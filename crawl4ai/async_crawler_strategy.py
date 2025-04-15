@@ -24,7 +24,10 @@ from .browser_manager import BrowserManager
 
 import aiofiles
 import aiohttp
-import cchardet
+try:
+    import cchardet as chardet
+except ImportError:
+    import chardet
 from aiohttp.client import ClientTimeout
 from urllib.parse import urlparse
 from types import MappingProxyType
