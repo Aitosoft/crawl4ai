@@ -164,7 +164,7 @@ cython_debug/
 Crawl4AI.egg-info/
 Crawl4AI.egg-info/*
 crawler_data.db
-.vscode/
+
 .tests/
 .test_pads/
 test_pad.py
@@ -258,3 +258,4 @@ continue_config.json
 
 CLAUDE_MONITOR.md
 CLAUDE.md
+.python_packages
