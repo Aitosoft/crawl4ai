@@ -1,2 +1,2 @@
-[postBuild]
-command = "/bin/bash postbuild.sh"
+[build]
+postBuildCommand = "/bin/bash postbuild.sh"
