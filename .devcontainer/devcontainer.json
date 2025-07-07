@@ -1,0 +1,44 @@
+{
+  "name": "crawl4ai (Python 3.11)",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11-bookworm",
+
+  // ---------- extra tooling ----------
+  "features": {
+    // Node 20 – Crawl4AI’s docs say >=16 is required for examples
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+
+    // Azure CLI – lets you `az containerapp up ...` later
+    "ghcr.io/devcontainers/features/azure-cli:1": {},
+
+    // Playwright system libraries (Chromium/Firefox/WebKit runtime deps)
+    "ghcr.io/devcontainers/features/apt-packages:1": {
+      "packages": [
+        "libnss3", "libatk1.0-0", "libatk-bridge2.0-0", "libgbm1",
+        "libgtk-3-0", "libxss1", "libasound2", "libdrm2",
+        "libx11-xcb1", "libxcomposite1", "libxdamage1", "libxrandr2",
+        "libcups2", "fonts-liberation", "libappindicator3-1", "xdg-utils"
+      ]
+    }
+  },
+
+  // ---------- quality-of-life ----------
+  "runArgs": ["--shm-size=1g"],          // needed for headless browsers
+  "forwardPorts": [11235],               // Crawl4AI server playground
+  "postCreateCommand": [
+    "pip install --upgrade pip",
+    // editable install of your fork + dev extras
+    "pip install -e .[dev] || pip install -e .",
+    // pull Playwright browsers & run diagnostics
+    "crawl4ai-setup && crawl4ai-doctor"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}
