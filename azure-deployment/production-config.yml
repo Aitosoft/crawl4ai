@@ -1,0 +1,87 @@
+# Production Configuration for Azure Container Apps deployment
+# This enables authentication and optimizes settings for production use
+
+# Application Configuration
+app:
+  title: "Crawl4AI API - Production"
+  version: "0.6.3"
+  host: "0.0.0.0"
+  port: 11235
+  reload: False
+  workers: 1
+  timeout_keep_alive: 300
+
+# Default LLM Configuration
+llm:
+  provider: "openai/gpt-4o-mini"
+  api_key_env: "OPENAI_API_KEY"
+
+# Redis Configuration (disabled for simplicity)
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: ""
+  ssl: False
+
+# Rate Limiting Configuration
+rate_limiting:
+  enabled: True
+  default_limit: "100/minute"  # Conservative limit for internal use
+  trusted_proxies: []
+  storage_uri: "memory://"
+
+# Security Configuration - ENABLED FOR PRODUCTION
+security:
+  enabled: true
+  jwt_enabled: true  # Enable JWT authentication
+  https_redirect: false  # Azure Container Apps handles HTTPS
+  trusted_hosts: ["*"]
+  headers:
+    x_content_type_options: "nosniff"
+    x_frame_options: "DENY"
+    content_security_policy: "default-src 'self'"
+    strict_transport_security: "max-age=63072000; includeSubDomains"
+
+# Crawler Configuration - Optimized for production
+crawler:
+  base_config:
+    simulate_user: true
+  memory_threshold_percent: 85.0  # Conservative memory limit
+  rate_limiter:
+    enabled: true
+    base_delay: [1.0, 3.0]  # Slightly more conservative
+  timeouts:
+    stream_init: 30.0
+    batch_process: 300.0
+  pool:
+    max_pages: 20  # Conservative for Azure Container Apps
+    idle_ttl_sec: 1800
+  browser:
+    kwargs:
+      headless: true
+      text_mode: true
+    extra_args:
+      - "--no-sandbox"
+      - "--disable-dev-shm-usage"
+      - "--disable-gpu"
+      - "--disable-software-rasterizer"
+      - "--disable-web-security"
+      - "--allow-insecure-localhost"
+      - "--ignore-certificate-errors"
+      - "--disable-background-timer-throttling"
+      - "--disable-backgrounding-occluded-windows"
+      - "--disable-renderer-backgrounding"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Observability Configuration
+observability:
+  prometheus:
+    enabled: True
+    endpoint: "/metrics"
+  health_check:
+    endpoint: "/health"

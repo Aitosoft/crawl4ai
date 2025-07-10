@@ -1,0 +1,69 @@
+# Azure Container Apps deployment configuration for Crawl4AI
+# This provides a clean, maintainable deployment with proper versioning
+
+# Resource group and container app settings
+resourceGroup: crawl4ai-v2-rg
+containerAppName: crawl4ai-v2-app
+location: northeurope  # Choose your preferred location
+subscriptionId: # Will be auto-detected if not specified
+
+# Container configuration
+image: 
+  registry: unclecode
+  repository: crawl4ai
+  tag: "0.6.0-r3"  # Update this when new versions are released
+
+# Environment configuration
+environment:
+  name: crawl4ai-v2-env
+  type: workload-profiles
+  workloadProfileName: Consumption
+
+# Application settings
+app:
+  # Container resource limits
+  resources:
+    cpu: 1.0
+    memory: 2.0Gi
+  
+  # Scaling configuration
+  scale:
+    minReplicas: 1
+    maxReplicas: 3
+    rules:
+      - name: http-scaling
+        type: http
+        httpMetadata:
+          concurrentRequests: 50
+  
+  # Port configuration
+  ingress:
+    external: true
+    targetPort: 11235
+    traffic:
+      - weight: 100
+        latestRevision: true
+  
+  # Environment variables
+  env:
+    - name: CRAWL4AI_API_TOKEN
+      value: "your-secure-token-here"  # We'll update this
+    - name: ENVIRONMENT
+      value: "production"
+    - name: LOG_LEVEL
+      value: "INFO"
+    - name: MAX_CONCURRENT_REQUESTS
+      value: "10"
+
+# Health check configuration
+healthCheck:
+  path: "/health"
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Monitoring and logging
+monitoring:
+  enabled: true
+  logAnalyticsWorkspace: crawl4ai-v2-logs

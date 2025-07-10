@@ -1,17 +1,22 @@
 {
   "name": "crawl4ai (Python 3.11)",
   "image": "mcr.microsoft.com/devcontainers/python:3.11-bookworm",
-
+  "containerEnv": {
+    "PYTHONPATH": "${containerWorkspaceFolder}:${containerWorkspaceFolder}/deploy/docker"
+  },
   "features": {
-    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
     "ghcr.io/devcontainers/features/azure-cli:1": {}
   },
-
-  "runArgs": ["--shm-size=1g"],
-  "forwardPorts": [11235],
-
-  "postCreateCommand": "bash -lc \"sudo apt-get update && sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libgbm1 libgtk-3-0 libxss1 libasound2 libdrm2 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libcups2 fonts-liberation libappindicator3-1 xdg-utils && pip install --upgrade pip && (pip install -e .[dev] || pip install -e .) && pip install ruff black mypy pytest pre-commit && pre-commit install && crawl4ai-setup && crawl4ai-doctor\"",
-
+  "runArgs": [
+    "--shm-size=1g"
+  ],
+  "forwardPorts": [
+    11235
+  ],
+  "postCreateCommand": "bash -lc 'sudo apt-get update && sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libgbm1 libgtk-3-0 libxss1 libasound2 libdrm2 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libcups2 fonts-liberation libappindicator3-1 xdg-utils && pip install --upgrade pip && pip install \"uvicorn[standard]\" && pip install -r deploy/docker/requirements.txt && (pip install -e .[dev] || pip install -e .) && pip install ruff black mypy pytest pre-commit && pre-commit install && crawl4ai-setup && crawl4ai-doctor && npm install -g @anthropic-ai/claude-code'",
   "customizations": {
     "vscode": {
       "extensions": [
