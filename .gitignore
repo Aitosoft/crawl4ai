@@ -265,3 +265,8 @@ tests/**/benchmark_reports
 
 docs/**/data
 .codecat/
+
+# Production credentials - keep secure
+azure-deployment/PRODUCTION_CREDENTIALS*.md
+azure-deployment/*credentials*
+azure-deployment/secrets/
