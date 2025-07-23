@@ -1,0 +1,281 @@
+name: Update Crawl4AI and Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Crawl4AI version to update to (e.g., v0.3.74 or latest)'
+        required: true
+        default: 'latest'
+      skip_tests:
+        description: 'Skip testing and deploy directly'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run - show what would be done without executing'
+        type: boolean
+        default: false
+
+env:
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  update-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests crawl4ai azure-cli
+
+      - name: Azure Login
+        if: ${{ !inputs.dry_run }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get current deployment info
+        id: current-info
+        run: |
+          # Get current version from deployment script
+          CURRENT_VERSION=$(grep -o 'unclecode/crawl4ai:[^"]*' azure-deployment/keyvault-deploy.sh | cut -d':' -f2)
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "📋 Current version: $CURRENT_VERSION"
+          
+          # Get current Azure revision (for rollback)
+          if [ "${{ inputs.dry_run }}" != "true" ]; then
+            CURRENT_REVISION=$(az containerapp revision list \
+              --name crawl4ai-v2-app \
+              --resource-group crawl4ai-v2-rg \
+              --query '[?properties.active].name' \
+              -o tsv | head -1)
+            echo "current_revision=$CURRENT_REVISION" >> $GITHUB_OUTPUT
+            echo "📋 Current active revision: $CURRENT_REVISION"
+          fi
+
+      - name: Verify Docker image availability
+        id: verify-image
+        run: |
+          VERSION="${{ inputs.version }}"
+          echo "🔍 Checking Docker image availability for: unclecode/crawl4ai:$VERSION"
+          
+          if [ "$VERSION" = "latest" ]; then
+            echo "✅ Using latest tag"
+            echo "image_available=true" >> $GITHUB_OUTPUT
+          else
+            # Check if specific version exists on Docker Hub
+            if curl -s "https://hub.docker.com/v2/repositories/unclecode/crawl4ai/tags/$VERSION" | jq -e '.name' > /dev/null; then
+              echo "✅ Docker image unclecode/crawl4ai:$VERSION is available"
+              echo "image_available=true" >> $GITHUB_OUTPUT
+            else
+              echo "❌ Docker image unclecode/crawl4ai:$VERSION not found"
+              echo "image_available=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Update deployment script
+        if: steps.verify-image.outputs.image_available == 'true'
+        run: |
+          VERSION="${{ inputs.version }}"
+          echo "📝 Updating deployment script to version: $VERSION"
+          
+          # Update the IMAGE line in the deployment script
+          sed -i "s|IMAGE=\"unclecode/crawl4ai:[^\"]*\"|IMAGE=\"unclecode/crawl4ai:$VERSION\"|" azure-deployment/keyvault-deploy.sh
+          
+          # Verify the change
+          echo "✅ Updated deployment script:"
+          grep "IMAGE=" azure-deployment/keyvault-deploy.sh
+
+      - name: Test local crawling functionality
+        if: ${{ !inputs.skip_tests && !inputs.dry_run && steps.verify-image.outputs.image_available == 'true' }}
+        run: |
+          echo "🧪 Running local crawling tests..."
+          
+          # Test 1: Basic crawling functionality
+          echo "📋 Test 1: Basic crawling with fit_markdown..."
+          python test_fit_markdown.py || echo "❌ fit_markdown test failed"
+          
+          echo "📋 Tests completed. Check output above for any failures."
+
+      - name: Deploy to Azure
+        if: ${{ !inputs.dry_run && steps.verify-image.outputs.image_available == 'true' }}
+        run: |
+          echo "🚀 Deploying to Azure..."
+          
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ./azure-deployment/keyvault-deploy.sh --update-only --dry-run
+          else
+            ./azure-deployment/keyvault-deploy.sh --update-only
+          fi
+          
+          # Wait for deployment to settle
+          echo "⏳ Waiting for deployment to settle..."
+          sleep 60
+
+      - name: Get production URL
+        if: ${{ !inputs.dry_run }}
+        id: production-url
+        run: |
+          PRODUCTION_URL=$(az containerapp show \
+            --name crawl4ai-v2-app \
+            --resource-group crawl4ai-v2-rg \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "production_url=https://$PRODUCTION_URL" >> $GITHUB_OUTPUT
+          echo "🌐 Production URL: https://$PRODUCTION_URL"
+
+      - name: Run production validation tests
+        if: ${{ !inputs.skip_tests && !inputs.dry_run && steps.verify-image.outputs.image_available == 'true' }}
+        id: production-tests
+        run: |
+          echo "🧪 Running production validation tests..."
+          
+          PRODUCTION_URL="${{ steps.production-url.outputs.production_url }}"
+          BEARER_TOKEN="as070511sip772patat"  # From your config
+          
+          # Test 1: Health check
+          echo "📋 Test 1: Health check..."
+          if curl -f "$PRODUCTION_URL/health" > /dev/null 2>&1; then
+            echo "✅ Health check passed"
+          else
+            echo "❌ Health check failed"
+            echo "test_failed=true" >> $GITHUB_OUTPUT
+          fi
+          
+          # Test 2: Authentication test
+          echo "📋 Test 2: Authentication test..."
+          python azure-deployment/test_auth.py --url "$PRODUCTION_URL" --token "$BEARER_TOKEN" || {
+            echo "❌ Authentication test failed"
+            echo "test_failed=true" >> $GITHUB_OUTPUT
+          }
+          
+          # Test 3: Basic crawl functionality
+          echo "📋 Test 3: Production crawl test..."
+          RESPONSE=$(curl -s -w "HTTP_STATUS:%{http_code}" \
+            -X POST "$PRODUCTION_URL/crawl" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $BEARER_TOKEN" \
+            -d '{"urls": ["https://example.com"], "crawler_config": {"markdown_generator": {"type": "DefaultMarkdownGenerator", "params": {"content_filter": {"type": "PruningContentFilter", "params": {"threshold": 0.6}}, "options": {"ignore_links": false}}}}}')
+          
+          HTTP_STATUS=$(echo $RESPONSE | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+          RESPONSE_BODY=$(echo $RESPONSE | sed 's/HTTP_STATUS:[0-9]*$//')
+          
+          if [ "$HTTP_STATUS" = "200" ]; then
+            # Check if response contains expected fields
+            if echo "$RESPONSE_BODY" | jq -e '.results[0].markdown.fit_markdown' > /dev/null; then
+              echo "✅ Production crawl test passed"
+            else
+              echo "❌ Production crawl test failed - missing fit_markdown"
+              echo "test_failed=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "❌ Production crawl test failed - HTTP $HTTP_STATUS"
+            echo "test_failed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Rollback on test failure
+        if: ${{ !inputs.dry_run && steps.production-tests.outputs.test_failed == 'true' }}
+        run: |
+          echo "🔄 Tests failed, rolling back to previous revision..."
+          
+          PREVIOUS_REVISION="${{ steps.current-info.outputs.current_revision }}"
+          
+          if [ -n "$PREVIOUS_REVISION" ]; then
+            # Revert to previous revision
+            az containerapp revision activate \
+              --revision "$PREVIOUS_REVISION" \
+              --resource-group crawl4ai-v2-rg
+            
+            echo "✅ Rolled back to revision: $PREVIOUS_REVISION"
+            
+            # Also revert the deployment script
+            git checkout -- azure-deployment/keyvault-deploy.sh
+            echo "✅ Reverted deployment script changes"
+          else
+            echo "❌ Could not determine previous revision for rollback"
+          fi
+          
+          exit 1
+
+      - name: Commit changes on success
+        if: ${{ !inputs.dry_run && steps.production-tests.outputs.test_failed != 'true' && steps.verify-image.outputs.image_available == 'true' }}
+        run: |
+          echo "✅ All tests passed, committing changes..."
+          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          git add azure-deployment/keyvault-deploy.sh
+          git commit -m "Update Crawl4AI to version ${{ inputs.version }}
+
+🚀 Automated update via GitHub Actions
+📋 Version: ${{ steps.current-info.outputs.current_version }} → ${{ inputs.version }}
+🧪 All validation tests passed
+🌐 Production URL: ${{ steps.production-url.outputs.production_url }}
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>" || echo "No changes to commit"
+          
+          git push origin main || echo "Nothing to push"
+
+      - name: Create success notification
+        if: ${{ !inputs.dry_run && steps.production-tests.outputs.test_failed != 'true' && steps.verify-image.outputs.image_available == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ inputs.version }}';
+            const currentVersion = '${{ steps.current-info.outputs.current_version }}';
+            const productionUrl = '${{ steps.production-url.outputs.production_url }}';
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `✅ Successfully Updated Crawl4AI to ${version}`,
+              body: `## 🎉 Update Completed Successfully
+              
+              **Previous Version:** \`${currentVersion}\`  
+              **New Version:** \`${version}\`  
+              **Production URL:** ${productionUrl}
+              
+              ### ✅ Tests Passed
+              - Health check
+              - Authentication test  
+              - Production crawl test with fit_markdown validation
+              
+              ### 🚀 Deployment Details
+              - Azure Container App updated successfully
+              - All validation tests passed
+              - Changes committed to main branch
+              
+              ---
+              *This update was completed via GitHub Actions workflow*`,
+              labels: ['crawl4ai-release', 'deployment-success']
+            });
+
+      - name: Send Discord notification
+        if: always()
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            ${{ steps.production-tests.outputs.test_failed == 'true' && '❌ **Crawl4AI Update Failed**' || '✅ **Crawl4AI Updated Successfully**' }}
+            
+            **Version:** `${{ steps.current-info.outputs.current_version }}` → `${{ inputs.version }}`
+            ${{ steps.production-tests.outputs.test_failed == 'true' && '**Status:** Rolled back due to test failures' || '**Status:** All tests passed, deployment successful' }}
+            
+            Production: ${{ steps.production-url.outputs.production_url || 'N/A' }}

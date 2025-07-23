@@ -1,0 +1,156 @@
+name: Monitor Crawl4AI Releases
+
+on:
+  schedule:
+    # Check for new releases daily at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-releases:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for new Crawl4AI releases
+        id: check-release
+        run: |
+          # Get latest release from crawl4ai repository
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/unclecode/crawl4ai/releases/latest | jq -r '.tag_name')
+          LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/unclecode/crawl4ai/releases/latest | jq -r '.html_url')
+          LATEST_RELEASE_BODY=$(curl -s https://api.github.com/repos/unclecode/crawl4ai/releases/latest | jq -r '.body')
+          RELEASE_DATE=$(curl -s https://api.github.com/repos/unclecode/crawl4ai/releases/latest | jq -r '.published_at')
+          
+          echo "Latest release: $LATEST_RELEASE"
+          echo "latest_release=$LATEST_RELEASE" >> $GITHUB_OUTPUT
+          echo "release_url=$LATEST_RELEASE_URL" >> $GITHUB_OUTPUT
+          echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
+          
+          # Store release body in a file to handle multiline content
+          echo "$LATEST_RELEASE_BODY" > release_body.txt
+          
+          # Check current version in our deployment script
+          CURRENT_VERSION=$(grep -o 'unclecode/crawl4ai:[^"]*' azure-deployment/keyvault-deploy.sh | cut -d':' -f2)
+          echo "Current version: $CURRENT_VERSION"
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          # Compare versions
+          if [ "$LATEST_RELEASE" != "$CURRENT_VERSION" ] && [ "$CURRENT_VERSION" != "latest" ]; then
+            echo "new_release_available=true" >> $GITHUB_OUTPUT
+            echo "🆕 New release available: $CURRENT_VERSION → $LATEST_RELEASE"
+          else
+            echo "new_release_available=false" >> $GITHUB_OUTPUT
+            echo "✅ Already up to date: $CURRENT_VERSION"
+          fi
+
+      - name: Check if Docker image is available
+        id: check-docker
+        if: steps.check-release.outputs.new_release_available == 'true'
+        run: |
+          RELEASE_TAG="${{ steps.check-release.outputs.latest_release }}"
+          
+          # Check if Docker image exists on Docker Hub
+          if curl -s "https://hub.docker.com/v2/repositories/unclecode/crawl4ai/tags/$RELEASE_TAG" | jq -e '.name' > /dev/null; then
+            echo "docker_available=true" >> $GITHUB_OUTPUT
+            echo "✅ Docker image unclecode/crawl4ai:$RELEASE_TAG is available"
+          else
+            echo "docker_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Docker image unclecode/crawl4ai:$RELEASE_TAG not yet available"
+          fi
+
+      - name: Create issue for new release
+        if: steps.check-release.outputs.new_release_available == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const releaseBody = fs.readFileSync('release_body.txt', 'utf8');
+            const currentVersion = '${{ steps.check-release.outputs.current_version }}';
+            const latestVersion = '${{ steps.check-release.outputs.latest_release }}';
+            const releaseUrl = '${{ steps.check-release.outputs.release_url }}';
+            const releaseDate = '${{ steps.check-release.outputs.release_date }}';
+            const dockerAvailable = '${{ steps.check-docker.outputs.docker_available }}' === 'true';
+            
+            const dockerStatus = dockerAvailable 
+              ? '✅ **Docker image is available**' 
+              : '⚠️ **Docker image not yet available** - Check again later';
+            
+            const issueTitle = `New Crawl4AI Release Available: ${latestVersion}`;
+            const issueBody = `## 🆕 New Crawl4AI Release Detected
+            
+            **Current Version:** \`${currentVersion}\`  
+            **New Version:** \`${latestVersion}\`  
+            **Release Date:** ${releaseDate}  
+            **Release URL:** ${releaseUrl}
+            
+            ### Docker Image Status
+            ${dockerStatus}
+            
+            ### Release Notes
+            ${releaseBody}
+            
+            ---
+            
+            ## Next Steps
+            
+            1. **Review the release notes** above for breaking changes
+            2. **Check if Docker image is available** (if not available above, wait and check manually)
+            3. **Test the update** by running the update workflow:
+               - Go to Actions → "Update Crawl4AI and Test"
+               - Click "Run workflow" 
+               - Enter version: \`${latestVersion}\`
+            4. **Monitor the test results** and deployment
+            
+            ### Manual Commands (if needed)
+            \`\`\`bash
+            # Test new version locally first
+            docker run --rm unclecode/crawl4ai:${latestVersion} --version
+            
+            # Update deployment (after workflow testing)
+            ./azure-deployment/keyvault-deploy.sh --update-only
+            \`\`\`
+            
+            ---
+            *This issue was automatically created by the release monitoring workflow*`;
+            
+            // Check if an issue already exists for this version
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['crawl4ai-release'],
+              state: 'open'
+            });
+            
+            const existingIssue = existingIssues.data.find(issue => 
+              issue.title.includes(latestVersion)
+            );
+            
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['crawl4ai-release', 'enhancement']
+              });
+              console.log(`Created issue for new release: ${latestVersion}`);
+            } else {
+              console.log(`Issue already exists for release: ${latestVersion}`);
+            }
+
+      - name: Send notification to Discord
+        if: steps.check-release.outputs.new_release_available == 'true'
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            🆕 **New Crawl4AI Release Available!**
+            
+            **Current:** `${{ steps.check-release.outputs.current_version }}`
+            **New:** `${{ steps.check-release.outputs.latest_release }}`
+            
+            Docker Image: ${{ steps.check-docker.outputs.docker_available == 'true' && '✅ Available' || '⚠️ Not yet available' }}
+            
+            Check the new issue in the repository for details and next steps.
