@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Example local configuration for azure deployment
+# Copy this file to local-config.sh and set your values
+# This file is gitignored for security
+
+# Bearer token for internal use
+export BEARER_TOKEN="your-secure-token-here"
+
+# Other sensitive configuration can go here
+# export OTHER_SECRET="value"

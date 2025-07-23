@@ -23,13 +23,21 @@ LOCATION="northeurope"
 IMAGE="unclecode/crawl4ai:latest"
 LOG_WORKSPACE="crawl4ai-v2-logs"
 
-# Bearer token for internal use
-BEARER_TOKEN="as070511sip772patat"
+# Load local configuration if available
+if [ -f "$(dirname "$0")/local-config.sh" ]; then
+    source "$(dirname "$0")/local-config.sh"
+fi
+
+# Bearer token for internal use - set in local-config.sh or environment
+BEARER_TOKEN="${BEARER_TOKEN:-}"
 
 # Parse command line arguments
 DRY_RUN=false
 UPDATE_ONLY=false
 NEW_TOKEN=""
+ROLLBACK=false
+ROLLBACK_REVISION=""
+LIST_REVISIONS=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -45,11 +53,34 @@ while [[ $# -gt 0 ]]; do
             NEW_TOKEN="$2"
             shift 2
             ;;
+        --rollback)
+            ROLLBACK=true
+            if [[ -n "$2" && "$2" != --* ]]; then
+                ROLLBACK_REVISION="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --list-revisions)
+            LIST_REVISIONS=true
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [--dry-run] [--update-only] [--new-token TOKEN]"
-            echo "  --dry-run      Show what would be done without executing"
-            echo "  --update-only  Update existing container app only"
-            echo "  --new-token    Set a new bearer token value"
+            echo "Usage: $0 [OPTIONS]"
+            echo "Options:"
+            echo "  --dry-run              Show what would be done without executing"
+            echo "  --update-only          Update existing container app only"
+            echo "  --new-token TOKEN      Set a new bearer token value"
+            echo "  --rollback [REVISION]  Rollback to previous or specific revision"
+            echo "  --list-revisions       List all available revisions"
+            echo ""
+            echo "Examples:"
+            echo "  $0                                    # Full deployment"
+            echo "  $0 --update-only                     # Update container image only"
+            echo "  $0 --rollback                        # Rollback to previous revision"
+            echo "  $0 --rollback crawl4ai-v2-app--abc123 # Rollback to specific revision"
+            echo "  $0 --list-revisions                  # List all revisions"
             exit 0
             ;;
         *)
@@ -79,6 +110,13 @@ print_warning() {
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_section() {
+    echo ""
+    echo -e "${YELLOW}======================================${NC}"
+    echo -e "${YELLOW}$1${NC}"
+    echo -e "${YELLOW}======================================${NC}"
 }
 
 # Function to execute commands with dry-run support
@@ -125,6 +163,160 @@ get_current_user() {
         print_status "Current user: $CURRENT_USER"
     else
         CURRENT_USER="user@example.com"
+    fi
+}
+
+# List available revisions
+list_revisions() {
+    print_section "AVAILABLE REVISIONS"
+    
+    if [ "$DRY_RUN" = false ]; then
+        print_status "Fetching revisions for $CONTAINER_APP..."
+        
+        # Get all revisions with details
+        az containerapp revision list \
+            --name $CONTAINER_APP \
+            --resource-group $RESOURCE_GROUP \
+            --output table \
+            --query '[].{Name:name,Active:properties.active,CreatedTime:properties.createdTime,Image:properties.template.containers[0].image,TrafficWeight:properties.trafficWeight}'
+        
+        # Get currently active revision
+        ACTIVE_REVISION=$(az containerapp revision list \
+            --name $CONTAINER_APP \
+            --resource-group $RESOURCE_GROUP \
+            --query '[?properties.active].name' \
+            -o tsv | head -1)
+        
+        print_status "Currently active revision: $ACTIVE_REVISION"
+    else
+        print_status "DRY RUN: Would list revisions for $CONTAINER_APP"
+    fi
+}
+
+# Rollback to a specific or previous revision
+rollback_revision() {
+    local target_revision="$1"
+    
+    print_section "ROLLBACK OPERATION"
+    
+    if [ "$DRY_RUN" = false ]; then
+        # Get current active revision
+        CURRENT_ACTIVE=$(az containerapp revision list \
+            --name $CONTAINER_APP \
+            --resource-group $RESOURCE_GROUP \
+            --query '[?properties.active].name' \
+            -o tsv | head -1)
+        
+        print_status "Current active revision: $CURRENT_ACTIVE"
+        
+        # If no target revision specified, find the previous active one
+        if [[ -z "$target_revision" ]]; then
+            print_status "No specific revision provided, finding previous revision..."
+            
+            # Get all revisions sorted by creation time (newest first)
+            ALL_REVISIONS=$(az containerapp revision list \
+                --name $CONTAINER_APP \
+                --resource-group $RESOURCE_GROUP \
+                --query '[].name' \
+                -o tsv | sort -r)
+            
+            # Find the previous revision (skip the current active one)
+            FOUND_CURRENT=false
+            for rev in $ALL_REVISIONS; do
+                if [ "$FOUND_CURRENT" = true ]; then
+                    target_revision=$rev
+                    break
+                fi
+                if [ "$rev" = "$CURRENT_ACTIVE" ]; then
+                    FOUND_CURRENT=true
+                fi
+            done
+            
+            if [[ -z "$target_revision" ]]; then
+                print_error "Could not find a previous revision to rollback to"
+                return 1
+            fi
+        fi
+        
+        print_status "Target rollback revision: $target_revision"
+        
+        # Verify the target revision exists
+        REVISION_EXISTS=$(az containerapp revision show \
+            --name $CONTAINER_APP \
+            --resource-group $RESOURCE_GROUP \
+            --revision "$target_revision" \
+            --query 'name' -o tsv 2>/dev/null || echo "")
+        
+        if [[ -z "$REVISION_EXISTS" ]]; then
+            print_error "Revision $target_revision does not exist or is not accessible"
+            return 1
+        fi
+        
+        # Get revision details for confirmation
+        REVISION_IMAGE=$(az containerapp revision show \
+            --name $CONTAINER_APP \
+            --resource-group $RESOURCE_GROUP \
+            --revision "$target_revision" \
+            --query 'properties.template.containers[0].image' -o tsv)
+        
+        REVISION_CREATED=$(az containerapp revision show \
+            --name $CONTAINER_APP \
+            --resource-group $RESOURCE_GROUP \
+            --revision "$target_revision" \
+            --query 'properties.createdTime' -o tsv)
+        
+        print_status "Rollback target details:"
+        echo "  Revision: $target_revision"
+        echo "  Image: $REVISION_IMAGE"
+        echo "  Created: $REVISION_CREATED"
+        
+        # Perform the rollback
+        execute_cmd "az containerapp revision activate \
+                      --revision $target_revision \
+                      --resource-group $RESOURCE_GROUP" \
+                   "Activating revision $target_revision"
+        
+        if [ $? -eq 0 ]; then
+            print_success "✅ Rollback completed successfully!"
+            
+            # Wait for rollback to take effect
+            print_status "Waiting for rollback to take effect..."
+            sleep 30
+            
+            # Verify the rollback
+            NEW_ACTIVE=$(az containerapp revision list \
+                --name $CONTAINER_APP \
+                --resource-group $RESOURCE_GROUP \
+                --query '[?properties.active].name' \
+                -o tsv | head -1)
+            
+            if [ "$NEW_ACTIVE" = "$target_revision" ]; then
+                print_success "Rollback verification successful"
+                
+                # Show updated deployment info
+                APP_URL=$(az containerapp show \
+                          --name $CONTAINER_APP \
+                          --resource-group $RESOURCE_GROUP \
+                          --query properties.configuration.ingress.fqdn -o tsv)
+                
+                echo ""
+                echo "📋 Post-Rollback Status:"
+                echo "   App URL: https://$APP_URL"
+                echo "   Active Revision: $NEW_ACTIVE"
+                echo "   Image: $REVISION_IMAGE"
+                echo ""
+                echo "🔧 Test the rollback:"
+                echo "   curl -H \"Authorization: Bearer $BEARER_TOKEN\" https://$APP_URL/health"
+            else
+                print_error "Rollback verification failed. Active revision: $NEW_ACTIVE"
+                return 1
+            fi
+        else
+            print_error "Rollback failed"
+            return 1
+        fi
+    else
+        print_status "DRY RUN: Would rollback to revision $target_revision"
     fi
 }
 
@@ -314,7 +506,15 @@ deploy_crawl4ai_with_keyvault() {
 # Main execution
 main() {
     check_azure_cli
-    deploy_crawl4ai_with_keyvault
+    
+    # Handle different modes of operation
+    if [ "$LIST_REVISIONS" = true ]; then
+        list_revisions
+    elif [ "$ROLLBACK" = true ]; then
+        rollback_revision "$ROLLBACK_REVISION"
+    else
+        deploy_crawl4ai_with_keyvault
+    fi
 }
 
 # Run main function

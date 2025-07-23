@@ -270,3 +270,5 @@ docs/**/data
 azure-deployment/PRODUCTION_CREDENTIALS*.md
 azure-deployment/*credentials*
 azure-deployment/secrets/
+azure-deployment/.env
+azure-deployment/local-config.sh
