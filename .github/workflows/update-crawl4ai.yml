@@ -107,7 +107,7 @@ jobs:
           
           # Test 1: Basic crawling functionality
           echo "📋 Test 1: Basic crawling with fit_markdown..."
-          python test_fit_markdown.py || echo "❌ fit_markdown test failed"
+          python test-aitosoft/test_fit_markdown.py || echo "❌ fit_markdown test failed"
           
           echo "📋 Tests completed. Check output above for any failures."
 
@@ -157,7 +157,7 @@ jobs:
           
           # Test 2: Authentication test
           echo "📋 Test 2: Authentication test..."
-          python azure-deployment/test_auth.py --url "$PRODUCTION_URL" --token "$BEARER_TOKEN" || {
+          python test-aitosoft/test_production_auth.py --url "$PRODUCTION_URL" --token "$BEARER_TOKEN" || {
             echo "❌ Authentication test failed"
             echo "test_failed=true" >> $GITHUB_OUTPUT
           }

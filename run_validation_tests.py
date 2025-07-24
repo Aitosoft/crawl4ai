@@ -109,7 +109,7 @@ def run_local_tests(skip_server=False):
     
     # Test 1: Basic crawling with fit_markdown
     results['fit_markdown'] = run_test_script(
-        'test_fit_markdown.py', 
+        'test-aitosoft/test_fit_markdown.py', 
         'Basic crawling with fit_markdown validation',
         timeout=120
     )
@@ -119,7 +119,7 @@ def run_local_tests(skip_server=False):
         print_status("Checking if local server is running...")
         if wait_for_server():
             results['server_api'] = run_test_script(
-                'test_server_api.py',
+                'test-aitosoft/test_server_api.py',
                 'Local server API functionality',
                 timeout=120
             )
@@ -133,7 +133,7 @@ def run_local_tests(skip_server=False):
     
     # Test 3: Authentication system test (local)
     results['auth_system'] = run_test_script(
-        'test_production_auth.py',
+        'test-aitosoft/test_production_auth.py',
         'Authentication system validation',
         timeout=60
     )
@@ -206,8 +206,8 @@ def main():
     parser.add_argument('--production-url', 
                        help='Production URL for testing')
     parser.add_argument('--bearer-token', 
-                       default='as070511sip772patat',
-                       help='Bearer token for authentication')
+                       default=os.environ.get('C4AI_TOKEN', ''),
+                       help='Bearer token for authentication (defaults to C4AI_TOKEN env var)')
     parser.add_argument('--skip-server', action='store_true',
                        help='Skip server API tests that require local server')
     

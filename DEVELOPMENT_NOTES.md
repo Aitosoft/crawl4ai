@@ -2,6 +2,8 @@
 
 This file tracks development progress and important notes for the Crawl4AI project.
 
+**Last Updated**: 2025-07-21
+
 ## Current Development Environment
 
 ### System Setup
@@ -47,16 +49,17 @@ This file tracks development progress and important notes for the Crawl4AI proje
 - [x] **Complete documentation**: Updated for production deployment
 
 ### Authentication Simplified
-- [x] **Bearer token**: `as070511sip772patat` (stored in crawl4ai-v2-keyvault)
+- [x] **Bearer token**: Retrieved from environment variable `C4AI_TOKEN` (stored in crawl4ai-v2-keyvault)
 - [x] **No JWT complexity**: Simple internal-use authentication
 - [x] **Azure best practices**: Key Vault + managed identity
 - [x] **Application-ready**: Perfect for internal service-to-service calls
 
 ### Next Steps (Future)
 - [ ] Add Gemini token for content cleaning (small model with large context)
-- [ ] Set up GitHub Actions for CI/CD automation
+- [x] Set up GitHub Actions for CI/CD automation *(2025-07-21)*
 - [ ] Test with actual Finnish company websites
 - [ ] Monitor production usage and optimize performance
+- [ ] Set up GitHub secrets for Azure authentication in new workflows
 
 ## Key Development Practices
 
@@ -123,4 +126,21 @@ pre-commit run --all-files
 
 ---
 
-*This file is maintained as we develop - add notes about decisions, learnings, and progress.*
+## Development History
+
+### 2025-07-21: CI/CD Pipeline Implementation
+- **Added**: GitHub Actions for crawl4ai release monitoring and automated updates
+- **Files**: `.github/workflows/monitor-crawl4ai-releases.yml`, `.github/workflows/update-crawl4ai.yml`  
+- **Added**: Test orchestration script `run_validation_tests.py`
+- **Enhanced**: Deployment script with rollback capabilities (`--rollback`, `--list-revisions`)
+- **Features**: Automated testing, rollback on failure, Discord notifications, issue creation
+- **Usage**: Manual trigger via GitHub Actions → "Update Crawl4AI and Test"
+
+### 2025-07-23: Test Files Organization
+- **Moved**: Test files to `test-aitosoft/` folder to separate custom code from upstream repo
+- **Files**: `test_fit_markdown.py`, `test_production_auth.py`, `test_server_api.py`
+- **Updated**: CI/CD workflows and test orchestration script to use new paths
+
+---
+
+*This file is maintained as we develop - add new entries to the Development History section with date and brief summary.*

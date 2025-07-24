@@ -4,6 +4,7 @@ Test production authentication with the simplified Bearer token approach
 """
 import requests
 import json
+import os
 
 def test_production_auth():
     """Test the production authentication setup"""
@@ -30,9 +31,14 @@ def test_production_auth():
     # Test 2: Crawl with correct Bearer token
     print("\n📋 Test 2: Crawl with Correct Bearer Token")
     try:
+        bearer_token = os.environ.get('C4AI_TOKEN', '')
+        if not bearer_token:
+            print("❌ C4AI_TOKEN environment variable not set")
+            return
+        
         headers = {
             "Content-Type": "application/json",
-            "Authorization": "Bearer as070511sip772patat"
+            "Authorization": f"Bearer {bearer_token}"
         }
         
         payload = {
@@ -134,10 +140,11 @@ def test_production_auth():
     
     print("\n🎯 Summary:")
     print("For internal application use, you should:")
-    print('1. Always include: "Authorization: Bearer as070511sip772patat"')
-    print("2. The token is securely stored in Azure Key Vault")
-    print("3. Your application can use this same token for all requests")
-    print("4. No token expiration to worry about")
+    print('1. Set C4AI_TOKEN environment variable with the bearer token')
+    print('2. Always include: "Authorization: Bearer $C4AI_TOKEN"')
+    print("3. The token is securely stored in Azure Key Vault")
+    print("4. Your application can use this same token for all requests")
+    print("5. No token expiration to worry about")
 
 if __name__ == "__main__":
     test_production_auth()
