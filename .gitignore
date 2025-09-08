@@ -198,6 +198,10 @@ update_changelog.sh
 docs/.DS_Store
 tmp/
 test_env/
+
+# Private agent guidance (do not publish)
+AGENTS.md
+CLAUDE.md
 **/.DS_Store
 **/.DS_Store
 
