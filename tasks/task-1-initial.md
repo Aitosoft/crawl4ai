@@ -2,108 +2,162 @@
 
 Date: 2025-11-15 | Priority: HIGH
 
+## Business Need
+
+MAS AI agents call crawl4ai with homepage URL to discover and extract Finnish company content.
+
+**Constraints:**
+- Start with homepage URL only (no sitemap knowledge)
+- Sites vary: 1 page to 1000+ pages
+- Languages: Finnish primary, English fallback
+- LLM: DeepSeek 3.2 (100k token limit, very cheap)
+- Need deterministic cleaning BEFORE LLM to save tokens
+- Return clean markdown without navigation, footers, cookie banners
+
+**Goal:** Simple, robust extraction using crawl4ai built-ins only.
+
 ## Current Status
 - Local: v0.6.3 | Upstream: v0.7.7 (4 versions behind)
 - Production: `unclecode/crawl4ai:latest` (unpinned)
 - Azure: crawl4ai-v2-rg / crawl4ai-v2-app (North Europe)
-- Auth: Bearer token in Key Vault
 
 ## Critical Issues
-1. **Security**: pyOpenSSL CVE (24.3.0 → 25.3.0 fixed in 0.7.7)
-2. **Performance**: Async LLM extraction blocking bug (#1055 fixed in 0.7.7)
-3. **Stability**: Unpinned Docker `latest` tag
-4. **Missing v0.7.7 features**: URL deduplication, monitoring dashboard, webhook support
+1. Security: pyOpenSSL CVE (fixed in 0.7.7)
+2. Performance: Async LLM blocking bug (fixed in 0.7.7)
+3. Stability: Unpinned Docker `latest` tag
 
 ## Code Boundaries
 
-**UPSTREAM** (unclecode/crawl4ai - do not modify):
-- `crawl4ai/` core library, `Dockerfile`, `requirements.txt`, `pyproject.toml`
+**UPSTREAM** (don't modify): `crawl4ai/`, `Dockerfile`, `requirements.txt`, `pyproject.toml`
+**CUSTOM**: `azure-deployment/`, `deploy/docker/`, `.github/workflows/monitor-crawl4ai-releases.yml`
 
-**CUSTOM** (Aitosoft):
-- `azure-deployment/` - Container Apps deployment scripts
-- `deploy/docker/` - API server (FastAPI wrapper)
-- `.github/workflows/monitor-crawl4ai-releases.yml` - Release monitoring
+## Built-in Features for Your Use Case
 
-## Vision: Intelligent Scraping
+### 1. URL Discovery from Homepage (No Sitemap Parser)
 
-Use crawl4ai's built-in LLM intelligence to adapt scraping behavior:
-- **Small Finnish company** (10 pages) → crawl most of site
-- **Large e-commerce** (1000 pages) → only contact/about pages
-- **LLM-guided decisions**: "Did we get email/phone? Stop if yes, continue if no"
-- **No custom patterns** until proven necessary
+**What exists:**
+- BestFirstCrawlingStrategy with `max_pages` hard limit
+- KeywordRelevanceScorer prioritizes relevant pages first
+- Automatic internal/external link classification
 
-## Built-in Intelligence (v0.7.7)
+**No sitemap.xml support** - use deep crawling instead:
 
-### 1. Smart Link Following
 ```python
 from crawl4ai.deep_crawling import BestFirstCrawlingStrategy
 from crawl4ai.deep_crawling.scorers import KeywordRelevanceScorer
 
-# Prioritizes relevant pages automatically
+# Discover URLs from homepage, prioritize by relevance
 scorer = KeywordRelevanceScorer(
-    keywords=["yhteystiedot", "contact", "about", "tietoja"],
+    keywords=["yhteystiedot", "tuotteet", "contact", "products"],
     weight=1.0
 )
 
 strategy = BestFirstCrawlingStrategy(
-    max_depth=2,
-    max_pages=20,  # Adaptive budget
-    url_scorer=scorer  # Visits most relevant pages first
+    max_depth=2,          # Homepage + 2 levels deep
+    max_pages=30,         # CRITICAL: Hard limit for token control
+    url_scorer=scorer,    # Crawls most relevant pages first
+    include_external=False
 )
 ```
 
-### 2. LLM Extraction with Schema
-```python
-from crawl4ai.extraction_strategy import LLMExtractionStrategy
-from pydantic import BaseModel
+### 2. Deterministic Token Reduction (Pre-LLM)
 
-class CompanyContact(BaseModel):
-    company_name: str
-    email: str | None
-    phone: str | None
-    address: str | None
+**CRITICAL: All run BEFORE LLM to save tokens**
 
-extraction = LLMExtractionStrategy(
-    llm_config=LLMConfig(provider="openai/gpt-4o-mini"),
-    schema=CompanyContact.model_json_schema(),
-    instruction="Extract contact info, return null if not found",
-    input_format="fit_markdown"
-)
-```
-
-### 3. Content Noise Removal
+**BM25ContentFilter** (60-90% token reduction):
 ```python
 from crawl4ai.content_filter_strategy import BM25ContentFilter
 
-# Removes navigation, footers, cookies automatically
+# Removes low-relevance content chunks using BM25 scoring
 filter = BM25ContentFilter(
-    user_query="contact information",
-    bm25_threshold=1.0
+    user_query="Finnish company contact product information",
+    bm25_threshold=1.2,  # Higher = more aggressive filtering
+    language="finnish"   # Uses Finnish stemmer
 )
 ```
 
-### 4. Session Management
+**PruningContentFilter** (60-80% token reduction):
 ```python
-# Multi-page crawl with state
-session_id = "company_scrape"
-for url in pages:
-    result = await crawler.arun(url, config=CrawlerRunConfig(session_id=session_id))
+from crawl4ai.content_filter_strategy import PruningContentFilter
+
+# Removes navigation, footers, low-density text
+filter = PruningContentFilter(
+    threshold=0.48,
+    threshold_type="dynamic",
+    min_word_threshold=10  # Remove blocks <10 words
+)
 ```
 
-### 5. Caching
+**HTML-level cleaning** (always happens):
 ```python
-from crawl4ai import CacheMode
-
-# Avoid re-crawling
-config = CrawlerRunConfig(cache_mode=CacheMode.ENABLED)
+config = CrawlerRunConfig(
+    excluded_tags=['nav', 'footer', 'header', 'aside', 'script', 'style'],
+    word_count_threshold=10,
+    exclude_external_links=True,
+    exclude_social_media_links=True
+)
 ```
 
-## Simple MAS Integration
+### 3. fit_markdown vs raw_markdown (60-90% Token Savings)
 
-**Your TypeScript MAS calls crawl4ai directly via HTTP:**
+**CRITICAL: Use fit_markdown for LLM input**
+
+```python
+result = await crawler.arun(url, config=config)
+
+# DON'T use this (full page content):
+raw = result.markdown.raw_markdown  # 5,000-20,000 tokens
+
+# USE this (filtered content):
+fit = result.markdown.fit_markdown  # 1,000-5,000 tokens (60-90% smaller)
+```
+
+`fit_markdown` uses your `content_filter` results. Much more token-efficient.
+
+### 4. Finnish Language Support
+
+**Built-in Finnish stemmer:**
+```python
+BM25ContentFilter(
+    user_query="tuote hinta yhteystiedot toimitus",
+    language="finnish",  # Uses Finnish snowball stemmer
+    bm25_threshold=1.2
+)
+```
+
+**Language preference header:**
+```python
+config = CrawlerRunConfig(
+    headers={"Accept-Language": "fi-FI,fi;q=0.9,en;q=0.8"}
+)
+```
+
+### 5. Token Estimation & Limiting (DeepSeek 100k Limit)
+
+**Built-in token estimation:**
+```python
+def estimate_tokens(text: str) -> int:
+    """Estimate tokens using crawl4ai's WORD_TOKEN_RATE"""
+    return int(len(text.split()) * 1.3)
+
+fit_markdown = result.markdown.fit_markdown
+tokens = estimate_tokens(fit_markdown)
+
+if tokens > 90000:  # Leave 10k buffer for DeepSeek
+    print(f"⚠️ {tokens} tokens exceeds limit!")
+```
+
+**Hard page limit to control total tokens:**
+```python
+BestFirstCrawlingStrategy(
+    max_pages=30  # Stops after 30 pages regardless of relevance
+)
+```
+
+## Complete Configuration for Finnish Companies
 
 ```typescript
-// No generated client needed - just HTTP
+// Your MAS agent calls crawl4ai with this configuration
 const response = await fetch('https://crawl4ai-v2-app.../crawl', {
   method: 'POST',
   headers: {
@@ -111,120 +165,231 @@ const response = await fetch('https://crawl4ai-v2-app.../crawl', {
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    urls: ['https://company.fi'],
+    urls: ['https://company.fi'],  // Homepage only
     crawler_config: {
+      // 1. URL Discovery (crawls max 30 pages, prioritized)
       deep_crawl_strategy: {
         type: 'BestFirstCrawlingStrategy',
         max_depth: 2,
-        max_pages: 20,
+        max_pages: 30,  // CRITICAL: Token budget control
+        include_external: false,
         url_scorer: {
           type: 'KeywordRelevanceScorer',
-          keywords: ['yhteystiedot', 'contact'],
+          keywords: ['yhteystiedot', 'tuotteet', 'tietoja', 'contact', 'products', 'about'],
           weight: 1.0
         }
       },
-      content_filter: {
-        type: 'BM25ContentFilter',
-        user_query: 'contact information'
+
+      // 2. Deterministic Pre-LLM Cleaning (saves 60-90% tokens)
+      markdown_generator: {
+        type: 'DefaultMarkdownGenerator',
+        content_filter: {
+          type: 'BM25ContentFilter',
+          user_query: 'Finnish company contact product information',
+          bm25_threshold: 1.2,
+          language: 'finnish'
+        }
       },
-      extraction_strategy: {
-        type: 'LLMExtractionStrategy',
-        llm_config: { provider: 'openai/gpt-4o-mini' },
-        schema: { /* CompanyContact schema */ },
-        instruction: 'Extract contact info'
-      }
+
+      // 3. HTML-level filtering
+      excluded_tags: ['nav', 'footer', 'header', 'aside', 'script', 'style'],
+      word_count_threshold: 10,
+      exclude_external_links: true,
+
+      // 4. Language preference
+      headers: {
+        'Accept-Language': 'fi-FI,fi;q=0.9,en;q=0.8'
+      },
+
+      // 5. Stream results as they arrive
+      stream: true
     }
   })
 });
 
+// Process results
 const { results } = await response.json();
-const contacts = JSON.parse(results[0].extracted_content);
+for (const result of results) {
+  // CRITICAL: Use fit_markdown, not raw_markdown
+  const cleanMarkdown = result.markdown.fit_markdown;
+
+  // Estimate tokens before sending to DeepSeek
+  const tokens = Math.floor(cleanMarkdown.split(' ').length * 1.3);
+
+  if (tokens < 90000) {  // DeepSeek 100k limit with buffer
+    // Send to DeepSeek for extraction
+    await deepseekExtract(cleanMarkdown);
+  }
+}
 ```
+
+## Handling Different Site Sizes
+
+### Small Site (1-10 pages)
+```json
+{
+  "deep_crawl_strategy": {
+    "type": "BFSDeepCrawlStrategy",
+    "max_depth": 3,
+    "max_pages": 10
+  }
+}
+```
+Result: Crawls entire site, each page ~1k-3k tokens with fit_markdown.
+
+### Large Site (1000+ pages)
+```json
+{
+  "deep_crawl_strategy": {
+    "type": "BestFirstCrawlingStrategy",
+    "max_depth": 2,
+    "max_pages": 30,
+    "url_scorer": {
+      "type": "KeywordRelevanceScorer",
+      "keywords": ["yhteystiedot", "contact"],
+      "weight": 1.0
+    }
+  }
+}
+```
+Result: Only crawls 30 most relevant pages (contact, about, products), skips blog/product catalog.
 
 ## Action Plan
 
 ### Immediate (This Week)
+
 1. **Merge upstream v0.7.7**
    ```bash
    git remote add upstream https://github.com/unclecode/crawl4ai.git
    git fetch upstream
    git merge upstream/main
-   # Resolve conflicts in azure-deployment/, .github/workflows/
    ```
 
 2. **Pin Docker version**
    ```bash
    # Edit azure-deployment/keyvault-deploy.sh
-   IMAGE="unclecode/crawl4ai:0.7.7"  # Change from "latest"
+   IMAGE="unclecode/crawl4ai:0.7.7"
 
    # Deploy
    ./azure-deployment/keyvault-deploy.sh
    ```
 
-3. **Test intelligent scraping**
+3. **Setup LLM API key**
    ```bash
+   cp .env.example .env
+   # Add your DEEPSEEK_API_KEY or OPENAI_API_KEY
+
+   # Add to Azure Key Vault
+   az keyvault secret set \
+     --vault-name crawl4ai-v2-keyvault \
+     --name deepseek-api-key \
+     --value "sk-your-key"
+
+   az containerapp update \
+     --name crawl4ai-v2-app \
+     --resource-group crawl4ai-v2-rg \
+     --set-env-vars DEEPSEEK_API_KEY=secretref:deepseek-api-key
+   ```
+
+4. **Test with Finnish companies**
+   ```bash
+   # Small site test
    curl -X POST https://crawl4ai-v2-app.../crawl \
      -H "Authorization: Bearer as070511sip772patat" \
-     -H "Content-Type: application/json" \
      -d '{
-       "urls": ["https://www.nokia.com/fi_fi/"],
+       "urls": ["https://small-company.fi"],
+       "crawler_config": {
+         "max_pages": 10,
+         "markdown_generator": {
+           "content_filter": {
+             "type": "BM25ContentFilter",
+             "language": "finnish"
+           }
+         }
+       }
+     }'
+
+   # Large site test
+   curl -X POST https://crawl4ai-v2-app.../crawl \
+     -H "Authorization: Bearer as070511sip772patat" \
+     -d '{
+       "urls": ["https://large-ecommerce.fi"],
        "crawler_config": {
          "deep_crawl_strategy": {
            "type": "BestFirstCrawlingStrategy",
-           "max_depth": 2,
-           "max_pages": 15,
+           "max_pages": 30,
            "url_scorer": {
              "type": "KeywordRelevanceScorer",
-             "keywords": ["yhteystiedot", "ota-yhteyttä"],
-             "weight": 1.0
+             "keywords": ["yhteystiedot", "tietoja"]
            }
          },
-         "content_filter": {
-           "type": "BM25ContentFilter",
-           "user_query": "contact information"
+         "markdown_generator": {
+           "content_filter": {
+             "type": "BM25ContentFilter",
+             "bm25_threshold": 1.2,
+             "language": "finnish"
+           }
          }
        }
      }'
    ```
 
 ### Short-term (Next 2 Weeks)
-1. Test with diverse Finnish companies:
-   - Small site (10 pages): Should crawl most of it
-   - Large e-commerce (1000 pages): Should find contact page quickly
-   - Validate `BestFirstCrawlingStrategy` adapts correctly
 
-2. Iterate on LLM extraction schema based on results
+1. **Test token efficiency**
+   - Verify fit_markdown is 60-90% smaller than raw_markdown
+   - Confirm BM25ContentFilter removes garbage (nav, footer, cookies)
+   - Validate Finnish stemmer improves relevance
 
-3. Monitor costs and performance (use built-in `/dashboard`)
+2. **Test different site types**
+   - 1-page site: Ensure no over-crawling
+   - 10-page site: Crawl most pages
+   - 1000-page site: Only top 30 relevant pages
+   - Validate total tokens stay under 90k for DeepSeek
 
-### If Needed (Only After Testing Built-ins)
-- Custom URL patterns (if `KeywordRelevanceScorer` insufficient)
-- Custom extraction (if `LLMExtractionStrategy` insufficient)
-- TypeScript client generation (if HTTP calls too verbose)
+3. **Validate Finnish/English handling**
+   - Primarily Finnish sites: Finnish stemmer + keywords
+   - Multilingual sites: Fallback to English
+   - Verify Accept-Language header works
+
+4. **Monitor costs**
+   - DeepSeek cost per company (<$0.01 expected)
+   - Token usage per page (1k-5k with fit_markdown)
+   - Crawl time per company
+
+### Only If Needed (After Testing)
+- Custom URL patterns (if KeywordRelevanceScorer insufficient)
+- Custom content filter (if BM25ContentFilter insufficient)
+- TypeScript client (if HTTP calls too verbose)
 
 ## Success Criteria
-- [ ] v0.7.7 deployed with pinned version
+
+- [ ] v0.7.7 deployed, pinned version
 - [ ] Security vulnerability patched
-- [ ] Small Finnish company: extracts contact info accurately
-- [ ] Large Finnish company: finds contact page without crawling 1000 pages
-- [ ] Clean markdown returned (no cookie banners, navigation, footers)
-- [ ] LLM costs reasonable (<$0.01 per company)
+- [ ] Small site (10 pages): Extracts contact info, <10k total tokens
+- [ ] Large site (1000 pages): Finds contact page in top 30 crawled pages, <30k total tokens
+- [ ] fit_markdown is 60-90% smaller than raw_markdown
+- [ ] Navigation, footers, cookie banners removed deterministically
+- [ ] Finnish content prioritized over other languages
+- [ ] Total tokens stay under 90k for DeepSeek (with 10k buffer)
+- [ ] Cost <$0.01 per company with DeepSeek
 
-## Key Decision: Use Built-ins First
-**Don't build custom solutions until proven necessary:**
-- ✅ Smart link following: `BestFirstCrawlingStrategy` + `KeywordRelevanceScorer`
-- ✅ Content filtering: `BM25ContentFilter` or `LLMContentFilter`
-- ✅ Extraction: `LLMExtractionStrategy` with Pydantic schema
-- ✅ Caching: `CacheMode.ENABLED`
-- ✅ Sessions: `session_id` parameter
+## Key Decisions
 
-**Only add custom code if:**
-1. Tested built-in features with 10+ Finnish companies
+**Use crawl4ai built-ins:**
+- ✅ URL discovery: `BestFirstCrawlingStrategy` + `max_pages`
+- ✅ Deterministic cleaning: `BM25ContentFilter` (pre-LLM)
+- ✅ Token efficiency: `fit_markdown` (60-90% smaller)
+- ✅ Finnish support: `language="finnish"` in BM25
+- ✅ Token limiting: `max_pages` + token estimation
+
+**Don't build custom solutions until:**
+1. Tested with 10+ Finnish companies
 2. Identified specific limitation
-3. No configuration change can solve it
+3. No configuration can solve it
 
 ## v0.7.7 Key Features
-- Monitoring dashboard: `/dashboard` endpoint
+- Monitoring dashboard: `/dashboard`
 - Async LLM parallel processing (10x faster)
 - URL deduplication in deep crawl
 - pyOpenSSL security fix
@@ -236,7 +401,7 @@ const contacts = JSON.parse(results[0].extracted_content);
 # Update to 0.7.7
 git fetch upstream && git merge upstream/main
 
-# Pin version in deployment
+# Pin version
 sed -i 's/IMAGE="unclecode\/crawl4ai:latest"/IMAGE="unclecode\/crawl4ai:0.7.7"/' azure-deployment/keyvault-deploy.sh
 
 # Deploy
@@ -245,45 +410,15 @@ sed -i 's/IMAGE="unclecode\/crawl4ai:latest"/IMAGE="unclecode\/crawl4ai:0.7.7"/'
 # Monitor
 az containerapp logs show --name crawl4ai-v2-app --resource-group crawl4ai-v2-rg --follow
 
-# Check dashboard
+# Dashboard
 open https://crawl4ai-v2-app.kindforest-02188d13.northeurope.azurecontainerapps.io/dashboard
 ```
 
-## LLM API Key Setup
-
-**Required for LLM extraction to work:**
-
-1. **Create .env file** (you must add actual API key)
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your DEEPSEEK_API_KEY or OPENAI_API_KEY
-   ```
-
-2. **Add to Azure Key Vault** (for production)
-   ```bash
-   az keyvault secret set \
-     --vault-name crawl4ai-v2-keyvault \
-     --name deepseek-api-key \
-     --value "sk-your-actual-key"
-
-   az containerapp update \
-     --name crawl4ai-v2-app \
-     --resource-group crawl4ai-v2-rg \
-     --set-env-vars DEEPSEEK_API_KEY=secretref:deepseek-api-key
-   ```
-
-3. **Verify .env is gitignored** (already configured)
-   ```bash
-   git status  # .env should NOT appear
-   ```
-
-**See `tasks/task-2-env-setup.md` for detailed instructions.**
-
 ## Next Steps
-1. Team review → approve Phase 1
-2. **Setup .env with API key** (see task-2-env-setup.md)
-3. Execute: merge 0.7.7, pin version, deploy
-4. **Add API key to Azure Key Vault**
-5. Test intelligent scraping with Nokia, Rovio, KONE
-6. Document learnings
-7. Only add custom code if built-ins insufficient
+1. Setup .env with DeepSeek API key
+2. Execute: merge 0.7.7, pin version, deploy
+3. Add API key to Azure Key Vault
+4. Test with small/large Finnish companies
+5. Validate token efficiency (fit_markdown vs raw_markdown)
+6. Measure costs with DeepSeek
+7. Document learnings
