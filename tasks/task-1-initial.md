@@ -1,218 +1,243 @@
-# Task 1: Crawl4AI Status & Reactivation
+# Task 1: Crawl4AI Update & Intelligent Scraping
 
 Date: 2025-11-15 | Priority: HIGH
 
-## Status
+## Current Status
 - Local: v0.6.3 | Upstream: v0.7.7 (4 versions behind)
 - Production: `unclecode/crawl4ai:latest` (unpinned)
 - Azure: crawl4ai-v2-rg / crawl4ai-v2-app (North Europe)
-- Auth: Bearer token `as070511sip772patat` in Key Vault
+- Auth: Bearer token in Key Vault
 
 ## Critical Issues
-1. Security: pyOpenSSL CVE (24.3.0 → 25.3.0 in v0.7.7)
-2. Performance: Async LLM extraction blocking (#1055 fixed in 0.7.7)
-3. Stability: Unpinned Docker version in production
-4. Missing: URL deduplication for Finnish sites (0.7.7 feature)
-5. Missing: Monitoring dashboard `/dashboard` (0.7.7)
-6. Missing: Webhook infrastructure for TypeScript MAS (0.7.6+)
+1. **Security**: pyOpenSSL CVE (24.3.0 → 25.3.0 fixed in 0.7.7)
+2. **Performance**: Async LLM extraction blocking bug (#1055 fixed in 0.7.7)
+3. **Stability**: Unpinned Docker `latest` tag
+4. **Missing v0.7.7 features**: URL deduplication, monitoring dashboard, webhook support
 
-## Code Structure
+## Code Boundaries
 
-### UPSTREAM (unclecode/crawl4ai - do not modify)
-- `crawl4ai/` - Core library (63 files)
-- `Dockerfile`, `docker-compose.yml`
-- `requirements.txt`, `pyproject.toml`
+**UPSTREAM** (unclecode/crawl4ai - do not modify):
+- `crawl4ai/` core library, `Dockerfile`, `requirements.txt`, `pyproject.toml`
 
-### CUSTOM (Aitosoft modifications)
-- `azure-deployment/` - Container Apps deployment
-  - `keyvault-deploy.sh` - Production deploy script
-  - `simple_auth.py` - Bearer token auth (diverges from upstream JWT)
-  - `custom_server.py` - Azure FastAPI wrapper
-  - `production-config.yml` - 20 max pages, 85% memory threshold
-- `deploy/docker/` - API server
-  - `server.py`, `api.py` - FastAPI REST API
-  - `auth.py` - JWT authentication
-  - `crawler_pool.py` - Browser pooling (30min idle TTL, 95% memory cap)
-- `.github/workflows/` - CI/CD
-  - `monitor-crawl4ai-releases.yml` - Daily upstream checks
-- `.devcontainer/` - Python 3.11, Node 20, Azure CLI
+**CUSTOM** (Aitosoft):
+- `azure-deployment/` - Container Apps deployment scripts
+- `deploy/docker/` - API server (FastAPI wrapper)
+- `.github/workflows/monitor-crawl4ai-releases.yml` - Release monitoring
 
-## Finnish Company Scraping Requirements
+## Vision: Intelligent Scraping
 
-### Target Data
-- Contact: email, phone, address
-- Company: offering, customer segments, value proposition
-- Exclude: `/blogi/`, `/uutiset/`, `/tietosuoja`, product pages, blogs, privacy notices
-- Avoid: Cookie consent, duplicate sections
+Use crawl4ai's built-in LLM intelligence to adapt scraping behavior:
+- **Small Finnish company** (10 pages) → crawl most of site
+- **Large e-commerce** (1000 pages) → only contact/about pages
+- **LLM-guided decisions**: "Did we get email/phone? Stop if yes, continue if no"
+- **No custom patterns** until proven necessary
 
-### Current Gaps
-1. No URL exclusion patterns
-2. No `JsonCssExtractionStrategy` for contacts
-3. No Finnish stemmer for BM25 filter
-4. No schema.org extraction
-5. No cookie consent removal
+## Built-in Intelligence (v0.7.7)
 
-### Extraction Strategy (implement in Phase 3)
-
+### 1. Smart Link Following
 ```python
-# Phase 1: Contact extraction
-from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
+from crawl4ai.deep_crawling import BestFirstCrawlingStrategy
+from crawl4ai.deep_crawling.scorers import KeywordRelevanceScorer
 
-contact_schema = {
-    "name": "Company Contact",
-    "baseSelector": "body",
-    "fields": [
-        {"name": "email", "selector": "a[href^='mailto:']", "type": "attribute", "attribute": "href"},
-        {"name": "phone", "selector": "a[href^='tel:'], .contact-phone", "type": "text"},
-        {"name": "address", "selector": ".address, [itemtype*='PostalAddress']", "type": "text"}
-    ]
-}
+# Prioritizes relevant pages automatically
+scorer = KeywordRelevanceScorer(
+    keywords=["yhteystiedot", "contact", "about", "tietoja"],
+    weight=1.0
+)
 
-# Phase 2: Company info
+strategy = BestFirstCrawlingStrategy(
+    max_depth=2,
+    max_pages=20,  # Adaptive budget
+    url_scorer=scorer  # Visits most relevant pages first
+)
+```
+
+### 2. LLM Extraction with Schema
+```python
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
+from pydantic import BaseModel
 
-llm_instruction = """Extract JSON: {"company_name": "", "offering": "", "target_customers": "", "value_proposition": ""}
-Ignore blogs, news, privacy policies, cookies. Language: Finnish or English."""
+class CompanyContact(BaseModel):
+    company_name: str
+    email: str | None
+    phone: str | None
+    address: str | None
 
-# Phase 3: URL filtering
-exclude_patterns = [r'/blog/', r'/blogi/', r'/article/', r'/artikkeli/', r'/news/', r'/uutiset/',
-                   r'/privacy', r'/tietosuoja', r'/cookie', r'/evastekaytanto', r'/product/\d+', r'/tuote/\d+']
-
-crawler_config = {
-    "exclude_patterns": exclude_patterns,
-    "max_depth": 2,
-    "url_deduplication": True  # Requires 0.7.7+
-}
+extraction = LLMExtractionStrategy(
+    llm_config=LLMConfig(provider="openai/gpt-4o-mini"),
+    schema=CompanyContact.model_json_schema(),
+    instruction="Extract contact info, return null if not found",
+    input_format="fit_markdown"
+)
 ```
 
-## TypeScript Integration (Phase 4)
+### 3. Content Noise Removal
+```python
+from crawl4ai.content_filter_strategy import BM25ContentFilter
 
-### Current State
-- No TypeScript client
-- No type safety
-- Manual HTTP calls from MAS
-
-### Implementation
-
-```bash
-# Generate OpenAPI client
-openapi-typescript-codegen \
-  --input https://crawl4ai-v2-app.kindforest-02188d13.northeurope.azurecontainerapps.io/openapi.json \
-  --output ./typescript-client --client fetch
+# Removes navigation, footers, cookies automatically
+filter = BM25ContentFilter(
+    user_query="contact information",
+    bm25_threshold=1.0
+)
 ```
+
+### 4. Session Management
+```python
+# Multi-page crawl with state
+session_id = "company_scrape"
+for url in pages:
+    result = await crawler.arun(url, config=CrawlerRunConfig(session_id=session_id))
+```
+
+### 5. Caching
+```python
+from crawl4ai import CacheMode
+
+# Avoid re-crawling
+config = CrawlerRunConfig(cache_mode=CacheMode.ENABLED)
+```
+
+## Simple MAS Integration
+
+**Your TypeScript MAS calls crawl4ai directly via HTTP:**
 
 ```typescript
-// Webhook receiver (requires 0.7.6+)
-app.post('/webhooks/crawl4ai', async (req, res) => {
-  const { job_id, status, result } = req.body;
-  if (status === 'completed') await processCompanyData(result);
-  res.status(200).send('OK');
+// No generated client needed - just HTTP
+const response = await fetch('https://crawl4ai-v2-app.../crawl', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer as070511sip772patat',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    urls: ['https://company.fi'],
+    crawler_config: {
+      deep_crawl_strategy: {
+        type: 'BestFirstCrawlingStrategy',
+        max_depth: 2,
+        max_pages: 20,
+        url_scorer: {
+          type: 'KeywordRelevanceScorer',
+          keywords: ['yhteystiedot', 'contact'],
+          weight: 1.0
+        }
+      },
+      content_filter: {
+        type: 'BM25ContentFilter',
+        user_query: 'contact information'
+      },
+      extraction_strategy: {
+        type: 'LLMExtractionStrategy',
+        llm_config: { provider: 'openai/gpt-4o-mini' },
+        schema: { /* CompanyContact schema */ },
+        instruction: 'Extract contact info'
+      }
+    }
+  })
 });
 
-// WebSocket monitor (requires 0.7.7+)
-const ws = new WebSocket('wss://your-app/monitor/stream');
-ws.on('message', (data) => logStatus(JSON.parse(data)));
+const { results } = await response.json();
+const contacts = JSON.parse(results[0].extracted_content);
 ```
 
 ## Action Plan
 
-### Phase 1: Security & Stability (Week 1) - 2 dev days
-1. Merge upstream v0.7.7
-2. Edit `azure-deployment/keyvault-deploy.sh`: `IMAGE="unclecode/crawl4ai:0.7.7"`
-3. Deploy: `./azure-deployment/keyvault-deploy.sh --update-only`
-4. Test: Health, auth, fit_markdown, Finnish sample
+### Immediate (This Week)
+1. **Merge upstream v0.7.7**
+   ```bash
+   git remote add upstream https://github.com/unclecode/crawl4ai.git
+   git fetch upstream
+   git merge upstream/main
+   # Resolve conflicts in azure-deployment/, .github/workflows/
+   ```
 
-### Phase 2: Monitoring (Week 2)
-1. Access `/dashboard` endpoint
-2. Configure Prometheus → Azure Monitor
-3. Set up alerts: browser pool exhaustion, memory >95%, fail rate >10%
-4. WebSocket monitoring in MAS
+2. **Pin Docker version**
+   ```bash
+   # Edit azure-deployment/keyvault-deploy.sh
+   IMAGE="unclecode/crawl4ai:0.7.7"  # Change from "latest"
 
-### Phase 3: Finnish Optimization (Week 3-4)
-1. Implement `contact_schema` + `llm_instruction`
-2. Add `exclude_patterns` for Finnish sites
-3. Configure Finnish stemmer: `snowballstemmer.stemmer('finnish')`
-4. Test: nokia.fi, rovio.com, kone.com/fi, fortum.fi
-5. Validate: contact accuracy >90%, no duplicates
+   # Deploy
+   ./azure-deployment/keyvault-deploy.sh
+   ```
 
-### Phase 4: TypeScript Integration (Week 5-6)
-1. Generate OpenAPI client
-2. Create `FinnishCompanyScraper` wrapper class
-3. Implement webhook receiver in MAS
-4. End-to-end test: MAS → Crawl4AI → Webhook → MAS
+3. **Test intelligent scraping**
+   ```bash
+   curl -X POST https://crawl4ai-v2-app.../crawl \
+     -H "Authorization: Bearer as070511sip772patat" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "urls": ["https://www.nokia.com/fi_fi/"],
+       "crawler_config": {
+         "deep_crawl_strategy": {
+           "type": "BestFirstCrawlingStrategy",
+           "max_depth": 2,
+           "max_pages": 15,
+           "url_scorer": {
+             "type": "KeywordRelevanceScorer",
+             "keywords": ["yhteystiedot", "ota-yhteyttä"],
+             "weight": 1.0
+           }
+         },
+         "content_filter": {
+           "type": "BM25ContentFilter",
+           "user_query": "contact information"
+         }
+       }
+     }'
+   ```
 
-### Phase 5: Modernization (Ongoing)
-1. Update `.devcontainer/devcontainer.json`: Python 3.12, Node 22
-2. Create `ARCHITECTURE.md`: upstream vs custom boundaries
-3. CI/CD: `tests/test_finnish_companies.py`
-4. Document upgrade checklist
+### Short-term (Next 2 Weeks)
+1. Test with diverse Finnish companies:
+   - Small site (10 pages): Should crawl most of it
+   - Large e-commerce (1000 pages): Should find contact page quickly
+   - Validate `BestFirstCrawlingStrategy` adapts correctly
 
-## Tech Stack Updates
+2. Iterate on LLM extraction schema based on results
 
-Current → Recommended:
-- Python: 3.11 → 3.12 (align with Docker)
-- Node.js: 20 → 22 LTS
-- Playwright: 1.49.0+ → latest
-- Dev container: Add Docker-in-Docker, ESLint, Prettier
+3. Monitor costs and performance (use built-in `/dashboard`)
 
-## Key Metrics
-
-### Performance
-- Crawl latency: p50, p95, p99
-- Browser pool utilization
-- Memory peaks
-- Concurrent capacity
-
-### Quality
-- Contact extraction accuracy: target >90%
-- Finnish company coverage
-- Duplicate detection rate
-- Success rate per .fi domain
-
-### Business
-- Companies/hour
-- Cost/company (Azure compute)
-- MAS task completion time
-
-## Authentication Decision
-
-Current: Dual auth (JWT dev, bearer token prod)
-Options:
-A. Keep dual (recommended for internal use)
-B. Standardize JWT (better security, more complex)
-C. Azure AD (overkill for internal)
-
-Recommendation: Keep dual, document in ARCHITECTURE.md
+### If Needed (Only After Testing Built-ins)
+- Custom URL patterns (if `KeywordRelevanceScorer` insufficient)
+- Custom extraction (if `LLMExtractionStrategy` insufficient)
+- TypeScript client generation (if HTTP calls too verbose)
 
 ## Success Criteria
+- [ ] v0.7.7 deployed with pinned version
+- [ ] Security vulnerability patched
+- [ ] Small Finnish company: extracts contact info accurately
+- [ ] Large Finnish company: finds contact page without crawling 1000 pages
+- [ ] Clean markdown returned (no cookie banners, navigation, footers)
+- [ ] LLM costs reasonable (<$0.01 per company)
 
-Phase 1: v0.7.7 deployed, pinned version, security patched, tests passing
-Phase 2: Dashboard accessible, metrics exporting, alerts configured
-Phase 3: Finnish extraction working, 10+ companies scraped, accuracy >90%
-Phase 4: TypeScript client integrated, webhooks handling async jobs
-Phase 5: Architecture documented, CI/CD testing Finnish scraping
+## Key Decision: Use Built-ins First
+**Don't build custom solutions until proven necessary:**
+- ✅ Smart link following: `BestFirstCrawlingStrategy` + `KeywordRelevanceScorer`
+- ✅ Content filtering: `BM25ContentFilter` or `LLMContentFilter`
+- ✅ Extraction: `LLMExtractionStrategy` with Pydantic schema
+- ✅ Caching: `CacheMode.ENABLED`
+- ✅ Sessions: `session_id` parameter
 
-## Immediate Actions (This Week)
-1. Team review → decide on Phase 1 start
-2. Execute Phase 1: merge 0.7.7, pin version, deploy
-3. Test with Finnish samples
-4. Document learnings
+**Only add custom code if:**
+1. Tested built-in features with 10+ Finnish companies
+2. Identified specific limitation
+3. No configuration change can solve it
 
-## Cost-Benefit
+## v0.7.7 Key Features
+- Monitoring dashboard: `/dashboard` endpoint
+- Async LLM parallel processing (10x faster)
+- URL deduplication in deep crawl
+- pyOpenSSL security fix
+- Better CDP error handling
 
-Update cost: ~2 dev days
-Benefits: Security fix, 10x faster async LLM, monitoring, URL dedup
-Risk of not updating: Vulnerability, growing tech debt, blocked features
-
-Recommendation: Proceed with 5-phase plan immediately
-
-## Commands Reference
+## Commands
 
 ```bash
-# Upstream sync
-git remote add upstream https://github.com/unclecode/crawl4ai.git
-git fetch upstream
-git merge upstream/main  # Preserve custom files in azure-deployment/, .github/workflows/, .devcontainer/
+# Update to 0.7.7
+git fetch upstream && git merge upstream/main
+
+# Pin version in deployment
+sed -i 's/IMAGE="unclecode\/crawl4ai:latest"/IMAGE="unclecode\/crawl4ai:0.7.7"/' azure-deployment/keyvault-deploy.sh
 
 # Deploy
 ./azure-deployment/keyvault-deploy.sh
@@ -220,30 +245,13 @@ git merge upstream/main  # Preserve custom files in azure-deployment/, .github/w
 # Monitor
 az containerapp logs show --name crawl4ai-v2-app --resource-group crawl4ai-v2-rg --follow
 
-# Generate TypeScript client
-openapi-typescript-codegen --input https://crawl4ai-v2-app.kindforest-02188d13.northeurope.azurecontainerapps.io/openapi.json --output ./typescript-client --client fetch
-
-# Test Finnish company
-curl -X POST https://crawl4ai-v2-app.kindforest-02188d13.northeurope.azurecontainerapps.io/crawl \
-  -H "Authorization: Bearer as070511sip772patat" \
-  -H "Content-Type: application/json" \
-  -d '{"urls": ["https://www.nokia.com/fi_fi/"], "crawler_config": {"exclude_patterns": ["/blogi/", "/uutiset/"], "max_depth": 2}}'
+# Check dashboard
+open https://crawl4ai-v2-app.kindforest-02188d13.northeurope.azurecontainerapps.io/dashboard
 ```
 
-## Version 0.7.7 Changelog (Key Items)
-- Monitoring dashboard at `/dashboard` with WebSocket streaming
-- Async LLM extraction fix (#1055) - parallel processing
-- pyOpenSSL 24.3.0 → 25.3.0 (CVE fix)
-- URL deduplication in DFS deep crawl
-- 3-tier browser pool with janitor
-- CDP endpoint verification with exponential backoff
-- Better HTTP error handling
-- Webhook infrastructure (v0.7.6)
-
-## Questions for Team
-1. Keep dual auth or standardize JWT?
-2. Update dev container to Python 3.12 now or after Phase 1?
-3. Azure Monitor or separate Grafana?
-4. TypeScript client: monorepo or NPM package?
-5. Current Azure monthly cost? Projected scaling cost?
-6. Where to store scraped data: Azure SQL, Cosmos DB, or MAS database?
+## Next Steps
+1. Team review → approve Phase 1
+2. Execute: merge 0.7.7, pin version, deploy
+3. Test intelligent scraping with Nokia, Rovio, KONE
+4. Document learnings
+5. Only add custom code if built-ins insufficient
