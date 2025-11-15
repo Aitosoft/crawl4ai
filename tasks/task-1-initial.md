@@ -249,9 +249,41 @@ az containerapp logs show --name crawl4ai-v2-app --resource-group crawl4ai-v2-rg
 open https://crawl4ai-v2-app.kindforest-02188d13.northeurope.azurecontainerapps.io/dashboard
 ```
 
+## LLM API Key Setup
+
+**Required for LLM extraction to work:**
+
+1. **Create .env file** (you must add actual API key)
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your DEEPSEEK_API_KEY or OPENAI_API_KEY
+   ```
+
+2. **Add to Azure Key Vault** (for production)
+   ```bash
+   az keyvault secret set \
+     --vault-name crawl4ai-v2-keyvault \
+     --name deepseek-api-key \
+     --value "sk-your-actual-key"
+
+   az containerapp update \
+     --name crawl4ai-v2-app \
+     --resource-group crawl4ai-v2-rg \
+     --set-env-vars DEEPSEEK_API_KEY=secretref:deepseek-api-key
+   ```
+
+3. **Verify .env is gitignored** (already configured)
+   ```bash
+   git status  # .env should NOT appear
+   ```
+
+**See `tasks/task-2-env-setup.md` for detailed instructions.**
+
 ## Next Steps
 1. Team review → approve Phase 1
-2. Execute: merge 0.7.7, pin version, deploy
-3. Test intelligent scraping with Nokia, Rovio, KONE
-4. Document learnings
-5. Only add custom code if built-ins insufficient
+2. **Setup .env with API key** (see task-2-env-setup.md)
+3. Execute: merge 0.7.7, pin version, deploy
+4. **Add API key to Azure Key Vault**
+5. Test intelligent scraping with Nokia, Rovio, KONE
+6. Document learnings
+7. Only add custom code if built-ins insufficient
