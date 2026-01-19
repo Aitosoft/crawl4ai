@@ -55,7 +55,7 @@ jobs:
           CURRENT_VERSION=$(grep -o 'unclecode/crawl4ai:[^"]*' azure-deployment/keyvault-deploy.sh | cut -d':' -f2)
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "📋 Current version: $CURRENT_VERSION"
-          
+
           # Get current Azure revision (for rollback)
           if [ "${{ inputs.dry_run }}" != "true" ]; then
             CURRENT_REVISION=$(az containerapp revision list \
@@ -72,7 +72,7 @@ jobs:
         run: |
           VERSION="${{ inputs.version }}"
           echo "🔍 Checking Docker image availability for: unclecode/crawl4ai:$VERSION"
-          
+
           if [ "$VERSION" = "latest" ]; then
             echo "✅ Using latest tag"
             echo "image_available=true" >> $GITHUB_OUTPUT
@@ -92,10 +92,10 @@ jobs:
         run: |
           VERSION="${{ inputs.version }}"
           echo "📝 Updating deployment script to version: $VERSION"
-          
+
           # Update the IMAGE line in the deployment script
           sed -i "s|IMAGE=\"unclecode/crawl4ai:[^\"]*\"|IMAGE=\"unclecode/crawl4ai:$VERSION\"|" azure-deployment/keyvault-deploy.sh
-          
+
           # Verify the change
           echo "✅ Updated deployment script:"
           grep "IMAGE=" azure-deployment/keyvault-deploy.sh
@@ -104,24 +104,24 @@ jobs:
         if: ${{ !inputs.skip_tests && !inputs.dry_run && steps.verify-image.outputs.image_available == 'true' }}
         run: |
           echo "🧪 Running local crawling tests..."
-          
+
           # Test 1: Basic crawling functionality
           echo "📋 Test 1: Basic crawling with fit_markdown..."
           python test-aitosoft/test_fit_markdown.py || echo "❌ fit_markdown test failed"
-          
+
           echo "📋 Tests completed. Check output above for any failures."
 
       - name: Deploy to Azure
         if: ${{ !inputs.dry_run && steps.verify-image.outputs.image_available == 'true' }}
         run: |
           echo "🚀 Deploying to Azure..."
-          
+
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ./azure-deployment/keyvault-deploy.sh --update-only --dry-run
           else
             ./azure-deployment/keyvault-deploy.sh --update-only
           fi
-          
+
           # Wait for deployment to settle
           echo "⏳ Waiting for deployment to settle..."
           sleep 60
@@ -142,10 +142,10 @@ jobs:
         id: production-tests
         run: |
           echo "🧪 Running production validation tests..."
-          
+
           PRODUCTION_URL="${{ steps.production-url.outputs.production_url }}"
-          BEARER_TOKEN="as070511sip772patat"  # From your config
-          
+          BEARER_TOKEN="${{ secrets.C4AI_TOKEN }}"  # From GitHub repository secrets
+
           # Test 1: Health check
           echo "📋 Test 1: Health check..."
           if curl -f "$PRODUCTION_URL/health" > /dev/null 2>&1; then
@@ -154,14 +154,14 @@ jobs:
             echo "❌ Health check failed"
             echo "test_failed=true" >> $GITHUB_OUTPUT
           fi
-          
+
           # Test 2: Authentication test
           echo "📋 Test 2: Authentication test..."
           python test-aitosoft/test_production_auth.py --url "$PRODUCTION_URL" --token "$BEARER_TOKEN" || {
             echo "❌ Authentication test failed"
             echo "test_failed=true" >> $GITHUB_OUTPUT
           }
-          
+
           # Test 3: Basic crawl functionality
           echo "📋 Test 3: Production crawl test..."
           RESPONSE=$(curl -s -w "HTTP_STATUS:%{http_code}" \
@@ -169,10 +169,10 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $BEARER_TOKEN" \
             -d '{"urls": ["https://example.com"], "crawler_config": {"markdown_generator": {"type": "DefaultMarkdownGenerator", "params": {"content_filter": {"type": "PruningContentFilter", "params": {"threshold": 0.6}}, "options": {"ignore_links": false}}}}}')
-          
+
           HTTP_STATUS=$(echo $RESPONSE | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
           RESPONSE_BODY=$(echo $RESPONSE | sed 's/HTTP_STATUS:[0-9]*$//')
-          
+
           if [ "$HTTP_STATUS" = "200" ]; then
             # Check if response contains expected fields
             if echo "$RESPONSE_BODY" | jq -e '.results[0].markdown.fit_markdown' > /dev/null; then
@@ -190,34 +190,34 @@ jobs:
         if: ${{ !inputs.dry_run && steps.production-tests.outputs.test_failed == 'true' }}
         run: |
           echo "🔄 Tests failed, rolling back to previous revision..."
-          
+
           PREVIOUS_REVISION="${{ steps.current-info.outputs.current_revision }}"
-          
+
           if [ -n "$PREVIOUS_REVISION" ]; then
             # Revert to previous revision
             az containerapp revision activate \
               --revision "$PREVIOUS_REVISION" \
               --resource-group crawl4ai-v2-rg
-            
+
             echo "✅ Rolled back to revision: $PREVIOUS_REVISION"
-            
+
             # Also revert the deployment script
             git checkout -- azure-deployment/keyvault-deploy.sh
             echo "✅ Reverted deployment script changes"
           else
             echo "❌ Could not determine previous revision for rollback"
           fi
-          
+
           exit 1
 
       - name: Commit changes on success
         if: ${{ !inputs.dry_run && steps.production-tests.outputs.test_failed != 'true' && steps.verify-image.outputs.image_available == 'true' }}
         run: |
           echo "✅ All tests passed, committing changes..."
-          
+
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
+
           git add azure-deployment/keyvault-deploy.sh
           git commit -m "Update Crawl4AI to version ${{ inputs.version }}
 
@@ -229,7 +229,7 @@ jobs:
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>" || echo "No changes to commit"
-          
+
           git push origin main || echo "Nothing to push"
 
       - name: Create success notification
@@ -240,27 +240,27 @@ Co-Authored-By: Claude <noreply@anthropic.com>" || echo "No changes to commit"
             const version = '${{ inputs.version }}';
             const currentVersion = '${{ steps.current-info.outputs.current_version }}';
             const productionUrl = '${{ steps.production-url.outputs.production_url }}';
-            
+
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: `✅ Successfully Updated Crawl4AI to ${version}`,
               body: `## 🎉 Update Completed Successfully
-              
-              **Previous Version:** \`${currentVersion}\`  
-              **New Version:** \`${version}\`  
+
+              **Previous Version:** \`${currentVersion}\`
+              **New Version:** \`${version}\`
               **Production URL:** ${productionUrl}
-              
+
               ### ✅ Tests Passed
               - Health check
-              - Authentication test  
+              - Authentication test
               - Production crawl test with fit_markdown validation
-              
+
               ### 🚀 Deployment Details
               - Azure Container App updated successfully
               - All validation tests passed
               - Changes committed to main branch
-              
+
               ---
               *This update was completed via GitHub Actions workflow*`,
               labels: ['crawl4ai-release', 'deployment-success']
@@ -274,8 +274,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>" || echo "No changes to commit"
         with:
           args: |
             ${{ steps.production-tests.outputs.test_failed == 'true' && '❌ **Crawl4AI Update Failed**' || '✅ **Crawl4AI Updated Successfully**' }}
-            
+
             **Version:** `${{ steps.current-info.outputs.current_version }}` → `${{ inputs.version }}`
             ${{ steps.production-tests.outputs.test_failed == 'true' && '**Status:** Rolled back due to test failures' || '**Status:** All tests passed, deployment successful' }}
-            
+
             Production: ${{ steps.production-url.outputs.production_url || 'N/A' }}

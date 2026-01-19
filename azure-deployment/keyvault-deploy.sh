@@ -20,7 +20,7 @@ CONTAINER_APP="crawl4ai-v2-app"
 ENVIRONMENT="crawl4ai-v2-env"
 KEYVAULT_NAME="crawl4ai-v2-keyvault"
 LOCATION="northeurope"
-IMAGE="unclecode/crawl4ai:latest"
+IMAGE="unclecode/crawl4ai:0.8.0"  # Pinned version for reproducibility (was 'latest')
 LOG_WORKSPACE="crawl4ai-v2-logs"
 
 # Load local configuration if available
@@ -123,14 +123,14 @@ print_section() {
 execute_cmd() {
     local cmd="$1"
     local description="$2"
-    
+
     print_status "$description"
-    
+
     if [ "$DRY_RUN" = true ]; then
         echo "DRY RUN: $cmd"
         return 0
     fi
-    
+
     echo "Executing: $cmd"
     if eval "$cmd"; then
         print_success "✅ $description completed"
@@ -147,12 +147,12 @@ check_azure_cli() {
         print_error "Azure CLI is not installed. Please install it first."
         exit 1
     fi
-    
+
     if ! az account show &> /dev/null; then
         print_error "Not logged in to Azure. Please run 'az login' first."
         exit 1
     fi
-    
+
     print_success "Azure CLI is ready"
 }
 
@@ -169,24 +169,24 @@ get_current_user() {
 # List available revisions
 list_revisions() {
     print_section "AVAILABLE REVISIONS"
-    
+
     if [ "$DRY_RUN" = false ]; then
         print_status "Fetching revisions for $CONTAINER_APP..."
-        
+
         # Get all revisions with details
         az containerapp revision list \
             --name $CONTAINER_APP \
             --resource-group $RESOURCE_GROUP \
             --output table \
             --query '[].{Name:name,Active:properties.active,CreatedTime:properties.createdTime,Image:properties.template.containers[0].image,TrafficWeight:properties.trafficWeight}'
-        
+
         # Get currently active revision
         ACTIVE_REVISION=$(az containerapp revision list \
             --name $CONTAINER_APP \
             --resource-group $RESOURCE_GROUP \
             --query '[?properties.active].name' \
             -o tsv | head -1)
-        
+
         print_status "Currently active revision: $ACTIVE_REVISION"
     else
         print_status "DRY RUN: Would list revisions for $CONTAINER_APP"
@@ -196,9 +196,9 @@ list_revisions() {
 # Rollback to a specific or previous revision
 rollback_revision() {
     local target_revision="$1"
-    
+
     print_section "ROLLBACK OPERATION"
-    
+
     if [ "$DRY_RUN" = false ]; then
         # Get current active revision
         CURRENT_ACTIVE=$(az containerapp revision list \
@@ -206,20 +206,20 @@ rollback_revision() {
             --resource-group $RESOURCE_GROUP \
             --query '[?properties.active].name' \
             -o tsv | head -1)
-        
+
         print_status "Current active revision: $CURRENT_ACTIVE"
-        
+
         # If no target revision specified, find the previous active one
         if [[ -z "$target_revision" ]]; then
             print_status "No specific revision provided, finding previous revision..."
-            
+
             # Get all revisions sorted by creation time (newest first)
             ALL_REVISIONS=$(az containerapp revision list \
                 --name $CONTAINER_APP \
                 --resource-group $RESOURCE_GROUP \
                 --query '[].name' \
                 -o tsv | sort -r)
-            
+
             # Find the previous revision (skip the current active one)
             FOUND_CURRENT=false
             for rev in $ALL_REVISIONS; do
@@ -231,74 +231,74 @@ rollback_revision() {
                     FOUND_CURRENT=true
                 fi
             done
-            
+
             if [[ -z "$target_revision" ]]; then
                 print_error "Could not find a previous revision to rollback to"
                 return 1
             fi
         fi
-        
+
         print_status "Target rollback revision: $target_revision"
-        
+
         # Verify the target revision exists
         REVISION_EXISTS=$(az containerapp revision show \
             --name $CONTAINER_APP \
             --resource-group $RESOURCE_GROUP \
             --revision "$target_revision" \
             --query 'name' -o tsv 2>/dev/null || echo "")
-        
+
         if [[ -z "$REVISION_EXISTS" ]]; then
             print_error "Revision $target_revision does not exist or is not accessible"
             return 1
         fi
-        
+
         # Get revision details for confirmation
         REVISION_IMAGE=$(az containerapp revision show \
             --name $CONTAINER_APP \
             --resource-group $RESOURCE_GROUP \
             --revision "$target_revision" \
             --query 'properties.template.containers[0].image' -o tsv)
-        
+
         REVISION_CREATED=$(az containerapp revision show \
             --name $CONTAINER_APP \
             --resource-group $RESOURCE_GROUP \
             --revision "$target_revision" \
             --query 'properties.createdTime' -o tsv)
-        
+
         print_status "Rollback target details:"
         echo "  Revision: $target_revision"
         echo "  Image: $REVISION_IMAGE"
         echo "  Created: $REVISION_CREATED"
-        
+
         # Perform the rollback
         execute_cmd "az containerapp revision activate \
                       --revision $target_revision \
                       --resource-group $RESOURCE_GROUP" \
                    "Activating revision $target_revision"
-        
+
         if [ $? -eq 0 ]; then
             print_success "✅ Rollback completed successfully!"
-            
+
             # Wait for rollback to take effect
             print_status "Waiting for rollback to take effect..."
             sleep 30
-            
+
             # Verify the rollback
             NEW_ACTIVE=$(az containerapp revision list \
                 --name $CONTAINER_APP \
                 --resource-group $RESOURCE_GROUP \
                 --query '[?properties.active].name' \
                 -o tsv | head -1)
-            
+
             if [ "$NEW_ACTIVE" = "$target_revision" ]; then
                 print_success "Rollback verification successful"
-                
+
                 # Show updated deployment info
                 APP_URL=$(az containerapp show \
                           --name $CONTAINER_APP \
                           --resource-group $RESOURCE_GROUP \
                           --query properties.configuration.ingress.fqdn -o tsv)
-                
+
                 echo ""
                 echo "📋 Post-Rollback Status:"
                 echo "   App URL: https://$APP_URL"
@@ -332,34 +332,34 @@ deploy_crawl4ai_with_keyvault() {
     echo "   Image: $IMAGE"
     echo "   Bearer Token: ${BEARER_TOKEN:0:10}..."
     echo ""
-    
+
     get_current_user
-    
+
     if [ "$UPDATE_ONLY" = false ]; then
         # Create resource group
         execute_cmd "az group create --name $RESOURCE_GROUP --location $LOCATION" \
                    "Creating resource group"
-        
+
         # Create Log Analytics workspace
         execute_cmd "az monitor log-analytics workspace create \
                       --resource-group $RESOURCE_GROUP \
                       --workspace-name $LOG_WORKSPACE \
                       --location $LOCATION" \
                    "Creating Log Analytics workspace"
-        
+
         # Get workspace credentials
         if [ "$DRY_RUN" = false ]; then
             WORKSPACE_ID=$(az monitor log-analytics workspace show \
                          --resource-group $RESOURCE_GROUP \
                          --workspace-name $LOG_WORKSPACE \
                          --query customerId -o tsv)
-            
+
             WORKSPACE_KEY=$(az monitor log-analytics workspace get-shared-keys \
                           --resource-group $RESOURCE_GROUP \
                           --workspace-name $LOG_WORKSPACE \
                           --query primarySharedKey -o tsv)
         fi
-        
+
         # Create Container Apps environment
         execute_cmd "az containerapp env create \
                       --name $ENVIRONMENT \
@@ -368,7 +368,7 @@ deploy_crawl4ai_with_keyvault() {
                       --logs-workspace-id $WORKSPACE_ID \
                       --logs-workspace-key $WORKSPACE_KEY" \
                    "Creating Container Apps environment"
-        
+
         # Create Key Vault
         execute_cmd "az keyvault create \
                       --name $KEYVAULT_NAME \
@@ -376,27 +376,27 @@ deploy_crawl4ai_with_keyvault() {
                       --location $LOCATION \
                       --sku standard" \
                    "Creating Key Vault"
-        
+
         # Assign Key Vault permissions to current user
         execute_cmd "az role assignment create \
                       --role \"Key Vault Secrets Officer\" \
                       --assignee $CURRENT_USER \
                       --scope /subscriptions/\$(az account show --query id -o tsv)/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.KeyVault/vaults/$KEYVAULT_NAME" \
                    "Assigning Key Vault permissions to user"
-        
+
         # Wait for role propagation
         if [ "$DRY_RUN" = false ]; then
             print_status "Waiting for role assignment propagation..."
             sleep 30
         fi
-        
+
         # Create secret in Key Vault
         execute_cmd "az keyvault secret set \
                       --vault-name $KEYVAULT_NAME \
                       --name C4AI-TOKEN \
                       --value $BEARER_TOKEN" \
                    "Creating bearer token secret in Key Vault"
-        
+
         # Create container app with managed identity
         execute_cmd "az containerapp create \
                       --name $CONTAINER_APP \
@@ -411,7 +411,7 @@ deploy_crawl4ai_with_keyvault() {
                       --memory 2.0Gi \
                       --system-assigned" \
                    "Creating container app with managed identity"
-        
+
         # Get the managed identity principal ID
         if [ "$DRY_RUN" = false ]; then
             PRINCIPAL_ID=$(az containerapp identity show \
@@ -419,14 +419,14 @@ deploy_crawl4ai_with_keyvault() {
                          --resource-group $RESOURCE_GROUP \
                          --query principalId -o tsv)
         fi
-        
+
         # Assign Key Vault permissions to container app
         execute_cmd "az role assignment create \
                       --role \"Key Vault Secrets User\" \
                       --assignee $PRINCIPAL_ID \
                       --scope /subscriptions/\$(az account show --query id -o tsv)/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.KeyVault/vaults/$KEYVAULT_NAME" \
                    "Assigning Key Vault permissions to container app"
-        
+
         # Get secret URI
         if [ "$DRY_RUN" = false ]; then
             SECRET_URI=$(az keyvault secret show \
@@ -434,14 +434,14 @@ deploy_crawl4ai_with_keyvault() {
                        --name C4AI-TOKEN \
                        --query id -o tsv)
         fi
-        
+
         # Configure container app to use Key Vault secret
         execute_cmd "az containerapp secret set \
                       --name $CONTAINER_APP \
                       --resource-group $RESOURCE_GROUP \
                       --secrets c4ai-token=\"@Microsoft.KeyVault(SecretUri=$SECRET_URI)\"" \
                    "Configuring Key Vault secret reference"
-        
+
         # Update environment variables
         execute_cmd "az containerapp update \
                       --name $CONTAINER_APP \
@@ -463,23 +463,23 @@ deploy_crawl4ai_with_keyvault() {
                           --value $BEARER_TOKEN" \
                        "Updating bearer token in Key Vault"
         fi
-        
+
         execute_cmd "az containerapp update \
                       --name $CONTAINER_APP \
                       --resource-group $RESOURCE_GROUP \
                       --image $IMAGE" \
                    "Updating container app image"
     fi
-    
+
     # Show deployment results
     if [ "$DRY_RUN" = false ]; then
         print_status "📊 Getting deployment information..."
-        
+
         APP_URL=$(az containerapp show \
                   --name $CONTAINER_APP \
                   --resource-group $RESOURCE_GROUP \
                   --query properties.configuration.ingress.fqdn -o tsv)
-        
+
         print_success "🎉 Deployment completed successfully!"
         echo ""
         echo "📋 Deployment Summary:"
@@ -506,7 +506,7 @@ deploy_crawl4ai_with_keyvault() {
 # Main execution
 main() {
     check_azure_cli
-    
+
     # Handle different modes of operation
     if [ "$LIST_REVISIONS" = true ]; then
         list_revisions

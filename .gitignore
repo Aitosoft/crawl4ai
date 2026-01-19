@@ -126,6 +126,10 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+*.env
+!.env.example
+!.env.txt
 .venv
 env/
 venv/
@@ -202,7 +206,7 @@ test_env/
 # Private agent guidance (do not publish)
 AGENTS.md
 CLAUDE.md
-**/.DS_Store
+notes-to-claude.md
 **/.DS_Store
 
 todo.md
