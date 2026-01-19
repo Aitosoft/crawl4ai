@@ -52,11 +52,9 @@ That's it! In just a few lines, you've automated a complete search workflow.
 
 Want to learn by doing? We've got you covered:
 
-**🚀 [Live Demo](https://docs.crawl4ai.com/c4a-script/demo)** - Try C4A-Script in your browser right now!
+**🚀 [Live Demo](https://docs.crawl4ai.com/apps/c4a-script/)** - Try C4A-Script in your browser right now!
 
-**📁 [Tutorial Examples](/examples/c4a_script/)** - Complete examples with source code
-
-**🛠️ [Local Tutorial](/examples/c4a_script/tutorial/)** - Run the interactive tutorial on your machine
+**📁 [Tutorial Examples](https://github.com/unclecode/crawl4ai/blob/main/docs/examples/c4a_script/)** - Complete examples with source code
 
 ### Running the Tutorial Locally
 
@@ -71,12 +69,12 @@ The tutorial includes a Flask-based web interface with:
 cd docs/examples/c4a_script/tutorial/
 
 # Install dependencies
-pip install flask
+pip install -r requirements.txt
 
 # Launch the tutorial server
-python app.py
+python server.py
 
-# Open http://localhost:5000 in your browser
+# Open http://localhost:8000 in your browser
 ```
 
 ## Core Concepts
@@ -113,8 +111,8 @@ CLICK `.submit-btn`
 # By attribute
 CLICK `button[type="submit"]`
 
-# By text content
-CLICK `button:contains("Sign In")`
+# By accessible attributes
+CLICK `button[aria-label="Search"][title="Search"]`
 
 # Complex selectors
 CLICK `.form-container input[name="email"]`

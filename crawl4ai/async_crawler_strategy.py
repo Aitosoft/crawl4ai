@@ -21,6 +21,7 @@ from .async_logger import AsyncLogger
 from .ssl_certificate import SSLCertificate
 from .user_agent_generator import ValidUAGenerator
 from .browser_manager import BrowserManager
+from .browser_adapter import BrowserAdapter, PlaywrightAdapter, UndetectedAdapter
 
 import aiofiles
 import aiohttp
@@ -71,7 +72,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
     """
 
     def __init__(
-        self, browser_config: BrowserConfig = None, logger: AsyncLogger = None, **kwargs
+        self, browser_config: BrowserConfig = None, logger: AsyncLogger = None, browser_adapter: BrowserAdapter = None, **kwargs
     ):
         """
         Initialize the AsyncPlaywrightCrawlerStrategy with a browser configuration.
@@ -80,11 +81,16 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
             browser_config (BrowserConfig): Configuration object containing browser settings.
                                           If None, will be created from kwargs for backwards compatibility.
             logger: Logger instance for recording events and errors.
+            browser_adapter (BrowserAdapter): Browser adapter for handling browser-specific operations.
+                                           If None, defaults to PlaywrightAdapter.
             **kwargs: Additional arguments for backwards compatibility and extending functionality.
         """
         # Initialize browser config, either from provided object or kwargs
         self.browser_config = browser_config or BrowserConfig.from_kwargs(kwargs)
         self.logger = logger
+        
+        # Initialize browser adapter
+        self.adapter = browser_adapter or PlaywrightAdapter()
 
         # Initialize session management
         self._downloaded_files = []
@@ -104,7 +110,9 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
 
         # Initialize browser manager with config
         self.browser_manager = BrowserManager(
-            browser_config=self.browser_config, logger=self.logger
+            browser_config=self.browser_config, 
+            logger=self.logger,
+            use_undetected=isinstance(self.adapter, UndetectedAdapter)
         )
 
     async def __aenter__(self):
@@ -322,7 +330,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
         """
 
         try:
-            result = await page.evaluate(wrapper_js)
+            result = await self.adapter.evaluate(page, wrapper_js)
             return result
         except Exception as e:
             if "Error evaluating condition" in str(e):
@@ -367,7 +375,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
 
                     # Replace the iframe with a div containing the extracted content
                     _iframe = iframe_content.replace("`", "\\`")
-                    await page.evaluate(
+                    await self.adapter.evaluate(page,
                         f"""
                         () => {{
                             const iframe = document.getElementById('iframe-{i}');
@@ -444,48 +452,48 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
         if url.startswith(("http://", "https://", "view-source:")):
             return await self._crawl_web(url, config)
 
-        elif url.startswith("file://"):
-            # initialize empty lists for console messages
-            captured_console = []
-            
-            # Process local file
-            local_file_path = url[7:]  # Remove 'file://' prefix
-            if not os.path.exists(local_file_path):
-                raise FileNotFoundError(f"Local file not found: {local_file_path}")
-            with open(local_file_path, "r", encoding="utf-8") as f:
-                html = f.read()
-            if config.screenshot:
-                screenshot_data = await self._generate_screenshot_from_html(html)
-            if config.capture_console_messages:
-                page, context = await self.browser_manager.get_page(crawlerRunConfig=config)
-                captured_console = await self._capture_console_messages(page, url)
-
-            return AsyncCrawlResponse(
-                html=html,
-                response_headers=response_headers,
-                status_code=status_code,
-                screenshot=screenshot_data,
-                get_delayed_content=None,
-                console_messages=captured_console,
+        elif url.startswith("file://") or url.startswith("raw://") or url.startswith("raw:"):
+            # Check if browser processing is required for file:// or raw: URLs
+            needs_browser = (
+                config.process_in_browser or
+                config.screenshot or
+                config.pdf or
+                config.capture_mhtml or
+                config.js_code or
+                config.wait_for or
+                config.scan_full_page or
+                config.remove_overlay_elements or
+                config.simulate_user or
+                config.magic or
+                config.process_iframes or
+                config.capture_console_messages or
+                config.capture_network_requests
             )
 
-        ##### 
-        # Since both "raw:" and "raw://" start with "raw:", the first condition is always true for both, so "raw://" will be sliced as "//...", which is incorrect.
-        # Fix: Check for "raw://" first, then "raw:"
-        # Also, the prefix "raw://" is actually 6 characters long, not 7, so it should be sliced accordingly: url[6:]
-        #####
-        elif url.startswith("raw://") or url.startswith("raw:"):
-            # Process raw HTML content
-            # raw_html = url[4:] if url[:4] == "raw:" else url[7:]
-            raw_html = url[6:] if url.startswith("raw://") else url[4:]
-            html = raw_html
-            if config.screenshot:
-                screenshot_data = await self._generate_screenshot_from_html(html)
+            if needs_browser:
+                # Route through _crawl_web() for full browser pipeline
+                # _crawl_web() will detect file:// and raw: URLs and use set_content()
+                return await self._crawl_web(url, config)
+
+            # Fast path: return HTML directly without browser interaction
+            if url.startswith("file://"):
+                # Process local file
+                local_file_path = url[7:]  # Remove 'file://' prefix
+                if not os.path.exists(local_file_path):
+                    raise FileNotFoundError(f"Local file not found: {local_file_path}")
+                with open(local_file_path, "r", encoding="utf-8") as f:
+                    html = f.read()
+            else:
+                # Process raw HTML content (raw:// or raw:)
+                html = url[6:] if url.startswith("raw://") else url[4:]
+
             return AsyncCrawlResponse(
                 html=html,
                 response_headers=response_headers,
                 status_code=status_code,
-                screenshot=screenshot_data,
+                screenshot=None,
+                pdf_data=None,
+                mhtml_data=None,
                 get_delayed_content=None,
             )
         else:
@@ -628,91 +636,16 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
             page.on("requestfailed", handle_request_failed_capture)
 
         # Console Message Capturing
+        handle_console = None
+        handle_error = None
         if config.capture_console_messages:
-            def handle_console_capture(msg):
-                try:
-                    message_type = "unknown"
-                    try:
-                        message_type = msg.type
-                    except:
-                        pass
-                        
-                    message_text = "unknown"
-                    try:
-                        message_text = msg.text
-                    except:
-                        pass
-                        
-                    # Basic console message with minimal content
-                    entry = {
-                        "type": message_type,
-                        "text": message_text,
-                        "timestamp": time.time()
-                    }
-                    
-                    captured_console.append(entry)
-                    
-                except Exception as e:
-                    if self.logger:
-                        self.logger.warning(f"Error capturing console message: {e}", tag="CAPTURE")
-                    # Still add something to the list even on error
-                    captured_console.append({
-                        "type": "console_capture_error", 
-                        "error": str(e), 
-                        "timestamp": time.time()
-                    })
-
-            def handle_pageerror_capture(err):
-                try:
-                    error_message = "Unknown error"
-                    try:
-                        error_message = err.message
-                    except:
-                        pass
-                        
-                    error_stack = ""
-                    try:
-                        error_stack = err.stack
-                    except:
-                        pass
-                        
-                    captured_console.append({
-                        "type": "error",
-                        "text": error_message,
-                        "stack": error_stack,
-                        "timestamp": time.time()
-                    })
-                except Exception as e:
-                    if self.logger:
-                        self.logger.warning(f"Error capturing page error: {e}", tag="CAPTURE")
-                    captured_console.append({
-                        "type": "pageerror_capture_error", 
-                        "error": str(e), 
-                        "timestamp": time.time()
-                    })
-
-            # Add event listeners directly
-            page.on("console", handle_console_capture)
-            page.on("pageerror", handle_pageerror_capture)
+            # Set up console capture using adapter
+            handle_console = await self.adapter.setup_console_capture(page, captured_console)
+            handle_error = await self.adapter.setup_error_capture(page, captured_console)
 
         # Set up console logging if requested
-        if config.log_console:
-            def log_consol(
-                msg, console_log_type="debug"
-            ):  # Corrected the parameter syntax
-                if console_log_type == "error":
-                    self.logger.error(
-                        message=f"Console error: {msg}",  # Use f-string for variable interpolation
-                        tag="CONSOLE"
-                    )
-                elif console_log_type == "debug":
-                    self.logger.debug(
-                        message=f"Console: {msg}",  # Use f-string for variable interpolation
-                        tag="CONSOLE"
-                    )
-
-            page.on("console", log_consol)
-            page.on("pageerror", lambda e: log_consol(e, "error"))
+        # Note: For undetected browsers, console logging won't work directly
+        # but captured messages can still be logged after retrieval
 
         try:
             # Get SSL certificate information if requested and URL is HTTPS
@@ -733,66 +666,82 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
             if not config.js_only:
                 await self.execute_hook("before_goto", page, context=context, url=url, config=config)
 
-                try:
-                    # Generate a unique nonce for this request
-                    if config.experimental.get("use_csp_nonce", False):
-                        nonce = hashlib.sha256(os.urandom(32)).hexdigest()
+                # Check if this is a file:// or raw: URL that needs set_content() instead of goto()
+                is_local_content = url.startswith("file://") or url.startswith("raw://") or url.startswith("raw:")
 
-                        # Add CSP headers to the request
-                        await page.set_extra_http_headers(
-                            {
-                                "Content-Security-Policy": f"default-src 'self'; script-src 'self' 'nonce-{nonce}' 'strict-dynamic'"
-                            }
-                        )
-
-                    response = await page.goto(
-                        url, wait_until=config.wait_until, timeout=config.page_timeout
-                    )
-                    redirected_url = page.url
-                except Error as e:
-                    # Allow navigation to be aborted when downloading files
-                    # This is expected behavior for downloads in some browser engines
-                    if 'net::ERR_ABORTED' in str(e) and self.browser_config.accept_downloads:
-                        self.logger.info(
-                            message=f"Navigation aborted, likely due to file download: {url}",
-                            tag="GOTO",
-                            params={"url": url},
-                        )
-                        response = None
+                if is_local_content:
+                    # Load local content using set_content() instead of network navigation
+                    if url.startswith("file://"):
+                        local_file_path = url[7:]  # Remove 'file://' prefix
+                        if not os.path.exists(local_file_path):
+                            raise FileNotFoundError(f"Local file not found: {local_file_path}")
+                        with open(local_file_path, "r", encoding="utf-8") as f:
+                            html_content = f.read()
                     else:
-                        raise RuntimeError(f"Failed on navigating ACS-GOTO:\n{str(e)}")
+                        # raw:// or raw:
+                        html_content = url[6:] if url.startswith("raw://") else url[4:]
+
+                    await page.set_content(html_content, wait_until=config.wait_until)
+                    response = None
+                    redirected_url = config.base_url or url
+                    status_code = 200
+                    response_headers = {}
+                else:
+                    # Standard web navigation with goto()
+                    try:
+                        # Generate a unique nonce for this request
+                        if config.experimental.get("use_csp_nonce", False):
+                            nonce = hashlib.sha256(os.urandom(32)).hexdigest()
+
+                            # Add CSP headers to the request
+                            await page.set_extra_http_headers(
+                                {
+                                    "Content-Security-Policy": f"default-src 'self'; script-src 'self' 'nonce-{nonce}' 'strict-dynamic'"
+                                }
+                            )
+
+                        response = await page.goto(
+                            url, wait_until=config.wait_until, timeout=config.page_timeout
+                        )
+                        redirected_url = page.url
+                    except Error as e:
+                        # Allow navigation to be aborted when downloading files
+                        # This is expected behavior for downloads in some browser engines
+                        if 'net::ERR_ABORTED' in str(e) and self.browser_config.accept_downloads:
+                            self.logger.info(
+                                message=f"Navigation aborted, likely due to file download: {url}",
+                                tag="GOTO",
+                                params={"url": url},
+                            )
+                            response = None
+                        else:
+                            raise RuntimeError(f"Failed on navigating ACS-GOTO:\n{str(e)}")
+
+                    # ──────────────────────────────────────────────────────────────
+                    # Walk the redirect chain.  Playwright returns only the last
+                    # hop, so we trace the `request.redirected_from` links until the
+                    # first response that differs from the final one and surface its
+                    # status-code.
+                    # ──────────────────────────────────────────────────────────────
+                    if response is None:
+                        status_code = 200
+                        response_headers = {}
+                    else:
+                        first_resp = response
+                        req = response.request
+                        while req and req.redirected_from:
+                            prev_req = req.redirected_from
+                            prev_resp = await prev_req.response()
+                            if prev_resp:                       # keep earliest
+                                first_resp = prev_resp
+                            req = prev_req
+
+                        status_code = first_resp.status
+                        response_headers = first_resp.headers
 
                 await self.execute_hook(
                     "after_goto", page, context=context, url=url, response=response, config=config
                 )
-
-                # ──────────────────────────────────────────────────────────────
-                # Walk the redirect chain.  Playwright returns only the last
-                # hop, so we trace the `request.redirected_from` links until the
-                # first response that differs from the final one and surface its
-                # status-code.
-                # ──────────────────────────────────────────────────────────────
-                if response is None:
-                    status_code = 200
-                    response_headers = {}
-                else:
-                    first_resp = response
-                    req = response.request
-                    while req and req.redirected_from:
-                        prev_req = req.redirected_from
-                        prev_resp = await prev_req.response()
-                        if prev_resp:                       # keep earliest
-                            first_resp = prev_resp
-                        req = prev_req
-                
-                    status_code = first_resp.status
-                    response_headers = first_resp.headers
-                # if response is None:
-                #     status_code = 200
-                #     response_headers = {}
-                # else:
-                #     status_code = response.status
-                #     response_headers = response.headers
 
             else:
                 status_code = 200
@@ -824,7 +773,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
             except Error:
                 visibility_info = await self.check_visibility(page)
 
-                if self.browser_config.config.verbose:
+                if self.browser_config.verbose:
                     self.logger.debug(
                         message="Body visibility info: {info}",
                         tag="DEBUG",
@@ -998,7 +947,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
                         await page.wait_for_load_state("domcontentloaded", timeout=5)
                     except PlaywrightTimeoutError:
                         pass
-                    await page.evaluate(update_image_dimensions_js)
+                    await self.adapter.evaluate(page, update_image_dimensions_js)
                 except Exception as e:
                     self.logger.error(
                         message="Error updating image dimensions: {error}",
@@ -1027,7 +976,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
                     
                     for selector in selectors:
                         try:
-                            content = await page.evaluate(
+                            content = await self.adapter.evaluate(page,
                                 f"""Array.from(document.querySelectorAll("{selector}"))
                                     .map(el => el.outerHTML)
                                     .join('')"""
@@ -1085,6 +1034,17 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
                 await asyncio.sleep(delay)
                 return await page.content()
 
+            # For undetected browsers, retrieve console messages before returning
+            if config.capture_console_messages and hasattr(self.adapter, 'retrieve_console_messages'):
+                final_messages = await self.adapter.retrieve_console_messages(page)
+                captured_console.extend(final_messages)
+
+            ###
+            # This ensures we capture the current page URL at the time we return the response, 
+            # which correctly reflects any JavaScript navigation that occurred.
+            ###
+            redirected_url = page.url  # Use current page URL to capture JS redirects
+            
             # Return complete response
             return AsyncCrawlResponse(
                 html=html,
@@ -1123,8 +1083,13 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
                     page.remove_listener("response", handle_response_capture)
                     page.remove_listener("requestfailed", handle_request_failed_capture)
                 if config.capture_console_messages:
-                    page.remove_listener("console", handle_console_capture)
-                    page.remove_listener("pageerror", handle_pageerror_capture)
+                    # Retrieve any final console messages for undetected browsers
+                    if hasattr(self.adapter, 'retrieve_console_messages'):
+                        final_messages = await self.adapter.retrieve_console_messages(page)
+                        captured_console.extend(final_messages)
+                    
+                    # Clean up console capture
+                    await self.adapter.cleanup_console_capture(page, handle_console, handle_error)
                 
                 # Close the page
                 await page.close()
@@ -1354,7 +1319,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
             """
             
             # Execute virtual scroll capture
-            result = await page.evaluate(virtual_scroll_js, config.to_dict())
+            result = await self.adapter.evaluate(page, virtual_scroll_js, config.to_dict())
             
             if result.get("replaced", False):
                 self.logger.success(
@@ -1438,11 +1403,12 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
         remove_overlays_js = load_js_script("remove_overlay_elements")
 
         try:
-            await page.evaluate(
+            await self.adapter.evaluate(page,
                 f"""
-                (() => {{
+                (async () => {{
                     try {{
-                        {remove_overlays_js}
+                        const removeOverlays = {remove_overlays_js};
+                        await removeOverlays();
                         return {{ success: true }};
                     }} catch (error) {{
                         return {{
@@ -1574,7 +1540,78 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
         await page.goto(file_path)
 
         return captured_console
-        
+
+    async def _generate_media_from_html(
+        self, html: str, config: CrawlerRunConfig = None
+    ) -> tuple:
+        """
+        Generate media (screenshot, PDF, MHTML) from raw HTML content.
+
+        This method is used for raw: and file:// URLs where we have HTML content
+        but need to render it in a browser to generate media outputs.
+
+        Args:
+            html (str): The raw HTML content to render
+            config (CrawlerRunConfig, optional): Configuration for media options
+
+        Returns:
+            tuple: (screenshot_data, pdf_data, mhtml_data) - any can be None
+        """
+        page = None
+        screenshot_data = None
+        pdf_data = None
+        mhtml_data = None
+
+        try:
+            # Get a browser page
+            config = config or CrawlerRunConfig()
+            page, context = await self.browser_manager.get_page(crawlerRunConfig=config)
+
+            # Load the HTML content into the page
+            await page.set_content(html, wait_until="domcontentloaded")
+
+            # Generate requested media
+            if config.pdf:
+                pdf_data = await self.export_pdf(page)
+
+            if config.capture_mhtml:
+                mhtml_data = await self.capture_mhtml(page)
+
+            if config.screenshot:
+                if config.screenshot_wait_for:
+                    await asyncio.sleep(config.screenshot_wait_for)
+                screenshot_height_threshold = getattr(config, 'screenshot_height_threshold', None)
+                screenshot_data = await self.take_screenshot(
+                    page, screenshot_height_threshold=screenshot_height_threshold
+                )
+
+            return screenshot_data, pdf_data, mhtml_data
+
+        except Exception as e:
+            error_message = f"Failed to generate media from HTML: {str(e)}"
+            self.logger.error(
+                message="HTML media generation failed: {error}",
+                tag="ERROR",
+                params={"error": error_message},
+            )
+            # Return error image for screenshot if it was requested
+            if config and config.screenshot:
+                img = Image.new("RGB", (800, 600), color="black")
+                draw = ImageDraw.Draw(img)
+                font = ImageFont.load_default()
+                draw.text((10, 10), error_message, fill=(255, 255, 255), font=font)
+                buffered = BytesIO()
+                img.save(buffered, format="JPEG")
+                screenshot_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            return screenshot_data, pdf_data, mhtml_data
+        finally:
+            # Clean up the page
+            if page:
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+
     async def take_screenshot(self, page, **kwargs) -> str:
         """
         Take a screenshot of the current page.
@@ -1843,7 +1880,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
                         # When {script} contains statements (e.g., const link = …; link.click();), 
                         # this forms invalid JavaScript, causing Playwright execution error: SyntaxError: Unexpected token 'const'.
                         # """
-                        result = await page.evaluate(
+                        result = await self.adapter.evaluate(page,
                             f"""
                         (async () => {{
                             try {{
@@ -1965,7 +2002,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
             for script in scripts:
                 try:
                     # Execute the script and wait for network idle
-                    result = await page.evaluate(
+                    result = await self.adapter.evaluate(page,
                         f"""
                         (() => {{
                             return new Promise((resolve) => {{
@@ -2049,7 +2086,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
         Returns:
             Boolean indicating visibility
         """
-        return await page.evaluate(
+        return await self.adapter.evaluate(page,
             """
             () => {
                 const element = document.body;
@@ -2090,7 +2127,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
             Dict containing scroll status and position information
         """
         try:
-            result = await page.evaluate(
+            result = await self.adapter.evaluate(page,
                 f"""() => {{
                     try {{
                         const startX = window.scrollX;
@@ -2147,7 +2184,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
         Returns:
             Dict containing width and height of the page
         """
-        return await page.evaluate(
+        return await self.adapter.evaluate(page,
             """
             () => {
                 const {scrollWidth, scrollHeight} = document.documentElement;
@@ -2167,7 +2204,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
             bool: True if page needs scrolling
         """
         try:
-            need_scroll = await page.evaluate(
+            need_scroll = await self.adapter.evaluate(page,
                 """
             () => {
                 const scrollHeight = document.documentElement.scrollHeight;
@@ -2343,9 +2380,28 @@ class AsyncHTTPCrawlerStrategy(AsyncCrawlerStrategy):
         )
 
 
+    def _format_proxy_url(self, proxy_config) -> str:
+        """Format ProxyConfig into aiohttp-compatible proxy URL."""
+        if not proxy_config:
+            return None
+
+        server = proxy_config.server
+        username = getattr(proxy_config, 'username', None)
+        password = getattr(proxy_config, 'password', None)
+
+        if username and password:
+            # Insert credentials into URL: http://user:pass@host:port
+            if '://' in server:
+                protocol, rest = server.split('://', 1)
+                return f"{protocol}://{username}:{password}@{rest}"
+            else:
+                return f"http://{username}:{password}@{server}"
+
+        return server
+
     async def _handle_http(
-        self, 
-        url: str, 
+        self,
+        url: str,
         config: CrawlerRunConfig
     ) -> AsyncCrawlResponse:
         async with self._session_context() as session:
@@ -2354,7 +2410,7 @@ class AsyncHTTPCrawlerStrategy(AsyncCrawlerStrategy):
                 connect=10,
                 sock_read=30
             )
-            
+
             headers = dict(self._BASE_HEADERS)
             if self.browser_config.headers:
                 headers.update(self.browser_config.headers)
@@ -2365,6 +2421,12 @@ class AsyncHTTPCrawlerStrategy(AsyncCrawlerStrategy):
                 'ssl': self.browser_config.verify_ssl,
                 'headers': headers
             }
+
+            # Add proxy support - use config.proxy_config (set by arun() from rotation strategy or direct config)
+            proxy_url = None
+            if config.proxy_config:
+                proxy_url = self._format_proxy_url(config.proxy_config)
+                request_kwargs['proxy'] = proxy_url
 
             if self.browser_config.method == "POST":
                 if self.browser_config.data:
@@ -2436,7 +2498,10 @@ class AsyncHTTPCrawlerStrategy(AsyncCrawlerStrategy):
             if scheme == 'file':
                 return await self._handle_file(parsed.path)
             elif scheme == 'raw':
-                return await self._handle_raw(parsed.path)
+                # Don't use parsed.path - urlparse truncates at '#' which is common in CSS
+                # Strip prefix directly: "raw://" (6 chars) or "raw:" (4 chars)
+                raw_content = url[6:] if url.startswith("raw://") else url[4:]
+                return await self._handle_raw(raw_content)
             else:  # http or https
                 return await self._handle_http(url, config)
                 

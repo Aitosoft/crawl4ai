@@ -3,12 +3,12 @@ import warnings
 
 from .async_webcrawler import AsyncWebCrawler, CacheMode
 # MODIFIED: Add SeedingConfig and VirtualScrollConfig here
-from .async_configs import BrowserConfig, CrawlerRunConfig, HTTPCrawlerConfig, LLMConfig, ProxyConfig, GeolocationConfig, SeedingConfig, VirtualScrollConfig, LinkPreviewConfig
+from .async_configs import BrowserConfig, CrawlerRunConfig, HTTPCrawlerConfig, LLMConfig, ProxyConfig, GeolocationConfig, SeedingConfig, VirtualScrollConfig, LinkPreviewConfig, MatchMode
 
 from .content_scraping_strategy import (
     ContentScrapingStrategy,
-    WebScrapingStrategy,
     LXMLWebScrapingStrategy,
+    WebScrapingStrategy,  # Backward compatibility alias
 )
 from .async_logger import (
     AsyncLoggerBase,
@@ -29,6 +29,12 @@ from .extraction_strategy import (
 )
 from .chunking_strategy import ChunkingStrategy, RegexChunking
 from .markdown_generation_strategy import DefaultMarkdownGenerator
+from .table_extraction import (
+    TableExtractionStrategy,
+    DefaultTableExtraction,
+    NoTableExtraction,
+    LLMTableExtraction,
+)
 from .content_filter_strategy import (
     PruningContentFilter,
     BM25ContentFilter,
@@ -66,6 +72,8 @@ from .deep_crawling import (
     BestFirstCrawlingStrategy,
     DFSDeepCrawlStrategy,
     DeepCrawlDecorator,
+    ContentRelevanceFilter,
+    ContentTypeScorer,
 )
 # NEW: Import AsyncUrlSeeder
 from .async_url_seeder import AsyncUrlSeeder
@@ -88,9 +96,17 @@ from .script import (
     ErrorDetail
 )
 
+# Browser Adapters
+from .browser_adapter import (
+    BrowserAdapter,
+    PlaywrightAdapter,
+    UndetectedAdapter
+)
+
 from .utils import (
     start_colab_display_server,
-    setup_colab_environment
+    setup_colab_environment,
+    hooks_to_string
 )
 
 __all__ = [
@@ -132,6 +148,7 @@ __all__ = [
     "CrawlResult",
     "CrawlerHub",
     "CacheMode",
+    "MatchMode",
     "ContentScrapingStrategy",
     "WebScrapingStrategy",
     "LXMLWebScrapingStrategy",
@@ -148,6 +165,9 @@ __all__ = [
     "ChunkingStrategy",
     "RegexChunking",
     "DefaultMarkdownGenerator",
+    "TableExtractionStrategy",
+    "DefaultTableExtraction",
+    "NoTableExtraction",
     "RelevantContentFilter",
     "PruningContentFilter",
     "BM25ContentFilter",
@@ -166,6 +186,7 @@ __all__ = [
     "ProxyConfig",
     "start_colab_display_server",
     "setup_colab_environment",
+    "hooks_to_string",
     # C4A Script additions
     "c4a_compile",
     "c4a_validate", 
@@ -173,6 +194,10 @@ __all__ = [
     "CompilationResult",
     "ValidationResult",
     "ErrorDetail",
+    # Browser Adapters
+    "BrowserAdapter",
+    "PlaywrightAdapter", 
+    "UndetectedAdapter",
     "LinkPreviewConfig"
 ]
 
