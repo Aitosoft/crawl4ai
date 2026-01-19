@@ -190,6 +190,7 @@ requirements0.txt
 a.txt
 
 *.sh
+!.devcontainer/setup.sh
 .idea
 docs/examples/.chainlit/
 docs/examples/.chainlit/*
