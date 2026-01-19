@@ -42,7 +42,7 @@ pip install -e ".[dev]" || pip install -e .
 
 # Install dev tools
 echo "[devcontainer] Installing dev tools..."
-pip install ruff black mypy pytest pre-commit
+pip install ruff black mypy pytest pytest-asyncio pre-commit
 
 # Setup pre-commit hooks
 echo "[devcontainer] Setting up pre-commit hooks..."
