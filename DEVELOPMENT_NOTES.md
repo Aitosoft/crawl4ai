@@ -2,7 +2,75 @@
 
 This file tracks development progress and important notes for the Crawl4AI project.
 
-**Last Updated**: 2025-07-21
+**Last Updated**: 2026-01-19
+
+## 2026-01-19: v0.8.0 Upgrade & Security Hardening
+
+### Major Milestone: Upgraded to Crawl4AI v0.8.0
+
+**Version Changes:**
+- Local: v0.7.1 → v0.8.0 ✅
+- Production: v0.6.0 → v0.8.0 (pending deployment)
+- Docker Image: `latest` → `0.8.0` (pinned version)
+
+**Critical Security Fixes in v0.8.0:**
+- 🔒 **RCE Fix**: Removed `__import__` from hook allowed builtins (Neo by ProjectDiscovery)
+- 🔒 **LFI Fix**: Added URL scheme validation, blocked file://, javascript:, data: URLs (Neo by ProjectDiscovery)
+
+**Security Improvements Made:**
+- ✅ Rotated all API tokens (Azure Key Vault + GitHub Secrets + local .env)
+- ✅ Removed all hardcoded tokens from documentation and workflows
+- ✅ Added comprehensive .env patterns to .gitignore (.env.*, *.env)
+- ✅ Created .env.example template for secure onboarding
+- ✅ Added notes-to-claude.md to .gitignore
+- ✅ Fixed GitHub Actions workflow to use secrets.C4AI_TOKEN
+- ✅ Documented token rotation procedure (TOKEN_ROTATION_GUIDE.md)
+- ✅ Updated pre-commit config to exclude GitHub Actions YAML from strict checking
+
+**New Token (Generated 2026-01-19):**
+- Algorithm: `openssl rand -hex 32`
+- Storage: Azure Key Vault (C4AI-TOKEN), GitHub Secrets (C4AI_TOKEN), .env.local (CRAWL4AI_API_TOKEN)
+- **Next Rotation Due**: 2026-04-19 (90 days)
+
+**Dependency Changes:**
+- ✅ Python requirement: 3.9 → 3.10 (we use 3.11, so compatible)
+- ✅ New: `patchright>=1.49.0` (stealth browser for anti-bot detection)
+- ✅ New: `anyio>=4.0.0` (async utilities)
+- ✅ New: `PyYAML>=6.0` (YAML configuration support)
+- ✅ Updated: `pyOpenSSL 24.3.0 → 25.3.0` (security fix)
+- ✅ **REMOVED from core**: `sentence-transformers` (now optional, saves ~500MB)
+
+**Breaking Changes (No Impact on Aitosoft):**
+- Hooks disabled by default (we don't use hooks)
+- file:// URLs blocked in Docker API (we only use http/https)
+
+**Documentation Created:**
+- [azure-deployment/V0.8.0_UPGRADE_SUMMARY.md](azure-deployment/V0.8.0_UPGRADE_SUMMARY.md) - Comprehensive upgrade analysis
+- [azure-deployment/TOKEN_ROTATION_GUIDE.md](azure-deployment/TOKEN_ROTATION_GUIDE.md) - Step-by-step rotation procedure
+- [.env.example](.env.example) - Template for local development
+
+**Git History:**
+- Commit: `4726c2f` - Security improvements and v0.8.0 preparation
+- Commit: `649a30f` - Merged v0.8.0 from upstream
+
+**Testing Status:**
+- ✅ Local installation verified (v0.8.0)
+- ✅ Dependencies installed successfully
+- ⏳ Production deployment pending
+- ⏳ Production validation pending
+
+**Next Steps:**
+1. Deploy v0.8.0 to Azure production
+2. Validate production health check + auth
+3. Test markdown extraction (raw + fit_markdown)
+4. Monitor for 24 hours
+5. Update multi-agent platform with new token
+
+---
+
+## Previous Updates
+
+### 2025-07-24: Version Management and Dependency Resolution
 
 ## Current Development Environment
 
@@ -57,7 +125,9 @@ This file tracks development progress and important notes for the Crawl4AI proje
 ### Next Steps (Future)
 - [ ] Add Gemini token for content cleaning (small model with large context)
 - [x] Set up GitHub Actions for CI/CD automation *(2025-07-21)*
-- [ ] Test with actual Finnish company websites
+- [x] Resolve v0.7.1 dependency issues for local testing *(2025-07-24)*
+- [ ] Test new v0.7.1 features with Finnish company websites
+- [ ] Evaluate when to upgrade production from v0.6.0 to v0.7.x
 - [ ] Monitor production usage and optimize performance
 - [ ] Set up GitHub secrets for Azure authentication in new workflows
 
@@ -130,7 +200,7 @@ pre-commit run --all-files
 
 ### 2025-07-21: CI/CD Pipeline Implementation
 - **Added**: GitHub Actions for crawl4ai release monitoring and automated updates
-- **Files**: `.github/workflows/monitor-crawl4ai-releases.yml`, `.github/workflows/update-crawl4ai.yml`  
+- **Files**: `.github/workflows/monitor-crawl4ai-releases.yml`, `.github/workflows/update-crawl4ai.yml`
 - **Added**: Test orchestration script `run_validation_tests.py`
 - **Enhanced**: Deployment script with rollback capabilities (`--rollback`, `--list-revisions`)
 - **Features**: Automated testing, rollback on failure, Discord notifications, issue creation
@@ -140,6 +210,15 @@ pre-commit run --all-files
 - **Moved**: Test files to `test-aitosoft/` folder to separate custom code from upstream repo
 - **Files**: `test_fit_markdown.py`, `test_production_auth.py`, `test_server_api.py`
 - **Updated**: CI/CD workflows and test orchestration script to use new paths
+
+### 2025-07-24: Version Management and Dependency Resolution
+- **Issue**: Upstream merge to v0.7.1 introduced new dependencies causing test failures
+- **Resolution**: Installed missing dependencies (`lark`, `sentence-transformers`, `alphashape`, `shapely`, `pdf2image`, `PyPDF2`)
+- **Codebase Version**: Updated to Crawl4AI v0.7.1 for local development and testing
+- **Production Strategy**: Maintains `unclecode/crawl4ai:latest` (v0.6.0 stable) for production deployment
+- **Files Updated**: `CLAUDE.md` and `DEVELOPMENT_NOTES.md` to document version strategy
+- **Test Status**: All `test-aitosoft/` tests now working with v0.7.1 dependencies
+- **Rationale**: Allows testing new v0.7.1 features locally while keeping production stable with proven v0.6.0
 
 ---
 
