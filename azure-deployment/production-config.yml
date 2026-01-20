@@ -33,8 +33,8 @@ rate_limiting:
 
 # Security Configuration - ENABLED FOR PRODUCTION
 security:
-  enabled: true
-  jwt_enabled: true  # Enable JWT authentication
+  enabled: true  # Enables simple token auth via CRAWL4AI_API_TOKEN
+  jwt_enabled: false  # Disable JWT (we use simple token auth instead)
   https_redirect: false  # Azure Container Apps handles HTTPS
   trusted_hosts: ["*"]
   headers:

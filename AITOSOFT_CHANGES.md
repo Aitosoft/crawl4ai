@@ -7,12 +7,19 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-01-19
+**Last Updated**: 2026-01-20
 
 ### Version
 - **Local**: v0.8.0
-- **Production**: Pending deployment to v0.8.0
-- **Docker Image**: Pinned to `0.8.0`
+- **Production**: v0.8.0-secure (deployed to West Europe)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.0-secure`
+
+### Production Deployment
+- **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
+- **Location**: West Europe (co-located with MAS)
+- **Resource Group**: `aitosoft-prod`
+- **Authentication**: ✅ Enabled (simple Bearer token)
+- **Status**: ✅ Running
 
 ### Environment
 - **Host**: Windows 11 (Snapdragon X Elite, 32GB RAM)
@@ -43,6 +50,57 @@ Keeping this log helps when syncing with upstream updates.
 ---
 
 ## Change Log
+
+### 2026-01-20: Production Deployment to West Europe
+
+**Purpose:** Deploy to production using existing aitosoft-prod infrastructure
+
+**Deployment Details:**
+- **Location**: West Europe (co-located with MAS)
+- **Resource Group**: `aitosoft-prod` (reusing existing resources)
+- **Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.0-secure`
+- **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
+- **Authentication**: ✅ Enabled and tested
+- **Cost**: ~€30-50/month (only container app cost)
+
+**Files Created:**
+- `azure-deployment/deploy-aitosoft-prod.sh` - Production deployment script
+- `DEPLOYMENT_INFO.md` - Current production info, credentials, usage examples
+
+**Infrastructure Used:**
+- `aitosoftacr` - Existing ACR (now has crawl4ai-service repository)
+- `aitosoft-aca` - Existing Container Apps environment
+- `workspace-aitosoftprodnCsc` - Existing Log Analytics
+
+**Benefits:**
+- Cost efficient (reuses existing infrastructure)
+- Same region as MAS (lower latency)
+- Simple token auth working correctly
+
+---
+
+### 2026-01-20: Add Simple Token Authentication
+
+**Purpose:** Add simple Bearer token authentication for production security
+
+**Files Modified:**
+- `deploy/docker/server.py` - Added SimpleTokenAuthMiddleware to security setup (3 lines)
+- `deploy/docker/config.yml` - Enabled security: true
+- `azure-deployment/production-config.yml` - Enabled security, disabled JWT
+
+**Files Created:**
+- `deploy/docker/simple_token_auth.py` - Middleware for static token authentication (39 lines)
+- `azure-deployment/SIMPLE_AUTH_DEPLOY.md` - Auth implementation guide
+
+**How it works:**
+- Uses `CRAWL4AI_API_TOKEN` environment variable as the auth token
+- Requires `Authorization: Bearer <token>` header on all requests (except /health, /docs)
+- Bypasses auth if `CRAWL4AI_API_TOKEN` is not set (development mode)
+- Total modification: 42 lines of code added to upstream
+
+**Why:** Upstream crawl4ai only provides JWT auth where anyone can get a token by calling `/token` with any email. This is unsuitable for preventing unauthorized access. Our simple token auth provides real security with one static secret token.
+
+---
 
 ### 2026-01-19: Repository Cleanup
 

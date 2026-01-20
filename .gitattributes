@@ -10,3 +10,4 @@ docs/md_v2/* linguist-documentation
 
 # Exclude HTML from language statistics
 *.html linguist-detectable=false
+*.sh text eol=lf
