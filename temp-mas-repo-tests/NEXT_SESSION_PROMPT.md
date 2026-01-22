@@ -34,7 +34,9 @@ Test **jpond.fi** to compare contact vs company page failure rates:
 
 **Commands** (use export token first):
 ```bash
-export CRAWL4AI_API_TOKEN="crawl4ai-d439be7297235edd4bde58b434c0ce82c99001912a47eafd"
+# Load token from .env file in crawl4ai repo
+source /path/to/crawl4ai-aitosoft/.env
+# Or manually: export CRAWL4AI_API_TOKEN="<see-crawl4ai-repo-.env-file>"
 
 # Test JPond company page (100 requests, ~2 hours)
 python test-aitosoft/test_reliability_study.py --mode isolated --url jpond-company --count 100

@@ -49,7 +49,9 @@ AVAILABLE TEST SITES:
 TESTING INFRASTRUCTURE:
 The test script is already set up and working:
 ```bash
-export CRAWL4AI_API_TOKEN="crawl4ai-d439be7297235edd4bde58b434c0ce82c99001912a47eafd"
+# Load token from .env file in crawl4ai repo
+source /path/to/crawl4ai-aitosoft/.env
+# Or manually: export CRAWL4AI_API_TOKEN="<see-crawl4ai-repo-.env-file>"
 
 # Run single test
 python test-aitosoft/test_reliability_study.py --mode isolated --url yhteystiedot --count 10

@@ -3,18 +3,27 @@
 Temporary test script to verify Azure-deployed crawler can retrieve contact information
 from Accountor pages.
 
-Run: python temp-accountor-test/test_accountor_contacts.py
+Run:
+    source ../.env  # Load credentials from .env file
+    python temp-accountor-test/test_accountor_contacts.py
 """
 
+import os
 import requests
 import time
 from typing import List, Dict
 
-# Azure deployment credentials
-CRAWL4AI_URL = (
-    "https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io"
+# Azure deployment credentials (load from environment variables)
+CRAWL4AI_URL = os.getenv(
+    "CRAWL4AI_API_URL",
+    "https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io",
 )
-CRAWL4AI_TOKEN = "crawl4ai-d439be7297235edd4bde58b434c0ce82c99001912a47eafd"
+CRAWL4AI_TOKEN = os.getenv("CRAWL4AI_API_TOKEN")
+
+if not CRAWL4AI_TOKEN:
+    raise ValueError(
+        "CRAWL4AI_API_TOKEN not set. Please source the .env file or set it manually."
+    )
 
 # Test cases: URL and contacts we expect to find in the markdown
 TEST_CASES = [

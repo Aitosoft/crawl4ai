@@ -155,6 +155,94 @@ Always prefix commits with `[aitosoft]`:
 
 ---
 
+## 🔐 CRITICAL SECURITY RULES
+
+**THIS IS A PUBLIC REPOSITORY. NEVER COMMIT SECRETS.**
+
+### MANDATORY Security Checklist (For ALL Documentation Work)
+
+Before writing ANY documentation, code examples, or making commits:
+
+1. **❌ NEVER write the API token directly in ANY file**
+   - Not in documentation files (*.md)
+   - Not in code examples
+   - Not in test scripts
+   - Not in comments
+
+2. **✅ ALWAYS reference the .env file instead**
+   - Use: `See .env file (CRAWL4AI_API_TOKEN)`
+   - Use: `export CRAWL4AI_API_TOKEN=<see-.env-file>`
+   - Use: `os.getenv("CRAWL4AI_API_TOKEN")`
+
+3. **✅ BEFORE EVERY COMMIT: Run security scan**
+   ```bash
+   # Search for any hardcoded tokens
+   grep -r "crawl4ai-[a-z0-9]" --exclude-dir=.git --exclude=".env" .
+   # This command MUST return no results
+   ```
+
+4. **✅ After writing documentation: Double-check for leaks**
+   - Search the file for "crawl4ai-"
+   - Search for any hex strings that look like tokens
+   - Verify all examples use environment variables
+
+### Where Secrets Belong
+
+| ✅ SAFE | ❌ NEVER |
+|---------|----------|
+| `.env` file (gitignored) | DEPLOYMENT_INFO.md |
+| Azure Key Vault | README.md or any *.md |
+| `os.getenv()` in code | Hardcoded strings |
+| `source .env` in bash | `export TOKEN="actual-token"` |
+
+### Token Rotation Protocol
+
+If a token is accidentally committed:
+
+1. **Rotate immediately** in Azure (invalidates old token):
+   ```bash
+   NEW_TOKEN="crawl4ai-$(openssl rand -hex 24)"
+   az containerapp update \
+     --name crawl4ai-service \
+     --resource-group aitosoft-prod \
+     --set-env-vars CRAWL4AI_API_TOKEN="$NEW_TOKEN"
+   ```
+
+2. **Update .env file** with new token (do not commit)
+
+3. **Remove from all files** that were committed:
+   - Replace with `.env` references
+   - Commit the sanitized files
+
+4. **Notify MAS team** - their service will break until they update
+
+### Example: Safe Documentation
+
+**❌ WRONG:**
+```bash
+export CRAWL4AI_API_TOKEN="crawl4ai-abc123..."
+```
+
+**✅ CORRECT:**
+```bash
+# Load token from .env file
+source .env
+# Or: export CRAWL4AI_API_TOKEN=<see-crawl4ai-repo-.env-file>
+```
+
+**❌ WRONG:**
+```python
+CRAWL4AI_TOKEN = "crawl4ai-abc123..."
+```
+
+**✅ CORRECT:**
+```python
+import os
+CRAWL4AI_TOKEN = os.getenv("CRAWL4AI_API_TOKEN")
+```
+
+---
+
 ## What's Ours vs Upstream
 
 ### 100% Upstream (Don't modify)

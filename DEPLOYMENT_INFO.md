@@ -15,13 +15,14 @@ https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io
 
 **API Token**:
 ```
-crawl4ai-d439be7297235edd4bde58b434c0ce82c99001912a47eafd
+See .env file (CRAWL4AI_API_TOKEN)
+NEVER commit tokens to git - always use .env files
 ```
 
 **⚠️ IMPORTANT**: Add these to your MAS repo `.env` or configuration:
 ```bash
 CRAWL4AI_API_URL=https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io
-CRAWL4AI_API_TOKEN=crawl4ai-d439be7297235edd4bde58b434c0ce82c99001912a47eafd
+CRAWL4AI_API_TOKEN=<get-from-crawl4ai-repo-.env-file>
 ```
 
 ---
@@ -47,9 +48,11 @@ All resources are in the `aitosoft-prod` resource group (West Europe):
 
 ```python
 import requests
+import os
 
-CRAWL4AI_URL = "https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io"
-CRAWL4AI_TOKEN = "crawl4ai-d439be7297235edd4bde58b434c0ce82c99001912a47eafd"
+# Load from environment variables (see .env file)
+CRAWL4AI_URL = os.getenv("CRAWL4AI_API_URL")
+CRAWL4AI_TOKEN = os.getenv("CRAWL4AI_API_TOKEN")
 
 # Basic crawl
 response = requests.post(
@@ -70,9 +73,10 @@ if result["success"]:
 # Health check (no auth)
 curl https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io/health
 
-# Crawl with auth
+# Crawl with auth (load token from .env file)
+source .env  # Or use: export CRAWL4AI_API_TOKEN=$(grep CRAWL4AI_API_TOKEN .env | cut -d= -f2)
 curl -X POST https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io/crawl \
-  -H "Authorization: Bearer crawl4ai-d439be7297235edd4bde58b434c0ce82c99001912a47eafd" \
+  -H "Authorization: Bearer $CRAWL4AI_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"urls": ["https://example.com"]}'
 ```
