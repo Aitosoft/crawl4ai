@@ -1,0 +1,11 @@
+# Test artifacts - don't commit large test outputs
+artifacts/
+reports/
+
+# Keep directory structure
+!artifacts/.gitkeep
+!reports/.gitkeep
+
+# But allow manual test results if needed
+!artifacts/manual/
+!reports/manual/

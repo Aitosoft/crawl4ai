@@ -92,6 +92,53 @@ print(result.markdown.fit_markdown)  # Cleaned content
 
 ---
 
+## Testing
+
+### Quick Test Commands
+
+```bash
+# Test a single site (saves artifacts)
+python test-aitosoft/test_site.py talgraf.fi --page yhteystiedot
+
+# Test with heavy config (for cookie walls like Accountor)
+python test-aitosoft/test_site.py accountor.com/fi/finland --page suuryritykselle --config heavy
+
+# Run Tier 1 regression (required before deploy)
+python test-aitosoft/test_regression.py --tier 1 --version pre-deploy
+
+# Run all regression tests
+python test-aitosoft/test_regression.py --all --version v11
+```
+
+### Test Site Tiers
+
+**Tier 1 (always test before deploy):**
+- talgraf.fi - Cookie consent + structured contacts
+- vahtivuori.fi - Email obfuscation `(at)`
+- accountor.com - Cookie wall (requires `magic: true` + `scan_full_page: true`)
+- monidor.fi - Clean baseline
+
+**Quality gate:** All 4 Tier 1 sites must pass
+
+### Key Testing Learnings
+
+From MAS V1-V10 investigation (coordinated with aitosoft-platform repo):
+
+| Finding | Evidence |
+|---------|----------|
+| **`magic: true` + `scan_full_page: true` solves cookie walls** | Accountor: 32 tokens → 14,493 tokens |
+| **Raw markdown > fit_markdown for contact extraction** | PruningContentFilter removes contact data at threshold ≥0.35 |
+| **LLM handles email obfuscation naturally** | JPond: all 19 `(at)` emails extracted |
+| **Use `fast` config by default, `heavy` only for edge cases** | 90% of sites work with domcontentloaded (2-4s vs 30-60s) |
+
+### Test Documentation
+
+- [TESTING.md](TESTING.md) - Complete testing framework and best practices
+- [TEST_SITES_REGISTRY.md](TEST_SITES_REGISTRY.md) - All test sites with metadata
+- [test-aitosoft/](test-aitosoft/) - Test scripts and reports
+
+---
+
 ## Key Principles
 
 1. **Minimal changes** - Keep modifications isolated from upstream code
