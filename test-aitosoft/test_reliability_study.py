@@ -6,14 +6,18 @@ Purpose: Gather 100+ data points to validate failure rates and solutions.
 
 Usage:
     # Isolated requests (baseline)
-    python test-aitosoft/test_reliability_study.py --mode isolated --url yhteystiedot --count 100
-    python test-aitosoft/test_reliability_study.py --mode isolated --url yritys --count 100
+    python test-aitosoft/test_reliability_study.py --mode isolated \
+        --url yhteystiedot --count 100
+    python test-aitosoft/test_reliability_study.py --mode isolated \
+        --url yritys --count 100
 
     # Batched requests (solution validation)
-    python test-aitosoft/test_reliability_study.py --mode batched --count 100
+    python test-aitosoft/test_reliability_study.py --mode batched \
+        --count 100
 
     # Retry logic (solution validation)
-    python test-aitosoft/test_reliability_study.py --mode retry --url yhteystiedot --count 100
+    python test-aitosoft/test_reliability_study.py --mode retry \
+        --url yhteystiedot --count 100
 """
 
 import os
@@ -46,6 +50,8 @@ CRAWL4AI_V10_CONFIG = {
 URLS = {
     "yhteystiedot": "https://www.talgraf.fi/yhteystiedot/",
     "yritys": "https://www.talgraf.fi/yritys/",
+    "jpond-company": "https://jpond.fi/jpond-oy/",
+    "jpond-contact": "https://jpond.fi/yhteystiedot/",
 }
 
 
@@ -256,12 +262,18 @@ def generate_summary(mode: str, url_key: str, results: list):
         failed_results = [r for r in successful if not r["ok"]]
 
         print(f"\nTotal Requests: {len(results)}")
-        print(
-            f"  ✅ Successes: {len(ok_results)}/{len(results)} ({len(ok_results)/len(results)*100:.1f}%)"
+        success_rate = len(ok_results) / len(results) * 100
+        failure_rate = len(failed_results) / len(results) * 100
+        success_msg = (
+            f"  ✅ Successes: {len(ok_results)}/{len(results)} "
+            f"({success_rate:.1f}%)"  # noqa: E501
         )
-        print(
-            f"  ❌ Failures: {len(failed_results)}/{len(results)} ({len(failed_results)/len(results)*100:.1f}%)"
+        failure_msg = (
+            f"  ❌ Failures: {len(failed_results)}/{len(results)} "
+            f"({failure_rate:.1f}%)"
         )
+        print(success_msg)
+        print(failure_msg)
 
         if ok_results:
             avg_chars = sum(r["chars"] for r in ok_results) / len(ok_results)
@@ -274,9 +286,8 @@ def generate_summary(mode: str, url_key: str, results: list):
             avg_chars = sum(r["chars"] for r in failed_results) / len(failed_results)
             print("\nFailure Statistics:")
             print(f"  Avg chars: {avg_chars:,.0f}")
-            print(
-                f"\n  Failed iterations: {', '.join(str(r['iteration']) for r in failed_results)}"
-            )
+            failed_iters = ", ".join(str(r["iteration"]) for r in failed_results)
+            print(f"\n  Failed iterations: {failed_iters}")
 
         if mode == "retry":
             retried = [r for r in results if r.get("retried")]
@@ -292,19 +303,27 @@ def generate_summary(mode: str, url_key: str, results: list):
 
         print(f"\nTotal Batched Requests: {len(results)}")
         print("\n/yhteystiedot/:")
+        yhteystiedot_success_rate = len(yhteystiedot_ok) / len(successful) * 100
+        yhteystiedot_failure_rate = len(yhteystiedot_failed) / len(successful) * 100
         print(
-            f"  ✅ Successes: {len(yhteystiedot_ok)}/{len(successful)} ({len(yhteystiedot_ok)/len(successful)*100:.1f}%)"
+            f"  ✅ Successes: {len(yhteystiedot_ok)}/{len(successful)} "
+            f"({yhteystiedot_success_rate:.1f}%)"
         )
         print(
-            f"  ❌ Failures: {len(yhteystiedot_failed)}/{len(successful)} ({len(yhteystiedot_failed)/len(successful)*100:.1f}%)"
+            f"  ❌ Failures: {len(yhteystiedot_failed)}/{len(successful)} "
+            f"({yhteystiedot_failure_rate:.1f}%)"
         )
 
         print("\n/yritys/:")
+        yritys_success_rate = len(yritys_ok) / len(successful) * 100
+        yritys_failure_rate = len(yritys_failed) / len(successful) * 100
         print(
-            f"  ✅ Successes: {len(yritys_ok)}/{len(successful)} ({len(yritys_ok)/len(successful)*100:.1f}%)"
+            f"  ✅ Successes: {len(yritys_ok)}/{len(successful)} "
+            f"({yritys_success_rate:.1f}%)"
         )
         print(
-            f"  ❌ Failures: {len(yritys_failed)}/{len(successful)} ({len(yritys_failed)/len(successful)*100:.1f}%)"
+            f"  ❌ Failures: {len(yritys_failed)}/{len(successful)} "
+            f"({yritys_failure_rate:.1f}%)"
         )
 
     print(f"\n{'=' * 80}")
@@ -376,12 +395,16 @@ def main():
         epilog="""
 Examples:
   # Baseline testing
-  python test-aitosoft/test_reliability_study.py --mode isolated --url yhteystiedot --count 100
-  python test-aitosoft/test_reliability_study.py --mode isolated --url yritys --count 100
+  python test-aitosoft/test_reliability_study.py --mode isolated \\
+      --url yhteystiedot --count 100
+  python test-aitosoft/test_reliability_study.py --mode isolated \\
+      --url yritys --count 100
 
   # Solution validation
-  python test-aitosoft/test_reliability_study.py --mode batched --count 100
-  python test-aitosoft/test_reliability_study.py --mode retry --url yhteystiedot --count 100
+  python test-aitosoft/test_reliability_study.py --mode batched \\
+      --count 100
+  python test-aitosoft/test_reliability_study.py --mode retry \\
+      --url yhteystiedot --count 100
         """,
     )
 
@@ -393,7 +416,7 @@ Examples:
     )
     parser.add_argument(
         "--url",
-        choices=["yhteystiedot", "yritys"],
+        choices=["yhteystiedot", "yritys", "jpond-company", "jpond-contact"],
         help="URL to test (required for isolated/retry modes)",
     )
     parser.add_argument(
