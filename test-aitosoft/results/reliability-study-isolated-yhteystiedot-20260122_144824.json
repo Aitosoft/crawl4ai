@@ -1,0 +1,30 @@
+{
+  "test_date": "2026-01-22T14:48:24.641289",
+  "mode": "isolated",
+  "url": "yhteystiedot",
+  "summary": {
+    "total_requests": 2,
+    "successes": 2,
+    "failures": 0,
+    "success_rate": 1.0,
+    "failure_rate": 0.0,
+    "avg_success_chars": 7058.0,
+    "avg_response_time": 4.789263844490051
+  },
+  "raw_results": [
+    {
+      "iteration": 1,
+      "success": true,
+      "chars": 7058,
+      "elapsed": 5.056462526321411,
+      "ok": true
+    },
+    {
+      "iteration": 2,
+      "success": true,
+      "chars": 7058,
+      "elapsed": 4.522065162658691,
+      "ok": true
+    }
+  ]
+}
