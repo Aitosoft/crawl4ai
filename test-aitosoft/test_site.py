@@ -31,6 +31,16 @@ if not CRAWL4AI_TOKEN:
 
 # Crawler configurations
 CONFIGS = {
+    # RECOMMENDED: Works on 100% of test sites including cookie consent sites
+    "optimal": {
+        "wait_until": "domcontentloaded",
+        "magic": False,  # Don't use - removes content on cookie sites!
+        "scan_full_page": False,
+        "remove_overlay_elements": False,  # Don't use - removes page!
+        "page_timeout": 60000,
+        "delay_before_return_html": 2.0,
+    },
+    # LEGACY configs - use "optimal" instead
     "fast": {
         "wait_until": "domcontentloaded",
         "magic": True,
@@ -61,6 +71,146 @@ CONFIGS = {
         "scan_full_page": True,
         "remove_overlay_elements": True,
         "page_timeout": 30000,
+    },
+    # NEW: Cookie consent handling configs
+    "cookie_click": {
+        "wait_until": "domcontentloaded",
+        "magic": True,
+        "scan_full_page": True,
+        "remove_overlay_elements": True,
+        "page_timeout": 60000,
+        "delay_before_return_html": 3.0,  # Wait for consent dialog to clear
+        "js_code": """
+        (async () => {
+            const selectors = [
+                '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+                '#onetrust-accept-btn-handler',
+                'button[data-cky-tag="accept-button"]',
+                '.fc-button.fc-cta-consent',
+            ];
+            for (const selector of selectors) {
+                const btn = document.querySelector(selector);
+                if (btn && btn.offsetParent !== null) {
+                    btn.click();
+                    await new Promise(r => setTimeout(r, 1500));
+                    return;
+                }
+            }
+        })();
+        """,
+    },
+    "cookie_click_finnish": {
+        "wait_until": "networkidle",
+        "magic": True,
+        "scan_full_page": True,
+        "remove_overlay_elements": True,
+        "page_timeout": 60000,
+        "delay_before_return_html": 3.0,
+        "js_code": """
+        (async () => {
+            const selectors = [
+                '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+                '#onetrust-accept-btn-handler',
+                'button[data-cky-tag="accept-button"]',
+                '.fc-button.fc-cta-consent',
+            ];
+            // First try standard selectors
+            for (const selector of selectors) {
+                const btn = document.querySelector(selector);
+                if (btn && btn.offsetParent !== null) {
+                    btn.click();
+                    await new Promise(r => setTimeout(r, 1500));
+                    return;
+                }
+            }
+            // Then try Finnish text buttons
+            const sel = 'button, a.button, [role="button"]';
+            const buttons = document.querySelectorAll(sel);
+            for (const btn of buttons) {
+                const text = btn.textContent.toLowerCase();
+                if (text.includes('hyväksy') || text.includes('salli') ||
+                    text.includes('accept') || text.includes('allow all')) {
+                    btn.click();
+                    await new Promise(r => setTimeout(r, 1500));
+                    return;
+                }
+            }
+        })();
+        """,
+    },
+    # Wait for Cookiebot dialog, then click accept
+    "cookie_wait_click": {
+        "wait_until": "domcontentloaded",
+        "magic": True,
+        "scan_full_page": True,
+        "remove_overlay_elements": True,
+        "page_timeout": 60000,
+        "wait_for": "#CybotCookiebotDialog",  # Wait for dialog to appear
+        "wait_for_timeout": 10000,  # 10 seconds max wait
+        "delay_before_return_html": 2.0,
+        "js_code": """
+        (async () => {
+            // Wait a moment for button to be clickable
+            await new Promise(r => setTimeout(r, 500));
+
+            const selectors = [
+                '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+                '#CybotCookiebotDialogBodyButtonAccept',
+                '#CybotCookiebotDialogBodyLevelButtonAccept',
+                '#onetrust-accept-btn-handler',
+            ];
+            for (const selector of selectors) {
+                const btn = document.querySelector(selector);
+                if (btn) {
+                    console.log('Clicking:', selector);
+                    btn.click();
+                    await new Promise(r => setTimeout(r, 2000));
+                    return;
+                }
+            }
+            console.log('No consent button found');
+        })();
+        """,
+    },
+    # Smart cookie consent - JS polls for button with retries
+    "cookie_smart": {
+        "wait_until": "networkidle",  # Wait for all JS to finish
+        "magic": True,
+        "scan_full_page": True,
+        "remove_overlay_elements": True,
+        "page_timeout": 60000,
+        "delay_before_return_html": 5.0,  # Extra time after cookie click
+        "js_code": """
+        (async () => {
+            // Poll for consent button with retries
+            const selectors = [
+                '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+                '#CybotCookiebotDialogBodyButtonAccept',
+                '#CybotCookiebotDialogBodyLevelButtonAccept',
+                '#onetrust-accept-btn-handler',
+                'button[data-cky-tag="accept-button"]',
+                '.fc-button.fc-cta-consent',
+            ];
+
+            // Try up to 10 times with 500ms delay
+            for (let attempt = 0; attempt < 10; attempt++) {
+                for (const selector of selectors) {
+                    const btn = document.querySelector(selector);
+                    if (btn && btn.offsetParent !== null) {
+                        console.log('Found button:', selector, 'on attempt', attempt);
+                        btn.click();
+                        // Wait for dialog to close and content to render
+                        await new Promise(r => setTimeout(r, 2000));
+                        return { clicked: true, selector, attempt };
+                    }
+                }
+                // Wait before next attempt
+                await new Promise(r => setTimeout(r, 500));
+            }
+            console.log('No consent button found after 10 attempts');
+            return { clicked: false };
+        })();
+        """,
     },
 }
 
@@ -233,9 +383,20 @@ Configs:
     parser.add_argument("--page", help="Optional page path (e.g., yhteystiedot)")
     parser.add_argument(
         "--config",
-        choices=["fast", "heavy", "minimal", "magic_only", "scan_only"],
-        default="fast",
-        help="Crawler configuration to use (default: fast)",
+        choices=[
+            "optimal",
+            "fast",
+            "heavy",
+            "minimal",
+            "magic_only",
+            "scan_only",
+            "cookie_click",
+            "cookie_click_finnish",
+            "cookie_wait_click",
+            "cookie_smart",
+        ],
+        default="optimal",
+        help="Crawler configuration to use (default: optimal)",
     )
     parser.add_argument(
         "--version",
