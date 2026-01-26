@@ -30,32 +30,31 @@ MAS Agent → API Request → Crawl4AI Service (this repo) → Return markdown/c
 
 ## 📊 Current Status - What We Know
 
-### Phase 3 Complete: Cookie Wall Root Cause Found ✅
+### Production Baseline (160 Fresh URLs)
 
-**Date**: 2026-01-24
-**Status**: ✅ **SOLVED** - Root cause identified and fixed
+**Date**: 2026-01-26
+**Test**: MAS crawled 160 small Finnish company websites (never previously accessed)
 
-#### 🚨 Critical Discovery
+| Outcome | Count | % |
+|---------|-------|---|
+| **Usable** | 140 | 87.5% |
+| Site down | 7 | 4.4% |
+| Bot blocked (Cookiebot) | 7 | 4.4% |
+| Parked/placeholder | 3 | 1.9% |
+| Shutdown | 1 | 0.6% |
+| Timeout | 1 | 0.6% |
+| JS-heavy | 1 | 0.6% |
 
-**The problem was NOT cookie consent walls - it was our config options!**
+**Key insight**: Most failures (12.5%) are **site issues**, not crawl4ai issues. Only ~5% are bot-related blocks.
 
-Two crawl4ai options were **destroying content** on cookie consent sites:
+### Critical Config Discovery
 
-| Option | What it does | Problem |
-|--------|--------------|---------|
-| `magic=True` | Auto-handles popups | Removes cookie consent content (including the actual page!) |
-| `remove_overlay_elements=True` | Removes overlays | Treats **entire page** as overlay on Cookiebot sites |
+Two crawl4ai options **destroy content** on cookie consent sites — don't use them:
 
-#### Test Results (4 MAS sites)
-
-| Site | Before (magic=True) | After (optimal) | Improvement |
-|------|---------------------|-----------------|-------------|
-| **accountor.com** | 31 tokens ❌ | **14,492 tokens** ✅ | **467x better** |
-| **monidor.com** | 15 tokens ❌ | **914 tokens** ✅ | **61x better** |
-| **solwers.com** | 3,555 tokens | **5,671 tokens** ✅ | 60% better |
-| **showell.com** | works | **22,401 tokens** ✅ | works |
-
-**All 4 sites now work** - no special cookie handling needed.
+| Option | Problem |
+|--------|---------|
+| `magic=True` | Removes cookie consent AND page content |
+| `remove_overlay_elements=True` | Treats entire page as overlay on Cookiebot sites |
 
 ### The Optimal Config
 
@@ -101,44 +100,31 @@ python test-aitosoft/test_site.py accountor.com/fi/finland --page suuryrityksell
 
 ## 📋 Test Sites & Quality Gates
 
-### Tier 1 Test Sites (Always Test Before Deploy)
+### Regression Test Sites
 
-| Site | Challenge | Config | Expected | Status |
-|------|-----------|--------|----------|--------|
-| **~~talgraf.fi~~** | Cloudflare blocking | N/A | N/A | ❌ BLOCKED |
-| **vahtivuori.fi** | Email obfuscation `(at)` | optimal | LLM extracts all | ⚠️ 404 (site restructured) |
-| **accountor.com** | Cookiebot | **optimal** | 12k+ tokens | ✅ Works |
-| **monidor.com** | Bot verification page | **optimal** | 15 tokens (challenge) | ⚠️ Partial |
-| **jpond.fi** | None | optimal | 1.8k+ tokens | ✅ Works |
-| **showell.com** | Cloudflare (not blocking) | optimal | 14k+ tokens | ✅ Works |
-| **solwers.com** | Cloudflare (not blocking) | optimal | 5k+ tokens | ✅ Works |
-| **caverna.fi** | None | optimal | 5k+ tokens | ✅ Works |
+| Site | Expected | Status |
+|------|----------|--------|
+| **jpond.fi** | 1.8k+ tokens | ✅ Works |
+| **showell.com** | 14k+ tokens | ✅ Works |
+| **solwers.com** | 5k+ tokens | ✅ Works |
+| **caverna.fi** | 5k+ tokens | ✅ Works |
+| **accountor.com** | 12k+ tokens | ✅ Works |
 
-**Quality Gate**: jpond.fi, showell.com, solwers.com, accountor.com must all pass.
+**Quality Gate**: All 5 must pass before deploy.
 
-### Tier 2 Test Sites (Extended Validation)
+### Retired Test Sites
 
-| Site | Type | Contact Page |
-|------|------|--------------|
-| **jpond.fi** | Software consulting | `/yhteystiedot/` |
-| **neuroliitto.fi** | Non-profit | `/yhteystiedot/hallinto-ja-tukipalvelut/` |
-| **solwers.com** | Public company | `/sijoittajat/hallinnointi/#johtoryhma` |
-| **caverna.fi** | Restaurant | Homepage |
-| **showell.com** | SaaS | Homepage |
+| Site | Reason |
+|------|--------|
+| talgraf.fi | Blocked after stress testing (Cloudflare) |
+| vahtivuori.fi | Site restructured (404) |
+| monidor.com | Returns bot verification challenge |
 
 ---
 
-## 🚨 Known Issues & Patterns
+## 🚨 Known Issues
 
-### Issue 1: Cookie Consent Sites ✅ SOLVED
-
-**Affected Sites**: Enterprise sites (Accountor, Monidor, etc.)
-**Symptom**: Returns 31 tokens instead of 14,000+ tokens
-**Root Cause**: ~~Cookie consent blocking~~ **`magic=True` and `remove_overlay_elements=True` were removing the content!**
-**Solution**: Use `optimal` config (magic=False, remove_overlay_elements=False)
-**Status**: ✅ **SOLVED** - no special handling needed
-
-### Issue 2: talgraf.fi Blocked (Cloudflare)
+### Cloudflare Blocking (talgraf.fi)
 
 **Affected Sites**: talgraf.fi (all pages)
 **Symptom**: Playwright navigation times out after 60-120s
@@ -153,12 +139,9 @@ python test-aitosoft/test_site.py accountor.com/fi/finland --page suuryrityksell
 
 **Lesson Learned**: See "Testing Best Practices" section below
 
-### Issue 3: Email Obfuscation ✅ SOLVED
+### Email Obfuscation
 
-**Affected Sites**: Many sites (vahtivuori.fi, jpond.fi use `(at)` pattern)
-**Symptom**: Emails written as `info (at) company.com`
-**Solution**: ✅ LLM extraction handles it naturally
-**Status**: ✅ **SOLVED** - no action needed
+Sites using `info (at) company.com` patterns work fine — LLM extraction handles them naturally.
 
 ---
 
@@ -180,7 +163,7 @@ source .env
 
 | Script | Purpose | Example Usage |
 |--------|---------|---------------|
-| **test_site.py** | Quick single-site testing | `python test-aitosoft/test_site.py talgraf.fi --page yhteystiedot` |
+| **test_site.py** | Quick single-site testing | `python test-aitosoft/test_site.py jpond.fi --page yhteystiedot` |
 | **test_regression.py** | Run Tier 1 regression tests | `python test-aitosoft/test_regression.py --tier 1 --version v1` |
 | **test_reliability_study.py** | Large-scale reliability testing | `python test-aitosoft/test_reliability_study.py --mode isolated --count 100` |
 
@@ -275,24 +258,6 @@ for site in sites:
 
 ## 🚀 Current Status (2026-01-26)
 
-### V11 Config Validation Complete
+**Production validated**: 87.5% success rate on 160 fresh Finnish company URLs.
 
-| Site | Tokens | Status |
-|------|--------|--------|
-| jpond.fi | 1,882 | ✅ |
-| showell.com | 14,752 | ✅ |
-| solwers.com | 5,292 | ✅ |
-| caverna.fi | 5,698 | ✅ |
-| accountor.com | 12,060 | ✅ |
-| monidor.com | 15 | ⚠️ Bot check page |
-| talgraf.fi | 0 | ❌ Blocked |
-
-**Conclusion**: V11 optimal config works for most sites. talgraf.fi is blocked due to our stress testing.
-
-### Message for MAS Claude
-
-The V11 config is validated and working. Key points:
-- **6/8 test sites work** with optimal config
-- **talgraf.fi is blocked** — skip it in production
-- **monidor.com returns bot challenge** — may need special handling or skip
-- **All other sites work reliably**
+The optimal config (V11) is working well. Most failures are site-side issues (down, parked, shutdown) rather than crawl4ai issues.
