@@ -7,8 +7,9 @@ Crawl4AI FastAPI entry‑point
 """
 
 # ── stdlib & 3rd‑party imports ───────────────────────────────
-from crawler_pool import close_all, janitor
+from crawler_pool import get_crawler, release_crawler, close_all, janitor
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+from crawl4ai.__version__ import __version__
 from auth import create_access_token, get_token_dependency, TokenRequest
 from typing import Optional, List, Dict
 from fastapi import Request, Depends
@@ -70,7 +71,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 config = load_config()
 setup_logging(config)
 
-__version__ = "0.5.1-d1"
+# Version is imported from crawl4ai package to ensure it stays in sync
 
 # ── global page semaphore (hard cap) ─────────────────────────
 MAX_PAGES = config["crawler"]["pool"].get("max_pages", 30)
@@ -212,7 +213,19 @@ async def root():
 
 
 # ─────────────────── infra / middleware  ─────────────────────
-redis = aioredis.from_url(config["redis"].get("uri", "redis://localhost"))
+def _build_redis_url(config: dict) -> str:
+    """Build Redis URL from config fields and environment variables."""
+    rc = config.get("redis", {})
+    host = os.environ.get("REDIS_HOST", rc.get("host", "localhost"))
+    port = os.environ.get("REDIS_PORT", rc.get("port", 6379))
+    password = os.environ.get("REDIS_PASSWORD", rc.get("password", ""))
+    db = rc.get("db", 0)
+    scheme = "rediss" if rc.get("ssl", False) else "redis"
+    auth = f":{password}@" if password else ""
+    return f"{scheme}://{auth}{host}:{port}/{db}"
+
+
+redis = aioredis.from_url(_build_redis_url(config))
 
 limiter = Limiter(
     key_func=get_remote_address,
@@ -319,6 +332,9 @@ logger = logging.getLogger(__name__)
 # ──────────────────────── Endpoints ──────────────────────────
 @app.post("/token")
 async def get_token(req: TokenRequest):
+    expected_token = config.get("security", {}).get("api_token", "")
+    if expected_token and req.api_token != expected_token:
+        raise HTTPException(401, "Invalid or missing api_token")
     if not verify_email_domain(req.email):
         raise HTTPException(400, "Invalid email domain")
     token = create_access_token({"sub": req.email})
@@ -341,6 +357,17 @@ async def get_markdown(
     body: MarkdownRequest,
     _td: Dict = Depends(token_dep),
 ):
+    """
+    Convert a web page into Markdown format.
+
+    Supports multiple extraction modes:
+    - fit (default): Readability-based extraction for clean content
+    - raw: Direct DOM to Markdown conversion
+    - bm25: BM25 relevance ranking with optional query
+    - llm: LLM-based summarization with optional query
+
+    Use this tool when you need clean, readable text from web pages.
+    """
     if not body.url.startswith(("http://", "https://")) and not body.url.startswith(
         ("raw:", "raw://")
     ):
@@ -383,9 +410,8 @@ async def generate_html(
     Use when you need sanitized HTML structures for building schemas or further processing.
     """
     validate_url_scheme(body.url, allow_raw=True)
-    from crawler_pool import get_crawler
-
     cfg = CrawlerRunConfig()
+    crawler = None
     try:
         crawler = await get_crawler(get_default_browser_config())
         results = await crawler.arun(url=body.url, config=cfg)
@@ -399,6 +425,9 @@ async def generate_html(
         return JSONResponse({"html": processed_html, "url": body.url, "success": True})
     except Exception as e:
         raise HTTPException(500, detail=str(e))
+    finally:
+        if crawler:
+            await release_crawler(crawler)
 
 
 # Screenshot endpoint
@@ -418,11 +447,12 @@ async def generate_screenshot(
     Then in result instead of the screenshot you will get a path to the saved file.
     """
     validate_url_scheme(body.url)
-    from crawler_pool import get_crawler
-
+    crawler = None
     try:
         cfg = CrawlerRunConfig(
-            screenshot=True, screenshot_wait_for=body.screenshot_wait_for
+            screenshot=True,
+            screenshot_wait_for=body.screenshot_wait_for,
+            wait_for_images=body.wait_for_images,
         )
         crawler = await get_crawler(get_default_browser_config())
         results = await crawler.arun(url=body.url, config=cfg)
@@ -438,6 +468,9 @@ async def generate_screenshot(
         return {"success": True, "screenshot": screenshot_data}
     except Exception as e:
         raise HTTPException(500, detail=str(e))
+    finally:
+        if crawler:
+            await release_crawler(crawler)
 
 
 # PDF endpoint
@@ -457,8 +490,7 @@ async def generate_pdf(
     Then in result instead of the PDF you will get a path to the saved file.
     """
     validate_url_scheme(body.url)
-    from crawler_pool import get_crawler
-
+    crawler = None
     try:
         cfg = CrawlerRunConfig(pdf=True)
         crawler = await get_crawler(get_default_browser_config())
@@ -475,6 +507,9 @@ async def generate_pdf(
         return {"success": True, "pdf": base64.b64encode(pdf_data).decode()}
     except Exception as e:
         raise HTTPException(500, detail=str(e))
+    finally:
+        if crawler:
+            await release_crawler(crawler)
 
 
 @app.post("/execute_js")
@@ -531,8 +566,7 @@ async def execute_js(
 
     """
     validate_url_scheme(body.url)
-    from crawler_pool import get_crawler
-
+    crawler = None
     try:
         cfg = CrawlerRunConfig(js_code=body.scripts)
         crawler = await get_crawler(get_default_browser_config())
@@ -543,6 +577,9 @@ async def execute_js(
         return JSONResponse(data)
     except Exception as e:
         raise HTTPException(500, detail=str(e))
+    finally:
+        if crawler:
+            await release_crawler(crawler)
 
 
 @app.get("/llm/{url:path}")
@@ -550,6 +587,11 @@ async def llm_endpoint(
     request: Request,
     url: str = Path(...),
     q: str = Query(...),
+    provider: Optional[str] = Query(
+        None, description="LLM provider override, e.g. 'openai/gpt-4o-mini'"
+    ),
+    temperature: Optional[float] = Query(None, description="LLM temperature override"),
+    base_url: Optional[str] = Query(None, description="LLM API base URL override"),
     _td: Dict = Depends(token_dep),
 ):
     if not q:
@@ -558,7 +600,9 @@ async def llm_endpoint(
         ("raw:", "raw://")
     ):
         url = "https://" + url
-    answer = await handle_llm_qa(url, q, config)
+    answer = await handle_llm_qa(
+        url, q, config, provider=provider, temperature=temperature, base_url=base_url
+    )
     return JSONResponse({"answer": answer})
 
 

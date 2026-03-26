@@ -300,6 +300,8 @@ docs/apps/linkdin/debug*/
 docs/apps/linkdin/samples/insights/*
 
 scripts/
+!scripts/gen-sbom.sh
+!scripts/update_stats.py
 
 
 # Database files
@@ -312,3 +314,6 @@ scripts/
 *.rdb
 *.ldb
 MEMORY.md
+
+# Handoff files
+HANDOFF-*.md

@@ -7,12 +7,12 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-01-20
+**Last Updated**: 2026-03-26
 
 ### Version
-- **Local**: v0.8.0
-- **Production**: v0.8.0-secure (deployed to West Europe)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.0-secure`
+- **Local**: v0.8.6 (merged from upstream 2026-03-26)
+- **Production**: v0.8.0-secure (deployed to West Europe) — **NEEDS REDEPLOY**
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.0-secure` — **NEEDS REBUILD**
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
@@ -29,6 +29,67 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Tests
 - 3/3 test-aitosoft/ tests passing
+
+---
+
+## v0.8.6 Upgrade (2026-03-26)
+
+### What Changed
+Merged 197 upstream commits covering v0.8.0 → v0.8.5 → v0.8.6.
+
+### Security Fixes (Critical)
+- **litellm supply chain compromise**: Replaced `litellm` with `unclecode-litellm==1.81.13` (PyPI supply chain attack)
+- **Redis CVE-2025-49844 (CVSS 10.0)**: Upgraded Redis to 7.2.7
+- **Pod deadlock fix**: Removed shared LOCK contention in monitor
+
+### New Anti-Blocking Features (v0.8.5)
+- **`remove_consent_popups=True`**: CMP-aware cookie consent removal (OneTrust, Cookiebot, Didomi)
+  - Tested on accountor.com: 7811 tokens without needing `magic=True` (was 32 tokens before)
+- **3-tier anti-bot retry + proxy escalation**: `max_retries=N` with proxy list auto-escalation
+- **`flatten_shadow_dom=True`**: Flattens Web Components into readable DOM
+- **`fallback_fetch_function`**: Custom async fallback when all retries fail
+
+### Bug Fixes
+- `scan_full_page` hang fix (prevents infinite-scroll pages from hanging)
+- `is_blocked()` re-check on fallback fetch failure
+- BM25ContentFilter deduplication fix
+- Screenshot distortion fix
+- MCP SSE endpoint crash fix on Starlette >=0.50
+
+### Dependency Changes
+- `litellm` → `unclecode-litellm==1.81.13` (security)
+- `tf-playwright-stealth` → `playwright-stealth>=2.0.0`
+
+### Merge Conflicts Resolved
+- `deploy/docker/server.py` — Kept our auth middleware, took upstream's `get_crawler` top-level import + `crawler = None` cleanup pattern
+- `deploy/docker/config.yml` — Kept `enabled: true`, added upstream's `api_token` field
+- `crawl4ai/__version__.py` — Took upstream v0.8.6
+- `Dockerfile`, `README.md`, `SECURITY.md`, `deploy/docker/README.md`, `docs/md_v2/blog/index.md` — Took upstream versions
+
+### Regression Test Results (v0.8.6)
+| Site | Config | Result | Tokens |
+|------|--------|--------|--------|
+| monidor.fi | baseline | 404 (site restructured) | - |
+| caverna.fi | baseline | PASS | 5833 |
+| accountor.com | `remove_consent_popups=True` | PASS | 7811 |
+| solwers.com | baseline | PASS | 12441 |
+
+### Recommended Config Updates for MAS
+```python
+# Default config (replaces "fast" config)
+CrawlerRunConfig(
+    remove_consent_popups=True,
+    remove_overlay_elements=True,
+)
+
+# Heavy config (replaces magic=True workaround)
+CrawlerRunConfig(
+    remove_consent_popups=True,
+    remove_overlay_elements=True,
+    scan_full_page=True,
+    max_retries=2,
+)
+```
 
 ---
 

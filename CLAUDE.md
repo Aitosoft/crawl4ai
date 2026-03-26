@@ -113,23 +113,34 @@ python test-aitosoft/test_regression.py --all --version v11
 ### Test Site Tiers
 
 **Tier 1 (always test before deploy):**
-- talgraf.fi - Cookie consent + structured contacts
-- vahtivuori.fi - Email obfuscation `(at)`
-- accountor.com - Cookie wall (requires `magic: true` + `scan_full_page: true`)
-- monidor.fi - Clean baseline
+- caverna.fi - Clean baseline restaurant site
+- accountor.com - Cookie wall (Cookiebot) — use `remove_consent_popups: true`
+- solwers.com - Public company, contacts extraction
+- jpond.fi - Software consulting, email obfuscation `(at)`
 
-**Quality gate:** All 4 Tier 1 sites must pass
+**Retired from Tier 1:**
+- talgraf.fi - BLOCKED by Cloudflare (from 200+ stress test requests in Jan 2026)
+- vahtivuori.fi - RETIRED (site restructured, contact page 404)
+- monidor.fi - RETIRED (URL structure changed, returns 404)
+
+**Quality gate:** All 4 active Tier 1 sites must pass
+
+**CRITICAL: Test site safety rules:**
+- NEVER hit the same site more than 1-2 times per session
+- Rotate across different sites
+- Past over-scraping caused permanent blocks (talgraf.fi lesson)
 
 ### Key Testing Learnings
 
-From MAS V1-V10 investigation (coordinated with aitosoft-platform repo):
+From MAS V1-V10 investigation + v0.8.6 upgrade testing:
 
 | Finding | Evidence |
 |---------|----------|
-| **`magic: true` + `scan_full_page: true` solves cookie walls** | Accountor: 32 tokens → 14,493 tokens |
+| **`remove_consent_popups: true` solves cookie walls** | Accountor: 7811 tokens (v0.8.6) without magic mode |
 | **Raw markdown > fit_markdown for contact extraction** | PruningContentFilter removes contact data at threshold ≥0.35 |
 | **LLM handles email obfuscation naturally** | JPond: all 19 `(at)` emails extracted |
 | **Use `fast` config by default, `heavy` only for edge cases** | 90% of sites work with domcontentloaded (2-4s vs 30-60s) |
+| **v0.8.5 anti-bot retry available** | `max_retries=N` with proxy list for auto-escalation |
 
 ### Test Documentation
 
@@ -252,9 +263,10 @@ CRAWL4AI_TOKEN = os.getenv("CRAWL4AI_API_TOKEN")
 - All other files in `deploy/docker/` (except those listed below)
 
 ### Aitosoft Modifications (Our changes to upstream)
-- `deploy/docker/server.py` - **Modified** (added 3 lines to enable SimpleTokenAuthMiddleware)
-- `deploy/docker/config.yml` - **Modified** (enabled security: true)
+- `deploy/docker/server.py` - **Modified** (added 3 lines at ~line 245 to enable SimpleTokenAuthMiddleware)
+- `deploy/docker/config.yml` - **Modified** (enabled security: true, added api_token field)
 - `deploy/docker/simple_token_auth.py` - **New** (our custom auth middleware, 39 lines)
+- **Last synced with upstream**: v0.8.6 (2026-03-26)
 
 ### 100% Aitosoft Code (Safe to modify)
 - `azure-deployment/` - All deployment scripts and docs

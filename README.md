@@ -16,7 +16,7 @@
 #### 🚀 Crawl4AI Cloud API — Closed Beta (Launching Soon)
 Reliable, large-scale web extraction, now built to be _**drastically more cost-effective**_ than any of the existing solutions.
 
-👉 **Apply [here](https://forms.gle/E9MyPaNXACnAMaqG7) for early access**  
+👉 **Apply [here](https://forms.gle/E9MyPaNXACnAMaqG7) for early access**
 _We’ll be onboarding in phases and working closely with early users.
 Limited slots._
 
@@ -37,11 +37,13 @@ Limited slots._
 
 Crawl4AI turns the web into clean, LLM ready Markdown for RAG, agents, and data pipelines. Fast, controllable, battle tested by a 50k+ star community.
 
-[✨ Check out latest update v0.8.0](#-recent-updates)
+[✨ Check out latest update v0.8.5](#-recent-updates)
 
-✨ **New in v0.8.0**: Crash Recovery & Prefetch Mode! Deep crawl crash recovery with `resume_state` and `on_state_change` callbacks for long-running crawls. New `prefetch=True` mode for 5-10x faster URL discovery. Critical security fixes for Docker API (hooks disabled by default, file:// URLs blocked). [Release notes →](https://github.com/unclecode/crawl4ai/blob/main/docs/blog/release-v0.8.0.md)
+✨ **New in v0.8.5**: Anti-Bot Detection, Shadow DOM & 60+ Bug Fixes! Automatic 3-tier anti-bot detection with proxy escalation, Shadow DOM flattening, deep crawl cancellation, config defaults API, consent popup removal, and critical security patches. [Release notes →](https://github.com/unclecode/crawl4ai/blob/main/docs/blog/release-v0.8.5.md)
 
-✨ Recent v0.7.8: Stability & Bug Fix Release! 11 bug fixes addressing Docker API issues, LLM extraction improvements, URL handling fixes, and dependency updates. [Release notes →](https://github.com/unclecode/crawl4ai/blob/main/docs/blog/release-v0.7.8.md)
+✨ Recent v0.8.0: Crash Recovery & Prefetch Mode! Deep crawl crash recovery with `resume_state` and `on_state_change` callbacks for long-running crawls. New `prefetch=True` mode for 5-10x faster URL discovery. [Release notes →](https://github.com/unclecode/crawl4ai/blob/main/docs/blog/release-v0.8.0.md)
+
+✨ Previous v0.7.8: Stability & Bug Fix Release! 11 bug fixes addressing Docker API issues, LLM extraction improvements, URL handling fixes, and dependency updates. [Release notes →](https://github.com/unclecode/crawl4ai/blob/main/docs/blog/release-v0.7.8.md)
 
 ✨ Previous v0.7.7: Complete Self-Hosting Platform with Real-time Monitoring! Enterprise-grade monitoring dashboard, comprehensive REST API, WebSocket streaming, and smart browser pool management. [Release notes →](https://github.com/unclecode/crawl4ai/blob/main/docs/blog/release-v0.7.7.md)
 
@@ -67,7 +69,7 @@ I made it open source for **availability**, anyone can use it without a gate. No
 </details>
 
 
-## 🚀 Quick Start 
+## 🚀 Quick Start
 
 1. Install Crawl4AI:
 ```bash
@@ -124,27 +126,27 @@ crwl https://www.example.com/products -q "Extract all product prices"
 Crawl4AI is the #1 trending open-source web crawler on GitHub. Your support keeps it independent, innovative, and free for the community — while giving you direct access to premium benefits.
 
 <div align="">
-  
-[![Become a Sponsor](https://img.shields.io/badge/Become%20a%20Sponsor-pink?style=for-the-badge&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/unclecode)  
+
+[![Become a Sponsor](https://img.shields.io/badge/Become%20a%20Sponsor-pink?style=for-the-badge&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/unclecode)
 [![Current Sponsors](https://img.shields.io/github/sponsors/unclecode?style=for-the-badge&logo=github&label=Current%20Sponsors&color=green)](https://github.com/sponsors/unclecode)
 
 </div>
 
 ### 🤝 Sponsorship Tiers
 
-- **🌱 Believer ($5/mo)** — Join the movement for data democratization  
-- **🚀 Builder ($50/mo)** — Priority support & early access to features  
-- **💼 Growing Team ($500/mo)** — Bi-weekly syncs & optimization help  
-- **🏢 Data Infrastructure Partner ($2000/mo)** — Full partnership with dedicated support  
+- **🌱 Believer ($5/mo)** — Join the movement for data democratization
+- **🚀 Builder ($50/mo)** — Priority support & early access to features
+- **💼 Growing Team ($500/mo)** — Bi-weekly syncs & optimization help
+- **🏢 Data Infrastructure Partner ($2000/mo)** — Full partnership with dedicated support
   *Custom arrangements available - see [SPONSORS.md](SPONSORS.md) for details & contact*
 
-**Why sponsor?**  
+**Why sponsor?**
 No rate-limited APIs. No lock-in. Build and own your data pipeline with direct guidance from the creator of Crawl4AI.
 
 [See All Tiers & Benefits →](https://github.com/sponsors/unclecode)
 
 
-## ✨ Features 
+## ✨ Features
 
 <details>
 <summary>📝 <strong>Markdown Generation</strong></summary>
@@ -153,7 +155,7 @@ No rate-limited APIs. No lock-in. Build and own your data pipeline with direct g
 - 🎯 **Fit Markdown**: Heuristic-based filtering to remove noise and irrelevant parts for AI-friendly processing.
 - 🔗 **Citations and References**: Converts page links into a numbered reference list with clean citations.
 - 🛠️ **Custom Strategies**: Users can create their own Markdown generation strategies tailored to specific needs.
-- 📚 **BM25 Algorithm**: Employs BM25-based filtering for extracting core information and removing irrelevant content. 
+- 📚 **BM25 Algorithm**: Employs BM25-based filtering for extracting core information and removing irrelevant content.
 </details>
 
 <details>
@@ -339,7 +341,7 @@ response = requests.post(
 )
 if response.status_code == 200:
     print("Crawl job submitted successfully.")
-    
+
 if "results" in response.json():
     results = response.json()["results"]
     print("Crawl job completed. Results:")
@@ -372,7 +374,7 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 async def main():
     browser_config = BrowserConfig(
-        headless=True,  
+        headless=True,
         verbose=True,
     )
     run_config = CrawlerRunConfig(
@@ -384,7 +386,7 @@ async def main():
         #     content_filter=BM25ContentFilter(user_query="WHEN_WE_FOCUS_BASED_ON_A_USER_QUERY", bm25_threshold=1.0)
         # ),
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
             url="https://docs.micronaut.io/4.9.9/guide/",
@@ -453,9 +455,9 @@ async def main():
         js_code=["""(async () => {const tabs = document.querySelectorAll("section.charge-methodology .tabs-menu-3 > div");for(let tab of tabs) {tab.scrollIntoView();tab.click();await new Promise(r => setTimeout(r, 500));}})();"""],
         cache_mode=CacheMode.BYPASS
     )
-        
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
-        
+
         result = await crawler.arun(
             url="https://www.kidocode.com/degrees/technology",
             config=run_config
@@ -493,17 +495,17 @@ async def main():
         word_count_threshold=1,
         extraction_strategy=LLMExtractionStrategy(
             # Here you can use any provider that Litellm library supports, for instance: ollama/qwen2
-            # provider="ollama/qwen2", api_token="no-token", 
-            llm_config = LLMConfig(provider="openai/gpt-4o", api_token=os.getenv('OPENAI_API_KEY')), 
+            # provider="ollama/qwen2", api_token="no-token",
+            llm_config = LLMConfig(provider="openai/gpt-4o", api_token=os.getenv('OPENAI_API_KEY')),
             schema=OpenAIModelFee.schema(),
             extraction_type="schema",
-            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens. 
-            Do not miss any models in the entire content. One extracted model JSON format should look like this: 
+            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens.
+            Do not miss any models in the entire content. One extracted model JSON format should look like this:
             {"model_name": "GPT-4", "input_fee": "US$10.00 / 1M tokens", "output_fee": "US$30.00 / 1M tokens"}."""
-        ),            
+        ),
         cache_mode=CacheMode.BYPASS,
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
             url='https://openai.com/api/pricing/',
@@ -540,16 +542,16 @@ async def test_news_crawl():
     run_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         url = "ADDRESS_OF_A_CHALLENGING_WEBSITE"
-        
+
         result = await crawler.arun(
             url,
             config=run_config,
             magic=True,
         )
-        
+
         print(f"Successfully crawled {url}")
         print(f"Content length: {len(result.markdown)}")
 ```
@@ -563,6 +565,48 @@ async def test_news_crawl():
 ## ✨ Recent Updates
 
 <details open>
+<summary><strong>Version 0.8.5 Release Highlights - Anti-Bot Detection, Shadow DOM & 60+ Bug Fixes</strong></summary>
+
+Our biggest release since v0.8.0. Anti-bot detection with proxy escalation, Shadow DOM flattening, deep crawl cancellation, and over 60 bug fixes.
+
+- **🛡️ Anti-Bot Detection & Proxy Escalation**:
+  - 3-tier detection: known vendors, generic block indicators, structural integrity checks
+  - Automatic retry with proxy chain and fallback fetch function
+  ```python
+  from crawl4ai import CrawlerRunConfig
+  from crawl4ai.async_configs import ProxyConfig
+
+  config = CrawlerRunConfig(
+      proxy_config=[ProxyConfig.DIRECT, ProxyConfig(server="http://my-proxy:8080")],
+      max_retries=2,
+      fallback_fetch_function=my_web_unlocker,
+  )
+  ```
+
+- **🌑 Shadow DOM Flattening**:
+  - Extract content hidden inside shadow DOM components
+  ```python
+  config = CrawlerRunConfig(flatten_shadow_dom=True)
+  ```
+
+- **🛑 Deep Crawl Cancellation**:
+  - Stop long crawls gracefully with `cancel()` or `should_cancel` callback
+  - Works with BFS, DFS, and BestFirst strategies
+
+- **⚙️ Config Defaults API**:
+  - `set_defaults()` / `get_defaults()` / `reset_defaults()` on BrowserConfig and CrawlerRunConfig
+
+- **🔒 Critical Security Fixes**:
+  - RCE via deserialization in Docker `/crawl` endpoint — removed `eval()`, added allowlist
+  - Redis CVE-2025-49844 (CVSS 10.0) — upgraded to 7.2.7
+
+- **60+ Bug Fixes** across browser management, proxy, deep crawling, extraction, CLI, and Docker
+
+[Full v0.8.5 Release Notes →](https://github.com/unclecode/crawl4ai/blob/main/docs/blog/release-v0.8.5.md)
+
+</details>
+
+<details>
 <summary><strong>Version 0.8.0 Release Highlights - Crash Recovery & Prefetch Mode</strong></summary>
 
 This release introduces crash recovery for deep crawls, a new prefetch mode for fast URL discovery, and critical security fixes for Docker deployments.
@@ -755,7 +799,7 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
 - **🚀 LLMTableExtraction**: Revolutionary table extraction with intelligent chunking for massive tables:
   ```python
   from crawl4ai import LLMTableExtraction, LLMConfig
-  
+
   # Configure intelligent table extraction
   table_strategy = LLMTableExtraction(
       llm_config=LLMConfig(provider="openai/gpt-4.1-mini"),
@@ -764,10 +808,10 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
       overlap_threshold=100,          # Maintain context between chunks
       extraction_type="structured"    # Get structured data output
   )
-  
+
   config = CrawlerRunConfig(table_extraction_strategy=table_strategy)
   result = await crawler.arun("https://complex-tables-site.com", config=config)
-  
+
   # Tables are automatically chunked, processed, and merged
   for table in result.tables:
       print(f"Extracted table: {len(table['data'])} rows")
@@ -789,7 +833,7 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
 - **🕵️ Undetected Browser Support**: Bypass sophisticated bot detection systems:
   ```python
   from crawl4ai import AsyncWebCrawler, BrowserConfig
-  
+
   browser_config = BrowserConfig(
       browser_type="undetected",  # Use undetected Chrome
       headless=True,              # Can run headless with stealth
@@ -798,34 +842,34 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
           "--disable-web-security"
       ]
   )
-  
+
   async with AsyncWebCrawler(config=browser_config) as crawler:
       result = await crawler.arun("https://protected-site.com")
   # Successfully bypass Cloudflare, Akamai, and custom bot detection
   ```
 
 - **🎨 Multi-URL Configuration**: Different strategies for different URL patterns in one batch:
-  ```python
-  from crawl4ai import CrawlerRunConfig, MatchMode
-  
+```python
+from crawl4ai import CrawlerRunConfig, MatchMode, CacheMode
+
   configs = [
       # Documentation sites - aggressive caching
       CrawlerRunConfig(
           url_matcher=["*docs*", "*documentation*"],
-          cache_mode="write",
+          cache_mode=CacheMode.WRITE_ONLY,
           markdown_generator_options={"include_links": True}
       ),
-      
+
       # News/blog sites - fresh content
       CrawlerRunConfig(
           url_matcher=lambda url: 'blog' in url or 'news' in url,
-          cache_mode="bypass"
+          cache_mode=CacheMode.BYPASS
       ),
-      
+
       # Fallback for everything else
       CrawlerRunConfig()
   ]
-  
+
   results = await crawler.arun_many(urls, config=configs)
   # Each URL gets the perfect configuration automatically
   ```
@@ -833,12 +877,12 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
 - **🧠 Memory Monitoring**: Track and optimize memory usage during crawling:
   ```python
   from crawl4ai.memory_utils import MemoryMonitor
-  
+
   monitor = MemoryMonitor()
   monitor.start_monitoring()
-  
+
   results = await crawler.arun_many(large_url_list)
-  
+
   report = monitor.get_report()
   print(f"Peak memory: {report['peak_mb']:.1f} MB")
   print(f"Efficiency: {report['efficiency']:.1f}%")
@@ -848,7 +892,7 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
 - **📊 Enhanced Table Extraction**: Direct DataFrame conversion from web tables:
   ```python
   result = await crawler.arun("https://site-with-tables.com")
-  
+
   # New way - direct table access
   if result.tables:
       import pandas as pd
@@ -875,7 +919,7 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
       max_pages=20, # Maximum number of pages to crawl
       strategy="statistical"
   )
-  
+
   async with AsyncWebCrawler() as crawler:
       adaptive_crawler = AdaptiveCrawler(crawler, config)
       state = await adaptive_crawler.digest(
@@ -893,7 +937,7 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
       scroll_by="container_height",
       wait_after_scroll=1.0
   )
-  
+
   result = await crawler.arun(url, config=CrawlerRunConfig(
       virtual_scroll_config=scroll_config
   ))
@@ -906,7 +950,7 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
       score_threshold=0.3,
       concurrent_requests=10
   )
-  
+
   result = await crawler.arun(url, config=CrawlerRunConfig(
       link_preview_config=link_config,
       score_links=True
@@ -922,7 +966,7 @@ This release focuses on stability with 11 bug fixes addressing issues reported b
       query="python tutorials",
       score_threshold=0.4
   ))
-  
+
   urls = await seeder.discover("https://example.com")
   ```
 
@@ -976,7 +1020,7 @@ For production environments, we recommend using the stable version. For testing 
 
 </details>
 
-## 📖 Documentation & Roadmap 
+## 📖 Documentation & Roadmap
 
 > 🚨 **Documentation Update Alert**: We're undertaking a major documentation overhaul next week to reflect recent updates and improvements. Stay tuned for a more comprehensive and up-to-date guide!
 
@@ -1002,7 +1046,7 @@ To check our development plans and upcoming features, visit our [Roadmap](https:
 
 </details>
 
-## 🤝 Contributing 
+## 🤝 Contributing
 
 We welcome contributions from the open-source community. Check out our [contribution guidelines](https://github.com/unclecode/crawl4ai/blob/main/CONTRIBUTORS.md) for more information.
 
@@ -1027,7 +1071,7 @@ Add one of these badges to your README, documentation, or website:
 | **Night Theme (Dark with Neon)** | <a href="https://github.com/unclecode/crawl4ai"><img src="./docs/assets/powered-by-night.svg" alt="Powered by Crawl4AI" width="200"/></a> |
 | **Dark Theme (Classic)** | <a href="https://github.com/unclecode/crawl4ai"><img src="./docs/assets/powered-by-dark.svg" alt="Powered by Crawl4AI" width="200"/></a> |
 | **Light Theme (Classic)** | <a href="https://github.com/unclecode/crawl4ai"><img src="./docs/assets/powered-by-light.svg" alt="Powered by Crawl4AI" width="200"/></a> |
- 
+
 
 HTML code for adding the badges:
 ```html
@@ -1085,11 +1129,11 @@ If you use Crawl4AI in your research or project, please cite:
 
 Text citation format:
 ```
-UncleCode. (2024). Crawl4AI: Open-source LLM Friendly Web Crawler & Scraper [Computer software]. 
+UncleCode. (2024). Crawl4AI: Open-source LLM Friendly Web Crawler & Scraper [Computer software].
 GitHub. https://github.com/unclecode/crawl4ai
 ```
 
-## 📧 Contact 
+## 📧 Contact
 
 For questions, suggestions, or feedback, feel free to reach out:
 
@@ -1101,25 +1145,25 @@ Happy Crawling! 🕸️🚀
 
 ## 🗾 Mission
 
-Our mission is to unlock the value of personal and enterprise data by transforming digital footprints into structured, tradeable assets. Crawl4AI empowers individuals and organizations with open-source tools to extract and structure data, fostering a shared data economy.  
+Our mission is to unlock the value of personal and enterprise data by transforming digital footprints into structured, tradeable assets. Crawl4AI empowers individuals and organizations with open-source tools to extract and structure data, fostering a shared data economy.
 
 We envision a future where AI is powered by real human knowledge, ensuring data creators directly benefit from their contributions. By democratizing data and enabling ethical sharing, we are laying the foundation for authentic AI advancement.
 
 <details>
 <summary>🔑 <strong>Key Opportunities</strong></summary>
- 
-- **Data Capitalization**: Transform digital footprints into measurable, valuable assets.  
-- **Authentic AI Data**: Provide AI systems with real human insights.  
-- **Shared Economy**: Create a fair data marketplace that benefits data creators.  
+
+- **Data Capitalization**: Transform digital footprints into measurable, valuable assets.
+- **Authentic AI Data**: Provide AI systems with real human insights.
+- **Shared Economy**: Create a fair data marketplace that benefits data creators.
 
 </details>
 
 <details>
 <summary>🚀 <strong>Development Pathway</strong></summary>
 
-1. **Open-Source Tools**: Community-driven platforms for transparent data extraction.  
-2. **Digital Asset Structuring**: Tools to organize and value digital knowledge.  
-3. **Ethical Data Marketplace**: A secure, fair platform for exchanging structured data.  
+1. **Open-Source Tools**: Community-driven platforms for transparent data extraction.
+2. **Digital Asset Structuring**: Tools to organize and value digital knowledge.
+3. **Ethical Data Marketplace**: A secure, fair platform for exchanging structured data.
 
 For more details, see our [full mission statement](./MISSION.md).
 </details>
@@ -1132,6 +1176,7 @@ Our enterprise sponsors and technology partners help scale Crawl4AI to power pro
 
 | Company | About | Sponsorship Tier |
 |------|------|----------------------------|
+| <a href="https://www.thordata.com/?ls=github&lk=crawl4ai" target="_blank"><img src="https://gist.github.com/aravindkarnam/dfc598a67be5036494475acece7e54cf/raw/thor_data.svg" alt="Thor Data" width="120"/></a>  | Leveraging Thordata ensures seamless compatibility with any AI/ML workflows and data infrastructure, massively accessing web data with 99.9% uptime, backed by one-on-one customer support. | 🥈 Silver |
 | <a href="https://app.nstproxy.com/register?i=ecOqW9" target="_blank"><picture><source width="250" media="(prefers-color-scheme: dark)" srcset="https://gist.github.com/aravindkarnam/62f82bd4818d3079d9dd3c31df432cf8/raw/nst-light.svg"><source width="250" media="(prefers-color-scheme: light)" srcset="https://www.nstproxy.com/logo.svg"><img alt="nstproxy" src="ttps://www.nstproxy.com/logo.svg"></picture></a>  | NstProxy is a trusted proxy provider with over 110M+ real residential IPs, city-level targeting, 99.99% uptime, and low pricing at $0.1/GB, it delivers unmatched stability, scale, and cost-efficiency. | 🥈 Silver |
 | <a href="https://app.scrapeless.com/passport/register?utm_source=official&utm_term=crawl4ai" target="_blank"><picture><source width="250" media="(prefers-color-scheme: dark)" srcset="https://gist.githubusercontent.com/aravindkarnam/0d275b942705604263e5c32d2db27bc1/raw/Scrapeless-light-logo.svg"><source width="250" media="(prefers-color-scheme: light)" srcset="https://gist.githubusercontent.com/aravindkarnam/22d0525cc0f3021bf19ebf6e11a69ccd/raw/Scrapeless-dark-logo.svg"><img alt="Scrapeless" src="https://gist.githubusercontent.com/aravindkarnam/22d0525cc0f3021bf19ebf6e11a69ccd/raw/Scrapeless-dark-logo.svg"></picture></a>  | Scrapeless provides production-grade infrastructure for Crawling, Automation, and AI Agents, offering Scraping Browser, 4 Proxy Types and Universal Scraping API. | 🥈 Silver |
 | <a href="https://dashboard.capsolver.com/passport/register?inviteCode=ESVSECTX5Q23" target="_blank"><picture><source width="120" media="(prefers-color-scheme: dark)" srcset="https://docs.crawl4ai.com/uploads/sponsors/20251013045338_72a71fa4ee4d2f40.png"><source width="120" media="(prefers-color-scheme: light)" srcset="https://www.capsolver.com/assets/images/logo-text.png"><img alt="Capsolver" src="https://www.capsolver.com/assets/images/logo-text.png"></picture></a> | AI-powered Captcha solving service. Supports all major Captcha types, including reCAPTCHA, Cloudflare, and more | 🥉 Bronze |

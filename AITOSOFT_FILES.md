@@ -36,7 +36,7 @@ Quick reference for what's ours vs upstream. **Read this before making changes.*
 **IMPORTANT**: Only 42 lines total changed from upstream!
 
 ### deploy/docker/server.py
-**Lines modified**: 3 lines added (lines 227-229)
+**Lines modified**: 3 lines added (lines 245-248)
 ```python
 # Add simple token auth if CRAWL4AI_API_TOKEN is set
 from simple_token_auth import SimpleTokenAuthMiddleware
@@ -44,16 +44,19 @@ app_.add_middleware(SimpleTokenAuthMiddleware)
 ```
 **Why**: Enable our custom auth middleware
 **Upstream sync**: Check for conflicts in `_setup_security()` function
+**Last merged**: v0.8.6 (2026-03-26)
 
 ### deploy/docker/config.yml
-**Lines modified**: 2 lines (lines 45-46)
+**Lines modified**: 2 lines (security section)
 ```yaml
 security:
-  enabled: true  # Changed from: false
+  enabled: true  # Changed from: false (Aitosoft: simple token auth)
   jwt_enabled: false  # We use simple token auth, not JWT
+  api_token: ""  # Upstream field, kept for compatibility
 ```
 **Why**: Enable security in production
 **Upstream sync**: Check `security:` section for new options
+**Last merged**: v0.8.6 (2026-03-26)
 
 ### deploy/docker/simple_token_auth.py
 **Status**: NEW FILE (39 lines)
