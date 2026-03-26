@@ -1,8 +1,8 @@
 # Crawl4AI Production Deployment
 
-**Last Updated**: 2026-01-20
+**Last Updated**: 2026-03-26
 **Location**: West Europe (co-located with MAS)
-**Status**: ✅ Running with authentication enabled
+**Status**: ⚠️ Running v0.8.0 — needs redeploy to v0.8.6
 
 ---
 
@@ -38,7 +38,7 @@ All resources are in the `aitosoft-prod` resource group (West Europe):
 | `crawl4ai-service` | Container App | The crawl4ai service |
 | `workspace-aitosoftprodnCsc` | Log Analytics | Monitoring & logs |
 
-**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.0-secure`
+**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.0-secure` → **Needs rebuild as `0.8.6`**
 
 ---
 
@@ -93,17 +93,23 @@ az containerapp logs show \
   --follow
 ```
 
-### Update to New Version
+### Update to New Version (Image Only — Keeps Existing Token)
 ```bash
-# Rebuild image
-az acr build --registry aitosoftacr --image crawl4ai-service:0.8.1 .
+# Step 1: Build image in Azure (no local Docker needed)
+az acr build --registry aitosoftacr --image crawl4ai-service:0.8.6 .
 
-# Update container app
+# Step 2: Update container app image ONLY (preserves env vars including API token)
 az containerapp update \
   --name crawl4ai-service \
   --resource-group aitosoft-prod \
-  --image aitosoftacr.azurecr.io/crawl4ai-service:0.8.1
+  --image aitosoftacr.azurecr.io/crawl4ai-service:0.8.6
+
+# Step 3: Verify
+curl https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io/health
 ```
+
+**⚠️ WARNING**: Do NOT use `deploy-aitosoft-prod.sh --update-only` for routine updates —
+it regenerates the API token which breaks the MAS connection. Use the commands above instead.
 
 ### Rotate API Token
 ```bash

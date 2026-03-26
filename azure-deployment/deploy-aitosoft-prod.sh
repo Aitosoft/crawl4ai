@@ -22,7 +22,7 @@ ENVIRONMENT="aitosoft-aca"  # Existing Container Apps environment
 LOCATION="westeurope"
 ACR_NAME="aitosoftacr"
 IMAGE_NAME="crawl4ai-service"
-IMAGE_TAG="0.8.0"
+IMAGE_TAG="0.8.6"
 FULL_IMAGE="${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${IMAGE_TAG}"
 
 # Generate secure token
