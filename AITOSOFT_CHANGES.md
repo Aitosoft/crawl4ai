@@ -11,8 +11,8 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.8.6 (merged from upstream 2026-03-26)
-- **Production**: v0.8.0-secure (deployed to West Europe) — **NEEDS REDEPLOY**
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.0-secure` — **NEEDS REBUILD**
+- **Production**: v0.8.6 (deployed 2026-03-26)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6`
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
