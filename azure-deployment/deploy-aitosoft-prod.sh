@@ -187,10 +187,10 @@ deploy_container_app() {
             --image $FULL_IMAGE \
             --target-port 11235 \
             --ingress external \
-            --min-replicas 1 \
-            --max-replicas 3 \
-            --cpu 1.0 \
-            --memory 2.0Gi \
+            --min-replicas 0 \
+            --max-replicas 20 \
+            --cpu 2.0 \
+            --memory 4.0Gi \
             --registry-server ${ACR_NAME}.azurecr.io \
             --env-vars \
                 CRAWL4AI_API_TOKEN=$API_TOKEN \

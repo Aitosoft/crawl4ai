@@ -1,8 +1,8 @@
 # Crawl4AI Production Deployment
 
-**Last Updated**: 2026-03-26
+**Last Updated**: 2026-04-04
 **Location**: West Europe (co-located with MAS)
-**Status**: ✅ Running v0.8.6 (deployed 2026-03-26)
+**Status**: ✅ Running v0.8.6 (rescaled 2026-04-04)
 
 ---
 
@@ -127,17 +127,13 @@ az containerapp update \
 
 ### Scale Resources
 ```bash
-# Increase replicas
+# Current (2026-04-04): 2 CPU, 4 GiB, 0-20 replicas
+# Adjust if needed:
 az containerapp update \
   --name crawl4ai-service \
   --resource-group aitosoft-prod \
-  --min-replicas 2 \
-  --max-replicas 5
-
-# Increase CPU/Memory
-az containerapp update \
-  --name crawl4ai-service \
-  --resource-group aitosoft-prod \
+  --min-replicas 0 \
+  --max-replicas 20 \
   --cpu 2.0 \
   --memory 4.0Gi
 ```
@@ -146,16 +142,25 @@ az containerapp update \
 
 ## Cost Optimization
 
-Current configuration:
-- **Replicas**: 1-3 (scales automatically)
-- **CPU**: 1.0 core per replica
-- **Memory**: 2.0 GiB per replica
-- **Estimated cost**: ~€30-50/month (depends on usage)
+Current configuration (updated 2026-04-04):
+- **Replicas**: 0-20 (scales to zero when idle, scales out under load)
+- **CPU**: 2.0 cores per replica
+- **Memory**: 4.0 GiB per replica
+- **max_pages**: 5 per replica (horizontal scaling strategy)
+- **memory_threshold**: 85% (conservative for cloud)
+- **Estimated cost**: Scales to zero when idle. Under load: ~€0.10/replica-hour
 
-To reduce costs:
-- Set `--min-replicas 0` (scales to zero when idle)
-- Reduce CPU/memory if performance allows
-- Monitor usage via Azure Portal > Cost Management
+### Scaling Strategy (2026-04-04)
+Investigation of 500s+ latency incidents revealed the original 1 CPU / 2 GiB config caused
+severe resource starvation — Chromium pages competed for a single CPU core, leading to
+8+ minute queuing delays on requests that actually crawled in <10s.
+
+Fix: fewer pages per replica (5), more replicas (up to 20). Each replica gets its own
+Chromium process with dedicated CPU. Azure scales replicas based on HTTP traffic.
+
+To monitor costs:
+- Azure Portal > Cost Management
+- Most time will be at 0 replicas (zero cost)
 
 ---
 

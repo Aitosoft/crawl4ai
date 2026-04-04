@@ -7,7 +7,7 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-03-26
+**Last Updated**: 2026-04-04
 
 ### Version
 - **Local**: v0.8.6 (merged from upstream 2026-03-26)
@@ -29,6 +29,39 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Tests
 - 3/3 test-aitosoft/ tests passing
+
+---
+
+## Resource Scaling Fix (2026-04-04)
+
+### What Changed
+Investigation of 500s+ request latency incidents revealed severe resource starvation.
+Azure logs showed requests waiting 8+ minutes in queue for CPU/memory, while actual crawls
+completed in <10 seconds. Root cause: 1 CPU / 2 GiB running 40 concurrent Playwright pages.
+
+### Config Changes
+- `deploy/docker/config.yml`: `max_pages` 40→5, `memory_threshold_percent` 95→85%
+- `azure-deployment/deploy-aitosoft-prod.sh`: Updated defaults to 2 CPU / 4 GiB / 20 replicas
+
+### Azure Changes (Applied Live)
+| Setting | Before | After |
+|---------|--------|-------|
+| CPU | 1.0 | 2.0 |
+| Memory | 2.0 GiB | 4.0 GiB |
+| minReplicas | 0 | 0 |
+| maxReplicas | 3 | 20 |
+| max_pages (per replica) | 40 | 5 |
+| memory_threshold | 95% | 85% |
+
+### Strategy
+Horizontal scaling: fewer pages per replica, more replicas. Each replica gets its own
+Chromium process with dedicated CPU. Azure Container Apps scales replicas based on HTTP
+traffic and scales to zero when idle (zero cost).
+
+### Evidence (from Azure Log Analytics)
+- tassufoods.fi: 524s total latency, but FETCH log shows 9.51s actual crawl time
+- 8+ minutes spent waiting with pool health checks showing 85% memory, no FETCH activity
+- Memory spiking to 100% intermittently during concurrent page processing
 
 ---
 
