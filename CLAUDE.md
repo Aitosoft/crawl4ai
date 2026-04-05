@@ -264,7 +264,7 @@ CRAWL4AI_TOKEN = os.getenv("CRAWL4AI_API_TOKEN")
 
 ### Aitosoft Modifications (Our changes to upstream)
 - `deploy/docker/server.py` - **Modified** (added 3 lines at ~line 245 to enable SimpleTokenAuthMiddleware)
-- `deploy/docker/config.yml` - **Modified** (enabled security: true, added api_token field)
+- `deploy/docker/config.yml` - **Modified** (enabled security: true, added api_token field, max_pages: 5, memory_threshold: 85%)
 - `deploy/docker/simple_token_auth.py` - **New** (our custom auth middleware, 39 lines)
 - **Last synced with upstream**: v0.8.6 (2026-03-26)
 
@@ -298,6 +298,8 @@ CRAWL4AI_TOKEN = os.getenv("CRAWL4AI_API_TOKEN")
 - Location: West Europe (aitosoft-prod resource group)
 - Uses existing infrastructure (aitosoftacr, aitosoft-aca)
 - Simple Bearer token authentication enabled
+- Resources: 2 vCPU / 4 GiB per replica, 0-20 replicas (scales to zero)
+- max_pages: 5 per replica (horizontal scaling strategy)
 - See `DEPLOYMENT_INFO.md` for endpoint and credentials
 
 **To deploy updates:**

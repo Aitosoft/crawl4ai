@@ -11,7 +11,7 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.8.6 (merged from upstream 2026-03-26)
-- **Production**: v0.8.6 (deployed 2026-03-26)
+- **Production**: v0.8.6 (deployed 2026-03-26, rescaled 2026-04-04)
 - **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6`
 
 ### Production Deployment
