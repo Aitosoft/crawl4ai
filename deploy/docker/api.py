@@ -662,6 +662,22 @@ async def handle_crawl_request(
         if not isinstance(results, list):
             results = [results]
 
+        # Aitosoft: second-tier retry via patchright for any results that the
+        # antibot_detector marked as blocked. Replaces blocked entries with
+        # patchright results when the retry succeeds, otherwise preserves the
+        # first-tier diagnostic. See aitosoft_patchright_fallback.py.
+        try:
+            from aitosoft_patchright_fallback import maybe_retry_blocked
+
+            results = await maybe_retry_blocked(
+                results=results,
+                urls=urls,
+                crawler_config=crawler_config,
+                base_browser_config=browser_config,
+            )
+        except Exception as _e:
+            logger.warning(f"[patchright] retry pass raised (non-fatal): {_e}")
+
         end_mem_mb = _get_memory_mb()  # <--- Get memory after
         end_time = time.time()
 

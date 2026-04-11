@@ -232,16 +232,45 @@ is protective insurance against future fingerprint-based detections — a
 site that passes today shouldn't start failing in 6–12 months because our
 fingerprint got stale.
 
-**Next steps for the blocked 4 (recommended, not in this change):**
-1. **Residential proxy** via crawl4ai's `proxy_config` for the handful of
-   sites confirmed to IP-block Azure. Add to CrawlerRunConfig per-site, not
-   globally. Cost: ~€10–30/month for 4 sites × 1 request/month.
-2. **Patchright (undetected-playwright) escalation** on retry. `patchright`
-   is already in `pyproject.toml`. A 2-tier retry — normal stealth first,
-   patchright fallback on block — would handle Cloudflare challenge sites
-   without proxy costs.
-3. **Accept the ~1% loss.** 4 blocked sites out of ~380 = 1.05%. If the
-   business cost is low, it's cheaper to skip them than to chase them.
+**Follow-up — patchright fallback retry (shipped as v5):**
+
+After discussing with MAS Claude, we chose to implement option 2 (patchright
+fallback) and skip residential proxies unless production data shows >3% blocks.
+
+New file: `deploy/docker/aitosoft_patchright_fallback.py`
+- Lazy singleton `AsyncWebCrawler` with `UndetectedAdapter`
+- `maybe_retry_blocked(results, urls, crawler_config, base_browser_config)`
+  scans for results marked blocked by antibot_detector and retries those
+  specific URLs through patchright
+- On retry success, replaces the blocked entry; on retry failure, keeps the
+  first-tier diagnostic so MAS can branch on the original block reason
+- Stealth is stripped from the BrowserConfig before patchright (the two
+  conflict — see `browser_manager.py:787`)
+
+Wired into `api.py` `handle_crawl_request` right after the first-tier crawl
+completes and before the memory/response bookkeeping. Wrapped in a
+try/except so a broken retry never fails the request — worst case, caller
+gets the first-tier result unchanged.
+
+Expected impact on the 4 blocked sites:
+- **pedelux.fi** (Cloudflare JS challenge): high likelihood of unblock.
+  Patchright is specifically good at Cloudflare challenges.
+- **baxter.fi / lundbeck.com** (Akamai/WAF 403): moderate likelihood.
+  Depends whether Akamai's detection is JA3/fingerprint-based (patchright
+  has different TLS fingerprint than regular Playwright-Chromium).
+- **rederiabeckero.ax** (15-byte response): low likelihood. Smells like an
+  IP-level block rather than fingerprint.
+
+If patchright still doesn't get through, MAS's WebsiteAnalysisAgent has a
+`research_web` fallback path that finds 3–5 contacts per company without
+the direct scrape, so the graceful-degradation story holds even for the
+blocked minority.
+
+---
+
+**Residential proxy option (deferred):**
+Available if MAS production shows >3% blocks — can be added per-site via
+`crawler_config.proxy_config`. Not implemented in this round.
 
 ### Per-Request Customization (for MAS)
 
