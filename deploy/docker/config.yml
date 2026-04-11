@@ -71,14 +71,18 @@ crawler:
   browser:
     kwargs:
       headless: true
-      text_mode: true
+      text_mode: false                     # Load images/fonts/media — matches real browser; blocking them is a clean fingerprint signal
+      enable_stealth: true                 # playwright-stealth: patches navigator.webdriver, chrome.runtime, WebGL vendor, permissions, plugins
+      chrome_channel: chrome               # Real Google Chrome (installed in Dockerfile). browser_manager reads chrome_channel (not channel) at launch
+      channel: chrome                      # Kept for symmetry — BrowserConfig stores both; chrome_channel is what Playwright actually uses
+      viewport_width: 1920                 # Realistic desktop (was 1080 — unusually narrow)
+      viewport_height: 1080                # Realistic desktop (was 600 — unusually short)
+      user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"  # Windows to match playwright-stealth's default navigator.platform=Win32 override. Linux Chrome is only ~4% of desktop traffic anyway.
     extra_args:
-      # - "--single-process"
+      # Removed: --disable-gpu, --disable-software-rasterizer (killed WebGL, huge detection signal)
+      # Removed: --disable-web-security (Cloudflare bot rules match on this explicitly)
       - "--no-sandbox"
       - "--disable-dev-shm-usage"
-      - "--disable-gpu"
-      - "--disable-software-rasterizer"
-      - "--disable-web-security"
       - "--allow-insecure-localhost"
       - "--ignore-certificate-errors"
 

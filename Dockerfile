@@ -176,8 +176,18 @@ RUN crawl4ai-setup
 
 RUN playwright install --with-deps
 
+# Aitosoft: install real Google Chrome (not just bundled Chromium).
+# Fixes TLS/JA3 fingerprint — bundled Chromium ships a distinct handshake that
+# Cloudflare's bot-management rulesets flag. Real Chrome matches ~65% of desktop
+# web traffic. BrowserConfig.channel=chrome (set in deploy/docker/config.yml)
+# tells Playwright to use it.
+RUN playwright install chrome
+
 RUN mkdir -p /home/appuser/.cache/ms-playwright \
     && cp -r /root/.cache/ms-playwright/chromium-* /home/appuser/.cache/ms-playwright/ \
+    && if ls /root/.cache/ms-playwright/chrome-* >/dev/null 2>&1; then \
+         cp -r /root/.cache/ms-playwright/chrome-* /home/appuser/.cache/ms-playwright/; \
+       fi \
     && chown -R appuser:appuser /home/appuser/.cache/ms-playwright
 
 RUN crawl4ai-doctor

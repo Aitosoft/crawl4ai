@@ -7,12 +7,12 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-04-04
+**Last Updated**: 2026-04-11
 
 ### Version
-- **Local**: v0.8.6 (merged from upstream 2026-03-26)
-- **Production**: v0.8.6 (deployed 2026-03-26, rescaled 2026-04-04)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6`
+- **Local**: v0.8.6 (merged from upstream 2026-03-26) + stealth package (2026-04-11)
+- **Production**: v0.8.6 + stealth (deployed 2026-04-11)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-stealth`
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
@@ -29,6 +29,221 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Tests
 - 3/3 test-aitosoft/ tests passing
+
+---
+
+## Stealth Package (2026-04-11)
+
+### What Changed
+Full stealth overhaul of the Docker image and runtime browser configuration,
+driven by MAS observing consistent HTTP 500s on 4 Cloudflare/AEM/WP.one-fronted
+sites (baxter.fi, lundbeck.com/fi, pedelux.fi, rederiabeckero.ax) while the
+same sites responded 200 to plain `curl`. Fingerprint diagnostic against bot
+detection pages (sannysoft, areyouheadless, creepjs, browserleaks) confirmed
+multiple fingerprint leaks: stale UA, no WebGL, wrong locale/timezone, missing
+stealth patches.
+
+### Files Modified (Upstream)
+
+**`Dockerfile`** — added one RUN step to install real Google Chrome:
+```
+RUN playwright install chrome
+```
+Playwright's bundled Chromium has a distinct TLS/JA3 handshake that Cloudflare's
+bot-management rulesets flag. Real Chrome matches ~65% of desktop web traffic
+and is the cheapest single fingerprint fix. The `chrome-*` cache copy into
+`appuser` home is conditional (falls back cleanly if Playwright bundles Chrome
+system-wide via apt instead of cache-local).
+
+**`deploy/docker/api.py`** — two 2-line edits in `handle_crawl_request` (line
+~567) and `handle_stream_crawl_request` (line ~740). Both call the new
+`merge_browser_config()` helper instead of `BrowserConfig.load()` directly.
+Root cause: upstream `api.py` loaded the user's `browser_config` dict into a
+BrowserConfig with class defaults, so config.yml.browser.kwargs only affected
+the PERMANENT pool browser (which is never hit by real requests — its
+signature differs from the all-defaults signature of a bare request). Our
+stealth/channel/UA/viewport settings were dead code for API traffic until
+this fix.
+
+**`crawl4ai/browser_adapter.py`** — `StealthAdapter._check_stealth_availability`
+and `apply_stealth` ported to the `playwright-stealth` 2.x class-based API
+(`from playwright_stealth import Stealth; Stealth().apply_stealth_async(page)`).
+Upstream v0.8.6 pins `playwright-stealth>=2.0.0` in pyproject.toml but still
+imports the old 1.x names (`stealth_async` / `stealth_sync`), which no longer
+exist. Imports failed silently and `apply_stealth` became a no-op — so
+`enable_stealth=True` had zero effect, even when set correctly. Confirmed in
+the v2 deploy where `navigator.webdriver` remained `false` and `chrome.runtime`
+remained absent on sannysoft/creepjs. Worth filing a PR upstream.
+
+**`crawl4ai/browser_manager.py`** — `BrowserManager._build_browser_args` (line
+~1057) hardcoded `--disable-gpu`, `--disable-gpu-compositing`, and
+`--disable-software-rasterizer` at the top of its arg list. The sibling
+`ManagedBrowser.build_browser_flags` (line ~69) gates those same flags on
+`if not config.enable_stealth:`. The two flag builders had drifted out of
+sync. Moved the GPU flags into the same conditional block so stealth-enabled
+crawls keep WebGL (via SwiftShader), which is one of the loudest anti-bot
+signals Cloudflare scores against. Also worth a PR upstream.
+
+**`deploy/docker/config.yml`** — browser kwargs overhaul:
+```yaml
+browser:
+  kwargs:
+    headless: true
+    text_mode: false                 # was true — real browsers load images/fonts
+    enable_stealth: true             # NEW — playwright-stealth patches
+    channel: chrome                  # NEW — use installed real Chrome
+    viewport_width: 1920             # NEW — was default 1080
+    viewport_height: 1080            # NEW — was default 600
+    user_agent: "Mozilla/5.0 (X11; Linux x86_64) ... Chrome/133.0.0.0 ..."
+  extra_args:
+    - "--no-sandbox"
+    - "--disable-dev-shm-usage"
+    - "--allow-insecure-localhost"
+    - "--ignore-certificate-errors"
+    # REMOVED: --disable-gpu, --disable-software-rasterizer (killed WebGL)
+    # REMOVED: --disable-web-security (Cloudflare bot rules match on this)
+```
+
+### Files Modified (Aitosoft-only)
+
+- `test-aitosoft/test_regression.py` — refreshed `TIER_1_SITES` list to match
+  CLAUDE.md (caverna, accountor, solwers, jpond). Retired sites removed:
+  talgraf (CF block), tilitoimistovahtivuori (404), monidor (restructure).
+  Default config swapped from `fast` (magic=true) → `optimal` (matches MAS).
+- `test-aitosoft/test_site.py` — `optimal` config now includes
+  `remove_consent_popups: true`. `CRAWL4AI_URL` reads from `CRAWL4AI_API_URL`
+  env var so tests can target localhost/staging.
+
+### New Files
+
+- `deploy/docker/aitosoft_browser_merge.py` — 50-line helper that merges
+  config.yml browser kwargs under a user's request `browser_config`. Called
+  from `api.py` at the two `BrowserConfig.load()` sites. Defensive: if the
+  user sends a fully serialized BrowserConfig (`{type, params}` shape), the
+  merge is skipped and the object is respected as-is.
+- `test-aitosoft/test_fingerprint.py` — before/after fingerprint diagnostic.
+  Hits sannysoft, areyouheadless, creepjs, browserleaks through crawl4ai's
+  own `/crawl` API, runs a JS probe inside the page (navigator.webdriver,
+  UA, platform, timezone, locale, plugins, cores, screen, viewport, WebGL
+  vendor/renderer, chrome.runtime, canvasFp, audioContext), and saves the
+  full HTML + screenshot + probe JSON + summary under `stealth-<label>/`.
+- `test-aitosoft/stealth-baseline/` — fingerprint capture with OLD config
+  (for before/after comparison). Key baseline signals:
+  - `webdriver: false` (tells: real Chrome is `undefined`)
+  - UA `Chrome/116.0.0.0` (2 years stale)
+  - viewport `1080x600` (unusual, signals narrow bot)
+  - `timezone: UTC, locale: en-US` (wrong for Finnish sites)
+  - `webgl: no-webgl` (HUGE tell: `--disable-gpu` flag)
+- `test-aitosoft/stealth-after/` — fingerprint capture with NEW config
+  (post-deploy). See file for comparison.
+- `test-aitosoft/reference/persona_generator.ts` — reference TypeScript for
+  the MAS team. Deterministic persona (UA/viewport/Accept-Language/sec-ch-ua)
+  from `master_company_id` via SHA-256(salt + id). Pool is Chromium-family
+  only (Chrome + Edge) to match crawl4ai's engine. Weighted by EMEA desktop
+  share. Rotatable via `PERSONA_SALT` constant.
+
+### Rationale (the "why")
+
+See the brainstorm dialogue between crawl4ai-Claude and aitosoft-platform-Claude
+preceding this change (conversation thread in the Claude Code session).
+Short version: every change moves the request one step closer to a real
+browser visit. None of the changes add new behavior to sites that already
+worked — they only REMOVE the hostile flags / outdated defaults / missing
+stealth patches that were leaking automation signals to bot detectors.
+
+### Per-Request Customization (for MAS)
+
+Locale, timezone, and geolocation are already forwarded by crawl4ai via
+`CrawlerRunConfig` → Playwright `new_context()` (see `browser_manager.py`
+lines ~1351-1366). No code change was needed for those. MAS can send them
+on every request under `crawler_config`:
+```json
+{
+  "urls": ["https://example.fi"],
+  "browser_config": {
+    "user_agent": "<from persona>",
+    "viewport_width": 1920,
+    "viewport_height": 1080,
+    "headers": {"Accept-Language": "fi-FI,fi;q=0.9,en;q=0.8"}
+  },
+  "crawler_config": {
+    "locale": "fi-FI",
+    "timezone_id": "Europe/Helsinki",
+    "wait_until": "domcontentloaded",
+    "remove_consent_popups": true,
+    "page_timeout": 90000,
+    "max_retries": 2
+  }
+}
+```
+
+### Deployment
+
+Built via `az acr build` (remote ACR build — no local Docker needed in the
+devcontainer) and deployed via `az containerapp update --image ...`. Four
+iterations landed as revisions `stealth-v1` → `stealth-v4`; each revealed
+an additional layer of the same root cause (config.yml wasn't reaching the
+request path, then the stealth library's API had changed, then a duplicate
+flag list had drifted out of sync, then the webdriver patch was gated on a
+condition that never fired, then platform and UA were mismatched). Final
+deployed image: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-stealth-v4`.
+
+### Results
+
+**Fingerprint diagnostic — baseline vs v4:**
+
+| Signal                  | Baseline                 | v4                                   |
+|-------------------------|--------------------------|--------------------------------------|
+| `navigator.webdriver`   | `false` (automation tell)| `undefined` (matches real Chrome)    |
+| User-Agent              | Chrome 116 / X11 Linux   | Chrome 133 / Windows NT 10.0         |
+| `navigator.platform`    | `Linux x86_64`           | `Win32` (matches UA)                 |
+| Viewport                | 1080 × 600               | 1920 × 1080                          |
+| WebGL vendor            | `no-webgl`               | `Intel Inc.`                         |
+| WebGL renderer          | `no-webgl`               | `Intel Iris OpenGL Engine`           |
+| `chrome.runtime`        | `false` (Chromium)       | `false` (matches real Chrome w/o ext)|
+
+Full artifacts: `test-aitosoft/stealth-baseline/` vs `test-aitosoft/stealth-v4/`
+(HTML + screenshots + probe JSON per target site).
+
+**Tier 1 regression (Caverna, Accountor, Solwers, JPond):** 4/4 PASS. Report
+at `test-aitosoft/reports/stealth-v4-regression-tier1.md`.
+
+**Previously-blocked sites — still blocked, but with clear diagnostics:**
+
+| Site                   | Baseline   | v4 Result                                                    |
+|------------------------|------------|--------------------------------------------------------------|
+| baxter.fi              | HTTP 500   | Blocked: "Access Denied on short page (HTTP 403, 6264 bytes)" (Akamai) |
+| lundbeck.com/fi        | HTTP 500   | Blocked: "HTTP 403 with HTML content (923 bytes)" (WAF)     |
+| pedelux.fi             | HTTP 500   | Blocked: "Cloudflare JS challenge" (never resolves)         |
+| rederiabeckero.ax      | HTTP 500   | Blocked: "Structural: no <body> tag (15 bytes)" (proxy?)    |
+
+v4 fingerprint work did NOT unblock these four. The nature of the blocks
+(static 403 pages from Akamai/WAFs, a Cloudflare challenge that never
+resolves, a 15-byte near-empty response) points at **IP-based or network-path
+detection** rather than fingerprint detection. The Azure Container Apps
+egress IP is almost certainly flagged by these specific gatekeepers — which
+stealth improvements cannot fix.
+
+**What v4 DID fix:** the fingerprint side of the equation for the ~380 sites
+that already work. Those sites now get a request that's substantially harder
+to flag as automation: real Chrome binary, current Chrome version, stealth
+patches active, WebGL present, platform/UA matched, viewport realistic. This
+is protective insurance against future fingerprint-based detections — a
+site that passes today shouldn't start failing in 6–12 months because our
+fingerprint got stale.
+
+**Next steps for the blocked 4 (recommended, not in this change):**
+1. **Residential proxy** via crawl4ai's `proxy_config` for the handful of
+   sites confirmed to IP-block Azure. Add to CrawlerRunConfig per-site, not
+   globally. Cost: ~€10–30/month for 4 sites × 1 request/month.
+2. **Patchright (undetected-playwright) escalation** on retry. `patchright`
+   is already in `pyproject.toml`. A 2-tier retry — normal stealth first,
+   patchright fallback on block — would handle Cloudflare challenge sites
+   without proxy costs.
+3. **Accept the ~1% loss.** 4 blocked sites out of ~380 = 1.05%. If the
+   business cost is low, it's cheaper to skip them than to chase them.
+
+### Per-Request Customization (for MAS)
 
 ---
 

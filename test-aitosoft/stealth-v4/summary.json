@@ -1,0 +1,179 @@
+{
+  "label": "v4",
+  "api_url": "https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io",
+  "timestamp": "2026-04-11T11:03:01.908855+00:00",
+  "results": [
+    {
+      "slug": "sannysoft",
+      "status": "OK",
+      "status_code": 200,
+      "elapsed_s": 12.69,
+      "html_bytes": 39793,
+      "markdown_bytes": 15732,
+      "has_screenshot": true,
+      "probe": {
+        "webdriver": null,
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "platform": "Win32",
+        "vendor": "Google Inc.",
+        "languages": [
+          "en-US",
+          "en"
+        ],
+        "timezone": "UTC",
+        "locale": "en-US",
+        "pluginsLen": 5,
+        "hardwareConcurrency": 4,
+        "deviceMemory": 16,
+        "webglVendor": "Intel Inc.",
+        "webglRenderer": "Intel Iris OpenGL Engine",
+        "chromeRuntime": false,
+        "chromeLoadTimes": true,
+        "screen": {
+          "width": 1920,
+          "height": 1080,
+          "availWidth": 1920,
+          "availHeight": 1080,
+          "colorDepth": 24,
+          "pixelDepth": 24
+        },
+        "window": {
+          "innerWidth": 1920,
+          "innerHeight": 1080,
+          "outerWidth": 1920,
+          "outerHeight": 1080,
+          "devicePixelRatio": 1
+        }
+      }
+    },
+    {
+      "slug": "areyouheadless",
+      "status": "OK",
+      "status_code": 200,
+      "elapsed_s": 10.08,
+      "html_bytes": 3668,
+      "markdown_bytes": 1637,
+      "has_screenshot": true,
+      "probe": {
+        "webdriver": null,
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "platform": "Win32",
+        "vendor": "Google Inc.",
+        "languages": [
+          "en-US",
+          "en"
+        ],
+        "timezone": "UTC",
+        "locale": "en-US",
+        "pluginsLen": 5,
+        "hardwareConcurrency": 4,
+        "deviceMemory": 16,
+        "webglVendor": "Intel Inc.",
+        "webglRenderer": "Intel Iris OpenGL Engine",
+        "chromeRuntime": false,
+        "chromeLoadTimes": true,
+        "screen": {
+          "width": 1920,
+          "height": 1080,
+          "availWidth": 1920,
+          "availHeight": 1080,
+          "colorDepth": 24,
+          "pixelDepth": 24
+        },
+        "window": {
+          "innerWidth": 1920,
+          "innerHeight": 1080,
+          "outerWidth": 1920,
+          "outerHeight": 1080,
+          "devicePixelRatio": 1
+        }
+      }
+    },
+    {
+      "slug": "creepjs",
+      "status": "OK",
+      "status_code": 200,
+      "elapsed_s": 9.94,
+      "html_bytes": 273949,
+      "markdown_bytes": 88728,
+      "has_screenshot": true,
+      "probe": {
+        "webdriver": null,
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "platform": "Win32",
+        "vendor": "Google Inc.",
+        "languages": [
+          "en-US",
+          "en"
+        ],
+        "timezone": "UTC",
+        "locale": "en-US",
+        "pluginsLen": 5,
+        "hardwareConcurrency": 4,
+        "deviceMemory": 16,
+        "webglVendor": "Intel Inc.",
+        "webglRenderer": "Intel Iris OpenGL Engine",
+        "chromeRuntime": false,
+        "chromeLoadTimes": true,
+        "screen": {
+          "width": 1920,
+          "height": 1080,
+          "availWidth": 1920,
+          "availHeight": 1080,
+          "colorDepth": 24,
+          "pixelDepth": 24
+        },
+        "window": {
+          "innerWidth": 1920,
+          "innerHeight": 1080,
+          "outerWidth": 1920,
+          "outerHeight": 1080,
+          "devicePixelRatio": 1
+        }
+      }
+    },
+    {
+      "slug": "browserleaks-js",
+      "status": "OK",
+      "status_code": 200,
+      "elapsed_s": 13.11,
+      "html_bytes": 30678,
+      "markdown_bytes": 14744,
+      "has_screenshot": true,
+      "probe": {
+        "webdriver": null,
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "platform": "Win32",
+        "vendor": "Google Inc.",
+        "languages": [
+          "en-US",
+          "en"
+        ],
+        "timezone": "UTC",
+        "locale": "en-US",
+        "pluginsLen": 5,
+        "hardwareConcurrency": 4,
+        "deviceMemory": 16,
+        "webglVendor": "Intel Inc.",
+        "webglRenderer": "Intel Iris OpenGL Engine",
+        "chromeRuntime": false,
+        "chromeLoadTimes": true,
+        "screen": {
+          "width": 1920,
+          "height": 1080,
+          "availWidth": 1920,
+          "availHeight": 1080,
+          "colorDepth": 24,
+          "pixelDepth": 24
+        },
+        "window": {
+          "innerWidth": 1920,
+          "innerHeight": 1080,
+          "outerWidth": 1920,
+          "outerHeight": 1080,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  ]
+}

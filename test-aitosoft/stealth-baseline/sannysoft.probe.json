@@ -1,0 +1,41 @@
+{
+  "webdriver": false,
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/116.0.0.0 Safari/537.36",
+  "platform": "Linux x86_64",
+  "vendor": "Google Inc.",
+  "languages": [
+    "en-US"
+  ],
+  "language": "en-US",
+  "pluginsLen": 5,
+  "mimeTypesLen": 2,
+  "hardwareConcurrency": 4,
+  "deviceMemory": 8,
+  "maxTouchPoints": 0,
+  "timezone": "UTC",
+  "locale": "en-US",
+  "screen": {
+    "width": 1080,
+    "height": 600,
+    "availWidth": 1080,
+    "availHeight": 600,
+    "colorDepth": 24,
+    "pixelDepth": 24
+  },
+  "window": {
+    "innerWidth": 1080,
+    "innerHeight": 600,
+    "outerWidth": 1080,
+    "outerHeight": 600,
+    "devicePixelRatio": 1
+  },
+  "chromeRuntime": false,
+  "chromeLoadTimes": true,
+  "permissionsQuery": true,
+  "notificationPermission": "default",
+  "webglVendor": "no-webgl",
+  "webglRenderer": "no-webgl",
+  "canvasFp": "JEbgnFjZQOAnAAAA//9KwcP7AAAABklEQVQDAMayGdA+TYsGAAAAAElFTkSuQmCC",
+  "audioContext": true,
+  "iframeContentWindow": true
+}

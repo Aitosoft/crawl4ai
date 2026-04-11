@@ -18,9 +18,10 @@ from datetime import datetime
 from typing import Optional
 import requests
 
-# Azure deployment credentials
-CRAWL4AI_URL = (
-    "https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io"
+# Azure deployment credentials (override via env for local/staging runs).
+CRAWL4AI_URL = os.getenv(
+    "CRAWL4AI_API_URL",
+    "https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io",
 )
 CRAWL4AI_TOKEN = os.getenv("CRAWL4AI_API_TOKEN")
 
@@ -31,12 +32,14 @@ if not CRAWL4AI_TOKEN:
 
 # Crawler configurations
 CONFIGS = {
-    # RECOMMENDED: Works on 100% of test sites including cookie consent sites
+    # RECOMMENDED: Matches MAS production config. Works on 100% of Tier 1 sites
+    # including cookie walls (remove_consent_popups handles OneTrust/Cookiebot/Didomi).
     "optimal": {
         "wait_until": "domcontentloaded",
         "magic": False,  # Don't use - removes content on cookie sites!
         "scan_full_page": False,
         "remove_overlay_elements": False,  # Don't use - removes page!
+        "remove_consent_popups": True,  # Aitosoft: CMP-aware cookie removal (v0.8.5+)
         "page_timeout": 60000,
         "delay_before_return_html": 2.0,
     },

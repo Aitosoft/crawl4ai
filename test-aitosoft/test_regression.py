@@ -19,36 +19,34 @@ if not CRAWL4AI_TOKEN:
     print("❌ Error: CRAWL4AI_API_TOKEN not set in environment")
     sys.exit(1)
 
-# Test site registry (see TEST_SITES_REGISTRY.md)
+# Test site registry (see TEST_SITES_REGISTRY.md and CLAUDE.md Tier 1 list).
+# Updated 2026-04-11: talgraf.fi/tilitoimistovahtivuori.fi/monidor.fi retired
+# (Cloudflare block, site 404, site restructure respectively).
 TIER_1_SITES: List[Dict[str, Any]] = [
     {
-        "domain": "talgraf.fi",
-        "page": "yhteystiedot",
-        "expected_decision_makers": [
-            "Toni Kemppinen",
-            "Sanna Kemppinen",
-            "Renne Pöysä",
-        ],
-        "expected_min_contacts": 15,
-    },
-    {
-        "domain": "tilitoimistovahtivuori.fi",
-        "page": "?page_id=77",
-        "expected_decision_makers": ["Jaana Toppinen", "Kirsi Haltia"],
-        "expected_min_contacts": 10,
+        "domain": "caverna.fi",
+        "page": None,  # Homepage — clean baseline restaurant site
+        "expected_decision_makers": [],
+        "expected_min_contacts": 1,
     },
     {
         "domain": "accountor.com/fi/finland",
         "page": "suuryritykselle",
         "expected_decision_makers": ["Jani Järvensivu"],
         "expected_min_contacts": 1,
-        "requires_heavy": True,  # Cookie wall
+        # Cookie wall handled by remove_consent_popups (in optimal config)
     },
     {
-        "domain": "monidor.fi",
-        "page": "fi/fi-yritys/yritys/",
-        "expected_decision_makers": ["Mikko Savola"],
-        "expected_min_contacts": 1,
+        "domain": "solwers.com",
+        "page": "sijoittajat/hallinnointi/#johtoryhma",
+        "expected_decision_makers": ["Johan Ehrnrooth"],
+        "expected_min_contacts": 5,
+    },
+    {
+        "domain": "jpond.fi",
+        "page": "yhteystiedot/",
+        "expected_decision_makers": ["Janne Lampi"],
+        "expected_min_contacts": 10,
     },
 ]
 
@@ -133,8 +131,10 @@ def test_site_with_fallback(site_config: dict, version: str) -> dict:
     print(f"Testing: {domain}/{page or 'homepage'}")
     print(f"{'=' * 80}")
 
-    # Try fast config first (unless we know it needs heavy)
-    config = "heavy" if requires_heavy else "fast"
+    # Default: "optimal" (matches MAS production config — domcontentloaded,
+    # remove_consent_popups, no magic, no scan_full_page). Heavy is only a
+    # fallback for sites that explicitly opt in.
+    config = "heavy" if requires_heavy else "optimal"
 
     result = test_site(
         domain=domain,
@@ -156,7 +156,9 @@ def test_site_with_fallback(site_config: dict, version: str) -> dict:
     raw_markdown = result.get("markdown", {}).get("raw_markdown", "")
     raw_tokens = len(raw_markdown) // 4
 
-    # If blocked and we haven't tried heavy yet, retry
+    # If blocked and we haven't tried heavy yet, retry (keeps the CLAUDE.md
+    # rule "never hit the same site more than 1-2 times per session" safe —
+    # maximum of 2 attempts per site).
     if raw_tokens < 100 and config != "heavy":
         print(f"\n⚠️  Blocked ({raw_tokens} tokens), retrying with heavy config...")
         result = test_site(

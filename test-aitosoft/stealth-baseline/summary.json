@@ -1,0 +1,163 @@
+{
+  "label": "baseline",
+  "api_url": "https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io",
+  "timestamp": "2026-04-11T08:06:36.929838+00:00",
+  "results": [
+    {
+      "slug": "sannysoft",
+      "status": "OK",
+      "status_code": 200,
+      "elapsed_s": 9.8,
+      "html_bytes": 39597,
+      "markdown_bytes": 15548,
+      "has_screenshot": true,
+      "probe": {
+        "webdriver": false,
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/116.0.0.0 Safari/537.36",
+        "platform": "Linux x86_64",
+        "languages": [
+          "en-US"
+        ],
+        "timezone": "UTC",
+        "locale": "en-US",
+        "pluginsLen": 5,
+        "hardwareConcurrency": 4,
+        "webglVendor": "no-webgl",
+        "webglRenderer": "no-webgl",
+        "chromeRuntime": false,
+        "screen": {
+          "width": 1080,
+          "height": 600,
+          "availWidth": 1080,
+          "availHeight": 600,
+          "colorDepth": 24,
+          "pixelDepth": 24
+        },
+        "window": {
+          "innerWidth": 1080,
+          "innerHeight": 600,
+          "outerWidth": 1080,
+          "outerHeight": 600,
+          "devicePixelRatio": 1
+        }
+      }
+    },
+    {
+      "slug": "areyouheadless",
+      "status": "OK",
+      "status_code": 200,
+      "elapsed_s": 9.67,
+      "html_bytes": 3668,
+      "markdown_bytes": 1637,
+      "has_screenshot": true,
+      "probe": {
+        "webdriver": false,
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/116.0.0.0 Safari/537.36",
+        "platform": "Linux x86_64",
+        "languages": [
+          "en-US"
+        ],
+        "timezone": "UTC",
+        "locale": "en-US",
+        "pluginsLen": 5,
+        "hardwareConcurrency": 4,
+        "webglVendor": "no-webgl",
+        "webglRenderer": "no-webgl",
+        "chromeRuntime": false,
+        "screen": {
+          "width": 1080,
+          "height": 600,
+          "availWidth": 1080,
+          "availHeight": 600,
+          "colorDepth": 24,
+          "pixelDepth": 24
+        },
+        "window": {
+          "innerWidth": 1080,
+          "innerHeight": 600,
+          "outerWidth": 1080,
+          "outerHeight": 600,
+          "devicePixelRatio": 1
+        }
+      }
+    },
+    {
+      "slug": "creepjs",
+      "status": "OK",
+      "status_code": 200,
+      "elapsed_s": 12.32,
+      "html_bytes": 257253,
+      "markdown_bytes": 82049,
+      "has_screenshot": true,
+      "probe": {
+        "webdriver": false,
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/116.0.0.0 Safari/537.36",
+        "platform": "Linux x86_64",
+        "languages": [
+          "en-US"
+        ],
+        "timezone": "UTC",
+        "locale": "en-US",
+        "pluginsLen": 5,
+        "hardwareConcurrency": 4,
+        "webglVendor": "no-webgl",
+        "webglRenderer": "no-webgl",
+        "chromeRuntime": false,
+        "screen": {
+          "width": 1080,
+          "height": 600,
+          "availWidth": 1080,
+          "availHeight": 600,
+          "colorDepth": 24,
+          "pixelDepth": 24
+        },
+        "window": {
+          "innerWidth": 1080,
+          "innerHeight": 600,
+          "outerWidth": 1080,
+          "outerHeight": 600,
+          "devicePixelRatio": 1
+        }
+      }
+    },
+    {
+      "slug": "browserleaks-js",
+      "status": "OK",
+      "status_code": 200,
+      "elapsed_s": 9.76,
+      "html_bytes": 30500,
+      "markdown_bytes": 14567,
+      "has_screenshot": true,
+      "probe": {
+        "webdriver": false,
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/116.0.0.0 Safari/537.36",
+        "platform": "Linux x86_64",
+        "languages": [
+          "en-US"
+        ],
+        "timezone": "UTC",
+        "locale": "en-US",
+        "pluginsLen": 5,
+        "hardwareConcurrency": 4,
+        "webglVendor": "no-webgl",
+        "webglRenderer": "no-webgl",
+        "chromeRuntime": false,
+        "screen": {
+          "width": 1080,
+          "height": 600,
+          "availWidth": 1080,
+          "availHeight": 600,
+          "colorDepth": 24,
+          "pixelDepth": 24
+        },
+        "window": {
+          "innerWidth": 1080,
+          "innerHeight": 600,
+          "outerWidth": 1080,
+          "outerHeight": 600,
+          "devicePixelRatio": 1
+        }
+      }
+    }
+  ]
+}
