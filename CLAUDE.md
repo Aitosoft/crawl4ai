@@ -1,6 +1,9 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+All documentation in this repo is written by Claude for Claude. Optimize for
+efficiency and readability in future sessions, not human formatting conventions.
+This file auto-loads into context — keep it high-signal. Detailed reference
+lives in other files; read those when needed.
 
 ## Mission
 
@@ -10,43 +13,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Task Tracking
+
+Work is tracked in `tasks/` as markdown files. Completed tasks move to `tasks/done/`.
+Each task file has: goal, status, plan, progress, learnings. Start each session by
+checking `ls tasks/` for open work.
+
+---
+
 ## Development Commands
 
-### Setup
 ```bash
+# Setup
 pip install -e .                    # Install in editable mode
-crawl4ai-setup                      # Setup browsers (Playwright)
+crawl4ai-setup                      # Setup browsers (Playwright + Patchright)
 crawl4ai-doctor                     # Verify installation
-```
 
-### Running the Server
-```bash
-# Start the Docker API server (port 11235)
+# Server (port 11235)
 uvicorn deploy.docker.server:app --host 0.0.0.0 --port 11235
-
-# Test health
 curl http://localhost:11235/health
-```
 
-### Code Quality
-```bash
-black crawl4ai/ tests/              # Format code
-ruff check crawl4ai/ tests/         # Lint
-mypy crawl4ai/                      # Type check
-pre-commit run --all-files          # All hooks
-```
+# Code quality
+pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
-### Testing
-```bash
-pytest                              # Run all tests
-pytest test-aitosoft/               # Run Aitosoft-specific tests
-pytest -xvs test-aitosoft/test_fit_markdown.py  # Single test file
-```
-
-### CLI Usage
-```bash
-crwl https://example.com -o markdown           # Basic crawl
-crwl https://example.com --deep-crawl bfs      # Deep crawl with BFS
+# Testing
+pytest test-aitosoft/               # Aitosoft-specific tests
+python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression
+python test-aitosoft/test_site.py <domain> --page <path>            # Single site
+python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic
 ```
 
 ---
@@ -54,299 +48,164 @@ crwl https://example.com --deep-crawl bfs      # Deep crawl with BFS
 ## Architecture
 
 ### Core Classes
-- **AsyncWebCrawler** - Main entry point for crawling
-- **BrowserConfig** - Browser settings (headless, proxy, user agent)
-- **CrawlerRunConfig** - Crawl settings (cache, markdown generator, extraction)
-- **CrawlResult** - Result object with `markdown.raw_markdown`, `markdown.fit_markdown`, `links`, `extracted_content`
+- **AsyncWebCrawler** — main entry point
+- **BrowserConfig** — browser settings (headless, proxy, UA, stealth, channel)
+- **CrawlerRunConfig** — per-crawl settings (cache, locale, timezone, extraction)
+- **CrawlResult** — `markdown.raw_markdown`, `markdown.fit_markdown`, `links`, `extracted_content`
 
-### Pipeline Flow
+### Pipeline
 ```
-URL → Browser (Playwright) → HTML → Content Scraping → Markdown Generation → Content Filtering → Extraction
+URL → Browser (Playwright/Patchright) → HTML → Scraping → Markdown → Filtering → Extraction
 ```
 
 ### Key Modules
 | Module | Purpose |
 |--------|---------|
 | `crawl4ai/async_webcrawler.py` | Main crawler class |
-| `crawl4ai/async_configs.py` | Configuration classes |
-| `crawl4ai/extraction_strategy.py` | LLM/CSS/XPath extraction |
-| `crawl4ai/content_filter_strategy.py` | PruningContentFilter, BM25ContentFilter |
-| `crawl4ai/deep_crawling/` | BFS, DFS, Best-First strategies |
+| `crawl4ai/async_configs.py` | BrowserConfig, CrawlerRunConfig |
+| `crawl4ai/browser_manager.py` | Playwright launch, context/page management |
+| `crawl4ai/browser_adapter.py` | PlaywrightAdapter, StealthAdapter, UndetectedAdapter |
+| `crawl4ai/antibot_detector.py` | Block detection (Cloudflare, Akamai, etc.) |
 | `deploy/docker/server.py` | FastAPI server entry point |
 | `deploy/docker/api.py` | API endpoint handlers |
+| `deploy/docker/crawler_pool.py` | Browser pool (PERMANENT + hot/cold tiers) |
 
-### fit_markdown (Key Feature)
-Use `PruningContentFilter` for cleaner LLM-friendly output:
-```python
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, DefaultMarkdownGenerator
-from crawl4ai.content_filter_strategy import PruningContentFilter
+### Stealth + Anti-Bot (added 2026-04-11)
+- **First tier:** Real Chrome (`chrome_channel: chrome`) + playwright-stealth
+  (`enable_stealth: true`) patches navigator.webdriver, WebGL, chrome.runtime, etc.
+- **Second tier:** Patchright fallback (`aitosoft_patchright_fallback.py`) — when
+  antibot_detector marks a result as blocked, retry once through undetected-chromium.
+- **Config merging:** `aitosoft_browser_merge.py` merges `config.yml` browser kwargs
+  into every request so stealth/UA/viewport apply even when the client sends no
+  `browser_config`. Without this, config.yml only affected the PERMANENT pool browser.
 
-config = CrawlerRunConfig(
-    markdown_generator=DefaultMarkdownGenerator(
-        content_filter=PruningContentFilter(threshold=0.48)
-    )
-)
-result = await crawler.arun(url, config=config)
-print(result.markdown.fit_markdown)  # Cleaned content
+### Per-Request Customization (for MAS)
+MAS sends per-company browser identity via the API:
+```json
+{
+  "browser_config": {"user_agent": "...", "viewport_width": 1920, "headers": {...}},
+  "crawler_config": {"locale": "fi-FI", "timezone_id": "Europe/Helsinki", "max_retries": 2}
+}
 ```
+`browser_config` fields override config.yml defaults. `locale`, `timezone_id`, `geolocation`
+are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 
 ---
 
 ## Testing
 
-### Quick Test Commands
+### Tier 1 (always test before deploy)
+- **caverna.fi** — clean baseline restaurant site
+- **accountor.com/fi/finland** — cookie wall (Cookiebot), use `remove_consent_popups: true`
+- **solwers.com** — public company, contacts extraction
+- **jpond.fi** — software consulting, email obfuscation `(at)`
 
-```bash
-# Test a single site (saves artifacts)
-python test-aitosoft/test_site.py talgraf.fi --page yhteystiedot
-
-# Test with heavy config (for cookie walls like Accountor)
-python test-aitosoft/test_site.py accountor.com/fi/finland --page suuryritykselle --config heavy
-
-# Run Tier 1 regression (required before deploy)
-python test-aitosoft/test_regression.py --tier 1 --version pre-deploy
-
-# Run all regression tests
-python test-aitosoft/test_regression.py --all --version v11
-```
-
-### Test Site Tiers
-
-**Tier 1 (always test before deploy):**
-- caverna.fi - Clean baseline restaurant site
-- accountor.com - Cookie wall (Cookiebot) — use `remove_consent_popups: true`
-- solwers.com - Public company, contacts extraction
-- jpond.fi - Software consulting, email obfuscation `(at)`
-
-**Retired from Tier 1:**
-- talgraf.fi - BLOCKED by Cloudflare (from 200+ stress test requests in Jan 2026)
-- vahtivuori.fi - RETIRED (site restructured, contact page 404)
-- monidor.fi - RETIRED (URL structure changed, returns 404)
-
-**Quality gate:** All 4 active Tier 1 sites must pass
+**Quality gate:** All 4 must pass. Run `test_regression.py --tier 1 --version <label>`.
 
 **CRITICAL: Test site safety rules:**
 - NEVER hit the same site more than 1-2 times per session
 - Rotate across different sites
-- Past over-scraping caused permanent blocks (talgraf.fi lesson)
+- Past over-scraping caused permanent Cloudflare blocks (talgraf.fi lesson)
 
-### Key Testing Learnings
-
-From MAS V1-V10 investigation + v0.8.6 upgrade testing:
-
-| Finding | Evidence |
-|---------|----------|
-| **`remove_consent_popups: true` solves cookie walls** | Accountor: 7811 tokens (v0.8.6) without magic mode |
-| **Raw markdown > fit_markdown for contact extraction** | PruningContentFilter removes contact data at threshold ≥0.35 |
-| **LLM handles email obfuscation naturally** | JPond: all 19 `(at)` emails extracted |
-| **Use `fast` config by default, `heavy` only for edge cases** | 90% of sites work with domcontentloaded (2-4s vs 30-60s) |
-| **v0.8.5 anti-bot retry available** | `max_retries=N` with proxy list for auto-escalation |
-
-### Test Documentation
-
-- [TESTING.md](TESTING.md) - Complete testing framework and best practices
-- [TEST_SITES_REGISTRY.md](TEST_SITES_REGISTRY.md) - All test sites with metadata
-- [test-aitosoft/](test-aitosoft/) - Test scripts and reports
+### Key Findings
+| Finding | Detail |
+|---------|--------|
+| `remove_consent_popups: true` solves cookie walls | Accountor: 7811 tokens without magic mode |
+| Raw markdown > fit_markdown for contact extraction | PruningContentFilter removes contacts at threshold >= 0.35 |
+| Use `optimal` config by default | domcontentloaded + remove_consent_popups (2-4s) |
+| Blocked sites are IP-based, not fingerprint-based | Confirmed: two different browser engines get identical blocks |
 
 ---
 
 ## Key Principles
 
-1. **Minimal changes** - Keep modifications isolated from upstream code
-2. **Track everything** - Document all changes in `AITOSOFT_CHANGES.md`
-3. **Security first** - No secrets in code. Use environment variables.
-4. **Clear separation** - Distinguish Aitosoft code from upstream code
-
-### Commit Messages
-Always prefix commits with `[aitosoft]`:
-```
-[aitosoft] Add internal authentication middleware
-[aitosoft] Update devcontainer setup
-```
+1. **Minimal upstream changes** — keep modifications isolated, document in `AITOSOFT_CHANGES.md`
+2. **Security first** — no secrets in code, use env vars (see Security section below)
+3. **`[aitosoft]` commit prefix** — all our commits
+4. **Test before deploy** — Tier 1 regression must pass
 
 ---
 
-## 🔐 CRITICAL SECURITY RULES
+## Security
 
-**THIS IS A PUBLIC REPOSITORY. NEVER COMMIT SECRETS.**
+**PUBLIC REPOSITORY. NEVER COMMIT SECRETS.**
 
-### MANDATORY Security Checklist (For ALL Documentation Work)
-
-Before writing ANY documentation, code examples, or making commits:
-
-1. **❌ NEVER write the API token directly in ANY file**
-   - Not in documentation files (*.md)
-   - Not in code examples
-   - Not in test scripts
-   - Not in comments
-
-2. **✅ ALWAYS reference the .env file instead**
-   - Use: `See .env file (CRAWL4AI_API_TOKEN)`
-   - Use: `export CRAWL4AI_API_TOKEN=<see-.env-file>`
-   - Use: `os.getenv("CRAWL4AI_API_TOKEN")`
-
-3. **✅ BEFORE EVERY COMMIT: Run security scan**
-   ```bash
-   # Search for any hardcoded tokens
-   grep -r "crawl4ai-[a-z0-9]" --exclude-dir=.git --exclude=".env" .
-   # This command MUST return no results
-   ```
-
-4. **✅ After writing documentation: Double-check for leaks**
-   - Search the file for "crawl4ai-"
-   - Search for any hex strings that look like tokens
-   - Verify all examples use environment variables
-
-### Where Secrets Belong
-
-| ✅ SAFE | ❌ NEVER |
-|---------|----------|
-| `.env` file (gitignored) | DEPLOYMENT_INFO.md |
-| Azure Key Vault | README.md or any *.md |
-| `os.getenv()` in code | Hardcoded strings |
-| `source .env` in bash | `export TOKEN="actual-token"` |
-
-### Token Rotation Protocol
-
-If a token is accidentally committed:
-
-1. **Rotate immediately** in Azure (invalidates old token):
-   ```bash
-   NEW_TOKEN="crawl4ai-$(openssl rand -hex 24)"
-   az containerapp update \
-     --name crawl4ai-service \
-     --resource-group aitosoft-prod \
-     --set-env-vars CRAWL4AI_API_TOKEN="$NEW_TOKEN"
-   ```
-
-2. **Update .env file** with new token (do not commit)
-
-3. **Remove from all files** that were committed:
-   - Replace with `.env` references
-   - Commit the sanitized files
-
-4. **Notify MAS team** - their service will break until they update
-
-### Example: Safe Documentation
-
-**❌ WRONG:**
-```bash
-export CRAWL4AI_API_TOKEN="crawl4ai-abc123..."
-```
-
-**✅ CORRECT:**
-```bash
-# Load token from .env file
-source .env
-# Or: export CRAWL4AI_API_TOKEN=<see-crawl4ai-repo-.env-file>
-```
-
-**❌ WRONG:**
-```python
-CRAWL4AI_TOKEN = "crawl4ai-abc123..."
-```
-
-**✅ CORRECT:**
-```python
-import os
-CRAWL4AI_TOKEN = os.getenv("CRAWL4AI_API_TOKEN")
-```
+- Tokens go in `.env` (gitignored) or Azure Key Vault, never in code/docs
+- Always use `os.getenv("CRAWL4AI_API_TOKEN")` in code
+- Before every commit: `grep -r "crawl4ai-[a-z0-9]" --exclude-dir=.git --exclude=".env" .` must return empty
+- If a token is leaked: rotate immediately via `az containerapp update --set-env-vars`, update `.env`, notify MAS team
 
 ---
 
 ## What's Ours vs Upstream
 
-### 100% Upstream (Don't modify)
-- `crawl4ai/` - Core crawler library
-- `deploy/docker/api.py` - API handlers
-- `deploy/docker/crawler_pool.py` - Browser pool management
-- All other files in `deploy/docker/` (except those listed below)
+### Aitosoft Modifications (changes to upstream files)
+| File | What changed |
+|------|-------------|
+| `Dockerfile` | Added `RUN playwright install chrome` for real Chrome binary |
+| `crawl4ai/browser_adapter.py` | Ported StealthAdapter to playwright-stealth 2.x API + webdriver init_script |
+| `crawl4ai/browser_manager.py` | Gated `--disable-gpu` flags on `enable_stealth` in `_build_browser_args` |
+| `deploy/docker/server.py` | Added 3 lines to enable SimpleTokenAuthMiddleware |
+| `deploy/docker/api.py` | Added config.yml merge (aitosoft_browser_merge) + patchright retry calls |
+| `deploy/docker/config.yml` | Stealth config: enable_stealth, chrome_channel, UA, viewport, removed hostile flags |
+| `.pre-commit-config.yaml` | Excluded upstream files from ruff + mypy (pre-existing latent issues) |
 
-### Aitosoft Modifications (Our changes to upstream)
-- `deploy/docker/server.py` - **Modified** (added 3 lines at ~line 245 to enable SimpleTokenAuthMiddleware)
-- `deploy/docker/config.yml` - **Modified** (enabled security: true, added api_token field, max_pages: 5, memory_threshold: 85%)
-- `deploy/docker/simple_token_auth.py` - **New** (our custom auth middleware, 39 lines)
-- **Last synced with upstream**: v0.8.6 (2026-03-26)
+### New Aitosoft Files (in upstream directories)
+| File | Purpose |
+|------|---------|
+| `deploy/docker/simple_token_auth.py` | Bearer token auth middleware (39 lines) |
+| `deploy/docker/aitosoft_browser_merge.py` | Merges config.yml browser kwargs into per-request BrowserConfig |
+| `deploy/docker/aitosoft_patchright_fallback.py` | Second-tier retry via patchright for blocked crawls |
 
-### 100% Aitosoft Code (Safe to modify)
-- `azure-deployment/` - All deployment scripts and docs
-- `test-aitosoft/` - Our test suite
-- `.devcontainer/` - Dev container setup
-- `CLAUDE.md` - This file
-- `AITOSOFT_CHANGES.md` - Change tracking
-- `DEPLOYMENT_INFO.md` - Production deployment info
+### 100% Aitosoft Code (safe to modify freely)
+- `tasks/` — task tracking
+- `test-aitosoft/` — test suite, fingerprint diagnostics, persona reference
+- `azure-deployment/` — deployment scripts and docs
+- `.devcontainer/` — dev container setup
+- `CLAUDE.md`, `AITOSOFT_CHANGES.md`, `AITOSOFT_FILES.md`, `DEPLOYMENT_INFO.md`
+
+### Upstream sync
+- **Last synced:** v0.8.6 (2026-03-26)
+- **Pending:** upstream/develop has 2 CVSS 9.8 security fixes (see `tasks/merge-upstream-develop.md`)
+- **Sync procedure:** `git fetch upstream && git merge upstream/develop`, check AITOSOFT_CHANGES.md for conflict points
 
 ---
 
-## Important Documentation
+## Documentation Index
 
-**Start here each session:**
-- `AITOSOFT_FILES.md` - Quick reference: What's ours vs upstream
-- `AITOSOFT_CHANGES.md` - What we've modified and why
-- `DEPLOYMENT_INFO.md` - Current production deployment info
+**Always read at session start:** This file (auto-loaded) + `ls tasks/` for open work.
 
-**For specific tasks:**
-- **Deployments**: `DEPLOYMENT_INFO.md` + `azure-deployment/deploy-aitosoft-prod.sh`
-- **Auth details**: `azure-deployment/SIMPLE_AUTH_DEPLOY.md`
-- **Upstream sync**: Check `AITOSOFT_FILES.md` for conflict points
+**Read when needed:**
+| Doc | When |
+|-----|------|
+| `AITOSOFT_CHANGES.md` | Understanding what we changed and why (authoritative change log) |
+| `AITOSOFT_FILES.md` | Quick inventory of our files vs upstream |
+| `DEPLOYMENT_INFO.md` | Endpoint, credentials, Azure resource details |
+| `TESTING.md` | Full testing framework, quality gates |
+| `TEST_SITES_REGISTRY.md` | Test site metadata, expected contacts, patterns |
 
 ---
 
 ## Azure Deployment
 
-**Current Production:**
-- Location: West Europe (aitosoft-prod resource group)
-- Uses existing infrastructure (aitosoftacr, aitosoft-aca)
-- Simple Bearer token authentication enabled
-- Resources: 2 vCPU / 4 GiB per replica, 0-20 replicas (scales to zero)
-- max_pages: 5 per replica (horizontal scaling strategy)
-- See `DEPLOYMENT_INFO.md` for endpoint and credentials
+- **Endpoint:** `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
+- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-stealth-v5`
+- **Resources:** 2 vCPU / 4 GiB per replica, 0-20 replicas (scales to zero)
+- **Auth:** Bearer token via `CRAWL4AI_API_TOKEN` env var
+- See `DEPLOYMENT_INFO.md` for full details
 
-**To deploy updates:**
+**Deploy flow:**
 ```bash
-./azure-deployment/deploy-aitosoft-prod.sh
+az acr build --registry aitosoftacr --image crawl4ai-service:<tag> --file Dockerfile .
+az containerapp update --name crawl4ai-service --resource-group aitosoft-prod --image aitosoftacr.azurecr.io/crawl4ai-service:<tag>
 ```
-
-**To view current deployment:**
-```bash
-# Read the current state
-cat DEPLOYMENT_INFO.md
-```
-
----
-
-## Working with Upstream
-
-This is a fork of `github.com/unclecode/crawl4ai` - keep changes minimal for easier merges:
-
-**Golden Rules:**
-- ✅ Add new files in `azure-deployment/` and `test-aitosoft/`
-- ✅ Minimize modifications to upstream files
-- ✅ Document ALL changes in `AITOSOFT_CHANGES.md`
-- ✅ Use `[aitosoft]` prefix in commit messages
-- ❌ Never refactor upstream code
-- ❌ Don't modify `crawl4ai/` core library
-
-**Syncing with upstream:**
-```bash
-git fetch upstream
-git merge upstream/main
-# Check AITOSOFT_CHANGES.md for conflicts with our modifications
-```
-
-**Our modifications are minimal:**
-- Only 42 lines of code changed from upstream (see "What's Ours vs Upstream" above)
-- Easy to maintain when upstream updates
+Note: `deploy-aitosoft-prod.sh` regenerates the API token on every run — use the
+manual `az` commands above to swap the image without breaking MAS's token.
 
 ---
 
 ## Cross-Repo Communication
 
-This repo works alongside `aitosoft-platform` (main multi-agent system). Both have Claude as developer.
-
-**To get info from the other repo:**
-1. Formulate a specific question
-2. Ask the business owner to relay it
-3. Wait for the response
-
-Use for: API contracts, deployment patterns, auth coordination.
+This repo works alongside `aitosoft-platform` (main multi-agent system). Both have
+Claude as developer. To exchange information between repos, ask the business owner
+to relay messages. Use for: API contracts, deployment coordination, debugging shared issues.
