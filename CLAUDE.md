@@ -139,22 +139,35 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 
 ## What's Ours vs Upstream
 
+### Integration Architecture (wrapper entry point)
+We use a **wrapper entry point** (`aitosoft_entry.py`) that imports and extends
+upstream's `server.py` without modifying it. This keeps merges clean.
+
+```
+gunicorn → aitosoft_entry:app
+             ├─ BrowserConfig.set_defaults(**config.yml)  # config.yml defaults for all requests
+             ├─ from server import app                     # upstream, unmodified
+             └─ app.add_middleware(SimpleTokenAuthMiddleware)  # our auth
+```
+
 ### Aitosoft Modifications (changes to upstream files)
 | File | What changed |
 |------|-------------|
 | `Dockerfile` | Added `RUN playwright install chrome` for real Chrome binary |
-| `crawl4ai/browser_adapter.py` | Ported StealthAdapter to playwright-stealth 2.x API + webdriver init_script |
-| `crawl4ai/browser_manager.py` | Gated `--disable-gpu` flags on `enable_stealth` in `_build_browser_args` |
-| `deploy/docker/server.py` | Added 3 lines to enable SimpleTokenAuthMiddleware |
-| `deploy/docker/api.py` | Added config.yml merge (aitosoft_browser_merge) + patchright retry calls |
-| `deploy/docker/config.yml` | Stealth config: enable_stealth, chrome_channel, UA, viewport, removed hostile flags |
-| `.pre-commit-config.yaml` | Excluded upstream files from ruff + mypy (pre-existing latent issues) |
+| `crawl4ai/browser_adapter.py` | Ported StealthAdapter to playwright-stealth 2.x API (PR upstream pending) |
+| `crawl4ai/browser_manager.py` | Gated `--disable-gpu` flags on `enable_stealth` (PR upstream pending) |
+| `deploy/docker/api.py` | 4 lines: patchright retry after first-tier crawl |
+| `deploy/docker/config.yml` | Stealth config: enable_stealth, chrome_channel, UA, viewport |
+| `deploy/docker/supervisord.conf` | Entry point: `aitosoft_entry:app` instead of `server:app` |
+| `.pre-commit-config.yaml` | Excluded upstream files from ruff + mypy (pre-existing issues) |
+
+**NOT modified** (moved to wrapper): `server.py` (auth), `api.py` (config merge)
 
 ### New Aitosoft Files (in upstream directories)
 | File | Purpose |
 |------|---------|
+| `deploy/docker/aitosoft_entry.py` | Wrapper entry point: sets BrowserConfig defaults + auth middleware |
 | `deploy/docker/simple_token_auth.py` | Bearer token auth middleware (39 lines) |
-| `deploy/docker/aitosoft_browser_merge.py` | Merges config.yml browser kwargs into per-request BrowserConfig |
 | `deploy/docker/aitosoft_patchright_fallback.py` | Second-tier retry via patchright for blocked crawls |
 
 ### 100% Aitosoft Code (safe to modify freely)
@@ -165,9 +178,9 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 - `CLAUDE.md`, `AITOSOFT_CHANGES.md`, `AITOSOFT_FILES.md`, `DEPLOYMENT_INFO.md`
 
 ### Upstream sync
-- **Last synced:** v0.8.6 (2026-03-26)
-- **Pending:** upstream/develop has 2 CVSS 9.8 security fixes (see `tasks/merge-upstream-develop.md`)
-- **Sync procedure:** `git fetch upstream && git merge upstream/develop`, check AITOSOFT_CHANGES.md for conflict points
+- **Last synced:** upstream/develop (2026-04-14), includes v0.8.6 + security hardening
+- **Sync procedure:** `git fetch upstream && git merge upstream/develop` — should be near-conflict-free now
+- **Key technique:** `BrowserConfig.set_defaults()` (upstream's `@_with_defaults` in `async_configs.py`) applies config.yml defaults to every request without patching `api.py`
 
 ---
 
