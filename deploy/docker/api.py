@@ -604,12 +604,7 @@ async def handle_crawl_request(
             else url
             for url in urls
         ]
-        # Aitosoft: merge config.yml browser.kwargs under the user's browser_config
-        # so stealth/channel/UA/viewport defaults apply to every request, not only
-        # the PERMANENT browser. See aitosoft_browser_merge.py for rationale.
-        from aitosoft_browser_merge import merge_browser_config
-
-        browser_config = merge_browser_config(browser_config, config)
+        browser_config = BrowserConfig.load(browser_config)
         crawler_config = CrawlerRunConfig.load(crawler_config)
 
         dispatcher = MemoryAdaptiveDispatcher(
@@ -822,11 +817,7 @@ async def handle_stream_crawl_request(
     hooks_info = None
     crawler = None
     try:
-        # Aitosoft: see handle_crawl_request above — same merge rationale.
-        from aitosoft_browser_merge import merge_browser_config
-
-        browser_config = merge_browser_config(browser_config, config)
-        # browser_config.verbose = True # Set to False or remove for production stress testing
+        browser_config = BrowserConfig.load(browser_config)
         browser_config.verbose = False
         crawler_config = CrawlerRunConfig.load(crawler_config)
         crawler_config.scraping_strategy = LXMLWebScrapingStrategy()

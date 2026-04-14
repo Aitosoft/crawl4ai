@@ -243,11 +243,6 @@ def _setup_security(app_: FastAPI):
     if sec.get("trusted_hosts", []) != ["*"]:
         app_.add_middleware(TrustedHostMiddleware, allowed_hosts=sec["trusted_hosts"])
 
-    # Add simple token auth if CRAWL4AI_API_TOKEN is set
-    from simple_token_auth import SimpleTokenAuthMiddleware
-
-    app_.add_middleware(SimpleTokenAuthMiddleware)
-
 
 _setup_security(app)
 
