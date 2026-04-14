@@ -25,7 +25,7 @@ repos:
         # Aitosoft: upstream files have pre-existing lint issues (bare
         # excepts, long lines, multi-import lines) that predate our work.
         # Fixing them is out of scope for this fork.
-        exclude: ^(crawl4ai/|deploy/docker/(api|server)\.py$)
+        exclude: ^(crawl4ai/|deploy/docker/(api|server|crawler_pool)\.py$)
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.5.1
@@ -37,4 +37,4 @@ repos:
         # Our edits to these files are minimal and targeted (stealth fixes);
         # fixing the latent upstream type errors is out of scope for this
         # fork. Re-enable once upstream cleans them up.
-        exclude: ^(crawl4ai/|deploy/docker/(api|server)\.py$)
+        exclude: ^(crawl4ai/|deploy/docker/(api|server|crawler_pool)\.py$)

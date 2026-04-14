@@ -38,7 +38,7 @@ All resources are in the `aitosoft-prod` resource group (West Europe):
 | `crawl4ai-service` | Container App | The crawl4ai service |
 | `workspace-aitosoftprodnCsc` | Log Analytics | Monitoring & logs |
 
-**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6`
+**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-maxpages-fix`
 
 ---
 

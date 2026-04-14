@@ -11,8 +11,8 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.8.6 + upstream/develop security fixes (merged 2026-04-14) + wrapper architecture
-- **Production**: v0.8.6 + security hardening + wrapper architecture (deployed 2026-04-14)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-security-v2`
+- **Production**: v0.8.6 + max_pages fix (deployed 2026-04-14)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-maxpages-fix`
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
@@ -29,6 +29,32 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Tests
 - 3/3 test-aitosoft/ tests passing
+
+---
+
+## Crawler Pool max_pages Enforcement (2026-04-14)
+
+### Incident
+WAA batch run caused cascading page starvation: crawls hung after ~09:43,
+active_requests climbed to 44 on a single browser (2 vCPU / 4 GiB), CPU
+starvation prevented any page from completing, MAS retries made it worse.
+
+### Root Cause
+`crawler_pool.py` had no per-browser concurrency limit. The `max_pages: 5`
+setting in config.yml was never enforced — the pool kept handing out the same
+browser regardless of active page count.
+
+### Fix
+- Added `MAX_PAGES` enforcement in `get_crawler()`: when a browser reaches
+  the limit, the pool creates an overflow browser with a unique key instead
+  of piling more pages onto the same Chromium process
+- Overflow browsers use `sig_ovf_N` keys to avoid overwriting existing pool
+  entries; the janitor cleans them up normally when idle
+- Deployed as `0.8.6-maxpages-fix`
+
+### Files Modified
+- `deploy/docker/crawler_pool.py` — `_active()` helper, MAX_PAGES cap in
+  `get_crawler()`, overflow key logic (`OVERFLOW_SEQ`)
 
 ---
 
