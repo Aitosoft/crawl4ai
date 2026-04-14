@@ -7,12 +7,12 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-04-11
+**Last Updated**: 2026-04-14
 
 ### Version
-- **Local**: v0.8.6 (merged from upstream 2026-03-26) + stealth package (2026-04-11)
-- **Production**: v0.8.6 + stealth (deployed 2026-04-11)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-stealth`
+- **Local**: v0.8.6 + upstream/develop security fixes (merged 2026-04-14) + wrapper architecture
+- **Production**: pending deploy (image not yet built)
+- **Docker Image**: pending build
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
@@ -29,6 +29,64 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Tests
 - 3/3 test-aitosoft/ tests passing
+
+---
+
+## Wrapper Architecture + Security Merge (2026-04-14)
+
+### What Changed
+Restructured how our fork integrates with upstream to make future merges
+near-conflict-free, then merged upstream/develop which had 2 CVSS 9.8
+security fixes.
+
+### Architecture: Wrapper Entry Point
+Created `deploy/docker/aitosoft_entry.py` — loaded by gunicorn instead of
+`server:app`. This wrapper:
+1. Calls `BrowserConfig.set_defaults(**config_yml_kwargs)` at import time,
+   using upstream's own `@_with_defaults` mechanism (`async_configs.py`).
+   Every `BrowserConfig.load({})` now inherits config.yml stealth/chrome/UA/viewport.
+2. Imports `app` from upstream `server.py` (unmodified).
+3. Adds `SimpleTokenAuthMiddleware` when `CRAWL4AI_API_TOKEN` env var is set.
+
+This replaces the old `aitosoft_browser_merge.py` module (deleted) and the
+3-line auth middleware patch in `server.py` (reverted).
+
+### Files Modified
+- `deploy/docker/supervisord.conf` — `server:app` → `aitosoft_entry:app`
+- `deploy/docker/server.py` — REVERTED to upstream (auth middleware removed)
+- `deploy/docker/api.py` — removed `merge_browser_config` calls; only 4
+  patchright retry lines remain as our modification
+
+### Files Created
+- `deploy/docker/aitosoft_entry.py` — wrapper entry point (25 lines)
+
+### Files Deleted
+- `deploy/docker/aitosoft_browser_merge.py` — replaced by `BrowserConfig.set_defaults()`
+
+### Upstream Merge
+Merged 8 commits from `upstream/develop`:
+- `e326da9` fix(security): complete AST sandbox escape remediation (CVSS 9.8)
+- `2fc39cb` fix(security): remove eval() from computed fields, harden config deserializer
+- `8995c1b` feat: expose arun_many config-list support in Docker API
+- `ec560f1` fix: default LLMExtractionStrategy extraction_type to schema
+- `7e7533e` fix: validate markdown_generator type in CrawlerRunConfig
+- Plus docs/merge commits
+
+Security hardening adds `_SAFE_CONFIG_ALLOWED_NAMES` / `_SAFE_CONFIG_ALLOWED_ATTRS`
+allowlists to `_safe_eval_config()` in server.py, blocking AST sandbox escapes.
+
+### Upstream Modification Inventory (after restructure)
+| File | Lines changed | Notes |
+|------|--------------|-------|
+| `deploy/docker/api.py` | 4 lines | Patchright retry only |
+| `deploy/docker/supervisord.conf` | 1 word | Entry point |
+| `crawl4ai/browser_adapter.py` | ~20 lines | Stealth 2.x port (upstream bug) |
+| `crawl4ai/browser_manager.py` | ~5 lines | GPU flag gating (upstream bug) |
+| `Dockerfile` | 1 line | `RUN playwright install chrome` |
+| `deploy/docker/config.yml` | deployment config | Stealth settings |
+| `.pre-commit-config.yaml` | exclude patterns | Pre-existing upstream lint issues |
+
+**Not modified**: `server.py` (was 3 lines, now 0)
 
 ---
 
