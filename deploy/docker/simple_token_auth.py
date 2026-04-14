@@ -3,7 +3,8 @@ Simple static token authentication middleware
 Checks Authorization: Bearer <token> against CRAWL4AI_API_TOKEN env var
 """
 import os
-from fastapi import Request, HTTPException
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 
@@ -26,15 +27,18 @@ class SimpleTokenAuthMiddleware(BaseHTTPMiddleware):
         # Check Authorization header
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
-            raise HTTPException(
+            return JSONResponse(
                 status_code=401,
-                detail="Missing or invalid Authorization header. Use: Authorization: Bearer <token>",
+                content={
+                    "detail": "Missing or invalid Authorization header."
+                    " Use: Authorization: Bearer <token>"
+                },
             )
 
         provided_token = auth_header[7:]  # Remove "Bearer " prefix
 
         if provided_token != expected_token:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            return JSONResponse(status_code=401, content={"detail": "Invalid token"})
 
         # Token is valid, proceed
         return await call_next(request)
