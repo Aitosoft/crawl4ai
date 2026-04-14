@@ -75,7 +75,7 @@ echo "[devcontainer] Setting up shell aliases..."
 ALIAS_LINE="alias ccd='claude --dangerously-skip-permissions'"
 VSCODE_HOME="$(getent passwd vscode | cut -d: -f6)"
 grep -qF "$ALIAS_LINE" "$VSCODE_HOME/.bash_aliases" 2>/dev/null || echo "$ALIAS_LINE" >> "$VSCODE_HOME/.bash_aliases"
-chown vscode:vscode "$VSCODE_HOME/.bash_aliases"
+sudo chown vscode:vscode "$VSCODE_HOME/.bash_aliases"
 
 # Print versions for verification
 echo ""
