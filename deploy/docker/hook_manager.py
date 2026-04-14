@@ -122,12 +122,14 @@ class UserHookManager:
             safe_builtins = {}
 
             # Add safe built-in functions (no __import__ for security)
+            # SECURITY: getattr/setattr removed - classic sandbox escape vectors.
+            # hasattr kept (read-only attribute check, not exploitable).
             allowed_builtins = [
                 'print', 'len', 'str', 'int', 'float', 'bool',
                 'list', 'dict', 'set', 'tuple', 'range', 'enumerate',
                 'zip', 'map', 'filter', 'any', 'all', 'sum', 'min', 'max',
                 'sorted', 'reversed', 'abs', 'round', 'isinstance', 'type',
-                'getattr', 'hasattr', 'setattr', 'callable', 'iter', 'next',
+                'hasattr', 'callable', 'iter', 'next',
                 '__build_class__'  # Required for class definitions in exec
             ]
             
@@ -140,12 +142,35 @@ class UserHookManager:
                 '__builtins__': safe_builtins
             }
             
-            # Add commonly needed imports
-            exec("import asyncio", namespace)
-            exec("import json", namespace)
-            exec("import re", namespace)
-            exec("from typing import Dict, List, Optional", namespace)
-            
+            # Inject commonly needed modules into hook namespace.
+            # NOTE: We import here (in hook_manager's own scope) and inject
+            # the objects directly. Using exec("import X", namespace) does NOT
+            # work because namespace's __builtins__ lacks __import__.
+            import asyncio as _asyncio_mod
+            import json as _json_mod
+            import re as _re_mod
+            from typing import Dict as _Dict, List as _List, Optional as _Optional
+
+            # SECURITY: Sanitize asyncio to prevent RCE via
+            # asyncio.subprocess.create_subprocess_shell() etc.
+            # Hooks need asyncio for sleep/gather/etc but NOT subprocess.
+            import types
+            safe_asyncio = types.ModuleType("asyncio")
+            for _attr in dir(_asyncio_mod):
+                if _attr not in ("subprocess", "create_subprocess_exec",
+                                 "create_subprocess_shell"):
+                    try:
+                        setattr(safe_asyncio, _attr, getattr(_asyncio_mod, _attr))
+                    except (AttributeError, TypeError):
+                        pass
+
+            namespace["asyncio"] = safe_asyncio
+            namespace["json"] = _json_mod
+            namespace["re"] = _re_mod
+            namespace["Dict"] = _Dict
+            namespace["List"] = _List
+            namespace["Optional"] = _Optional
+
             # Execute the code to define the function
             exec(hook_code, namespace)
             

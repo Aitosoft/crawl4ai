@@ -11,8 +11,10 @@ from crawler_pool import get_crawler, release_crawler, close_all, janitor
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from crawl4ai.__version__ import __version__
 from auth import create_access_token, get_token_dependency, TokenRequest
+from pydantic import BaseModel
 from typing import Optional, List, Dict
 from fastapi import Request, Depends
+from fastapi.responses import FileResponse
 import base64
 import re
 import logging
@@ -34,7 +36,7 @@ from schemas import (
     JSEndpointRequest,
 )
 
-from utils import load_config, setup_logging, verify_email_domain
+from utils import FilterType, load_config, setup_logging, verify_email_domain
 import os
 import sys
 import time
@@ -48,6 +50,7 @@ from rank_bm25 import BM25Okapi
 from fastapi.responses import (
     StreamingResponse,
     RedirectResponse,
+    PlainTextResponse,
     JSONResponse,
 )
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
@@ -55,10 +58,11 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from job import init_job_router
 
-from mcp_bridge import attach_mcp, mcp_tool
+from mcp_bridge import attach_mcp, mcp_resource, mcp_template, mcp_tool
 
 import ast
 import crawl4ai as _c4
+from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -80,6 +84,18 @@ GLOBAL_SEM = asyncio.Semaphore(MAX_PAGES)
 # ── security feature flags ───────────────────────────────────
 # Hooks are disabled by default for security (RCE risk). Set to "true" to enable.
 HOOKS_ENABLED = os.environ.get("CRAWL4AI_HOOKS_ENABLED", "false").lower() == "true"
+
+# Warn loudly if API token is not set (all endpoints unauthenticated)
+_api_token = config.get("security", {}).get("api_token", "") or os.environ.get(
+    "CRAWL4AI_API_TOKEN", ""
+)
+if not _api_token:
+    import logging as _logging
+
+    _logging.getLogger("crawl4ai.security").warning(
+        "CRAWL4AI_API_TOKEN is not set. All API endpoints are unauthenticated. "
+        "Set CRAWL4AI_API_TOKEN environment variable to enable authentication."
+    )
 
 
 # ── default browser config helper ─────────────────────────────
@@ -280,12 +296,90 @@ ALLOWED_TYPES = {
 }
 
 
+_SAFE_CONFIG_ALLOWED_NAMES = {
+    # Config constructors
+    "CrawlerRunConfig",
+    "BrowserConfig",
+    "HTTPCrawlerConfig",
+    # Sub-config types
+    "LLMConfig",
+    "ProxyConfig",
+    "GeolocationConfig",
+    "SeedingConfig",
+    "VirtualScrollConfig",
+    "LinkPreviewConfig",
+    # Extraction strategies
+    "JsonCssExtractionStrategy",
+    "JsonXPathExtractionStrategy",
+    "JsonLxmlExtractionStrategy",
+    "LLMExtractionStrategy",
+    "CosineStrategy",
+    "RegexExtractionStrategy",
+    # Markdown / content filters
+    "DefaultMarkdownGenerator",
+    "PruningContentFilter",
+    "BM25ContentFilter",
+    "LLMContentFilter",
+    "LXMLWebScrapingStrategy",
+    # Chunking
+    "RegexChunking",
+    # Deep crawl
+    "BFSDeepCrawlStrategy",
+    "DFSDeepCrawlStrategy",
+    "BestFirstCrawlingStrategy",
+    # Filters & scorers
+    "FilterChain",
+    "URLPatternFilter",
+    "DomainFilter",
+    "ContentTypeFilter",
+    "URLFilter",
+    "SEOFilter",
+    "ContentRelevanceFilter",
+    "KeywordRelevanceScorer",
+    "URLScorer",
+    "CompositeScorer",
+    "DomainAuthorityScorer",
+    "FreshnessScorer",
+    "PathDepthScorer",
+    # Enums
+    "CacheMode",
+    "MatchMode",
+    "DisplayMode",
+    # Dispatchers
+    "MemoryAdaptiveDispatcher",
+    "SemaphoreDispatcher",
+    # Table extraction
+    "DefaultTableExtraction",
+    "NoTableExtraction",
+    # Proxy
+    "RoundRobinProxyStrategy",
+}
+
+# Attributes safe to access in config constructor args (e.g. CacheMode.BYPASS)
+_SAFE_CONFIG_ALLOWED_ATTRS = frozenset(
+    {
+        # Enum values commonly used in config
+        "BYPASS",
+        "READ_ONLY",
+        "WRITE_ONLY",
+        "ENABLED",
+        "DISABLED",
+        "READ_WRITE",
+        "BYPASS_CACHE",
+        "STANDARD",
+        "COMPACT",
+        "DETAILED",
+        # Common config field names accessed via dot notation
+        "value",
+        "name",
+    }
+)
+
+
 def _safe_eval_config(expr: str) -> dict:
     """
-    Accept exactly one top‑level call to CrawlerRunConfig(...) or BrowserConfig(...).
-    Whatever is inside the parentheses is fine *except* further function calls
-    (so no  __import__('os') stuff).  All public names from crawl4ai are available
-    when we eval.
+    Accept exactly one top-level call to CrawlerRunConfig(...) or BrowserConfig(...).
+    Hardened with allowlists for names, attributes, and blocked AST constructs.
     """
     tree = ast.parse(expr, mode="eval")
 
@@ -300,15 +394,46 @@ def _safe_eval_config(expr: str) -> dict:
     ):
         raise ValueError("Only CrawlerRunConfig(...) or BrowserConfig(...) are allowed")
 
-    # forbid nested calls to keep the surface tiny
     for node in ast.walk(call):
+        # Block nested function calls
         if isinstance(node, ast.Call) and node is not call:
             raise ValueError("Nested function calls are not permitted")
 
-    # expose everything that crawl4ai exports, nothing else
-    safe_env = {
-        name: getattr(_c4, name) for name in dir(_c4) if not name.startswith("_")
-    }
+        # Block lambdas
+        if isinstance(node, ast.Lambda):
+            raise ValueError("Lambda expressions are not permitted")
+
+        # Block generators and comprehensions
+        if isinstance(
+            node, (ast.GeneratorExp, ast.ListComp, ast.SetComp, ast.DictComp)
+        ):
+            raise ValueError("Comprehensions and generators are not permitted")
+
+        # Allowlist attribute access
+        if isinstance(node, ast.Attribute):
+            if node.attr not in _SAFE_CONFIG_ALLOWED_ATTRS:
+                raise ValueError(
+                    f"Attribute access '{node.attr}' is not permitted in config expressions"
+                )
+
+        # Allowlist name references
+        if isinstance(node, ast.Name) and node.id not in _SAFE_CONFIG_ALLOWED_NAMES:
+            # Allow Python literals/constants used as keyword arg values
+            if node.id not in {"True", "False", "None"}:
+                raise ValueError(
+                    f"Name '{node.id}' is not permitted in config expressions"
+                )
+
+    # Only expose allowlisted names from crawl4ai
+    safe_env = {}
+    for name in _SAFE_CONFIG_ALLOWED_NAMES:
+        obj = getattr(_c4, name, None)
+        if obj is not None:
+            safe_env[name] = obj
+    safe_env["True"] = True
+    safe_env["False"] = False
+    safe_env["None"] = None
+
     obj = eval(compile(tree, "<config>", "eval"), {"__builtins__": {}}, safe_env)
     return obj.dump()
 
@@ -718,6 +843,7 @@ async def crawl(
         crawler_config=crawl_request.crawler_config,
         config=config,
         hooks_config=hooks_config,
+        crawler_configs=crawl_request.crawler_configs,
     )
     # check if all of the results are not successful
     if all(not result["success"] for result in results["results"]):
