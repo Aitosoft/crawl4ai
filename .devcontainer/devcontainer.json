@@ -18,6 +18,7 @@
     11235,
     8000
   ],
+  "remoteUser": "vscode",
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "customizations": {
     "vscode": {
