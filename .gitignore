@@ -1,6 +1,9 @@
 # Scripts folder (private tools)
 .scripts/
 
+# Test artifacts (regeneratable diagnostic output)
+test-aitosoft/stealth-*/
+
 # Database files
 *.db
 
