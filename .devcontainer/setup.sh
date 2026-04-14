@@ -55,6 +55,9 @@ echo "[devcontainer] Running crawl4ai setup..."
 crawl4ai-setup || echo "crawl4ai-setup skipped (may already be configured)"
 crawl4ai-doctor || echo "crawl4ai-doctor check completed"
 
+# Fix ownership of ~/.claude volume mount (Docker creates it as root)
+sudo chown -R "$(id -u):$(id -g)" "$HOME/.claude" 2>/dev/null || true
+
 # Install Claude Code CLI (native installer for reliable auto-updates)
 if ! command -v claude >/dev/null 2>&1; then
     echo "[devcontainer] Installing Claude Code CLI..."
