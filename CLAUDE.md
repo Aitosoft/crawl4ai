@@ -202,7 +202,7 @@ gunicorn → aitosoft_entry:app
 ## Azure Deployment
 
 - **Endpoint:** `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
-- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-stealth-v5`
+- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-security-v2`
 - **Resources:** 2 vCPU / 4 GiB per replica, 0-20 replicas (scales to zero)
 - **Auth:** Bearer token via `CRAWL4AI_API_TOKEN` env var
 - See `DEPLOYMENT_INFO.md` for full details

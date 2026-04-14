@@ -11,8 +11,8 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.8.6 + upstream/develop security fixes (merged 2026-04-14) + wrapper architecture
-- **Production**: pending deploy (image not yet built)
-- **Docker Image**: pending build
+- **Production**: v0.8.6 + security hardening + wrapper architecture (deployed 2026-04-14)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-security-v2`
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
