@@ -1,0 +1,305 @@
+{
+  "passed": true,
+  "duration_min": 2,
+  "memory_drift_percent": 0.0,
+  "samples": [
+    {
+      "ts": 1776179820.7599018,
+      "elapsed_s": 0.1185452938079834,
+      "memory_mb": null,
+      "cpu_percent": null,
+      "browser_count": 1,
+      "total_browser_memory_mb": 270,
+      "active_request_total": 0,
+      "requests_sent": 0,
+      "requests_ok": 0,
+      "requests_504": 0,
+      "requests_other_fail": 0
+    },
+    {
+      "ts": 1776179860.729196,
+      "elapsed_s": 40.08783960342407,
+      "memory_mb": null,
+      "cpu_percent": null,
+      "browser_count": 1,
+      "total_browser_memory_mb": 270,
+      "active_request_total": 0,
+      "requests_sent": 6,
+      "requests_ok": 6,
+      "requests_504": 0,
+      "requests_other_fail": 0
+    },
+    {
+      "ts": 1776179891.1051087,
+      "elapsed_s": 70.46375226974487,
+      "memory_mb": null,
+      "cpu_percent": null,
+      "browser_count": 1,
+      "total_browser_memory_mb": 270,
+      "active_request_total": 0,
+      "requests_sent": 12,
+      "requests_ok": 12,
+      "requests_504": 0,
+      "requests_other_fail": 0
+    },
+    {
+      "ts": 1776179921.4440029,
+      "elapsed_s": 100.80264639854431,
+      "memory_mb": null,
+      "cpu_percent": null,
+      "browser_count": 1,
+      "total_browser_memory_mb": 270,
+      "active_request_total": 0,
+      "requests_sent": 19,
+      "requests_ok": 19,
+      "requests_504": 0,
+      "requests_other_fail": 0
+    },
+    {
+      "ts": 1776179951.721661,
+      "elapsed_s": 131.08030462265015,
+      "memory_mb": null,
+      "cpu_percent": null,
+      "browser_count": 1,
+      "total_browser_memory_mb": 270,
+      "active_request_total": 0,
+      "requests_sent": 23,
+      "requests_ok": 23,
+      "requests_504": 0,
+      "requests_other_fail": 0
+    },
+    {
+      "ts": 1776179982.115064,
+      "elapsed_s": 161.47370743751526,
+      "memory_mb": null,
+      "cpu_percent": null,
+      "browser_count": 1,
+      "total_browser_memory_mb": 270,
+      "active_request_total": 0,
+      "requests_sent": 23,
+      "requests_ok": 23,
+      "requests_504": 0,
+      "requests_other_fail": 0
+    },
+    {
+      "ts": 1776180012.488727,
+      "elapsed_s": 191.84737062454224,
+      "memory_mb": null,
+      "cpu_percent": null,
+      "browser_count": 1,
+      "total_browser_memory_mb": 270,
+      "active_request_total": 0,
+      "requests_sent": 23,
+      "requests_ok": 23,
+      "requests_504": 0,
+      "requests_other_fail": 0
+    },
+    {
+      "ts": 1776180042.8665295,
+      "elapsed_s": 222.225172996521,
+      "memory_mb": null,
+      "cpu_percent": null,
+      "browser_count": 1,
+      "total_browser_memory_mb": 270,
+      "active_request_total": 0,
+      "requests_sent": 23,
+      "requests_ok": 23,
+      "requests_504": 0,
+      "requests_other_fail": 0
+    }
+  ],
+  "outcomes": [
+    {
+      "url": "https://caverna.fi",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 14.218544960021973,
+      "error": null
+    },
+    {
+      "url": "https://solwers.com/sijoittajat/hallinnointi/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 8.898546695709229,
+      "error": null
+    },
+    {
+      "url": "https://httpbin.org/html",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.5279409885406494,
+      "error": null
+    },
+    {
+      "url": "https://httpbin.org/get",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.3684945106506348,
+      "error": null
+    },
+    {
+      "url": "https://example.com",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.5465610027313232,
+      "error": null
+    },
+    {
+      "url": "https://www.iana.org/domains/reserved",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.9913880825042725,
+      "error": null
+    },
+    {
+      "url": "https://www.w3.org/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.4565699100494385,
+      "error": null
+    },
+    {
+      "url": "https://docs.python.org/3/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.469352960586548,
+      "error": null
+    },
+    {
+      "url": "https://wordpress.org/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 4.545962810516357,
+      "error": null
+    },
+    {
+      "url": "https://readthedocs.org/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 4.234678268432617,
+      "error": null
+    },
+    {
+      "url": "https://www.diabetes.fi/yhteystiedot",
+      "is_hard": true,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 4.368902206420898,
+      "error": null
+    },
+    {
+      "url": "https://www.diabetes.fi/henkilokunnan-yhteystiedot",
+      "is_hard": true,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 4.3255860805511475,
+      "error": null
+    },
+    {
+      "url": "https://pypi.org/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.498276472091675,
+      "error": null
+    },
+    {
+      "url": "https://www.jpond.fi/yhteystiedot/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 6.509355783462524,
+      "error": null
+    },
+    {
+      "url": "https://caverna.fi",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.8827433586120605,
+      "error": null
+    },
+    {
+      "url": "https://solwers.com/sijoittajat/hallinnointi/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 4.647860050201416,
+      "error": null
+    },
+    {
+      "url": "https://httpbin.org/html",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 4.13978385925293,
+      "error": null
+    },
+    {
+      "url": "https://httpbin.org/get",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.373939037322998,
+      "error": null
+    },
+    {
+      "url": "https://example.com",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.236246347427368,
+      "error": null
+    },
+    {
+      "url": "https://www.iana.org/domains/reserved",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.4652671813964844,
+      "error": null
+    },
+    {
+      "url": "https://www.w3.org/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.4527812004089355,
+      "error": null
+    },
+    {
+      "url": "https://docs.python.org/3/",
+      "is_hard": false,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.359663248062134,
+      "error": null
+    },
+    {
+      "url": "https://www.diabetes.fi/henkilokunnan-yhteystiedot",
+      "is_hard": true,
+      "status_code": 200,
+      "ok": true,
+      "duration_s": 3.8807449340820312,
+      "error": null
+    },
+    {
+      "url": "https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/",
+      "is_hard": true,
+      "status_code": 0,
+      "ok": false,
+      "duration_s": 200.72172474861145,
+      "error": "client-timeout"
+    }
+  ]
+}

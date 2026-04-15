@@ -194,6 +194,8 @@ a.txt
 
 *.sh
 !.devcontainer/setup.sh
+!azure-deployment/batch-scale.sh
+!azure-deployment/setup-memory-alert.sh
 .idea
 docs/examples/.chainlit/
 docs/examples/.chainlit/*

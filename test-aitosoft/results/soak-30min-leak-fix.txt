@@ -1,0 +1,444 @@
+
+🔥 Soak test starting
+   Target: https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io
+   Duration: 30 min + 2 min drain
+   Parallel agents: 1
+   Cycle pattern: 10 healthy + 2 hard, repeating
+
+  [load]   0.0m mem=   270 MB  browsers= 1  active=0  sent=0 ok=0 504=0 other=0
+  [a1 c001] ok   200   4.6s  https://caverna.fi
+  [a1 c001] ok   200   4.8s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c001] ok   200   3.5s  https://httpbin.org/html
+  [a1 c001] ok   200   3.4s  https://httpbin.org/get
+  [a1 c001] ok   200   3.5s  https://example.com
+  [a1 c001] ok   200   4.0s  https://www.iana.org/domains/reserved
+  [a1 c001] ok   200   3.5s  https://www.w3.org/
+  [load]   0.5m mem=   270 MB  browsers= 1  active=0  sent=7 ok=7 504=0 other=0
+  [a1 c001] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c001] ok   200   4.6s  https://wordpress.org/
+  [a1 c001] ok   200   4.6s  https://readthedocs.org/
+  [a1 c001] HARD 200   4.3s  https://www.diabetes.fi/yhteystiedot
+  [a1 c001] HARD 200   3.9s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c002] ok   200   3.4s  https://pypi.org/
+  [load]   1.0m mem=   270 MB  browsers= 1  active=0  sent=13 ok=13 504=0 other=0
+  [a1 c002] ok   200   6.6s  https://www.jpond.fi/yhteystiedot/
+  [a1 c002] ok   200   4.1s  https://caverna.fi
+  [a1 c002] ok   200   4.3s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c002] ok   200   3.6s  https://httpbin.org/html
+  [a1 c002] ok   200   3.4s  https://httpbin.org/get
+  [a1 c002] ok   200   3.2s  https://example.com
+  [a1 c002] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [load]   1.5m mem=   270 MB  browsers= 1  active=0  sent=20 ok=20 504=0 other=0
+  [a1 c002] ok   200   3.5s  https://www.w3.org/
+  [a1 c002] ok   200   3.3s  https://docs.python.org/3/
+  [a1 c002] HARD 200   3.9s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c002] HARD 200   3.5s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c003] ok   200   4.0s  https://wordpress.org/
+  [a1 c003] ok   200   4.3s  https://readthedocs.org/
+  [a1 c003] ok   200   3.4s  https://pypi.org/
+  [load]   2.0m mem=   270 MB  browsers= 1  active=0  sent=27 ok=27 504=0 other=0
+  [a1 c003] ok   200   4.1s  https://www.jpond.fi/yhteystiedot/
+  [a1 c003] ok   200   3.9s  https://caverna.fi
+  [a1 c003] ok   200   4.3s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c003] ok   200   4.2s  https://httpbin.org/html
+  [a1 c003] ok   200   3.3s  https://httpbin.org/get
+  [a1 c003] ok   200   3.2s  https://example.com
+  [a1 c003] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [load]   2.5m mem=   270 MB  browsers= 1  active=0  sent=34 ok=34 504=0 other=0
+  [a1 c003] HARD 200   3.5s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c003] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [a1 c004] ok   200   3.4s  https://www.w3.org/
+  [a1 c004] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c004] ok   200   4.1s  https://wordpress.org/
+  [a1 c004] ok   200   4.0s  https://readthedocs.org/
+  [a1 c004] ok   200   3.4s  https://pypi.org/
+  [load]   3.0m mem=   270 MB  browsers= 1  active=0  sent=41 ok=41 504=0 other=0
+  [a1 c004] ok   200   4.3s  https://www.jpond.fi/yhteystiedot/
+  [a1 c004] ok   200   3.9s  https://caverna.fi
+  [a1 c004] ok   200   4.4s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c004] ok   200   3.3s  https://httpbin.org/html
+  [a1 c004] ok   200   3.8s  https://httpbin.org/get
+  [a1 c004] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [a1 c004] HARD 200   4.0s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c005] ok   200   3.2s  https://example.com
+  [load]   3.5m mem=   270 MB  browsers= 1  active=0  sent=49 ok=49 504=0 other=0
+  [a1 c005] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c005] ok   200   3.4s  https://www.w3.org/
+  [a1 c005] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c005] ok   200   3.9s  https://wordpress.org/
+  [a1 c005] ok   200   4.2s  https://readthedocs.org/
+  [a1 c005] ok   200   3.5s  https://pypi.org/
+  [a1 c005] ok   200   4.1s  https://www.jpond.fi/yhteystiedot/
+  [load]   4.1m mem=   270 MB  browsers= 1  active=0  sent=56 ok=56 504=0 other=0
+  [a1 c005] ok   200   3.9s  https://caverna.fi
+  [a1 c005] ok   200   4.3s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c005] HARD 200   3.9s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c005] HARD 200   7.6s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c006] ok   200   3.6s  https://httpbin.org/html
+  [a1 c006] ok   200   3.3s  https://httpbin.org/get
+  [load]   4.6m mem=   270 MB  browsers= 1  active=0  sent=62 ok=62 504=0 other=0
+  [a1 c006] ok   200   3.2s  https://example.com
+  [a1 c006] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c006] ok   200   3.4s  https://www.w3.org/
+  [a1 c006] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c006] ok   200   3.8s  https://wordpress.org/
+  [a1 c006] ok   200   4.3s  https://readthedocs.org/
+  [a1 c006] ok   200   3.4s  https://pypi.org/
+  [load]   5.1m mem=   270 MB  browsers= 1  active=0  sent=69 ok=69 504=0 other=0
+  [a1 c006] ok   200   5.0s  https://www.jpond.fi/yhteystiedot/
+  [a1 c006] HARD 500   6.2s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c006] HARD 200   4.0s  https://www.diabetes.fi/yhteystiedot
+  [a1 c007] ok   200   4.1s  https://caverna.fi
+  [a1 c007] ok   200   4.5s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c007] ok   200   3.5s  https://httpbin.org/html
+  [a1 c007] ok   200   3.3s  https://httpbin.org/get
+  [load]   5.6m mem=   270 MB  browsers= 1  active=0  sent=76 ok=75 504=0 other=1
+  [a1 c007] ok   200   3.2s  https://example.com
+  [a1 c007] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c007] ok   200   3.4s  https://www.w3.org/
+  [a1 c007] ok   200   3.5s  https://docs.python.org/3/
+  [a1 c007] ok   200   3.8s  https://wordpress.org/
+  [a1 c007] ok   200   4.3s  https://readthedocs.org/
+  [a1 c007] HARD 200   3.9s  https://www.diabetes.fi/yhteystiedot
+  [load]   6.1m mem=   270 MB  browsers= 1  active=0  sent=83 ok=82 504=0 other=1
+  [a1 c007] HARD 200   4.1s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c008] ok   200   3.4s  https://pypi.org/
+  [a1 c008] ok   200   5.0s  https://www.jpond.fi/yhteystiedot/
+  [a1 c008] ok   200   4.0s  https://caverna.fi
+  [a1 c008] ok   200   4.5s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c008] ok   200   3.8s  https://httpbin.org/html
+  [load]   6.6m mem=   270 MB  browsers= 1  active=0  sent=89 ok=88 504=0 other=1
+  [a1 c008] ok   200   3.5s  https://httpbin.org/get
+  [a1 c008] ok   200   3.2s  https://example.com
+  [a1 c008] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c008] ok   200   3.4s  https://www.w3.org/
+  [a1 c008] ok   200   3.6s  https://docs.python.org/3/
+  [a1 c008] HARD 200   4.1s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c008] HARD 500   6.5s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [load]   7.1m mem=   270 MB  browsers= 1  active=0  sent=96 ok=94 504=0 other=2
+  [a1 c009] ok   200   3.8s  https://wordpress.org/
+  [a1 c009] ok   200   4.0s  https://readthedocs.org/
+  [a1 c009] ok   200   3.4s  https://pypi.org/
+  [a1 c009] ok   200   4.5s  https://www.jpond.fi/yhteystiedot/
+  [a1 c009] ok   200   4.2s  https://caverna.fi
+  [a1 c009] ok   200   4.4s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c009] ok   200   3.3s  https://httpbin.org/html
+  [load]   7.6m mem=   270 MB  browsers= 1  active=0  sent=103 ok=101 504=0 other=2
+  [a1 c009] ok   200   3.6s  https://httpbin.org/get
+  [a1 c009] ok   200   3.2s  https://example.com
+  [a1 c009] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c009] HARD 500   6.2s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c009] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [a1 c010] ok   200   3.5s  https://www.w3.org/
+  [a1 c010] ok   200   3.4s  https://docs.python.org/3/
+  [load]   8.1m mem=   270 MB  browsers= 1  active=0  sent=110 ok=107 504=0 other=3
+  [a1 c010] ok   200   3.7s  https://wordpress.org/
+  [a1 c010] ok   200   4.3s  https://readthedocs.org/
+  [a1 c010] ok   200   3.4s  https://pypi.org/
+  [a1 c010] ok   200   4.9s  https://www.jpond.fi/yhteystiedot/
+  [a1 c010] ok   200   4.0s  https://caverna.fi
+  [a1 c010] ok   200   4.4s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c010] ok   200   3.3s  https://httpbin.org/html
+  [load]   8.6m mem=   270 MB  browsers= 1  active=0  sent=117 ok=114 504=0 other=3
+  [a1 c010] ok   200   3.3s  https://httpbin.org/get
+  [a1 c010] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [a1 c010] HARD 200   4.0s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c011] ok   200   3.3s  https://example.com
+  [a1 c011] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c011] ok   200   3.4s  https://www.w3.org/
+  [a1 c011] ok   200   3.4s  https://docs.python.org/3/
+  [load]   9.1m mem=   270 MB  browsers= 1  active=0  sent=124 ok=121 504=0 other=3
+  [a1 c011] ok   200   3.7s  https://wordpress.org/
+  [a1 c011] ok   200   4.0s  https://readthedocs.org/
+  [a1 c011] ok   200   3.4s  https://pypi.org/
+  [a1 c011] ok   200   4.6s  https://www.jpond.fi/yhteystiedot/
+  [a1 c011] ok   200   4.0s  https://caverna.fi
+  [a1 c011] ok   200   4.3s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c011] HARD 200   3.9s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [load]   9.6m mem=   270 MB  browsers= 1  active=0  sent=131 ok=128 504=0 other=3
+  [a1 c011] HARD 500   6.3s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c012] ok   200   4.0s  https://httpbin.org/html
+  [a1 c012] ok   200   3.4s  https://httpbin.org/get
+  [a1 c012] ok   200   3.3s  https://example.com
+  [a1 c012] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c012] ok   200   3.5s  https://www.w3.org/
+  [a1 c012] ok   200   3.4s  https://docs.python.org/3/
+  [load]  10.1m mem=   270 MB  browsers= 1  active=0  sent=138 ok=134 504=0 other=4
+  [a1 c012] ok   200   3.7s  https://wordpress.org/
+  [a1 c012] ok   200   3.9s  https://readthedocs.org/
+  [a1 c012] ok   200   3.3s  https://pypi.org/
+  [a1 c012] ok   200   4.4s  https://www.jpond.fi/yhteystiedot/
+  [a1 c012] HARD 500   6.1s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c012] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [load]  10.6m mem=   270 MB  browsers= 1  active=0  sent=144 ok=139 504=0 other=5
+  [a1 c013] ok   200   3.9s  https://caverna.fi
+  [a1 c013] ok   200   4.4s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c013] ok   200   3.3s  https://httpbin.org/html
+  [a1 c013] ok   200   3.4s  https://httpbin.org/get
+  [a1 c013] ok   200   3.3s  https://example.com
+  [a1 c013] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c013] ok   200   3.4s  https://www.w3.org/
+  [a1 c013] ok   200   3.4s  https://docs.python.org/3/
+  [load]  11.1m mem=   270 MB  browsers= 1  active=0  sent=152 ok=147 504=0 other=5
+  [a1 c013] ok   200   3.7s  https://wordpress.org/
+  [a1 c013] ok   200   4.0s  https://readthedocs.org/
+  [a1 c013] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [a1 c013] HARD 200   3.9s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c014] ok   200   3.5s  https://pypi.org/
+  [a1 c014] ok   200   4.8s  https://www.jpond.fi/yhteystiedot/
+  [a1 c014] ok   200   3.8s  https://caverna.fi
+  [load]  11.6m mem=   270 MB  browsers= 1  active=0  sent=159 ok=154 504=0 other=5
+  [a1 c014] ok   200   4.4s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c014] ok   200   3.9s  https://httpbin.org/html
+  [a1 c014] ok   200   3.5s  https://httpbin.org/get
+  [a1 c014] ok   200   3.3s  https://example.com
+  [a1 c014] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c014] ok   200   3.5s  https://www.w3.org/
+  [a1 c014] ok   200   3.3s  https://docs.python.org/3/
+  [load]  12.2m mem=   270 MB  browsers= 1  active=0  sent=166 ok=161 504=0 other=5
+  [a1 c014] HARD 200   3.9s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [load]  12.7m mem=   270 MB  browsers= 1  active=0  sent=167 ok=162 504=0 other=5
+  [load]  13.2m mem=   270 MB  browsers= 1  active=0  sent=167 ok=162 504=0 other=5
+  [load]  13.7m mem=   270 MB  browsers= 1  active=0  sent=167 ok=162 504=0 other=5
+  [load]  14.2m mem=   270 MB  browsers= 1  active=0  sent=167 ok=162 504=0 other=5
+  [load]  14.7m mem=   270 MB  browsers= 1  active=0  sent=167 ok=162 504=0 other=5
+  [a1 c014] HARD 504 180.1s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [load]  15.2m mem=   270 MB  browsers= 1  active=0  sent=168 ok=162 504=1 other=5
+  [a1 c015] ok   200   4.0s  https://wordpress.org/
+  [a1 c015] ok   200   4.2s  https://readthedocs.org/
+  [a1 c015] ok   200   3.5s  https://pypi.org/
+  [a1 c015] ok   200   4.4s  https://www.jpond.fi/yhteystiedot/
+  [a1 c015] ok   200   4.0s  https://caverna.fi
+  [a1 c015] ok   200   4.4s  https://solwers.com/sijoittajat/hallinnointi/
+  [load]  15.7m mem=   270 MB  browsers= 1  active=0  sent=174 ok=168 504=1 other=5
+  [a1 c015] ok   200   3.6s  https://httpbin.org/html
+  [a1 c015] ok   200   3.3s  https://httpbin.org/get
+  [a1 c015] ok   200   3.3s  https://example.com
+  [a1 c015] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c015] HARD 500   6.4s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c015] HARD 200   3.9s  https://www.diabetes.fi/yhteystiedot
+  [a1 c016] ok   200   3.4s  https://www.w3.org/
+  [load]  16.2m mem=   270 MB  browsers= 1  active=0  sent=181 ok=174 504=1 other=6
+  [a1 c016] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c016] ok   200   4.0s  https://wordpress.org/
+  [a1 c016] ok   200   4.4s  https://readthedocs.org/
+  [a1 c016] ok   200   3.4s  https://pypi.org/
+  [a1 c016] ok   200   4.7s  https://www.jpond.fi/yhteystiedot/
+  [a1 c016] ok   200   4.0s  https://caverna.fi
+  [a1 c016] ok   200   4.3s  https://solwers.com/sijoittajat/hallinnointi/
+  [load]  16.7m mem=   270 MB  browsers= 1  active=0  sent=188 ok=181 504=1 other=6
+  [a1 c016] ok   200   3.4s  https://httpbin.org/html
+  [a1 c016] ok   200   3.7s  https://httpbin.org/get
+  [a1 c016] HARD 200   4.0s  https://www.diabetes.fi/yhteystiedot
+  [a1 c016] HARD 200   3.9s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c017] ok   200   3.2s  https://example.com
+  [a1 c017] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c017] ok   200   3.5s  https://www.w3.org/
+  [load]  17.2m mem=   270 MB  browsers= 1  active=0  sent=195 ok=188 504=1 other=6
+  [a1 c017] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c017] ok   200   4.0s  https://wordpress.org/
+  [a1 c017] ok   200   4.5s  https://readthedocs.org/
+  [a1 c017] ok   200   3.4s  https://pypi.org/
+  [a1 c017] ok   200   4.2s  https://www.jpond.fi/yhteystiedot/
+  [a1 c017] ok   200   4.0s  https://caverna.fi
+  [a1 c017] ok   200   4.4s  https://solwers.com/sijoittajat/hallinnointi/
+  [load]  17.7m mem=   270 MB  browsers= 1  active=0  sent=202 ok=195 504=1 other=6
+  [a1 c017] HARD 200   3.9s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c017] HARD 500   6.7s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c018] ok   200   3.7s  https://httpbin.org/html
+  [a1 c018] ok   200   3.7s  https://httpbin.org/get
+  [a1 c018] ok   200   3.2s  https://example.com
+  [a1 c018] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c018] ok   200   3.4s  https://www.w3.org/
+  [load]  18.2m mem=   270 MB  browsers= 1  active=0  sent=209 ok=201 504=1 other=7
+  [a1 c018] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c018] ok   200   4.2s  https://wordpress.org/
+  [a1 c018] ok   200   4.1s  https://readthedocs.org/
+  [a1 c018] ok   200   3.5s  https://pypi.org/
+  [a1 c018] ok   200   4.3s  https://www.jpond.fi/yhteystiedot/
+  [a1 c018] HARD 500   6.0s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [load]  18.7m mem=   270 MB  browsers= 1  active=0  sent=215 ok=206 504=1 other=8
+  [a1 c018] HARD 200   3.9s  https://www.diabetes.fi/yhteystiedot
+  [a1 c019] ok   200   4.1s  https://caverna.fi
+  [a1 c019] ok   200   4.6s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c019] ok   200   4.0s  https://httpbin.org/html
+  [a1 c019] ok   200   3.3s  https://httpbin.org/get
+  [a1 c019] ok   200   3.2s  https://example.com
+  [a1 c019] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [load]  19.2m mem=   270 MB  browsers= 1  active=0  sent=222 ok=213 504=1 other=8
+  [a1 c019] ok   200   3.4s  https://www.w3.org/
+  [a1 c019] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c019] ok   200   4.2s  https://wordpress.org/
+  [a1 c019] ok   200   4.1s  https://readthedocs.org/
+  [a1 c019] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [a1 c019] HARD 200   4.0s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c020] ok   200   3.4s  https://pypi.org/
+  [load]  19.7m mem=   270 MB  browsers= 1  active=0  sent=229 ok=220 504=1 other=8
+  [a1 c020] ok   200   4.1s  https://www.jpond.fi/yhteystiedot/
+  [a1 c020] ok   200   3.8s  https://caverna.fi
+  [a1 c020] ok   200   4.5s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c020] ok   200   3.5s  https://httpbin.org/html
+  [a1 c020] ok   200   3.3s  https://httpbin.org/get
+  [a1 c020] ok   200   3.2s  https://example.com
+  [a1 c020] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c020] ok   200   3.4s  https://www.w3.org/
+  [load]  20.3m mem=   270 MB  browsers= 1  active=0  sent=237 ok=228 504=1 other=8
+  [a1 c020] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c020] HARD 200   4.1s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c020] HARD 500   6.5s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c021] ok   200   4.1s  https://wordpress.org/
+  [a1 c021] ok   200   4.3s  https://readthedocs.org/
+  [a1 c021] ok   200   3.4s  https://pypi.org/
+  [load]  20.8m mem=   270 MB  browsers= 1  active=0  sent=243 ok=233 504=1 other=9
+  [a1 c021] ok   200   4.5s  https://www.jpond.fi/yhteystiedot/
+  [a1 c021] ok   200   4.1s  https://caverna.fi
+  [a1 c021] ok   200   4.7s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c021] ok   200   3.3s  https://httpbin.org/html
+  [a1 c021] ok   200   8.6s  https://httpbin.org/get
+  [a1 c021] ok   200   3.2s  https://example.com
+  [load]  21.3m mem=   270 MB  browsers= 1  active=0  sent=249 ok=239 504=1 other=9
+  [a1 c021] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [load]  21.8m mem=   270 MB  browsers= 1  active=0  sent=250 ok=240 504=1 other=9
+  [load]  22.3m mem=   270 MB  browsers= 1  active=0  sent=250 ok=240 504=1 other=9
+  [load]  22.8m mem=   270 MB  browsers= 1  active=0  sent=250 ok=240 504=1 other=9
+  [load]  23.3m mem=   270 MB  browsers= 1  active=0  sent=250 ok=240 504=1 other=9
+  [load]  23.8m mem=   270 MB  browsers= 1  active=0  sent=250 ok=240 504=1 other=9
+  [load]  24.3m mem=   270 MB  browsers= 1  active=0  sent=250 ok=240 504=1 other=9
+  [a1 c021] HARD 504 180.1s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c021] HARD 200   4.3s  https://www.diabetes.fi/yhteystiedot
+  [a1 c022] ok   200   3.6s  https://www.w3.org/
+  [a1 c022] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c022] ok   200   4.0s  https://wordpress.org/
+  [a1 c022] ok   200   4.2s  https://readthedocs.org/
+  [a1 c022] ok   200   3.4s  https://pypi.org/
+  [load]  24.8m mem=   270 MB  browsers= 1  active=0  sent=257 ok=246 504=2 other=9
+  [a1 c022] ok   200   4.6s  https://www.jpond.fi/yhteystiedot/
+  [a1 c022] ok   200   4.3s  https://caverna.fi
+  [a1 c022] ok   200   4.5s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c022] ok   200   7.5s  https://httpbin.org/html
+  [a1 c022] ok   200   3.3s  https://httpbin.org/get
+  [a1 c022] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [load]  25.3m mem=   270 MB  browsers= 1  active=0  sent=263 ok=252 504=2 other=9
+  [a1 c022] HARD 200   4.1s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c023] ok   200   3.4s  https://example.com
+  [a1 c023] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c023] ok   200   3.5s  https://www.w3.org/
+  [a1 c023] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c023] ok   200   4.1s  https://wordpress.org/
+  [a1 c023] ok   200   4.0s  https://readthedocs.org/
+  [a1 c023] ok   200   3.4s  https://pypi.org/
+  [load]  25.8m mem=   270 MB  browsers= 1  active=0  sent=271 ok=260 504=2 other=9
+  [a1 c023] ok   200   4.2s  https://www.jpond.fi/yhteystiedot/
+  [a1 c023] ok   200   4.0s  https://caverna.fi
+  [a1 c023] ok   200   4.5s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c023] HARD 200   4.0s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c023] HARD 200   3.6s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c024] ok   200   3.5s  https://httpbin.org/html
+  [load]  26.3m mem=   270 MB  browsers= 1  active=0  sent=277 ok=266 504=2 other=9
+  [a1 c024] ok   200   7.9s  https://httpbin.org/get
+  [a1 c024] ok   200   3.3s  https://example.com
+  [a1 c024] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c024] ok   200   3.5s  https://www.w3.org/
+  [a1 c024] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c024] ok   200   4.0s  https://wordpress.org/
+  [a1 c024] ok   200   4.0s  https://readthedocs.org/
+  [load]  26.8m mem=   270 MB  browsers= 1  active=0  sent=284 ok=273 504=2 other=9
+  [a1 c024] ok   200   3.4s  https://pypi.org/
+  [a1 c024] ok   200   4.2s  https://www.jpond.fi/yhteystiedot/
+  [a1 c024] HARD 500   6.0s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c024] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [a1 c025] ok   200   3.9s  https://caverna.fi
+  [a1 c025] ok   200   4.4s  https://solwers.com/sijoittajat/hallinnointi/
+  [load]  27.3m mem=   270 MB  browsers= 1  active=0  sent=290 ok=278 504=2 other=10
+  [a1 c025] ok   200   3.3s  https://httpbin.org/html
+  [a1 c025] ok   200   3.5s  https://httpbin.org/get
+  [a1 c025] ok   200   3.3s  https://example.com
+  [a1 c025] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c025] ok   200   3.5s  https://www.w3.org/
+  [a1 c025] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c025] ok   200   4.2s  https://wordpress.org/
+  [a1 c025] ok   200   4.5s  https://readthedocs.org/
+  [load]  27.9m mem=   270 MB  browsers= 1  active=0  sent=298 ok=286 504=2 other=10
+  [a1 c025] HARD 200   3.9s  https://www.diabetes.fi/yhteystiedot
+  [a1 c025] HARD 200   4.0s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c026] ok   200   3.4s  https://pypi.org/
+  [a1 c026] ok   200   4.1s  https://www.jpond.fi/yhteystiedot/
+  [a1 c026] ok   200   4.1s  https://caverna.fi
+  [a1 c026] ok   200   4.3s  https://solwers.com/sijoittajat/hallinnointi/
+  [a1 c026] ok   200   3.3s  https://httpbin.org/html
+  [load]  28.4m mem=   270 MB  browsers= 1  active=0  sent=305 ok=293 504=2 other=10
+  [a1 c026] ok   200   3.5s  https://httpbin.org/get
+  [a1 c026] ok   200   3.3s  https://example.com
+  [a1 c026] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c026] ok   200   3.4s  https://www.w3.org/
+  [a1 c026] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c026] HARD 200   3.9s  https://www.diabetes.fi/henkilokunnan-yhteystiedot
+  [a1 c026] HARD 500   6.3s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [load]  28.9m mem=   270 MB  browsers= 1  active=0  sent=312 ok=299 504=2 other=11
+  [a1 c027] ok   200   4.2s  https://wordpress.org/
+  [a1 c027] ok   200   4.3s  https://readthedocs.org/
+  [a1 c027] ok   200   3.5s  https://pypi.org/
+  [a1 c027] ok   200   5.2s  https://www.jpond.fi/yhteystiedot/
+  [a1 c027] ok   200   3.9s  https://caverna.fi
+  [a1 c027] ok   200   4.3s  https://solwers.com/sijoittajat/hallinnointi/
+  [load]  29.4m mem=   270 MB  browsers= 1  active=0  sent=318 ok=305 504=2 other=11
+  [a1 c027] ok   200   4.0s  https://httpbin.org/html
+  [a1 c027] ok   200   3.4s  https://httpbin.org/get
+  [a1 c027] ok   200   3.2s  https://example.com
+  [a1 c027] ok   200   3.4s  https://www.iana.org/domains/reserved
+  [a1 c027] HARD 500   6.5s  https://ahlmanedu.fi/tietoa-ahlmanedusta/yhteystiedot/hallitus/
+  [a1 c027] HARD 200   3.8s  https://www.diabetes.fi/yhteystiedot
+  [a1 c028] ok   200   3.5s  https://www.w3.org/
+  [load]  29.9m mem=   270 MB  browsers= 1  active=0  sent=325 ok=311 504=2 other=12
+  [a1 c028] ok   200   3.4s  https://docs.python.org/3/
+  [a1 c028] ok   200   4.2s  https://wordpress.org/
+  [drain]  30.4m mem=   270 MB  browsers= 1  active=0  sent=327 ok=313 504=2 other=12
+  [drain]  30.9m mem=   270 MB  browsers= 1  active=0  sent=327 ok=313 504=2 other=12
+  [drain]  31.4m mem=   270 MB  browsers= 1  active=0  sent=327 ok=313 504=2 other=12
+  [drain]  31.9m mem=   270 MB  browsers= 1  active=0  sent=327 ok=313 504=2 other=12
+
+======================================================================
+Soak test complete — ✅ PASS
+======================================================================
+  Duration:         30 min
+  Requests sent:    327
+  Healthy OK rate:  273/273 (✅)
+  Hard OK rate:     40/54 (non-blocking — hard sites may legitimately fail)
+  Memory drift:     +0.0% ✅
+  Post-load stuck:  ✅ drained to 0
+
+  Raw data: test-aitosoft/results/soak-20260414-160043.json
+
+  Memory trend (MB, range 270–270):
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
+        270 MB  ········································
