@@ -1,6 +1,12 @@
 import asyncio
 from pydantic import BaseModel, Field
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, LLMConfig, BrowserConfig, CacheMode
+from crawl4ai import (
+    AsyncWebCrawler,
+    CrawlerRunConfig,
+    LLMConfig,
+    BrowserConfig,
+    CacheMode,
+)
 from crawl4ai.extraction_strategy import LLMExtractionStrategy
 from typing import Dict
 import os
@@ -9,10 +15,14 @@ import os
 class OpenAIModelFee(BaseModel):
     model_name: str = Field(..., description="Name of the OpenAI model.")
     input_fee: str = Field(..., description="Fee for input token for the OpenAI model.")
-    output_fee: str = Field(..., description="Fee for output token for the OpenAI model.")
+    output_fee: str = Field(
+        ..., description="Fee for output token for the OpenAI model."
+    )
 
 
-async def extract_structured_data_using_llm(provider: str, api_token: str = None, extra_headers: Dict[str, str] = None):
+async def extract_structured_data_using_llm(
+    provider: str, api_token: str = None, extra_headers: Dict[str, str] = None
+):
     print(f"\n--- Extracting Structured Data with {provider} ---")
 
     if api_token is None and provider != "ollama":
@@ -33,7 +43,7 @@ async def extract_structured_data_using_llm(provider: str, api_token: str = None
             llm_config=LLMConfig(provider=provider, api_token=api_token),
             schema=OpenAIModelFee.model_json_schema(),
             extraction_type="schema",
-            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens. 
+            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens.
             Do not miss any models in the entire content.""",
             extra_args=extra_args,
         ),
@@ -41,8 +51,7 @@ async def extract_structured_data_using_llm(provider: str, api_token: str = None
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
-            url="https://openai.com/api/pricing/", 
-            config=crawler_config
+            url="https://openai.com/api/pricing/", config=crawler_config
         )
         print(result.extracted_content)
 

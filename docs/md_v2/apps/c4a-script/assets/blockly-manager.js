@@ -8,17 +8,17 @@ class BlocklyManager {
         this.isUpdating = false; // Prevent circular updates
         this.blocklyVisible = false;
         this.toolboxXml = this.generateToolbox();
-        
+
         this.init();
     }
-    
+
     init() {
         this.setupBlocklyContainer();
         this.initializeWorkspace();
         this.setupEventHandlers();
         this.setupSynchronization();
     }
-    
+
     setupBlocklyContainer() {
         // Create blockly container div
         const editorContainer = document.querySelector('.editor-container');
@@ -29,7 +29,7 @@ class BlocklyManager {
         blocklyDiv.style.width = '100%';
         editorContainer.appendChild(blocklyDiv);
     }
-    
+
     generateToolbox() {
         return `
         <xml id="toolbox" style="display: none">
@@ -39,7 +39,7 @@ class BlocklyManager {
                 <block type="c4a_back"></block>
                 <block type="c4a_forward"></block>
             </category>
-            
+
             <category name="Wait" colour="${BlockColors.WAIT}">
                 <block type="c4a_wait_time">
                     <field name="SECONDS">3</field>
@@ -53,7 +53,7 @@ class BlocklyManager {
                     <field name="TIMEOUT">5</field>
                 </block>
             </category>
-            
+
             <category name="Mouse Actions" colour="${BlockColors.ACTIONS}">
                 <block type="c4a_click">
                     <field name="SELECTOR">button.submit</field>
@@ -68,7 +68,7 @@ class BlocklyManager {
                     <field name="AMOUNT">500</field>
                 </block>
             </category>
-            
+
             <category name="Keyboard" colour="${BlockColors.KEYBOARD}">
                 <block type="c4a_type">
                     <field name="TEXT">hello@example.com</field>
@@ -91,7 +91,7 @@ class BlocklyManager {
                     <field name="KEY">Shift</field>
                 </block>
             </category>
-            
+
             <category name="Control Flow" colour="${BlockColors.CONTROL}">
                 <block type="c4a_if_exists">
                     <field name="SELECTOR">.cookie-banner</field>
@@ -112,7 +112,7 @@ class BlocklyManager {
                     <field name="CONDITION">document.querySelector('.load-more')</field>
                 </block>
             </category>
-            
+
             <category name="Variables" colour="${BlockColors.VARIABLES}">
                 <block type="c4a_setvar">
                     <field name="NAME">username</field>
@@ -122,7 +122,7 @@ class BlocklyManager {
                     <field name="CODE">console.log('Hello')</field>
                 </block>
             </category>
-            
+
             <category name="Procedures" colour="${BlockColors.PROCEDURES}">
                 <block type="c4a_proc_def">
                     <field name="NAME">login</field>
@@ -131,7 +131,7 @@ class BlocklyManager {
                     <field name="NAME">login</field>
                 </block>
             </category>
-            
+
             <category name="Comments" colour="#9E9E9E">
                 <block type="c4a_comment">
                     <field name="TEXT">Add comment here</field>
@@ -139,10 +139,10 @@ class BlocklyManager {
             </category>
         </xml>`;
     }
-    
+
     initializeWorkspace() {
         const blocklyDiv = document.getElementById('blockly-view');
-        
+
         // Dark theme configuration
         const theme = Blockly.Theme.defineTheme('c4a-dark', {
             'base': Blockly.Themes.Classic,
@@ -170,7 +170,7 @@ class BlocklyManager {
                 'size': 13
             }
         });
-        
+
         this.workspace = Blockly.inject(blocklyDiv, {
             toolbox: this.toolboxXml,
             theme: theme,
@@ -192,7 +192,7 @@ class BlocklyManager {
             sounds: false,
             media: 'https://unpkg.com/blockly/media/'
         });
-        
+
         // Add workspace change listener
         this.workspace.addChangeListener((event) => {
             if (!this.isUpdating && event.type !== Blockly.Events.UI) {
@@ -200,7 +200,7 @@ class BlocklyManager {
             }
         });
     }
-    
+
     setupEventHandlers() {
         // Add blockly toggle button
         const headerActions = document.querySelector('.editor-panel .header-actions');
@@ -209,14 +209,14 @@ class BlocklyManager {
         blocklyBtn.className = 'action-btn';
         blocklyBtn.title = 'Toggle Blockly Mode';
         blocklyBtn.innerHTML = '<span class="icon">🧩</span>';
-        
+
         // Insert before the Run button
         const runBtn = document.getElementById('run-btn');
         headerActions.insertBefore(blocklyBtn, runBtn);
-        
+
         blocklyBtn.addEventListener('click', () => this.toggleBlocklyView());
     }
-    
+
     setupSynchronization() {
         // Listen to CodeMirror changes
         this.app.editor.on('change', (instance, changeObj) => {
@@ -225,25 +225,25 @@ class BlocklyManager {
             }
         });
     }
-    
+
     toggleBlocklyView() {
         const editorView = document.getElementById('editor-view');
         const blocklyView = document.getElementById('blockly-view');
         const timelineView = document.getElementById('timeline-view');
         const blocklyBtn = document.getElementById('blockly-btn');
-        
+
         this.blocklyVisible = !this.blocklyVisible;
-        
+
         if (this.blocklyVisible) {
             // Show Blockly
             editorView.classList.add('hidden');
             timelineView.classList.add('hidden');
             blocklyView.classList.remove('hidden');
             blocklyBtn.classList.add('active');
-            
+
             // Resize workspace
             Blockly.svgResize(this.workspace);
-            
+
             // Sync current code to blocks
             this.syncCodeToBlocks();
         } else {
@@ -251,72 +251,72 @@ class BlocklyManager {
             blocklyView.classList.add('hidden');
             editorView.classList.remove('hidden');
             blocklyBtn.classList.remove('active');
-            
+
             // Refresh CodeMirror
             setTimeout(() => this.app.editor.refresh(), 100);
         }
     }
-    
+
     syncBlocksToCode() {
         if (this.isUpdating) return;
-        
+
         try {
             this.isUpdating = true;
-            
+
             // Generate C4A-Script from blocks using our custom generator
             if (typeof c4aGenerator !== 'undefined') {
                 const code = c4aGenerator.workspaceToCode(this.workspace);
-                
+
                 // Process the code to maintain proper formatting
                 const lines = code.split('\n');
                 const formattedLines = [];
                 let lastWasComment = false;
-                
+
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i].trim();
                     if (!line) continue;
-                    
+
                     const isComment = line.startsWith('#');
-                    
+
                     // Add blank line when transitioning between comments and commands
                     if (formattedLines.length > 0 && lastWasComment !== isComment) {
                         formattedLines.push('');
                     }
-                    
+
                     formattedLines.push(line);
                     lastWasComment = isComment;
                 }
-                
+
                 const cleanCode = formattedLines.join('\n');
-                
+
                 // Update CodeMirror
                 this.app.editor.setValue(cleanCode);
             }
-            
+
         } catch (error) {
             console.error('Error syncing blocks to code:', error);
         } finally {
             this.isUpdating = false;
         }
     }
-    
+
     syncCodeToBlocks() {
         if (this.isUpdating) return;
-        
+
         try {
             this.isUpdating = true;
-            
+
             // Clear workspace
             this.workspace.clear();
-            
+
             // Parse C4A-Script and generate blocks
             const code = this.app.editor.getValue();
             const blocks = this.parseC4AToBlocks(code);
-            
+
             if (blocks) {
                 Blockly.Xml.domToWorkspace(blocks, this.workspace);
             }
-            
+
         } catch (error) {
             console.error('Error syncing code to blocks:', error);
             // Show error in console
@@ -325,20 +325,20 @@ class BlocklyManager {
             this.isUpdating = false;
         }
     }
-    
+
     parseC4AToBlocks(code) {
         const lines = code.split('\n');
         const xml = document.createElement('xml');
         let yPos = 20;
         let previousBlock = null;
         let rootBlock = null;
-        
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
-            
+
             // Skip empty lines
             if (!line) continue;
-            
+
             // Handle comments
             if (line.startsWith('#')) {
                 const commentBlock = this.parseLineToBlock(line, i, lines);
@@ -360,9 +360,9 @@ class BlocklyManager {
                 }
                 continue;
             }
-            
+
             const block = this.parseLineToBlock(line, i, lines);
-            
+
             if (block) {
                 if (previousBlock) {
                     // Connect to previous block using <next>
@@ -380,10 +380,10 @@ class BlocklyManager {
                 previousBlock = block;
             }
         }
-        
+
         return xml;
     }
-    
+
     parseLineToBlock(line, index, allLines) {
         // Navigation commands
         if (line.startsWith('GO ')) {
@@ -399,16 +399,16 @@ class BlocklyManager {
         if (line === 'FORWARD') {
             return this.createBlock('c4a_forward');
         }
-        
+
         // Wait commands
         if (line.startsWith('WAIT ')) {
             const parts = line.substring(5).trim();
-            
+
             // Check if it's just a number (wait time)
             if (/^\d+(\.\d+)?$/.test(parts)) {
                 return this.createBlock('c4a_wait_time', { 'SECONDS': parts });
             }
-            
+
             // Check for selector wait
             const selectorMatch = parts.match(/^`([^`]+)`\s+(\d+)$/);
             if (selectorMatch) {
@@ -417,7 +417,7 @@ class BlocklyManager {
                     'TIMEOUT': selectorMatch[2]
                 });
             }
-            
+
             // Check for text wait
             const textMatch = parts.match(/^"([^"]+)"\s+(\d+)$/);
             if (textMatch) {
@@ -427,11 +427,11 @@ class BlocklyManager {
                 });
             }
         }
-        
+
         // Click commands
         if (line.startsWith('CLICK ')) {
             const target = line.substring(6).trim();
-            
+
             // Check for coordinates
             const coordMatch = target.match(/^(\d+)\s+(\d+)$/);
             if (coordMatch) {
@@ -440,7 +440,7 @@ class BlocklyManager {
                     'Y': coordMatch[2]
                 });
             }
-            
+
             // Selector click
             const selectorMatch = target.match(/^`([^`]+)`$/);
             if (selectorMatch) {
@@ -449,7 +449,7 @@ class BlocklyManager {
                 });
             }
         }
-        
+
         // Other mouse actions
         if (line.startsWith('DOUBLE_CLICK ')) {
             const selector = line.substring(13).trim().match(/^`([^`]+)`$/);
@@ -459,7 +459,7 @@ class BlocklyManager {
                 });
             }
         }
-        
+
         if (line.startsWith('RIGHT_CLICK ')) {
             const selector = line.substring(12).trim().match(/^`([^`]+)`$/);
             if (selector) {
@@ -468,7 +468,7 @@ class BlocklyManager {
                 });
             }
         }
-        
+
         // Scroll
         if (line.startsWith('SCROLL ')) {
             const match = line.match(/^SCROLL\s+(UP|DOWN|LEFT|RIGHT)(?:\s+(\d+))?$/);
@@ -479,18 +479,18 @@ class BlocklyManager {
                 });
             }
         }
-        
+
         // Type commands
         if (line.startsWith('TYPE ')) {
             const content = line.substring(5).trim();
-            
+
             // Variable type
             if (content.startsWith('$')) {
                 return this.createBlock('c4a_type_var', {
                     'VAR': content.substring(1)
                 });
             }
-            
+
             // Text type
             const textMatch = content.match(/^"([^"]*)"$/);
             if (textMatch) {
@@ -499,7 +499,7 @@ class BlocklyManager {
                 });
             }
         }
-        
+
         // SET command
         if (line.startsWith('SET ')) {
             const match = line.match(/^SET\s+`([^`]+)`\s+"([^"]*)"$/);
@@ -510,7 +510,7 @@ class BlocklyManager {
                 });
             }
         }
-        
+
         // CLEAR command
         if (line.startsWith('CLEAR ')) {
             const match = line.match(/^CLEAR\s+`([^`]+)`$/);
@@ -520,7 +520,7 @@ class BlocklyManager {
                 });
             }
         }
-        
+
         // SETVAR command
         if (line.startsWith('SETVAR ')) {
             const match = line.match(/^SETVAR\s+(\w+)\s*=\s*"([^"]*)"$/);
@@ -531,7 +531,7 @@ class BlocklyManager {
                 });
             }
         }
-        
+
         // IF commands (simplified - only single line)
         if (line.startsWith('IF ')) {
             // IF EXISTS
@@ -552,7 +552,7 @@ class BlocklyManager {
                     return block;
                 }
             }
-            
+
             // IF NOT EXISTS
             const notExistsMatch = line.match(/^IF\s+\(NOT\s+EXISTS\s+`([^`]+)`\)\s+THEN\s+(.+)$/);
             if (notExistsMatch) {
@@ -562,22 +562,22 @@ class BlocklyManager {
                 return block;
             }
         }
-        
+
         // Comments
         if (line.startsWith('#')) {
             return this.createBlock('c4a_comment', {
                 'TEXT': line.substring(1).trim()
             });
         }
-        
+
         // If we can't parse it, return null
         return null;
     }
-    
+
     createBlock(type, fields = {}) {
         const block = document.createElement('block');
         block.setAttribute('type', type);
-        
+
         // Add fields
         for (const [name, value] of Object.entries(fields)) {
             const field = document.createElement('field');
@@ -585,7 +585,7 @@ class BlocklyManager {
             field.textContent = value;
             block.appendChild(field);
         }
-        
+
         return block;
     }
 }

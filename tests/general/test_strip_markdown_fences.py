@@ -35,12 +35,19 @@ SIMPLE_SCHEMA = {
 NESTED_SCHEMA = {
     "name": "Products",
     "baseSelector": ".product-card",
-    "baseFields": [{"name": "id", "selector": "", "type": "attribute", "attribute": "data-id"}],
+    "baseFields": [
+        {"name": "id", "selector": "", "type": "attribute", "attribute": "data-id"}
+    ],
     "fields": [
         {"name": "title", "selector": "h2.title", "type": "text"},
         {"name": "price", "selector": ".price", "type": "text"},
         {"name": "description", "selector": ".desc", "type": "text"},
-        {"name": "image", "selector": "img.product-img", "type": "attribute", "attribute": "src"},
+        {
+            "name": "image",
+            "selector": "img.product-img",
+            "type": "attribute",
+            "attribute": "src",
+        },
     ],
 }
 
@@ -73,7 +80,7 @@ class TestStripMarkdownFences:
     def test_fence_with_language_variants(self):
         """Various language tags after ``` are stripped."""
         for lang in ["json", "JSON", "javascript", "js", "text", "jsonc"]:
-            raw = f"```{lang}\n{{\"a\": 1}}\n```"
+            raw = f'```{lang}\n{{"a": 1}}\n```'
             result = _strip_markdown_fences(raw)
             assert json.loads(result) == {"a": 1}, f"Failed for language tag: {lang}"
 
@@ -90,7 +97,7 @@ class TestStripMarkdownFences:
     def test_nested_code_block_in_value(self):
         """JSON with a string value containing ``` is not corrupted."""
         inner = {"code": "Use ```python\\nprint()\\n``` for code blocks"}
-        raw = f'```json\n{json.dumps(inner)}\n```'
+        raw = f"```json\n{json.dumps(inner)}\n```"
         result = _strip_markdown_fences(raw)
         parsed = json.loads(result)
         assert "```python" in parsed["code"]
@@ -166,7 +173,9 @@ class TestRealAnthropicSchemaGeneration:
             ),
         )
         _validate_schema(schema)
-        print(f"\n[Anthropic Haiku CSS] Generated schema: {json.dumps(schema, indent=2)}")
+        print(
+            f"\n[Anthropic Haiku CSS] Generated schema: {json.dumps(schema, indent=2)}"
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(
@@ -185,7 +194,9 @@ class TestRealAnthropicSchemaGeneration:
             ),
         )
         _validate_schema(schema)
-        print(f"\n[Anthropic Haiku XPath] Generated schema: {json.dumps(schema, indent=2)}")
+        print(
+            f"\n[Anthropic Haiku XPath] Generated schema: {json.dumps(schema, indent=2)}"
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(
@@ -203,7 +214,9 @@ class TestRealAnthropicSchemaGeneration:
             ),
         )
         _validate_schema(schema)
-        print(f"\n[Anthropic Haiku no-query] Generated schema: {json.dumps(schema, indent=2)}")
+        print(
+            f"\n[Anthropic Haiku no-query] Generated schema: {json.dumps(schema, indent=2)}"
+        )
 
 
 class TestRealOpenAISchemaGeneration:
@@ -226,7 +239,9 @@ class TestRealOpenAISchemaGeneration:
             ),
         )
         _validate_schema(schema)
-        print(f"\n[OpenAI gpt-4o-mini CSS] Generated schema: {json.dumps(schema, indent=2)}")
+        print(
+            f"\n[OpenAI gpt-4o-mini CSS] Generated schema: {json.dumps(schema, indent=2)}"
+        )
 
 
 class TestRealGroqSchemaGeneration:
@@ -265,7 +280,7 @@ class TestRegressionNoBreakage:
         "raw_json",
         [
             '{"simple": true}',
-            '[]',
+            "[]",
             '[{"a": 1}, {"a": 2}]',
             '{"nested": {"deep": {"value": 42}}}',
             '{"unicode": "\u3053\u3093\u306b\u3061\u306f\u4e16\u754c"}',
@@ -300,7 +315,7 @@ class TestRegressionNoBreakage:
         "raw_json",
         [
             '{"simple": true}',
-            '[]',
+            "[]",
             '[{"a": 1}, {"a": 2}]',
             json.dumps(SIMPLE_SCHEMA),
             json.dumps(NESTED_SCHEMA, indent=2),

@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       activeBuilder = new ScriptBuilder();
       activeBuilder.start();
     }
-    
+
     sendResponse({ success: true });
   } else if (request.action === 'stopCapture') {
     if (activeBuilder) {

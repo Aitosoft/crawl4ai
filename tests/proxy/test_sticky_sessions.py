@@ -12,9 +12,7 @@ Tests cover:
 
 import asyncio
 import os
-import time
 import pytest
-from unittest.mock import patch
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 from crawl4ai.async_configs import CrawlerRunConfig, ProxyConfig
@@ -28,8 +26,7 @@ class TestRoundRobinProxyStrategySession:
     def setup_method(self):
         """Setup for each test method."""
         self.proxies = [
-            ProxyConfig(server=f"http://proxy{i}.test:8080")
-            for i in range(5)
+            ProxyConfig(server=f"http://proxy{i}.test:8080") for i in range(5)
         ]
 
     # ==================== BASIC STICKY SESSION TESTS ====================
@@ -91,7 +88,7 @@ class TestRoundRobinProxyStrategySession:
         strategy = RoundRobinProxyStrategy(self.proxies)
 
         # Acquire session
-        proxy1 = await strategy.get_proxy_for_session("session-1")
+        await strategy.get_proxy_for_session("session-1")
         assert strategy.get_session_proxy("session-1") is not None
 
         # Release session
@@ -162,7 +159,7 @@ class TestRoundRobinProxyStrategySession:
         strategy = RoundRobinProxyStrategy(self.proxies)
 
         # Acquire with 1 second TTL
-        proxy1 = await strategy.get_proxy_for_session("session-1", ttl=1)
+        await strategy.get_proxy_for_session("session-1", ttl=1)
 
         # Wait for TTL to expire
         await asyncio.sleep(1.1)
@@ -262,9 +259,9 @@ class TestRoundRobinProxyStrategySession:
             return proxy.server
 
         # Acquire same session from multiple coroutines
-        results = await asyncio.gather(*[
-            acquire_session("shared-session") for _ in range(10)
-        ])
+        results = await asyncio.gather(
+            *[acquire_session("shared-session") for _ in range(10)]
+        )
 
         # All should get same proxy
         assert len(set(results)) == 1
@@ -280,9 +277,9 @@ class TestRoundRobinProxyStrategySession:
             return (session_id, proxy.server)
 
         # Acquire different sessions concurrently
-        results = await asyncio.gather(*[
-            acquire_session(f"session-{i}") for i in range(5)
-        ])
+        results = await asyncio.gather(
+            *[acquire_session(f"session-{i}") for i in range(5)]
+        )
 
         # Each session should have a consistent proxy
         session_proxies = dict(results)
@@ -305,9 +302,7 @@ class TestRoundRobinProxyStrategySession:
             return proxy.server
 
         # Run multiple acquire/release cycles concurrently
-        await asyncio.gather(*[
-            acquire_and_release(f"session-{i}") for i in range(10)
-        ])
+        await asyncio.gather(*[acquire_and_release(f"session-{i}") for i in range(10)])
 
         # All sessions should be released
         active = strategy.get_active_sessions()
@@ -348,7 +343,7 @@ class TestCrawlerRunConfigSession:
         config = CrawlerRunConfig(
             proxy_session_id="test-session",
             proxy_session_ttl=300,
-            proxy_session_auto_release=True
+            proxy_session_auto_release=True,
         )
 
         assert config.proxy_session_id == "test-session"
@@ -370,8 +365,7 @@ class TestCrawlerStickySessionIntegration:
     def setup_method(self):
         """Setup for each test method."""
         self.proxies = [
-            ProxyConfig(server=f"http://proxy{i}.test:8080")
-            for i in range(3)
+            ProxyConfig(server=f"http://proxy{i}.test:8080") for i in range(3)
         ]
         self.test_url = "https://httpbin.org/ip"
 
@@ -383,7 +377,7 @@ class TestCrawlerStickySessionIntegration:
         config = CrawlerRunConfig(
             cache_mode=CacheMode.BYPASS,
             proxy_session_id="test-session",
-            page_timeout=15000
+            page_timeout=15000,
         )
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -400,7 +394,7 @@ class TestCrawlerStickySessionIntegration:
             cache_mode=CacheMode.BYPASS,
             proxy_rotation_strategy=strategy,
             proxy_session_id="integration-test",
-            page_timeout=10000
+            page_timeout=10000,
         )
 
         browser_config = BrowserConfig(headless=True)
@@ -408,7 +402,7 @@ class TestCrawlerStickySessionIntegration:
         async with AsyncWebCrawler(config=browser_config) as crawler:
             # First request
             try:
-                result1 = await crawler.arun(url=self.test_url, config=config)
+                await crawler.arun(url=self.test_url, config=config)
             except Exception:
                 pass  # Proxy connection may fail, but session should be tracked
 
@@ -428,7 +422,7 @@ class TestCrawlerStickySessionIntegration:
         rotating_config = CrawlerRunConfig(
             cache_mode=CacheMode.BYPASS,
             proxy_rotation_strategy=strategy,
-            page_timeout=5000
+            page_timeout=5000,
         )
 
         # Config WITH sticky session - should use same proxy
@@ -436,7 +430,7 @@ class TestCrawlerStickySessionIntegration:
             cache_mode=CacheMode.BYPASS,
             proxy_rotation_strategy=strategy,
             proxy_session_id="sticky-test",
-            page_timeout=5000
+            page_timeout=5000,
         )
 
         browser_config = BrowserConfig(headless=True)
@@ -452,7 +446,11 @@ class TestCrawlerStickySessionIntegration:
                     await crawler.arun(url=self.test_url, config=rotating_config)
                 except Exception:
                     pass
-                rotating_proxies.append(rotating_config.proxy_config.server if rotating_config.proxy_config else None)
+                rotating_proxies.append(
+                    rotating_config.proxy_config.server
+                    if rotating_config.proxy_config
+                    else None
+                )
 
             # Try sticky requests
             for _ in range(3):
@@ -460,12 +458,18 @@ class TestCrawlerStickySessionIntegration:
                     await crawler.arun(url=self.test_url, config=sticky_config)
                 except Exception:
                     pass
-                sticky_proxies.append(sticky_config.proxy_config.server if sticky_config.proxy_config else None)
+                sticky_proxies.append(
+                    sticky_config.proxy_config.server
+                    if sticky_config.proxy_config
+                    else None
+                )
 
             # Rotating should have different proxies (or cycle through them)
             # Sticky should have same proxy for all requests
             if all(sticky_proxies):
-                assert len(set(sticky_proxies)) == 1, "Sticky session should use same proxy"
+                assert (
+                    len(set(sticky_proxies)) == 1
+                ), "Sticky session should use same proxy"
 
             await strategy.release_session("sticky-test")
 
@@ -479,8 +483,8 @@ class TestStickySessionRealWorld:
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(
-        not os.environ.get('TEST_PROXY_1'),
-        reason="Requires TEST_PROXY_1 environment variable"
+        not os.environ.get("TEST_PROXY_1"),
+        reason="Requires TEST_PROXY_1 environment variable",
     )
     async def test_verify_ip_consistency(self):
         """Verify that sticky session actually uses same IP.
@@ -493,8 +497,8 @@ class TestStickySessionRealWorld:
 
         # Load proxies from environment
         proxy_strs = [
-            os.environ.get('TEST_PROXY_1', ''),
-            os.environ.get('TEST_PROXY_2', '')
+            os.environ.get("TEST_PROXY_1", ""),
+            os.environ.get("TEST_PROXY_2", ""),
         ]
         proxies = [ProxyConfig.from_string(p) for p in proxy_strs if p]
 
@@ -508,7 +512,7 @@ class TestStickySessionRealWorld:
             cache_mode=CacheMode.BYPASS,
             proxy_rotation_strategy=strategy,
             proxy_session_id="ip-verify-session",
-            page_timeout=30000
+            page_timeout=30000,
         )
 
         browser_config = BrowserConfig(headless=True)
@@ -517,10 +521,7 @@ class TestStickySessionRealWorld:
             ips = []
 
             for i in range(3):
-                result = await crawler.arun(
-                    url="https://httpbin.org/ip",
-                    config=config
-                )
+                result = await crawler.arun(url="https://httpbin.org/ip", config=config)
 
                 if result and result.success and result.html:
                     # Extract IP from response
@@ -537,13 +538,11 @@ class TestStickySessionRealWorld:
 
 # ==================== STANDALONE TEST FUNCTIONS ====================
 
+
 @pytest.mark.asyncio
 async def test_sticky_session_simple():
     """Simple test for sticky session functionality."""
-    proxies = [
-        ProxyConfig(server=f"http://proxy{i}.test:8080")
-        for i in range(3)
-    ]
+    proxies = [ProxyConfig(server=f"http://proxy{i}.test:8080") for i in range(3)]
     strategy = RoundRobinProxyStrategy(proxies)
 
     # Same session should return same proxy

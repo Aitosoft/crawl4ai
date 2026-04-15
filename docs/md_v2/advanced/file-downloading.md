@@ -87,7 +87,7 @@ async def download_multiple_files(url: str, download_path: str):
                 for (const link of downloadLinks) {
                     link.click();
                     // Delay between clicks
-                    await new Promise(r => setTimeout(r, 2000));  
+                    await new Promise(r => setTimeout(r, 2000));
                 }
             """,
             wait_for=10  # Wait for all downloads to start

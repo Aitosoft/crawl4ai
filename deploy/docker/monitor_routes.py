@@ -1,11 +1,9 @@
 # monitor_routes.py - Monitor API endpoints
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-from typing import Optional
 from monitor import get_monitor
 import logging
 import asyncio
-import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/monitor", tags=["monitor"])
@@ -32,7 +30,10 @@ async def get_requests(status: str = "all", limit: int = 50):
     """
     # Input validation
     if status not in ["all", "active", "completed", "success", "error"]:
-        raise HTTPException(400, f"Invalid status: {status}. Must be one of: all, active, completed, success, error")
+        raise HTTPException(
+            400,
+            f"Invalid status: {status}. Must be one of: all, active, completed, success, error",
+        )
     if limit < 1 or limit > 1000:
         raise HTTPException(400, f"Invalid limit: {limit}. Must be between 1 and 1000")
 
@@ -44,11 +45,14 @@ async def get_requests(status: str = "all", limit: int = 50):
         elif status == "completed":
             return {"active": [], "completed": monitor.get_completed_requests(limit)}
         elif status in ["success", "error"]:
-            return {"active": [], "completed": monitor.get_completed_requests(limit, status)}
+            return {
+                "active": [],
+                "completed": monitor.get_completed_requests(limit, status),
+            }
         else:  # "all"
             return {
                 "active": monitor.get_active_requests(),
-                "completed": monitor.get_completed_requests(limit)
+                "completed": monitor.get_completed_requests(limit),
             }
     except Exception as e:
         logger.error(f"Error getting requests: {e}")
@@ -76,8 +80,8 @@ async def get_browsers():
             "summary": {
                 "total_count": total_browsers,
                 "total_memory_mb": total_memory,
-                "reuse_rate_percent": round(reuse_rate, 1)
-            }
+                "reuse_rate_percent": round(reuse_rate, 1),
+            },
         }
     except Exception as e:
         logger.error(f"Error getting browsers: {e}")
@@ -105,9 +109,13 @@ async def get_timeline(metric: str = "memory", window: str = "5m"):
     """
     # Input validation
     if metric not in ["memory", "requests", "browsers"]:
-        raise HTTPException(400, f"Invalid metric: {metric}. Must be one of: memory, requests, browsers")
+        raise HTTPException(
+            400, f"Invalid metric: {metric}. Must be one of: memory, requests, browsers"
+        )
     if window != "5m":
-        raise HTTPException(400, f"Invalid window: {window}. Only '5m' is currently supported")
+        raise HTTPException(
+            400, f"Invalid window: {window}. Only '5m' is currently supported"
+        )
 
     try:
         monitor = get_monitor()
@@ -149,6 +157,7 @@ async def get_errors_log(limit: int = 100):
 
 # ========== Control Actions ==========
 
+
 class KillBrowserRequest(BaseModel):
     sig: str
 
@@ -162,7 +171,7 @@ async def force_cleanup():
         from contextlib import suppress
 
         killed_count = 0
-        now = time.time()
+        time.time()
 
         async with LOCK:
             for sig in list(COLD_POOL.keys()):
@@ -176,7 +185,9 @@ async def force_cleanup():
                 killed_count += 1
 
         monitor = get_monitor()
-        await monitor.track_janitor_event("force_cleanup", "manual", {"killed": killed_count})
+        await monitor.track_janitor_event(
+            "force_cleanup", "manual", {"killed": killed_count}
+        )
 
         return {"success": True, "killed_browsers": killed_count}
     except Exception as e:
@@ -192,7 +203,14 @@ async def kill_browser(req: KillBrowserRequest):
         sig: Browser config signature (first 8 chars)
     """
     try:
-        from crawler_pool import HOT_POOL, COLD_POOL, LAST_USED, USAGE_COUNT, LOCK, DEFAULT_CONFIG_SIG
+        from crawler_pool import (
+            HOT_POOL,
+            COLD_POOL,
+            LAST_USED,
+            USAGE_COUNT,
+            LOCK,
+            DEFAULT_CONFIG_SIG,
+        )
         from contextlib import suppress
 
         # Find full signature matching prefix
@@ -217,7 +235,9 @@ async def kill_browser(req: KillBrowserRequest):
 
             # Check if trying to kill permanent
             if DEFAULT_CONFIG_SIG and DEFAULT_CONFIG_SIG.startswith(req.sig):
-                raise HTTPException(403, "Cannot kill permanent browser. Use restart instead.")
+                raise HTTPException(
+                    403, "Cannot kill permanent browser. Use restart instead."
+                )
 
             if not target_sig:
                 raise HTTPException(404, f"Browser with sig={req.sig} not found")
@@ -226,7 +246,9 @@ async def kill_browser(req: KillBrowserRequest):
             monitor = get_monitor()
             active_count = len(monitor.get_active_requests())
             if active_count > 0:
-                logger.warning(f"Killing browser {target_sig[:8]} while {active_count} requests are active - may cause failures")
+                logger.warning(
+                    f"Killing browser {target_sig[:8]} while {active_count} requests are active - may cause failures"
+                )
 
             # Kill the browser
             if pool_type == "hot":
@@ -243,7 +265,9 @@ async def kill_browser(req: KillBrowserRequest):
         logger.info(f"🔪 Killed {pool_type} browser (sig={target_sig[:8]})")
 
         monitor = get_monitor()
-        await monitor.track_janitor_event("kill_browser", target_sig, {"pool": pool_type, "manual": True})
+        await monitor.track_janitor_event(
+            "kill_browser", target_sig, {"pool": pool_type, "manual": True}
+        )
 
         return {"success": True, "killed_sig": target_sig[:8], "pool_type": pool_type}
     except HTTPException:
@@ -261,14 +285,23 @@ async def restart_browser(req: KillBrowserRequest):
         sig: Browser config signature (first 8 chars), or "permanent"
     """
     try:
-        from crawler_pool import (PERMANENT, HOT_POOL, COLD_POOL, LAST_USED,
-                                  USAGE_COUNT, LOCK, DEFAULT_CONFIG_SIG, init_permanent)
-        from crawl4ai import AsyncWebCrawler, BrowserConfig
+        from crawler_pool import (
+            PERMANENT,
+            HOT_POOL,
+            COLD_POOL,
+            LAST_USED,
+            USAGE_COUNT,
+            LOCK,
+            DEFAULT_CONFIG_SIG,
+            init_permanent,
+        )
+        from crawl4ai import BrowserConfig
         from contextlib import suppress
-        import time
 
         # Handle permanent browser restart
-        if req.sig == "permanent" or (DEFAULT_CONFIG_SIG and DEFAULT_CONFIG_SIG.startswith(req.sig)):
+        if req.sig == "permanent" or (
+            DEFAULT_CONFIG_SIG and DEFAULT_CONFIG_SIG.startswith(req.sig)
+        ):
             async with LOCK:
                 if PERMANENT:
                     with suppress(Exception):
@@ -276,11 +309,14 @@ async def restart_browser(req: KillBrowserRequest):
 
                 # Reinitialize permanent
                 from utils import load_config
+
                 config = load_config()
-                await init_permanent(BrowserConfig(
-                    extra_args=config["crawler"]["browser"].get("extra_args", []),
-                    **config["crawler"]["browser"].get("kwargs", {}),
-                ))
+                await init_permanent(
+                    BrowserConfig(
+                        extra_args=config["crawler"]["browser"].get("extra_args", []),
+                        **config["crawler"]["browser"].get("kwargs", {}),
+                    )
+                )
 
             logger.info("🔄 Restarted permanent browser")
             return {"success": True, "restarted": "permanent"}
@@ -288,7 +324,6 @@ async def restart_browser(req: KillBrowserRequest):
         # Handle hot/cold browser restart
         target_sig = None
         pool_type = None
-        browser_config = None
 
         async with LOCK:
             # Find browser
@@ -326,9 +361,15 @@ async def restart_browser(req: KillBrowserRequest):
         logger.info(f"🔄 Restarted {pool_type} browser (sig={target_sig[:8]})")
 
         monitor = get_monitor()
-        await monitor.track_janitor_event("restart_browser", target_sig, {"pool": pool_type})
+        await monitor.track_janitor_event(
+            "restart_browser", target_sig, {"pool": pool_type}
+        )
 
-        return {"success": True, "restarted_sig": target_sig[:8], "note": "Browser will be recreated on next request"}
+        return {
+            "success": True,
+            "restarted_sig": target_sig[:8],
+            "note": "Browser will be recreated on next request",
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -374,16 +415,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     "health": await monitor.get_health_summary(),
                     "requests": {
                         "active": monitor.get_active_requests(),
-                        "completed": monitor.get_completed_requests(limit=10)
+                        "completed": monitor.get_completed_requests(limit=10),
                     },
                     "browsers": await monitor.get_browser_list(),
                     "timeline": {
                         "memory": monitor.get_timeline_data("memory", "5m"),
                         "requests": monitor.get_timeline_data("requests", "5m"),
-                        "browsers": monitor.get_timeline_data("browsers", "5m")
+                        "browsers": monitor.get_timeline_data("browsers", "5m"),
                     },
                     "janitor": monitor.get_janitor_log(limit=10),
-                    "errors": monitor.get_errors_log(limit=10)
+                    "errors": monitor.get_errors_log(limit=10),
                 }
 
                 # Send update to client

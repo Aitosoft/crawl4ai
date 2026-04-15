@@ -1,6 +1,6 @@
 # Crawl Result and Output
 
-When you call `arun()` on a page, Crawl4AI returns a **`CrawlResult`** object containing everything you might need—raw HTML, a cleaned version, optional screenshots or PDFs, structured extraction results, and more. This document explains those fields and how they map to different output types.  
+When you call `arun()` on a page, Crawl4AI returns a **`CrawlResult`** object containing everything you might need—raw HTML, a cleaned version, optional screenshots or PDFs, structured extraction results, and more. This document explains those fields and how they map to different output types.
 
 ---
 
@@ -109,7 +109,7 @@ print(result.cleaned_html)  # Freed of forms, header, footer, data-* attributes
 
 ### 3.1 `markdown`
 
-- **`markdown`**: The current location for detailed markdown output, returning a **`MarkdownGenerationResult`** object.  
+- **`markdown`**: The current location for detailed markdown output, returning a **`MarkdownGenerationResult`** object.
 - **`markdown_v2`**: Removed in v0.5. Accessing it now raises `AttributeError`; use `markdown`.
 
 **`MarkdownGenerationResult`** Fields:
@@ -184,7 +184,7 @@ if __name__ == "__main__":
 ```
 
 Here:
-- `url="raw://..."` passes the HTML content directly, no network requests.  
+- `url="raw://..."` passes the HTML content directly, no network requests.
 - The **CSS** extraction strategy populates `result.extracted_content` with the JSON array `[{"title": "...", "link": "..."}]`.
 
 ---
@@ -263,11 +263,11 @@ config = CrawlerRunConfig(
 )
 ```
 
-Each extracted table contains: 
+Each extracted table contains:
 
-- `headers`: Column header names 
+- `headers`: Column header names
 - `rows`: List of rows, each containing cell values
-- `caption`: Table caption text (if available) 
+- `caption`: Table caption text (if available)
 - `summary`: Table summary attribute (if specified)
 
 ### Table Extraction Tips
@@ -335,9 +335,9 @@ else:
 
 ## 7. Next Steps
 
-- **Markdown Generation**: Dive deeper into how to configure `DefaultMarkdownGenerator` and various filters.  
+- **Markdown Generation**: Dive deeper into how to configure `DefaultMarkdownGenerator` and various filters.
 - **Content Filtering**: Learn how to use `BM25ContentFilter` and `PruningContentFilter`.
-- **Session & Hooks**: If you want to manipulate the page or preserve state across multiple `arun()` calls, see the hooking or session docs.  
+- **Session & Hooks**: If you want to manipulate the page or preserve state across multiple `arun()` calls, see the hooking or session docs.
 - **LLM Extraction**: For complex or unstructured content requiring AI-driven parsing, check the LLM-based strategies doc.
 
 **Enjoy** exploring all that `CrawlResult` offers—whether you need raw HTML, sanitized output, markdown, or fully structured data, Crawl4AI has you covered!

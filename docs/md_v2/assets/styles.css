@@ -65,7 +65,7 @@ a:hover {
 }
 
 blockquote::after {
-    color: #444; 
+    color: #444;
 }
 
 pre, code {
@@ -90,11 +90,11 @@ strong {
 .highlight {
     /* background: url(//s2.svgbox.net/pen-brushes.svg?ic=brush-1&color=50ffff); */
     background-color: #50ffff17;
-    
+
 }
 
 div.highlight {
- margin-bottom: 2em;   
+ margin-bottom: 2em;
 }
 
 .terminal-card > header {
@@ -153,8 +153,8 @@ div.highlight {
 
 .tab-content header {
     padding: 0.5em;
-    display: flex; 
-    justify-content: end; 
+    display: flex;
+    justify-content: end;
     align-items: center;
     background-color: var(--progress-bar-background);
 }

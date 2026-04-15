@@ -40,13 +40,13 @@ This deployment provides:
    ```bash
    # Check the deployment script
    cat azure-deployment/deploy.sh
-   
+
    # Review the configuration
    cat azure-deployment/production-config.yml
    ```
 
 3. **Customize deployment settings (optional)**
-   
+
    Edit `azure-deployment/deploy.sh` to change:
    - `RESOURCE_GROUP`: Change from "crawl4ai-v2-rg" if desired
    - `CONTAINER_APP`: Change from "crawl4ai-v2-app" if desired
@@ -98,7 +98,7 @@ After deployment completes, you'll see output like:
      -H "Content-Type: application/json" \
      -d '{"email":"test@gmail.com"}'
    ```
-   
+
    This returns:
    ```json
    {

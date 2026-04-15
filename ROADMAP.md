@@ -16,8 +16,8 @@ graph TD
         B["`
         • Automated Schema Generator
         • Domain-Specific Scrapers
-        • 
-        • 
+        •
+        •
         `"]
     end
 
@@ -26,7 +26,7 @@ graph TD
         • Interactive Playground
         • Performance Monitor
         • Cloud Integration
-        • 
+        •
         `"]
     end
 
@@ -34,8 +34,8 @@ graph TD
         D["`
         • Sponsorship Program
         • Educational Content
-        • 
-        • 
+        •
+        •
         `"]
     end
 
@@ -75,7 +75,7 @@ async with AsyncWebCrawler() as crawler:
         max_urls=5,
         relevance_threshold=0.7
     )
-    
+
     for result in results:
         print(f"Source: {result.url} (Relevance: {result.relevance_score})")
         print(f"Content: {result.markdown}\n")
@@ -105,7 +105,7 @@ async with AsyncWebCrawler() as crawler:
         ],
         confidence_threshold=0.85
     )
-    
+
     result = await crawler.arun(
         urls=[
             "https://aws.amazon.com/ec2/pricing/",
@@ -115,7 +115,7 @@ async with AsyncWebCrawler() as crawler:
         optimizer=optimizer,
         optimization_mode="minimal_extraction"
     )
-    
+
     print(f"Knowledge Coverage: {result.knowledge_coverage}")
     print(f"Data Efficiency: {result.efficiency_ratio}")
     print(f"Extracted Content: {result.optimal_content}")
@@ -137,7 +137,7 @@ from crawl4ai.agents import CrawlerAgent
 
 async with AsyncWebCrawler() as crawler:
     agent = CrawlerAgent(crawler)
-    
+
     # Automatic planning and execution
     result = await agent.arun(
         goal="Find research papers about quantum computing published in 2023 with more than 50 citations",
@@ -145,7 +145,7 @@ async with AsyncWebCrawler() as crawler:
     )
     print("Generated Plan:", result.executed_steps)
     print("Extracted Data:", result.data)
-    
+
     # Using custom steps with automatic execution
     result = await agent.arun(
         goal="Extract conference deadlines from ML conferences",
@@ -156,7 +156,7 @@ async with AsyncWebCrawler() as crawler:
             "Verify dates are for 2024"
         ]
     )
-    
+
     # Monitoring execution
     print("Step Completion:", result.step_status)
     print("Execution Time:", result.execution_time)
@@ -241,13 +241,13 @@ async with AsyncWebCrawler() as crawler:
         extractor="academic",  # Built-in extractor type
         site_type="arxiv",     # Specific site optimization
         extract_fields=[
-            "title", 
-            "authors", 
-            "abstract", 
+            "title",
+            "authors",
+            "abstract",
             "citations"
         ]
     )
-    
+
     # E-commerce product data
     products = await crawler.arun(
         url="https://store.example.com/products",

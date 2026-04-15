@@ -1,5 +1,5 @@
 """
-This example demonstrates how to use JSON CSS extraction to scrape product information 
+This example demonstrates how to use JSON CSS extraction to scrape product information
 from Amazon search results. It shows how to extract structured data like product titles,
 prices, ratings, and other details using CSS selectors.
 """

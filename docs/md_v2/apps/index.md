@@ -290,7 +290,7 @@ These tools are built based on user feedback. Have an idea? [Let us know](https:
 
 ## 📢 Stay Updated
 
-Want to know when new apps are released? 
+Want to know when new apps are released?
 
 - ⭐ [Star us on GitHub](https://github.com/unclecode/crawl4ai) to get notifications
 - 🐦 Follow [@unclecode](https://twitter.com/unclecode) for announcements

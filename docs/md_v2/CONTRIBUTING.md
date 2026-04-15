@@ -17,13 +17,13 @@ We encourage contributions of all kinds: bug fixes, new features, documentation 
 
 1. **Fork the Repository**: Create your own fork on GitHub.
 2. **Create a Branch**: Base your work on the `develop` branch.
-    
+
     ```
     git checkout develop
     git checkout -b feature/your-feature-name  # Or bugfix/your-bugfix-name
-    
+
     ```
-    
+
 3. **Make Changes**:
     - Implement your feature or fix.
     - If updating documentation (e.g., README.md, mkdocs.yml, or docs/blog/), ensure version references are consistent (e.g., update site_name in mkdocs.yml to reflect the upcoming version if relevant).

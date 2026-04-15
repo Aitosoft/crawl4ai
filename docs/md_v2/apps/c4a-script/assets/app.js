@@ -10,7 +10,7 @@ class TutorialApp {
         this.tutorialSteps = [];
         this.recordingManager = null;
         this.blocklyManager = null;
-        
+
         this.init();
     }
 
@@ -20,10 +20,10 @@ class TutorialApp {
         this.setupTabs();
         this.setupTutorial();
         this.checkFirstVisit();
-        
+
         // Initialize recording manager
         this.recordingManager = new RecordingManager(this);
-        
+
         // Initialize Blockly manager
         this.blocklyManager = new BlocklyManager(this);
     }
@@ -54,7 +54,7 @@ class TutorialApp {
         if (saved && !this.tutorialMode) {
             this.editor.setValue(saved);
         }
-        
+
         // Ensure editor is properly sized and interactive
         setTimeout(() => {
             this.editor.refresh();
@@ -63,7 +63,7 @@ class TutorialApp {
             doc.setCursor(doc.lineCount() - 1, 0);
             this.editor.focus();
         }, 100);
-        
+
         // Single unified click handler for focus
         const editorElement = this.editor.getWrapperElement();
         editorElement.addEventListener('mousedown', (e) => {
@@ -152,7 +152,7 @@ class TutorialApp {
                 this.switchTab(tabName);
             });
         });
-        
+
         // Remove execution tab since we're removing it
         const progressTab = document.querySelector('[data-tab="progress"]');
         if (progressTab) progressTab.remove();
@@ -162,7 +162,7 @@ class TutorialApp {
         // Update tab buttons
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-        
+
         // Update tab panes
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
         document.getElementById(`${tabName}-tab`).classList.add('active');
@@ -273,7 +273,7 @@ class TutorialApp {
         // Update navigation UI
         document.getElementById('tutorial-step-info').textContent = `Step ${index + 1} of ${this.tutorialSteps.length}`;
         document.getElementById('tutorial-title').textContent = step.title;
-        
+
         // Update progress bar
         const progress = ((index + 1) / this.tutorialSteps.length) * 100;
         document.getElementById('tutorial-progress-fill').style.width = `${progress}%`;
@@ -289,10 +289,10 @@ class TutorialApp {
 
         // Set script
         this.editor.setValue(step.script);
-        
+
         // Update description in nav bar
         document.getElementById('tutorial-description').textContent = step.description;
-        
+
         // Focus editor after setting content and ensure it's editable
         // Use requestAnimationFrame for better timing
         requestAnimationFrame(() => {
@@ -346,12 +346,12 @@ class TutorialApp {
 
             // Compile C4A to JS
             const compiled = await this.compileScript(script);
-            
+
             if (compiled.success) {
                 this.currentJS = compiled.jsCode;
                 this.displayJS(compiled.jsCode);
                 this.addConsoleMessage(`✓ Compiled successfully (${compiled.jsCode.length} statements)`, 'success');
-                
+
                 // Execute the JS
                 await this.executeJS(compiled.jsCode);
             } else {
@@ -375,11 +375,11 @@ class TutorialApp {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ script })
             });
-            
+
             if (!response.ok) {
                 throw new Error('Compilation service unavailable');
             }
-            
+
             return await response.json();
         } catch (error) {
             // Return error if compilation service is unavailable
@@ -396,16 +396,16 @@ class TutorialApp {
     }
 
     displayJS(jsCode) {
-        const formatted = jsCode.map((line, i) => 
+        const formatted = jsCode.map((line, i) =>
             `${(i + 1).toString().padStart(2, ' ')}. ${line}`
         ).join('\n');
-        
+
         document.getElementById('js-output').textContent = formatted;
     }
 
     async executeJS(jsCode) {
         this.addConsoleMessage('Executing JavaScript...');
-        
+
         // Send all code to iframe to execute at once
         await this.executeInIframe(jsCode);
     }
@@ -413,10 +413,10 @@ class TutorialApp {
     async executeInIframe(jsCode) {
         const iframe = document.getElementById('playground-frame');
         const iframeWindow = iframe.contentWindow;
-        
+
         // Create a unique ID for this execution
         const executionId = 'exec_' + Date.now();
-        
+
         // Create the full script to execute in iframe
         const fullScript = `
             (async () => {
@@ -431,7 +431,7 @@ class TutorialApp {
                         throw error; // Stop execution on first error
                     }
                     `).join('\n')}
-                    
+
                     // Send success message
                     window.parent.postMessage({
                         type: 'c4a-execution-complete',
@@ -451,13 +451,13 @@ class TutorialApp {
                 }
             })();
         `;
-        
+
         // Wait for execution result
         return new Promise((resolve, reject) => {
             const messageHandler = (event) => {
                 if (event.data.type === 'c4a-execution-complete' && event.data.id === executionId) {
                     window.removeEventListener('message', messageHandler);
-                    
+
                     // Log results
                     if (event.data.results) {
                         event.data.results.forEach(result => {
@@ -469,7 +469,7 @@ class TutorialApp {
                             }
                         });
                     }
-                    
+
                     if (event.data.success) {
                         this.addConsoleMessage('Execution completed successfully', 'success');
                         resolve();
@@ -479,15 +479,15 @@ class TutorialApp {
                     }
                 }
             };
-            
+
             window.addEventListener('message', messageHandler);
-            
+
             // Inject and execute the script
             const script = iframe.contentDocument.createElement('script');
             script.textContent = fullScript;
             iframe.contentDocument.body.appendChild(script);
             script.remove();
-            
+
             // Timeout after 10 seconds
             setTimeout(() => {
                 window.removeEventListener('message', messageHandler);
@@ -500,10 +500,10 @@ class TutorialApp {
     highlightElement(element) {
         const originalBorder = element.style.border;
         const originalBackground = element.style.backgroundColor;
-        
+
         element.style.border = '2px solid #0fbbaa';
         element.style.backgroundColor = 'rgba(15, 187, 170, 0.1)';
-        
+
         setTimeout(() => {
             element.style.border = originalBorder;
             element.style.backgroundColor = originalBackground;
@@ -521,7 +521,7 @@ class TutorialApp {
             <span class="console-${type}">${message}</span>
         `;
         consoleEl.appendChild(line);
-        
+
         // Scroll the console container (parent of console-output)
         const consoleContainer = consoleEl.parentElement;
         if (consoleContainer) {
@@ -552,7 +552,7 @@ class TutorialApp {
         this.isEditingJS = !this.isEditingJS;
         const editBtn = document.getElementById('edit-js-btn');
         const jsOutput = document.getElementById('js-output');
-        
+
         if (this.isEditingJS) {
             editBtn.innerHTML = '<span>💾</span>';
             jsOutput.contentEditable = true;
@@ -599,10 +599,10 @@ class TutorialApp {
 
         const currentIndex = parseInt(localStorage.getItem('exampleIndex') || '0');
         const example = examples[currentIndex % examples.length];
-        
+
         this.editor.setValue(example.script);
         this.addConsoleMessage(`Loaded example: ${example.name}`, 'success');
-        
+
         localStorage.setItem('exampleIndex', ((currentIndex + 1) % examples.length).toString());
     }
 
@@ -640,33 +640,33 @@ class RecordingManager {
         this.keyBufferTimeout = null;
         this.scrollAccumulator = { direction: null, amount: 0, startTime: 0 };
         this.processedEventIndices = new Set(); // Track which raw events have been processed
-        
+
         this.init();
     }
-    
+
     init() {
         this.setupUI();
         this.setupMessageHandler();
     }
-    
+
     setupUI() {
         // Record button
         const recordBtn = document.getElementById('record-btn');
         recordBtn.addEventListener('click', () => this.toggleRecording());
-        
+
         // Timeline button
         const timelineBtn = document.getElementById('timeline-btn');
         timelineBtn?.addEventListener('click', () => this.showTimeline());
-        
+
         // Back to editor button
         document.getElementById('back-to-editor')?.addEventListener('click', () => this.hideTimeline());
-        
+
         // Timeline controls
         document.getElementById('select-all-events')?.addEventListener('click', () => this.selectAllEvents());
         document.getElementById('clear-events')?.addEventListener('click', () => this.clearEvents());
         document.getElementById('generate-script')?.addEventListener('click', () => this.generateScript());
     }
-    
+
     setupMessageHandler() {
         window.addEventListener('message', (event) => {
             if (event.data.type === 'c4a-recording-event' && this.isRecording) {
@@ -674,11 +674,11 @@ class RecordingManager {
             }
         });
     }
-    
+
     toggleRecording() {
         const recordBtn = document.getElementById('record-btn');
         const timelineBtn = document.getElementById('timeline-btn');
-        
+
         if (!this.isRecording) {
             // Start recording
             this.isRecording = true;
@@ -689,14 +689,14 @@ class RecordingManager {
             this.processedEventIndices = new Set();
             this.keyBuffer = [];
             this.scrollAccumulator = { direction: null, amount: 0, startTime: 0 };
-            
+
             recordBtn.classList.add('recording');
             recordBtn.innerHTML = '<span class="icon">⏹</span>Stop';
-            
+
             // Show timeline immediately when recording starts
             timelineBtn.classList.remove('hidden');
             this.showTimeline();
-            
+
             this.injectEventCapture();
             this.app.addConsoleMessage('🔴 Recording started...', 'info');
         } else {
@@ -704,46 +704,46 @@ class RecordingManager {
             this.isRecording = false;
             recordBtn.classList.remove('recording');
             recordBtn.innerHTML = '<span class="icon">⏺</span>Record';
-            
+
             this.removeEventCapture();
             this.processEvents();
-            
+
             this.app.addConsoleMessage('⏹️ Recording stopped', 'info');
         }
     }
-    
+
     showTimeline() {
         const editorView = document.getElementById('editor-view');
         const timelineView = document.getElementById('timeline-view');
-        
+
         editorView.classList.add('hidden');
         timelineView.classList.remove('hidden');
-        
+
         // Refresh CodeMirror when switching back
         this.editorNeedsRefresh = true;
     }
-    
+
     hideTimeline() {
         const editorView = document.getElementById('editor-view');
         const timelineView = document.getElementById('timeline-view');
-        
+
         timelineView.classList.add('hidden');
         editorView.classList.remove('hidden');
-        
+
         // Refresh CodeMirror after switching
         if (this.editorNeedsRefresh) {
             setTimeout(() => this.app.editor.refresh(), 100);
             this.editorNeedsRefresh = false;
         }
     }
-    
+
     injectEventCapture() {
         const iframe = document.getElementById('playground-frame');
         const script = `
             (function() {
                 if (window.__c4aRecordingActive) return;
                 window.__c4aRecordingActive = true;
-                
+
                 const captureEvent = (type, event) => {
                     const data = {
                         type: type,
@@ -754,7 +754,7 @@ class RecordingManager {
                         targetSelector: generateSelector(event.target),
                         targetType: event.target.type // For input elements
                     };
-                    
+
                     // Add type-specific data
                     switch(type) {
                         case 'click':
@@ -796,24 +796,24 @@ class RecordingManager {
                             data.value = event.target.value || '';
                             break;
                     }
-                    
+
                     window.parent.postMessage({
                         type: 'c4a-recording-event',
                         event: data
                     }, '*');
                 };
-                
+
                 const generateSelector = (element) => {
                     try {
                         if (element.id) return '#' + element.id;
-                        
+
                         if (element.className && typeof element.className === 'string') {
                             const classes = element.className.trim().split(/\\s+/);
                             if (classes.length > 0 && classes[0]) {
                                 return '.' + classes[0];
                             }
                         }
-                        
+
                         // Generate nth-child selector
                         let path = [];
                         let currentElement = element;
@@ -840,20 +840,20 @@ class RecordingManager {
                         return element.nodeName.toLowerCase();
                     }
                 };
-                
+
                 // Store event handlers for cleanup
                 window.__c4aEventHandlers = {};
-                
+
                 // Attach event listeners
-                const events = ['click', 'dblclick', 'contextmenu', 'keydown', 'keyup', 
+                const events = ['click', 'dblclick', 'contextmenu', 'keydown', 'keyup',
                                'input', 'change', 'scroll', 'wheel', 'focus', 'blur'];
-                
+
                 events.forEach(eventType => {
                     const handler = (e) => captureEvent(eventType, e);
                     window.__c4aEventHandlers[eventType] = handler;
                     document.addEventListener(eventType, handler, true);
                 });
-                
+
                 // Cleanup function
                 window.__c4aCleanupRecording = () => {
                     events.forEach(eventType => {
@@ -868,42 +868,42 @@ class RecordingManager {
                 };
             })();
         `;
-        
+
         const scriptEl = iframe.contentDocument.createElement('script');
         scriptEl.textContent = script;
         iframe.contentDocument.body.appendChild(scriptEl);
         scriptEl.remove();
         this.eventInjected = true;
     }
-    
+
     removeEventCapture() {
         if (!this.eventInjected) return;
-        
+
         const iframe = document.getElementById('playground-frame');
         iframe.contentWindow.eval('if (window.__c4aCleanupRecording) window.__c4aCleanupRecording();');
         this.eventInjected = false;
     }
-    
+
     handleRecordedEvent(event) {
         const now = Date.now();
         const timeSinceStart = ((now - this.startTime) / 1000).toFixed(1);
-        
+
         // Add time since last event
         event.timeSinceStart = timeSinceStart;
         event.timeSinceLast = now - this.lastEventTime;
         this.lastEventTime = now;
-        
+
         this.rawEvents.push(event);
-        
+
         // Real-time processing for immediate feedback
         if (event.type === 'keydown' && this.shouldGroupKeystrokes(event)) {
             this.keyBuffer.push(event);
-            
+
             // Clear existing timeout
             if (this.keyBufferTimeout) {
                 clearTimeout(this.keyBufferTimeout);
             }
-            
+
             // Set timeout to flush buffer after 500ms of no typing
             this.keyBufferTimeout = setTimeout(() => {
                 this.flushKeyBuffer();
@@ -913,24 +913,24 @@ class RecordingManager {
             // Handle change events for select, checkbox, radio
             if (event.type === 'change') {
                 const tagName = event.targetTag?.toLowerCase();
-                
+
                 // Only skip change events for text inputs (they're part of typing)
-                if (tagName === 'input' && 
-                    event.targetType !== 'checkbox' && 
+                if (tagName === 'input' &&
+                    event.targetType !== 'checkbox' &&
                     event.targetType !== 'radio') {
                     return; // Skip text input change events
                 }
-                
+
                 // For select, checkbox, radio - process the change event
-                if (tagName === 'select' || 
+                if (tagName === 'select' ||
                     (tagName === 'input' && (event.targetType === 'checkbox' || event.targetType === 'radio'))) {
-                    
+
                     // Flush any pending keystrokes first
                     if (this.keyBuffer.length > 0) {
                         this.flushKeyBuffer();
                         this.updateTimeline();
                     }
-                    
+
                     // Create SET command for the value change
                     const command = this.eventToCommand(event, this.rawEvents.length - 1);
                     if (command) {
@@ -940,34 +940,34 @@ class RecordingManager {
                     return;
                 }
             }
-            
+
             // Skip input events - they're part of typing
             if (event.type === 'input') {
                 return;
             }
-            
+
             // Clear timeout if exists
             if (this.keyBufferTimeout) {
                 clearTimeout(this.keyBufferTimeout);
                 this.keyBufferTimeout = null;
             }
-            
+
             // Flush key buffer only for significant events
-            const shouldFlushBuffer = event.type === 'click' || 
-                                    event.type === 'dblclick' || 
+            const shouldFlushBuffer = event.type === 'click' ||
+                                    event.type === 'dblclick' ||
                                     event.type === 'contextmenu' ||
                                     event.type === 'scroll' ||
                                     event.type === 'wheel';
-            
+
             const hadKeyBuffer = this.keyBuffer.length > 0;
-            
+
             if (shouldFlushBuffer && hadKeyBuffer) {
                 this.flushKeyBuffer();
                 this.updateTimeline();
             }
-            
+
             // Process this event immediately if it's not a typing-related event
-            if (event.type !== 'keydown' && event.type !== 'keyup' && 
+            if (event.type !== 'keydown' && event.type !== 'keyup' &&
                 event.type !== 'input' && event.type !== 'change' &&
                 event.type !== 'focus' && event.type !== 'blur') {
                 const command = this.eventToCommand(event, this.rawEvents.length - 1);
@@ -975,8 +975,8 @@ class RecordingManager {
                     // Check if it's a scroll event that should be accumulated
                     if (command.type === 'SCROLL') {
                         // Remove previous scroll events in the same direction
-                        this.groupedEvents = this.groupedEvents.filter(e => 
-                            !(e.type === 'SCROLL' && e.direction === command.direction && 
+                        this.groupedEvents = this.groupedEvents.filter(e =>
+                            !(e.type === 'SCROLL' && e.direction === command.direction &&
                               parseFloat(e.time) > parseFloat(command.time) - 0.5)
                         );
                     }
@@ -986,11 +986,11 @@ class RecordingManager {
             }
         }
     }
-    
+
     shouldGroupKeystrokes(event) {
         // Skip if no key
         if (!event.key) return false;
-        
+
         // Group printable characters, space, and common typing keys
         return (
             event.key.length === 1 || // Single characters
@@ -1001,10 +1001,10 @@ class RecordingManager {
             event.key === 'Delete' // Delete
         );
     }
-    
+
     flushKeyBuffer() {
         if (this.keyBuffer.length === 0) return;
-        
+
         // Build the text, handling special keys
         const text = this.keyBuffer.map(e => {
             switch(e.key) {
@@ -1016,16 +1016,16 @@ class RecordingManager {
                 default: return e.key;
             }
         }).join('');
-        
+
         // Don't create empty TYPE commands
         if (text.length === 0) {
             this.keyBuffer = [];
             return;
         }
-        
+
         const firstEvent = this.keyBuffer[0];
         const lastEvent = this.keyBuffer[this.keyBuffer.length - 1];
-        
+
         // Mark all keystroke events as processed
         this.keyBuffer.forEach(event => {
             const index = this.rawEvents.indexOf(event);
@@ -1033,15 +1033,15 @@ class RecordingManager {
                 this.processedEventIndices.add(index);
             }
         });
-        
+
         // Check if this should be a SET command instead of TYPE
         // Look for a click event just before the first keystroke
         const firstKeystrokeIndex = this.rawEvents.indexOf(firstEvent);
         let commandType = 'TYPE';
-        
+
         if (firstKeystrokeIndex > 0) {
             const prevEvent = this.rawEvents[firstKeystrokeIndex - 1];
-            if (prevEvent && prevEvent.type === 'click' && 
+            if (prevEvent && prevEvent.type === 'click' &&
                 prevEvent.targetSelector === firstEvent.targetSelector) {
                 // This looks like a SET pattern
                 commandType = 'SET';
@@ -1049,15 +1049,15 @@ class RecordingManager {
                 this.processedEventIndices.add(firstKeystrokeIndex - 1);
             }
         }
-        
+
         // Check if we already have a TYPE command for this exact text at this time
         // This prevents duplicates when the buffer is flushed multiple times
-        const existingCommand = this.groupedEvents.find(cmd => 
-            cmd.type === commandType && 
-            cmd.value === text && 
+        const existingCommand = this.groupedEvents.find(cmd =>
+            cmd.type === commandType &&
+            cmd.value === text &&
             cmd.time === firstEvent.timeSinceStart
         );
-        
+
         if (!existingCommand) {
             this.groupedEvents.push({
                 type: commandType,
@@ -1068,49 +1068,49 @@ class RecordingManager {
                 raw: [...this.keyBuffer]  // Make a copy to avoid reference issues
             });
         }
-        
+
         this.keyBuffer = [];
     }
-    
+
     processEvents() {
         // Clear any pending timeouts
         if (this.keyBufferTimeout) {
             clearTimeout(this.keyBufferTimeout);
             this.keyBufferTimeout = null;
         }
-        
+
         // Flush any remaining buffers
         this.flushKeyBuffer();
-        
+
         // Don't reprocess events that were already grouped during recording
         // Just apply final optimizations
         this.optimizeEvents();
         this.updateTimeline();
     }
-    
+
     eventToCommand(event, index) {
         // Skip already processed events
         if (this.processedEventIndices.has(index)) {
             return null;
         }
-        
+
         // Skip events that should only be processed as grouped commands
-        if (event.type === 'keydown' || event.type === 'keyup' || 
+        if (event.type === 'keydown' || event.type === 'keyup' ||
             event.type === 'input' || event.type === 'focus' || event.type === 'blur') {
             return null;
         }
-        
+
         // Allow change events for select, checkbox, radio
         if (event.type === 'change') {
             const tagName = event.targetTag?.toLowerCase();
-            if (tagName === 'select' || 
+            if (tagName === 'select' ||
                 (tagName === 'input' && (event.targetType === 'checkbox' || event.targetType === 'radio'))) {
                 // Process as SET command
             } else {
                 return null; // Skip change events for text inputs
             }
         }
-        
+
         switch (event.type) {
             case 'click':
                 // Check if followed by input focus or change event
@@ -1120,55 +1120,55 @@ class RecordingManager {
                         return null; // Skip, will be handled by SET or change event
                     }
                 }
-                
+
                 // Also check if this is a click on a select element
                 if (event.targetTag?.toLowerCase() === 'select') {
                     // Look ahead for a change event
                     for (let i = index + 1; i < Math.min(index + 5, this.rawEvents.length); i++) {
-                        if (this.rawEvents[i].type === 'change' && 
+                        if (this.rawEvents[i].type === 'change' &&
                             this.rawEvents[i].targetSelector === event.targetSelector) {
                             return null; // Skip click, change event will handle it
                         }
                     }
                 }
-                
+
                 return {
                     type: 'CLICK',
                     selector: event.targetSelector,
                     time: event.timeSinceStart
                 };
-                
+
             case 'dblclick':
                 return {
                     type: 'DOUBLE_CLICK',
                     selector: event.targetSelector,
                     time: event.timeSinceStart
                 };
-                
+
             case 'contextmenu':
                 return {
                     type: 'RIGHT_CLICK',
                     selector: event.targetSelector,
                     time: event.timeSinceStart
                 };
-                
+
             case 'scroll':
             case 'wheel':
                 // Accumulate scroll events
                 if (event.deltaY !== 0) {
                     const direction = event.deltaY > 0 ? 'DOWN' : 'UP';
                     const amount = Math.abs(event.deltaY);
-                    
-                    if (this.scrollAccumulator.direction === direction && 
+
+                    if (this.scrollAccumulator.direction === direction &&
                         event.timestamp - this.scrollAccumulator.startTime < 500) {
                         this.scrollAccumulator.amount += amount;
                     } else {
                         this.scrollAccumulator = { direction, amount, startTime: event.timestamp };
                     }
-                    
+
                     // Return accumulated scroll at end of sequence
                     const nextEvent = this.rawEvents[index + 1];
-                    if (!nextEvent || nextEvent.type !== 'scroll' || 
+                    if (!nextEvent || nextEvent.type !== 'scroll' ||
                         nextEvent.timestamp - event.timestamp > 500) {
                         return {
                             type: 'SCROLL',
@@ -1179,15 +1179,15 @@ class RecordingManager {
                     }
                 }
                 return null;
-                
+
             // Input events are handled through keystroke grouping
             case 'input':
                 return null;
-                
+
             case 'change':
                 // Handle select, checkbox, radio changes
                 const tagName = event.targetTag?.toLowerCase();
-                
+
                 if (tagName === 'select') {
                     return {
                         type: 'SET',
@@ -1213,14 +1213,14 @@ class RecordingManager {
                 }
                 return null;
         }
-        
+
         return null;
     }
-    
+
     optimizeEvents() {
         const optimized = [];
         let lastTime = 0;
-        
+
         this.groupedEvents.forEach((event, index) => {
             // Insert WAIT if pause > 1 second
             const currentTime = parseFloat(event.time);
@@ -1231,29 +1231,29 @@ class RecordingManager {
                     time: lastTime.toFixed(1)
                 });
             }
-            
+
             optimized.push(event);
             lastTime = currentTime;
         });
-        
+
         this.groupedEvents = optimized;
     }
-    
+
     updateTimeline() {
         const timeline = document.getElementById('timeline-events');
         timeline.innerHTML = '';
-        
+
         this.groupedEvents.forEach((event, index) => {
             const eventEl = this.createEventElement(event, index);
             timeline.appendChild(eventEl);
         });
     }
-    
+
     createEventElement(event, index) {
         const div = document.createElement('div');
         div.className = 'timeline-event';
         div.dataset.index = index;
-        
+
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.className = 'event-checkbox';
@@ -1261,31 +1261,31 @@ class RecordingManager {
         checkbox.addEventListener('change', () => {
             div.classList.toggle('selected', checkbox.checked);
         });
-        
+
         const time = document.createElement('span');
         time.className = 'event-time';
         time.textContent = event.time + 's';
-        
+
         const command = document.createElement('span');
         command.className = 'event-command';
         command.innerHTML = this.formatCommand(event);
-        
+
         const editBtn = document.createElement('button');
         editBtn.className = 'event-edit';
         editBtn.textContent = 'Edit';
         editBtn.addEventListener('click', () => this.editEvent(index));
-        
+
         div.appendChild(checkbox);
         div.appendChild(time);
         div.appendChild(command);
         div.appendChild(editBtn);
-        
+
         // Initially selected
         div.classList.add('selected');
-        
+
         return div;
     }
-    
+
     formatCommand(event) {
         switch (event.type) {
             case 'CLICK':
@@ -1308,29 +1308,29 @@ class RecordingManager {
                 return `<span class="cmd-name">${event.type}</span>`;
         }
     }
-    
+
     editEvent(index) {
         const event = this.groupedEvents[index];
         this.currentEditIndex = index;
-        
+
         // Show modal
         const overlay = document.getElementById('event-editor-overlay');
         const modal = document.getElementById('event-editor-modal');
         overlay.classList.remove('hidden');
         modal.classList.remove('hidden');
-        
+
         // Populate fields
         document.getElementById('edit-command-type').value = event.type;
-        
+
         // Show/hide fields based on command type
         const selectorField = document.getElementById('edit-selector-field');
         const valueField = document.getElementById('edit-value-field');
         const directionField = document.getElementById('edit-direction-field');
-        
+
         selectorField.classList.add('hidden');
         valueField.classList.add('hidden');
         directionField.classList.add('hidden');
-        
+
         switch (event.type) {
             case 'CLICK':
             case 'DOUBLE_CLICK':
@@ -1359,25 +1359,25 @@ class RecordingManager {
                 document.getElementById('edit-value').value = event.value;
                 break;
         }
-        
+
         // Setup event handlers
         this.setupEditModalHandlers();
     }
-    
+
     setupEditModalHandlers() {
         const overlay = document.getElementById('event-editor-overlay');
         const modal = document.getElementById('event-editor-modal');
         const cancelBtn = document.getElementById('edit-cancel');
         const saveBtn = document.getElementById('edit-save');
-        
+
         const closeModal = () => {
             overlay.classList.add('hidden');
             modal.classList.add('hidden');
         };
-        
+
         const saveHandler = () => {
             const event = this.groupedEvents[this.currentEditIndex];
-            
+
             // Update event based on type
             switch (event.type) {
                 case 'CLICK':
@@ -1400,23 +1400,23 @@ class RecordingManager {
                     event.value = parseInt(document.getElementById('edit-value').value) || 0;
                     break;
             }
-            
+
             // Update timeline
             this.updateTimeline();
             closeModal();
         };
-        
+
         // Clean up old handlers
         cancelBtn.replaceWith(cancelBtn.cloneNode(true));
         saveBtn.replaceWith(saveBtn.cloneNode(true));
         overlay.replaceWith(overlay.cloneNode(true));
-        
+
         // Add new handlers
         document.getElementById('edit-cancel').addEventListener('click', closeModal);
         document.getElementById('edit-save').addEventListener('click', saveHandler);
         document.getElementById('event-editor-overlay').addEventListener('click', closeModal);
     }
-    
+
     selectAllEvents() {
         const checkboxes = document.querySelectorAll('.event-checkbox');
         const events = document.querySelectorAll('.timeline-event');
@@ -1425,37 +1425,37 @@ class RecordingManager {
             events[i].classList.add('selected');
         });
     }
-    
+
     clearEvents() {
         this.groupedEvents = [];
         this.updateTimeline();
     }
-    
+
     generateScript() {
         const selectedEvents = [];
         const checkboxes = document.querySelectorAll('.event-checkbox');
-        
+
         checkboxes.forEach((cb, index) => {
             if (cb.checked && this.groupedEvents[index]) {
                 selectedEvents.push(this.groupedEvents[index]);
             }
         });
-        
+
         if (selectedEvents.length === 0) {
             this.app.addConsoleMessage('No events selected', 'warning');
             return;
         }
-        
+
         const script = selectedEvents.map(event => this.eventToC4A(event)).join('\n');
-        
+
         // Set the script in the editor
         this.app.editor.setValue(script);
         this.app.addConsoleMessage(`Generated ${selectedEvents.length} commands`, 'success');
-        
+
         // Switch back to editor view
         this.hideTimeline();
     }
-    
+
     eventToC4A(event) {
         switch (event.type) {
             case 'CLICK':

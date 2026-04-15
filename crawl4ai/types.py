@@ -1,87 +1,87 @@
 from typing import TYPE_CHECKING, Union
 
 # Logger types
-AsyncLoggerBase = Union['AsyncLoggerBaseType']
-AsyncLogger = Union['AsyncLoggerType']
+AsyncLoggerBase = Union["AsyncLoggerBaseType"]
+AsyncLogger = Union["AsyncLoggerType"]
 
 # Crawler core types
-AsyncWebCrawler = Union['AsyncWebCrawlerType']
-CacheMode = Union['CacheModeType']
-CrawlResult = Union['CrawlResultType']
-CrawlerHub = Union['CrawlerHubType']
-BrowserProfiler = Union['BrowserProfilerType']
+AsyncWebCrawler = Union["AsyncWebCrawlerType"]
+CacheMode = Union["CacheModeType"]
+CrawlResult = Union["CrawlResultType"]
+CrawlerHub = Union["CrawlerHubType"]
+BrowserProfiler = Union["BrowserProfilerType"]
 # NEW: Add AsyncUrlSeederType
-AsyncUrlSeeder = Union['AsyncUrlSeederType']
+AsyncUrlSeeder = Union["AsyncUrlSeederType"]
 
 # Configuration types
-BrowserConfig = Union['BrowserConfigType']
-CrawlerRunConfig = Union['CrawlerRunConfigType']
-HTTPCrawlerConfig = Union['HTTPCrawlerConfigType']
-LLMConfig = Union['LLMConfigType']
+BrowserConfig = Union["BrowserConfigType"]
+CrawlerRunConfig = Union["CrawlerRunConfigType"]
+HTTPCrawlerConfig = Union["HTTPCrawlerConfigType"]
+LLMConfig = Union["LLMConfigType"]
 # NEW: Add SeedingConfigType
-SeedingConfig = Union['SeedingConfigType']
+SeedingConfig = Union["SeedingConfigType"]
 
 # Content scraping types
-ContentScrapingStrategy = Union['ContentScrapingStrategyType']
-LXMLWebScrapingStrategy = Union['LXMLWebScrapingStrategyType']
+ContentScrapingStrategy = Union["ContentScrapingStrategyType"]
+LXMLWebScrapingStrategy = Union["LXMLWebScrapingStrategyType"]
 # Backward compatibility alias
-WebScrapingStrategy = Union['LXMLWebScrapingStrategyType']
+WebScrapingStrategy = Union["LXMLWebScrapingStrategyType"]
 
 # Proxy types
-ProxyRotationStrategy = Union['ProxyRotationStrategyType']
-RoundRobinProxyStrategy = Union['RoundRobinProxyStrategyType']
+ProxyRotationStrategy = Union["ProxyRotationStrategyType"]
+RoundRobinProxyStrategy = Union["RoundRobinProxyStrategyType"]
 
 # Extraction types
-ExtractionStrategy = Union['ExtractionStrategyType']
-LLMExtractionStrategy = Union['LLMExtractionStrategyType']
-CosineStrategy = Union['CosineStrategyType']
-JsonCssExtractionStrategy = Union['JsonCssExtractionStrategyType']
-JsonXPathExtractionStrategy = Union['JsonXPathExtractionStrategyType']
+ExtractionStrategy = Union["ExtractionStrategyType"]
+LLMExtractionStrategy = Union["LLMExtractionStrategyType"]
+CosineStrategy = Union["CosineStrategyType"]
+JsonCssExtractionStrategy = Union["JsonCssExtractionStrategyType"]
+JsonXPathExtractionStrategy = Union["JsonXPathExtractionStrategyType"]
 
 # Chunking types
-ChunkingStrategy = Union['ChunkingStrategyType']
-RegexChunking = Union['RegexChunkingType']
+ChunkingStrategy = Union["ChunkingStrategyType"]
+RegexChunking = Union["RegexChunkingType"]
 
 # Markdown generation types
-DefaultMarkdownGenerator = Union['DefaultMarkdownGeneratorType']
-MarkdownGenerationResult = Union['MarkdownGenerationResultType']
+DefaultMarkdownGenerator = Union["DefaultMarkdownGeneratorType"]
+MarkdownGenerationResult = Union["MarkdownGenerationResultType"]
 
 # Content filter types
-RelevantContentFilter = Union['RelevantContentFilterType']
-PruningContentFilter = Union['PruningContentFilterType']
-BM25ContentFilter = Union['BM25ContentFilterType']
-LLMContentFilter = Union['LLMContentFilterType']
+RelevantContentFilter = Union["RelevantContentFilterType"]
+PruningContentFilter = Union["PruningContentFilterType"]
+BM25ContentFilter = Union["BM25ContentFilterType"]
+LLMContentFilter = Union["LLMContentFilterType"]
 
 # Dispatcher types
-BaseDispatcher = Union['BaseDispatcherType']
-MemoryAdaptiveDispatcher = Union['MemoryAdaptiveDispatcherType']
-SemaphoreDispatcher = Union['SemaphoreDispatcherType']
-RateLimiter = Union['RateLimiterType']
-CrawlerMonitor = Union['CrawlerMonitorType']
-DisplayMode = Union['DisplayModeType']
-RunManyReturn = Union['RunManyReturnType']
+BaseDispatcher = Union["BaseDispatcherType"]
+MemoryAdaptiveDispatcher = Union["MemoryAdaptiveDispatcherType"]
+SemaphoreDispatcher = Union["SemaphoreDispatcherType"]
+RateLimiter = Union["RateLimiterType"]
+CrawlerMonitor = Union["CrawlerMonitorType"]
+DisplayMode = Union["DisplayModeType"]
+RunManyReturn = Union["RunManyReturnType"]
 
 # Docker client
-Crawl4aiDockerClient = Union['Crawl4aiDockerClientType']
+Crawl4aiDockerClient = Union["Crawl4aiDockerClientType"]
 
 # Deep crawling types
-DeepCrawlStrategy = Union['DeepCrawlStrategyType']
-BFSDeepCrawlStrategy = Union['BFSDeepCrawlStrategyType']
-FilterChain = Union['FilterChainType']
-ContentTypeFilter = Union['ContentTypeFilterType']
-DomainFilter = Union['DomainFilterType']
-URLFilter = Union['URLFilterType']
-FilterStats = Union['FilterStatsType']
-SEOFilter = Union['SEOFilterType']
-KeywordRelevanceScorer = Union['KeywordRelevanceScorerType']
-URLScorer = Union['URLScorerType']
-CompositeScorer = Union['CompositeScorerType']
-DomainAuthorityScorer = Union['DomainAuthorityScorerType']
-FreshnessScorer = Union['FreshnessScorerType']
-PathDepthScorer = Union['PathDepthScorerType']
-BestFirstCrawlingStrategy = Union['BestFirstCrawlingStrategyType']
-DFSDeepCrawlStrategy = Union['DFSDeepCrawlStrategyType']
-DeepCrawlDecorator = Union['DeepCrawlDecoratorType']
+DeepCrawlStrategy = Union["DeepCrawlStrategyType"]
+BFSDeepCrawlStrategy = Union["BFSDeepCrawlStrategyType"]
+FilterChain = Union["FilterChainType"]
+ContentTypeFilter = Union["ContentTypeFilterType"]
+DomainFilter = Union["DomainFilterType"]
+URLFilter = Union["URLFilterType"]
+FilterStats = Union["FilterStatsType"]
+SEOFilter = Union["SEOFilterType"]
+KeywordRelevanceScorer = Union["KeywordRelevanceScorerType"]
+URLScorer = Union["URLScorerType"]
+CompositeScorer = Union["CompositeScorerType"]
+DomainAuthorityScorer = Union["DomainAuthorityScorerType"]
+FreshnessScorer = Union["FreshnessScorerType"]
+PathDepthScorer = Union["PathDepthScorerType"]
+BestFirstCrawlingStrategy = Union["BestFirstCrawlingStrategyType"]
+DFSDeepCrawlStrategy = Union["DFSDeepCrawlStrategyType"]
+DeepCrawlDecorator = Union["DeepCrawlDecoratorType"]
 
 # Only import types during type checking to avoid circular imports
 if TYPE_CHECKING:
@@ -90,7 +90,7 @@ if TYPE_CHECKING:
         AsyncLoggerBase as AsyncLoggerBaseType,
         AsyncLogger as AsyncLoggerType,
     )
-    
+
     # Crawler core imports
     from .async_webcrawler import (
         AsyncWebCrawler as AsyncWebCrawlerType,
@@ -99,9 +99,10 @@ if TYPE_CHECKING:
     from .models import CrawlResult as CrawlResultType
     from .hub import CrawlerHub as CrawlerHubType
     from .browser_profiler import BrowserProfiler as BrowserProfilerType
+
     # NEW: Import AsyncUrlSeeder for type checking
     from .async_url_seeder import AsyncUrlSeeder as AsyncUrlSeederType
-    
+
     # Configuration imports
     from .async_configs import (
         BrowserConfig as BrowserConfigType,
@@ -111,19 +112,19 @@ if TYPE_CHECKING:
         # NEW: Import SeedingConfig for type checking
         SeedingConfig as SeedingConfigType,
     )
-    
+
     # Content scraping imports
     from .content_scraping_strategy import (
         ContentScrapingStrategy as ContentScrapingStrategyType,
         LXMLWebScrapingStrategy as LXMLWebScrapingStrategyType,
     )
-    
+
     # Proxy imports
     from .proxy_strategy import (
         ProxyRotationStrategy as ProxyRotationStrategyType,
         RoundRobinProxyStrategy as RoundRobinProxyStrategyType,
     )
-    
+
     # Extraction imports
     from .extraction_strategy import (
         ExtractionStrategy as ExtractionStrategyType,
@@ -132,19 +133,19 @@ if TYPE_CHECKING:
         JsonCssExtractionStrategy as JsonCssExtractionStrategyType,
         JsonXPathExtractionStrategy as JsonXPathExtractionStrategyType,
     )
-    
+
     # Chunking imports
     from .chunking_strategy import (
         ChunkingStrategy as ChunkingStrategyType,
         RegexChunking as RegexChunkingType,
     )
-    
+
     # Markdown generation imports
     from .markdown_generation_strategy import (
         DefaultMarkdownGenerator as DefaultMarkdownGeneratorType,
     )
     from .models import MarkdownGenerationResult as MarkdownGenerationResultType
-    
+
     # Content filter imports
     from .content_filter_strategy import (
         RelevantContentFilter as RelevantContentFilterType,
@@ -152,7 +153,7 @@ if TYPE_CHECKING:
         BM25ContentFilter as BM25ContentFilterType,
         LLMContentFilter as LLMContentFilterType,
     )
-    
+
     # Dispatcher imports
     from .async_dispatcher import (
         BaseDispatcher as BaseDispatcherType,
@@ -163,10 +164,10 @@ if TYPE_CHECKING:
         DisplayMode as DisplayModeType,
         RunManyReturn as RunManyReturnType,
     )
-    
+
     # Docker client
     from .docker_client import Crawl4aiDockerClient as Crawl4aiDockerClientType
-    
+
     # Deep crawling imports
     from .deep_crawling import (
         DeepCrawlStrategy as DeepCrawlStrategyType,
@@ -189,7 +190,7 @@ if TYPE_CHECKING:
     )
 
 
-
-def create_llm_config(*args, **kwargs) -> 'LLMConfigType':
+def create_llm_config(*args, **kwargs) -> "LLMConfigType":
     from .async_configs import LLMConfig
+
     return LLMConfig(*args, **kwargs)

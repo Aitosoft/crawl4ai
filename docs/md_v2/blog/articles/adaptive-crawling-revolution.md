@@ -35,7 +35,7 @@ My first principle was crucial: start with classic statistical approaches. No em
 def calculate_information_gain(new_page, knowledge_base):
     new_terms = extract_terms(new_page) - existing_terms(knowledge_base)
     overlap = calculate_overlap(new_page, knowledge_base)
-    
+
     # High gain = many new terms + low overlap
     gain = len(new_terms) / (1 + overlap)
     return gain
@@ -62,7 +62,7 @@ From available links, we select those with highest information gain. It's not ab
 ### 1. Coverage: The Breadth Sensor
 Measures how well your knowledge spans the query space. Not just "do we have pages?" but "do we have the RIGHT pages?"
 
-### 2. Consistency: The Coherence Detector  
+### 2. Consistency: The Coherence Detector
 Information from multiple sources should align. When pages agree, confidence rises. When they conflict, we need more data.
 
 ### 3. Saturation: The Efficiency Guardian
@@ -109,7 +109,7 @@ Change the query, and the knowledge structure adapts.
 
 This is the beauty of adaptive crawling: your knowledge base becomes a living entity that grows based on actual needs, not hypothetical completeness.
 
-## Why "Adaptive"? 
+## Why "Adaptive"?
 
 I specifically chose "Adaptive" because it captures the essence: the system adapts to what it finds. Dense technical documentation might need 20 pages for confidence. A simple FAQ might need just 5. The crawler doesn't follow a recipe—it reads the room and adjusts.
 
@@ -164,7 +164,7 @@ For a typical SaaS documentation crawl:
 
 ## Missing the Forest for the Trees
 
-The startup world has a dangerous blind spot. We're so enamored with LLMs that we forget: just because you CAN process everything with an LLM doesn't mean you SHOULD. 
+The startup world has a dangerous blind spot. We're so enamored with LLMs that we forget: just because you CAN process everything with an LLM doesn't mean you SHOULD.
 
 Classic NLP and statistical methods can:
 - Filter irrelevant content before it reaches LLMs
@@ -186,7 +186,7 @@ auth_knowledge = await adaptive.digest(
 # Tuesday: They ask about rate limiting
 # The crawler adapts, builds on existing knowledge
 rate_limit_knowledge = await adaptive.digest(
-    "https://docs.api.com", 
+    "https://docs.api.com",
     "rate limiting throttling quotas"
 )
 
@@ -285,15 +285,15 @@ async with AsyncWebCrawler() as crawler:
         strategy="embedding",  # or "statistical"
         embedding_min_confidence_threshold=0.1  # Stop if irrelevant
     )
-    
+
     adaptive = AdaptiveCrawler(crawler, config)
-    
+
     # Watch intelligence at work
     result = await adaptive.digest(
         start_url="https://your-docs.com",
         query="your users' actual questions"
     )
-    
+
     # See the efficiency
     adaptive.print_stats()
     print(f"Found {adaptive.confidence:.0%} of needed information")

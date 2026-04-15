@@ -31,7 +31,7 @@ EVAL `
   console.log('=== Product Extraction Results ===');
   console.log('Total products found:', products.length);
   console.log(JSON.stringify(products, null, 2));
-  
+
   // Save to localStorage for retrieval
   localStorage.setItem('scraped_products', JSON.stringify(products));
 `
@@ -50,7 +50,7 @@ EVAL `
     })),
     reviews: document.querySelector('.review-count')?.textContent
   };
-  
+
   console.log('=== Product Details ===');
   console.log(JSON.stringify(details, null, 2));
 `

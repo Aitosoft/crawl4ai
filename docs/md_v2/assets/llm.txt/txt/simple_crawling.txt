@@ -40,7 +40,7 @@ result = await crawler.arun("https://example.com", config=config)
 
 # Different content formats
 print(result.html)                    # Raw HTML
-print(result.cleaned_html)            # Cleaned HTML  
+print(result.cleaned_html)            # Cleaned HTML
 print(result.markdown.raw_markdown)   # Raw markdown
 print(result.markdown.fit_markdown)   # Filtered markdown
 
@@ -97,17 +97,17 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 
 async def comprehensive_crawl():
     browser_config = BrowserConfig(verbose=True)
-    
+
     run_config = CrawlerRunConfig(
         # Content filtering
         word_count_threshold=10,
         excluded_tags=['form', 'header', 'nav'],
         exclude_external_links=True,
-        
+
         # Content processing
         process_iframes=True,
         remove_overlay_elements=True,
-        
+
         # Cache control
         cache_mode=CacheMode.ENABLED
     )
@@ -117,24 +117,24 @@ async def comprehensive_crawl():
             url="https://example.com",
             config=run_config
         )
-        
+
         if result.success:
             # Display content summary
             print(f"Title: {result.metadata.get('title', 'No title')}")
             print(f"Content: {result.markdown[:500]}...")
-            
+
             # Process media
             images = result.media.get("images", [])
             print(f"Found {len(images)} images")
             for img in images[:3]:  # First 3 images
                 print(f"  - {img.get('src', 'No src')}")
-            
+
             # Process links
             internal_links = result.links.get("internal", [])
             print(f"Found {len(internal_links)} internal links")
             for link in internal_links[:3]:  # First 3 links
                 print(f"  - {link.get('href', 'No href')}")
-                
+
         else:
             print(f"❌ Crawl failed: {result.error_message}")
             print(f"Status: {result.status_code}")
@@ -174,9 +174,9 @@ async def extract_tables():
             table_score_threshold=7,  # Higher = stricter detection
             cache_mode=CacheMode.BYPASS
         )
-        
+
         result = await crawler.arun("https://example.com/tables", config=config)
-        
+
         if result.success and result.tables:
             # New tables field (v0.6+)
             for i, table in enumerate(result.tables):
@@ -184,7 +184,7 @@ async def extract_tables():
                 print(f"Headers: {table['headers']}")
                 print(f"Rows: {len(table['rows'])}")
                 print(f"Caption: {table.get('caption', 'No caption')}")
-                
+
                 # Convert to DataFrame
                 df = pd.DataFrame(table['rows'], columns=table['headers'])
                 print(df.head())
@@ -204,23 +204,23 @@ async def process_financial_tables():
         keep_data_attributes=True,
         scan_full_page=True
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun("https://coinmarketcap.com", config=config)
-        
+
         if result.tables:
             # Get the main data table (usually first/largest)
             main_table = result.tables[0]
-            
+
             # Create DataFrame
             df = pd.DataFrame(
                 main_table['rows'],
                 columns=main_table['headers']
             )
-            
+
             # Clean and process data
             df = clean_financial_data(df)
-            
+
             # Save for analysis
             df.to_csv("market_data.csv", index=False)
             return df
@@ -232,22 +232,22 @@ def clean_financial_data(df):
             # Remove currency symbols
             df[col] = df[col].str.replace(r'[^\d.]', '', regex=True)
             df[col] = pd.to_numeric(df[col], errors='coerce')
-        
+
         elif '%' in str(df[col].iloc[0]):
             # Convert percentages
             df[col] = df[col].str.replace('%', '').astype(float) / 100
-        
+
         elif any(suffix in str(df[col].iloc[0]) for suffix in ['B', 'M', 'K']):
             # Handle large numbers (Billions, Millions, etc.)
             df[col] = df[col].apply(convert_large_numbers)
-    
+
     return df
 
 def convert_large_numbers(value):
     """Convert 1.5B -> 1500000000"""
     if pd.isna(value):
         return float('nan')
-    
+
     value = str(value)
     multiplier = 1
     if 'B' in value:
@@ -256,7 +256,7 @@ def convert_large_numbers(value):
         multiplier = 1e6
     elif 'K' in value:
         multiplier = 1e3
-    
+
     number = float(re.sub(r'[^\d.]', '', value))
     return number * multiplier
 ```
@@ -294,18 +294,18 @@ financial_config = CrawlerRunConfig(
 async def extract_all_tables():
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun("https://example.com/data", config=config)
-        
+
         tables_data = {}
-        
+
         for i, table in enumerate(result.tables):
             # Create meaningful names based on content
             table_name = (
-                table.get('caption') or 
+                table.get('caption') or
                 f"table_{i+1}_{table['headers'][0]}"
             ).replace(' ', '_').lower()
-            
+
             df = pd.DataFrame(table['rows'], columns=table['headers'])
-            
+
             # Store with metadata
             tables_data[table_name] = {
                 'dataframe': df,
@@ -314,7 +314,7 @@ async def extract_all_tables():
                 'caption': table.get('caption'),
                 'summary': table.get('summary')
             }
-        
+
         return tables_data
 
 # Usage
@@ -332,7 +332,7 @@ def get_tables(result):
     # New format (v0.6+)
     if hasattr(result, 'tables') and result.tables:
         return result.tables
-    
+
     # Fallback to media.tables (older versions)
     return result.media.get('tables', [])
 

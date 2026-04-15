@@ -11,8 +11,8 @@ I’m working on a solution that will allow the crawler to emit a continuous str
 **Interactivity Through Process IDs**
 
 A key part of this new design is the concept of a unique process ID for each crawl session. Imagine you’re listening to an event stream that informs you:
-- The crawler just hit a certain page  
-- It triggered a hook and is now pausing for instructions  
+- The crawler just hit a certain page
+- It triggered a hook and is now pausing for instructions
 
 With the event stream in place, you can send a follow-up request back to the server—referencing the unique process ID—to provide extra data, instructions, or parameters. This might include selecting which links to follow next, adjusting extraction strategies, or providing authentication tokens for a protected API. Once the crawler receives these instructions, it resumes execution with the updated context.
 
@@ -43,4 +43,3 @@ sequenceDiagram
 I’m currently exploring the best APIs, technologies, and patterns to make this vision a reality. My goal is to deliver a seamless developer experience—one that integrates with existing Crawl4AI workflows while offering new flexibility and power.
 
 Stay tuned for more updates as I continue building this feature out. In the meantime, I’d love to hear any feedback or suggestions you might have to help shape this interactive, event-driven future of web crawling with Crawl4AI.
-

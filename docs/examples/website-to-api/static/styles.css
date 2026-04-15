@@ -721,43 +721,43 @@ select option,
     .header-content {
         padding: 0 1rem;
     }
-    
+
     .main-content {
         padding: 1rem;
     }
-    
+
     .hero-title {
         font-size: 2rem;
     }
-    
+
     .workflow-demo {
         grid-template-columns: 1fr;
         gap: 1rem;
     }
-    
+
     .workflow-arrow {
         transform: rotate(90deg);
         margin: 1rem 0;
     }
-    
+
     .form-options {
         grid-template-columns: 1fr;
     }
-    
+
     .form-row {
         grid-template-columns: 1fr;
     }
-    
+
     .result-info {
         grid-template-columns: 1fr;
     }
-    
+
     .model-card {
         flex-direction: column;
         gap: 1rem;
         text-align: center;
     }
-    
+
     .model-actions {
         width: 100%;
         justify-content: center;

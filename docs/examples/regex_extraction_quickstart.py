@@ -14,9 +14,8 @@ Run the whole thing with::
     python regex_extraction_quickstart.py
 """
 
-import os, json, asyncio
+import json, asyncio
 from pathlib import Path
-from typing import List
 
 from crawl4ai import (
     AsyncWebCrawler,
@@ -26,17 +25,18 @@ from crawl4ai import (
     LLMConfig,
 )
 
+
 # ────────────────────────────────────────────────────────────────────────────
 # 1. Default-catalog extraction
 # ────────────────────────────────────────────────────────────────────────────
 async def demo_regex_default() -> None:
     print("\n=== 1. Regex extraction – default patterns ===")
 
-    url = "https://www.iana.org/domains/example"      # has e-mail + URLs
+    url = "https://www.iana.org/domains/example"  # has e-mail + URLs
     strategy = RegexExtractionStrategy(
-        pattern = RegexExtractionStrategy.Url | RegexExtractionStrategy.Currency
-    )               
-    config   = CrawlerRunConfig(extraction_strategy=strategy)
+        pattern=RegexExtractionStrategy.Url | RegexExtractionStrategy.Currency
+    )
+    config = CrawlerRunConfig(extraction_strategy=strategy)
 
     async with AsyncWebCrawler() as crawler:
         result: CrawlResult = await crawler.arun(url, config=config)
@@ -60,8 +60,8 @@ async def demo_regex_custom() -> None:
     url = "https://www.apple.com/shop/buy-mac/macbook-pro"
     price_pattern = {"usd_price": r"\$\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?"}
 
-    strategy = RegexExtractionStrategy(custom = price_pattern)
-    config   = CrawlerRunConfig(extraction_strategy=strategy)
+    strategy = RegexExtractionStrategy(custom=price_pattern)
+    config = CrawlerRunConfig(extraction_strategy=strategy)
 
     async with AsyncWebCrawler() as crawler:
         result: CrawlResult = await crawler.arun(url, config=config)
@@ -82,7 +82,7 @@ async def demo_regex_custom() -> None:
 async def demo_regex_generate_pattern() -> None:
     print("\n=== 3. generate_pattern → regex extraction ===")
 
-    cache_dir   = Path(__file__).parent / "tmp"
+    cache_dir = Path(__file__).parent / "tmp"
     cache_dir.mkdir(exist_ok=True)
     pattern_file = cache_dir / "price_pattern.json"
 
@@ -102,7 +102,7 @@ async def demo_regex_generate_pattern() -> None:
 
         # pull one sample page as HTML context
         async with AsyncWebCrawler() as crawler:
-            html = (await crawler.arun(url)).fit_html 
+            html = (await crawler.arun(url)).fit_html
 
         pattern = RegexExtractionStrategy.generate_pattern(
             label="price",
@@ -116,7 +116,7 @@ async def demo_regex_generate_pattern() -> None:
 
     # ── 3-B. extraction pass – zero LLM calls
     strategy = RegexExtractionStrategy(custom=pattern)
-    config   = CrawlerRunConfig(extraction_strategy=strategy, delay_before_return_html=3)
+    config = CrawlerRunConfig(extraction_strategy=strategy, delay_before_return_html=3)
 
     async with AsyncWebCrawler() as crawler:
         result: CrawlResult = await crawler.arun(url, config=config)

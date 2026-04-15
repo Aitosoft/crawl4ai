@@ -599,16 +599,16 @@ body {
     .catalog-layout {
         grid-template-columns: 1fr;
     }
-    
+
     .feature-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .nav-menu {
         flex-wrap: wrap;
         gap: 1rem;
     }
-    
+
     .cookie-content {
         flex-direction: column;
         text-align: center;

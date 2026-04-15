@@ -52,28 +52,28 @@
             font-family: 'Fira Code', monospace;
             font-size: 0.9rem;
         }
-        
+
         .CodeMirror-gutters {
             background-color: #1E1E1E !important;
             border-right: 1px solid #3F3F44 !important;
         }
-        
+
         .CodeMirror-linenumber {
             color: #3F3F44 !important;
         }
-        
+
         .cm-s-darcula .cm-keyword {
             color: #4EFFFF !important;
         }
-        
+
         .cm-s-darcula .cm-string {
             color: #F380F5 !important;
         }
-        
+
         .cm-s-darcula .cm-number {
             color: #D5CEBF !important;
         }
-        
+
         /* Add to your <style> section or Tailwind config */
         .hljs {
             background: #1E1E1E !important;
@@ -215,7 +215,7 @@
                         </div>
                         <div>
                             <label for="md-query" class="block text-xs text-secondary mb-1">Query (for BM25/LLM filters)</label>
-                            <input id="md-query" type="text" placeholder="Enter search terms or instructions" 
+                            <input id="md-query" type="text" placeholder="Enter search terms or instructions"
                                 class="bg-dark border border-border rounded px-2 py-1 text-sm w-full">
                         </div>
                         <div>
@@ -234,7 +234,7 @@
                     <div class="mt-2 space-y-3 p-2 border border-border rounded">
                         <div>
                             <label for="llm-question" class="block text-xs text-secondary mb-1">Question</label>
-                            <input id="llm-question" type="text" value="What is this page about?" 
+                            <input id="llm-question" type="text" value="What is this page about?"
                                 class="bg-dark border border-border rounded px-2 py-1 text-sm w-full">
                         </div>
                     </div>
@@ -485,19 +485,19 @@
             cm.setValue(TEMPLATES[e.target.value]);
             document.getElementById('cfg-status').textContent = '';
         });
-        
+
         // Handle endpoint selection change to show appropriate options
         document.getElementById('endpoint').addEventListener('change', function(e) {
             const endpoint = e.target.value;
             const mdOptions = document.getElementById('md-options');
             const llmOptions = document.getElementById('llm-options');
             const advConfig = document.getElementById('adv-config');
-            
+
             // Hide all option sections first
             mdOptions.classList.add('hidden');
             llmOptions.classList.add('hidden');
             advConfig.classList.add('hidden');
-            
+
             // Show the appropriate section based on endpoint
             if (endpoint === 'md') {
                 mdOptions.classList.remove('hidden');
@@ -573,7 +573,7 @@
             // Python snippet
             const pyCodeEl = document.querySelector('#python-content code');
             let pySnippet;
-            
+
             if (method === 'GET') {
                 // GET request (for /llm endpoint)
                 pySnippet = `import httpx\n\nasync def crawl():\n    async with httpx.AsyncClient() as client:\n        response = await client.get(\n            "${window.location.origin}${api}"\n        )\n        return response.json()`;
@@ -589,7 +589,7 @@
             // cURL snippet
             const curlCodeEl = document.querySelector('#curl-content code');
             let curlSnippet;
-            
+
             if (method === 'GET') {
                 // GET request (for /llm endpoint)
                 curlSnippet = `curl -X GET "${window.location.origin}${api}"`;
@@ -650,14 +650,14 @@
 
             const api = endpointMap[endpoint];
             let payload;
-            
+
             // Create appropriate payload based on endpoint type
             if (endpoint === 'md') {
                 // Get values from the /md specific inputs
                 const filterType = document.getElementById('md-filter').value;
                 const query = document.getElementById('md-query').value.trim();
                 const cache = document.getElementById('md-cache').value;
-                
+
                 // MD endpoint expects: { url, f, q, c }
                 payload = {
                     url: urls[0], // Take first URL
@@ -690,7 +690,7 @@
                     const encodedUrl = encodeURIComponent(url);
                     // Get the question from the LLM-specific input
                     const question = document.getElementById('llm-question').value.trim() || "What is this page about?";
-                    
+
                     response = await fetch(`${api}/${encodedUrl}?q=${encodeURIComponent(question)}`, {
                         method: 'GET',
                         headers: { 'Accept': 'application/json' }
@@ -773,7 +773,7 @@
                 }
 
                 forceHighlightElement(document.querySelector('#response-content code'));
-                
+
                 // For generateSnippets, handle the LLM case specially
                 if (endpoint === 'llm') {
                     const url = urls[0];
@@ -965,14 +965,14 @@
                 });
             });
         }
-        
+
         // Function to initialize UI based on selected endpoint
         function initUI() {
             // Trigger the endpoint change handler to set initial UI state
             const endpointSelect = document.getElementById('endpoint');
             const event = new Event('change');
             endpointSelect.dispatchEvent(event);
-            
+
             // Initialize copy buttons
             initCopyButtons();
         }

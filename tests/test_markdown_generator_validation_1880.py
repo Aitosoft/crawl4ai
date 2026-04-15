@@ -24,6 +24,7 @@ class TestMarkdownGeneratorDeserialization:
         }
         config = CrawlerRunConfig.load(data)
         from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+
         assert isinstance(config.markdown_generator, DefaultMarkdownGenerator)
 
     def test_params_with_content_filter(self):
@@ -67,7 +68,9 @@ class TestMarkdownGeneratorDeserialization:
             }
         }
         config = CrawlerRunConfig.load(data)
-        assert isinstance(config.markdown_generator.content_filter, PruningContentFilter)
+        assert isinstance(
+            config.markdown_generator.content_filter, PruningContentFilter
+        )
 
     def test_options_key_raises_clear_error(self):
         """Using "options" instead of "params" should raise ValueError with hint."""
@@ -99,9 +102,7 @@ class TestMarkdownGeneratorDeserialization:
         """A dict without type/params structure should raise ValueError."""
         from crawl4ai.async_configs import CrawlerRunConfig
 
-        data = {
-            "markdown_generator": {"foo": "bar"}
-        }
+        data = {"markdown_generator": {"foo": "bar"}}
         with pytest.raises(ValueError, match="got dict"):
             CrawlerRunConfig.load(data)
 
@@ -124,7 +125,6 @@ class TestMarkdownGeneratorDeserialization:
     def test_none_markdown_generator_uses_default(self):
         """None should use the default (DefaultMarkdownGenerator)."""
         from crawl4ai.async_configs import CrawlerRunConfig
-        from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
         config = CrawlerRunConfig(markdown_generator=None)
         # None is allowed — the crawler falls back to default behavior
@@ -149,10 +149,12 @@ class TestExistingValidationStillWorks:
 
     def test_extraction_strategy_dict_raises(self):
         from crawl4ai.async_configs import CrawlerRunConfig
+
         with pytest.raises(ValueError, match="extraction_strategy"):
             CrawlerRunConfig(extraction_strategy={"type": "bad"})
 
     def test_chunking_strategy_dict_raises(self):
         from crawl4ai.async_configs import CrawlerRunConfig
+
         with pytest.raises(ValueError, match="chunking_strategy"):
             CrawlerRunConfig(chunking_strategy={"type": "bad"})

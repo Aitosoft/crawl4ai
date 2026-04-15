@@ -9,9 +9,9 @@ These approaches let you extract data instantly—even from complex or nested HT
 
 **Why avoid LLM for basic extractions?**
 
-1. **Faster & Cheaper**: No API calls or GPU overhead.  
-2. **Lower Carbon Footprint**: LLM inference can be energy-intensive. Pattern-based extraction is practically carbon-free.  
-3. **Precise & Repeatable**: CSS/XPath selectors and regex patterns do exactly what you specify. LLM outputs can vary or hallucinate.  
+1. **Faster & Cheaper**: No API calls or GPU overhead.
+2. **Lower Carbon Footprint**: LLM inference can be energy-intensive. Pattern-based extraction is practically carbon-free.
+3. **Precise & Repeatable**: CSS/XPath selectors and regex patterns do exactly what you specify. LLM outputs can vary or hallucinate.
 4. **Scales Readily**: For thousands of pages, pattern-based extraction runs quickly and in parallel.
 
 Below, we'll explore how to craft these schemas and use them with **JsonCssExtractionStrategy** (or **JsonXPathExtractionStrategy** if you prefer XPath). We'll also highlight advanced features like **nested fields** and **base element attributes**.
@@ -22,9 +22,9 @@ Below, we'll explore how to craft these schemas and use them with **JsonCssExtra
 
 A schema defines:
 
-1. A **base selector** that identifies each "container" element on the page (e.g., a product row, a blog post card).  
-2. **Fields** describing which CSS/XPath selectors to use for each piece of data you want to capture (text, attribute, HTML block, etc.).  
-3. **Nested** or **list** types for repeated or hierarchical structures.  
+1. A **base selector** that identifies each "container" element on the page (e.g., a product row, a blog post card).
+2. **Fields** describing which CSS/XPath selectors to use for each piece of data you want to capture (text, attribute, HTML block, etc.).
+3. **Nested** or **list** types for repeated or hierarchical structures.
 
 For example, if you have a list of products, each one might have a name, price, reviews, and "related products." This approach is faster and more reliable than an LLM for consistent, structured pages.
 
@@ -74,7 +74,7 @@ async def extract_crypto_prices():
         # 4. Run the crawl and extraction
         result = await crawler.arun(
             url="https://example.com/crypto-prices",
-            
+
             config=config
         )
 
@@ -174,10 +174,10 @@ asyncio.run(extract_crypto_prices_xpath())
 
 **Key Points**:
 
-1. **`JsonXPathExtractionStrategy`** is used instead of `JsonCssExtractionStrategy`.  
-2. **`baseSelector`** and each field's `"selector"` use **XPath** instead of CSS.  
-3. **`raw://`** lets us pass `dummy_html` with no real network request—handy for local testing.  
-4. Everything (including the extraction strategy) is in **`CrawlerRunConfig`**.  
+1. **`JsonXPathExtractionStrategy`** is used instead of `JsonCssExtractionStrategy`.
+2. **`baseSelector`** and each field's `"selector"` use **XPath** instead of CSS.
+3. **`raw://`** lets us pass `dummy_html` with no real network request—handy for local testing.
+4. Everything (including the extraction strategy) is in **`CrawlerRunConfig`**.
 
 That's how you keep the config self-contained, illustrate **XPath** usage, and demonstrate the **raw** scheme for direct HTML input—all while avoiding the old approach of passing `extraction_strategy` directly to `arun()`.
 
@@ -199,10 +199,10 @@ This snippet includes categories, products, features, reviews, and related items
 schema = {
     "name": "E-commerce Product Catalog",
     "baseSelector": "div.category",
-    # (1) We can define optional baseFields if we want to extract attributes 
+    # (1) We can define optional baseFields if we want to extract attributes
     # from the category container
     "baseFields": [
-        {"name": "data_cat_id", "type": "attribute", "attribute": "data-cat-id"}, 
+        {"name": "data_cat_id", "type": "attribute", "attribute": "data-cat-id"},
     ],
     "fields": [
         {
@@ -247,7 +247,7 @@ schema = {
                     "selector": "ul.product-features li",
                     "type": "list",
                     "fields": [
-                        {"name": "feature", "type": "text"} 
+                        {"name": "feature", "type": "text"}
                     ]
                 },
                 {
@@ -256,18 +256,18 @@ schema = {
                     "type": "nested_list",
                     "fields": [
                         {
-                            "name": "reviewer", 
-                            "selector": "span.reviewer", 
+                            "name": "reviewer",
+                            "selector": "span.reviewer",
                             "type": "text"
                         },
                         {
-                            "name": "rating", 
-                            "selector": "span.rating", 
+                            "name": "rating",
+                            "selector": "span.rating",
                             "type": "text"
                         },
                         {
-                            "name": "comment", 
-                            "selector": "p.review-text", 
+                            "name": "comment",
+                            "selector": "p.review-text",
                             "type": "text"
                         }
                     ]
@@ -278,13 +278,13 @@ schema = {
                     "type": "list",
                     "fields": [
                         {
-                            "name": "name", 
-                            "selector": "span.related-name", 
+                            "name": "name",
+                            "selector": "span.related-name",
                             "type": "text"
                         },
                         {
-                            "name": "price", 
-                            "selector": "span.related-price", 
+                            "name": "price",
+                            "selector": "span.related-price",
                             "type": "text"
                         }
                     ]
@@ -297,11 +297,11 @@ schema = {
 
 Key Takeaways:
 
-- **Nested vs. List**:  
-  - **`type: "nested"`** means a **single** sub-object (like `details`).  
-  - **`type: "list"`** means multiple items that are **simple** dictionaries or single text fields.  
+- **Nested vs. List**:
+  - **`type: "nested"`** means a **single** sub-object (like `details`).
+  - **`type: "list"`** means multiple items that are **simple** dictionaries or single text fields.
   - **`type: "nested_list"`** means repeated **complex** objects (like `products` or `reviews`).
-- **Base Fields**: We can extract **attributes** from the container element via `"baseFields"`. For instance, `"data_cat_id"` might be `data-cat-id="elect123"`.  
+- **Base Fields**: We can extract **attributes** from the container element via `"baseFields"`. For instance, `"data_cat_id"` might be `data-cat-id="elect123"`.
 - **Transforms**: We can also define a `transform` if we want to lower/upper case, strip whitespace, or even run a custom function.
 
 ### Running the Extraction
@@ -318,9 +318,9 @@ ecommerce_schema = {
 
 async def extract_ecommerce_data():
     strategy = JsonCssExtractionStrategy(ecommerce_schema, verbose=True)
-    
+
     config = CrawlerRunConfig()
-    
+
     async with AsyncWebCrawler(verbose=True) as crawler:
         result = await crawler.arun(
             url="https://raw.githubusercontent.com/unclecode/crawl4ai/main/docs/examples/sample_ecommerce.html",
@@ -331,7 +331,7 @@ async def extract_ecommerce_data():
         if not result.success:
             print("Crawl failed:", result.error_message)
             return
-        
+
         # Parse the JSON output
         data = json.loads(result.extracted_content)
         print(json.dumps(data, indent=2) if data else "No data found.")
@@ -373,15 +373,15 @@ async def extract_with_regex():
     strategy = RegexExtractionStrategy(
         pattern = RegexExtractionStrategy.Url | RegexExtractionStrategy.Currency
     )
-    
+
     config = CrawlerRunConfig(extraction_strategy=strategy)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://example.com",
             config=config
         )
-        
+
         if result.success:
             data = json.loads(result.extracted_content)
             for item in data[:5]:  # Show first 5 matches
@@ -402,8 +402,8 @@ strategy = RegexExtractionStrategy(pattern=RegexExtractionStrategy.Email)
 # Combine multiple patterns
 strategy = RegexExtractionStrategy(
     pattern = (
-        RegexExtractionStrategy.Email | 
-        RegexExtractionStrategy.PhoneUS | 
+        RegexExtractionStrategy.Email |
+        RegexExtractionStrategy.PhoneUS |
         RegexExtractionStrategy.Url
     )
 )
@@ -451,17 +451,17 @@ from crawl4ai import (
 async def extract_prices():
     # Define a custom pattern for US Dollar prices
     price_pattern = {"usd_price": r"\$\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?"}
-    
+
     # Create strategy with custom pattern
     strategy = RegexExtractionStrategy(custom=price_pattern)
     config = CrawlerRunConfig(extraction_strategy=strategy)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://www.example.com/products",
             config=config
         )
-        
+
         if result.success:
             data = json.loads(result.extracted_content)
             for item in data:
@@ -489,25 +489,25 @@ async def extract_with_generated_pattern():
     cache_dir = Path("./pattern_cache")
     cache_dir.mkdir(exist_ok=True)
     pattern_file = cache_dir / "price_pattern.json"
-    
+
     # 1. Generate or load pattern
     if pattern_file.exists():
         pattern = json.load(pattern_file.open())
         print(f"Using cached pattern: {pattern}")
     else:
         print("Generating pattern via LLM...")
-        
+
         # Configure LLM
         llm_config = LLMConfig(
             provider="openai/gpt-4o-mini",
             api_token="env:OPENAI_API_KEY",
         )
-        
+
         # Get sample HTML for context
         async with AsyncWebCrawler() as crawler:
             result = await crawler.arun("https://example.com/products")
             html = result.markdown.fit_html
-        
+
         # Generate pattern (one-time LLM usage)
         pattern = RegexExtractionStrategy.generate_pattern(
             label="price",
@@ -515,20 +515,20 @@ async def extract_with_generated_pattern():
             query="Product prices in USD format",
             llm_config=llm_config,
         )
-        
+
         # Cache pattern for future use
         json.dump(pattern, pattern_file.open("w"), indent=2)
-    
+
     # 2. Use pattern for extraction (no LLM calls)
     strategy = RegexExtractionStrategy(custom=pattern)
     config = CrawlerRunConfig(extraction_strategy=strategy)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://example.com/products",
             config=config
         )
-        
+
         if result.success:
             data = json.loads(result.extracted_content)
             for item in data[:10]:
@@ -540,7 +540,7 @@ asyncio.run(extract_with_generated_pattern())
 
 This pattern allows you to:
 1. Use an LLM once to generate a highly optimized regex for your specific site
-2. Save the pattern to disk for reuse 
+2. Save the pattern to disk for reuse
 3. Extract data using only regex (no further LLM calls) in production
 
 ### Extraction Results Format
@@ -574,9 +574,9 @@ Each match includes:
 
 ## 5. Why "No LLM" Is Often Better
 
-1. **Zero Hallucination**: Pattern-based extraction doesn't guess text. It either finds it or not.  
-2. **Guaranteed Structure**: The same schema or regex yields consistent JSON across many pages, so your downstream pipeline can rely on stable keys.  
-3. **Speed**: LLM-based extraction can be 10–1000x slower for large-scale crawling.  
+1. **Zero Hallucination**: Pattern-based extraction doesn't guess text. It either finds it or not.
+2. **Guaranteed Structure**: The same schema or regex yields consistent JSON across many pages, so your downstream pipeline can rely on stable keys.
+3. **Speed**: LLM-based extraction can be 10–1000x slower for large-scale crawling.
 4. **Scalable**: Adding or updating a field is a matter of adjusting the schema or regex, not re-tuning a model.
 
 **When might you consider an LLM?** Possibly if the site is extremely unstructured or you want AI summarization. But always try a schema or regex approach first for repeated or consistent data patterns.
@@ -679,12 +679,12 @@ The `score` and `author` fields first navigate to the next sibling `<tr>`, then 
 
 ## 9. Tips & Best Practices
 
-1. **Inspect the DOM** in Chrome DevTools or Firefox's Inspector to find stable selectors.  
-2. **Start Simple**: Verify you can extract a single field. Then add complexity like nested objects or lists.  
-3. **Test** your schema on partial HTML or a test page before a big crawl.  
-4. **Combine with JS Execution** if the site loads content dynamically. You can pass `js_code` or `wait_for` in `CrawlerRunConfig`.  
-5. **Look at Logs** when `verbose=True`: if your selectors are off or your schema is malformed, it'll often show warnings.  
-6. **Use baseFields** if you need attributes from the container element (e.g., `href`, `data-id`), especially for the "parent" item.  
+1. **Inspect the DOM** in Chrome DevTools or Firefox's Inspector to find stable selectors.
+2. **Start Simple**: Verify you can extract a single field. Then add complexity like nested objects or lists.
+3. **Test** your schema on partial HTML or a test page before a big crawl.
+4. **Combine with JS Execution** if the site loads content dynamically. You can pass `js_code` or `wait_for` in `CrawlerRunConfig`.
+5. **Look at Logs** when `verbose=True`: if your selectors are off or your schema is malformed, it'll often show warnings.
+6. **Use baseFields** if you need attributes from the container element (e.g., `href`, `data-id`), especially for the "parent" item.
 7. **Performance**: For large pages, make sure your selectors are as narrow as possible.
 8. **Consider Using Regex First**: For simple data types like emails, URLs, and dates, `RegexExtractionStrategy` is often the fastest approach.
 
@@ -927,8 +927,8 @@ This approach lets you generate schemas once that work reliably across hundreds 
 
 With Crawl4AI's LLM-free extraction strategies - `JsonCssExtractionStrategy`, `JsonXPathExtractionStrategy`, and now `RegexExtractionStrategy` - you can build powerful pipelines that:
 
-- Scrape any consistent site for structured data.  
-- Support nested objects, repeating lists, or pattern-based extraction.  
+- Scrape any consistent site for structured data.
+- Support nested objects, repeating lists, or pattern-based extraction.
 - Scale to thousands of pages quickly and reliably.
 
 **Choosing the Right Strategy**:

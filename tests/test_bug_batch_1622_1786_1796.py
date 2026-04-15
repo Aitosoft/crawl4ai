@@ -5,7 +5,6 @@ Tests for bug fix batch: PR #1622, #1786, #1796
 - #1786: arun_many should wire mean_delay/max_range into dispatcher
 - #1796: process_iframes should use DOMParser instead of innerHTML
 """
-import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
@@ -119,9 +118,7 @@ async def test_resolve_head_4xx_returns_none(seeder):
 @pytest.mark.asyncio
 async def test_resolve_head_network_error(seeder):
     """Network error should return None (not raise)."""
-    seeder.client.head = AsyncMock(
-        side_effect=httpx.ConnectError("connection refused")
-    )
+    seeder.client.head = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
     result = await seeder._resolve_head("https://example.com/down")
     assert result is None
 
@@ -161,7 +158,7 @@ class TestDispatcherWiring:
         """When no dispatcher is provided, arun_many should create one using config delays."""
         from crawl4ai.async_webcrawler import AsyncWebCrawler
         from crawl4ai.async_configs import CrawlerRunConfig, BrowserConfig
-        from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher, RateLimiter
+        from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
 
         captured_dispatcher = {}
 
@@ -191,16 +188,17 @@ class TestDispatcherWiring:
 
                 rl = captured_dispatcher.get("rate_limiter")
                 assert rl is not None, "Dispatcher should have been created"
-                assert rl.base_delay == (2.0, 3.5), (
-                    f"Expected base_delay=(2.0, 3.5), got {rl.base_delay}"
-                )
+                assert rl.base_delay == (
+                    2.0,
+                    3.5,
+                ), f"Expected base_delay=(2.0, 3.5), got {rl.base_delay}"
 
     @pytest.mark.asyncio
     async def test_dispatcher_uses_first_config_from_list(self):
         """When config is a list, should use the first config's delays."""
         from crawl4ai.async_webcrawler import AsyncWebCrawler
         from crawl4ai.async_configs import CrawlerRunConfig, BrowserConfig
-        from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher, RateLimiter
+        from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
 
         captured_dispatcher = {}
 
@@ -232,9 +230,10 @@ class TestDispatcherWiring:
 
                 rl = captured_dispatcher.get("rate_limiter")
                 assert rl is not None
-                assert rl.base_delay == (5.0, 7.0), (
-                    f"Expected base_delay=(5.0, 7.0) from first config, got {rl.base_delay}"
-                )
+                assert rl.base_delay == (
+                    5.0,
+                    7.0,
+                ), f"Expected base_delay=(5.0, 7.0) from first config, got {rl.base_delay}"
 
     @pytest.mark.asyncio
     async def test_explicit_dispatcher_not_overridden(self):
@@ -284,10 +283,12 @@ class TestProcessIframesDOMParser:
 
         # Should contain DOMParser usage
         assert "DOMParser" in source, "process_iframes should use DOMParser"
-        assert "parseFromString" in source, "process_iframes should call parseFromString"
-        assert "doc.body.firstChild" in source, (
-            "process_iframes should move nodes from parsed doc"
-        )
+        assert (
+            "parseFromString" in source
+        ), "process_iframes should call parseFromString"
+        assert (
+            "doc.body.firstChild" in source
+        ), "process_iframes should move nodes from parsed doc"
 
         # The old innerHTML assignment pattern should NOT be present
         # Note: document.body.innerHTML for READING iframe content is fine
@@ -297,9 +298,7 @@ class TestProcessIframesDOMParser:
             stripped = line.strip()
             # Only flag div.innerHTML assignment, not reading from document.body
             if "div.innerHTML" in stripped and "=" in stripped:
-                pytest.fail(
-                    f"Found unsafe innerHTML assignment: {stripped}"
-                )
+                pytest.fail(f"Found unsafe innerHTML assignment: {stripped}")
 
     def test_js_snippet_structure(self):
         """The JS snippet should properly create DOM nodes from parsed HTML."""

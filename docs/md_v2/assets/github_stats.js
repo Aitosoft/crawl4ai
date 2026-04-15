@@ -109,9 +109,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const insertBeforeElement = insertBeforeSelector ? headerContainer.querySelector(insertBeforeSelector) : null;
     if (insertBeforeElement) {
         // headerContainer.insertBefore(badgeContainer, insertBeforeElement);
-        headerContainer.querySelector(insertBeforeSelector).appendChild(badgeContainer); 
+        headerContainer.querySelector(insertBeforeSelector).appendChild(badgeContainer);
     } else {
-        headerContainer.appendChild(badgeContainer); 
+        headerContainer.appendChild(badgeContainer);
     }
 
      console.info('GitHub Stats: Badge added to header.');

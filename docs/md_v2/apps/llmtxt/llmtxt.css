@@ -584,19 +584,19 @@ body {
         flex-direction: column;
         gap: 1.5rem;
     }
-    
+
     .nav-links {
         gap: 1rem;
     }
-    
+
     .preset-options {
         flex-direction: column;
     }
-    
+
     .components-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .content {
         padding: 1rem;
     }

@@ -128,7 +128,7 @@ c4aGenerator.forBlock['c4a_key_up'] = function(block, generator) {
 c4aGenerator.forBlock['c4a_if_exists'] = function(block, generator) {
     const selector = generator.getFieldValue(block, 'SELECTOR');
     const thenCode = generator.statementToCode(block, 'THEN').trim();
-    
+
     if (thenCode.includes('\n')) {
         // Multi-line then block
         const lines = thenCode.split('\n').filter(line => line.trim());
@@ -144,11 +144,11 @@ c4aGenerator.forBlock['c4a_if_exists_else'] = function(block, generator) {
     const selector = generator.getFieldValue(block, 'SELECTOR');
     const thenCode = generator.statementToCode(block, 'THEN').trim();
     const elseCode = generator.statementToCode(block, 'ELSE').trim();
-    
+
     // For simplicity, only handle single-line then/else
     const thenLine = thenCode.split('\n')[0];
     const elseLine = elseCode.split('\n')[0];
-    
+
     if (thenLine && elseLine) {
         return `IF (EXISTS \`${selector}\`) THEN ${thenLine} ELSE ${elseLine}\n`;
     } else if (thenLine) {
@@ -160,7 +160,7 @@ c4aGenerator.forBlock['c4a_if_exists_else'] = function(block, generator) {
 c4aGenerator.forBlock['c4a_if_not_exists'] = function(block, generator) {
     const selector = generator.getFieldValue(block, 'SELECTOR');
     const thenCode = generator.statementToCode(block, 'THEN').trim();
-    
+
     if (thenCode.includes('\n')) {
         const lines = thenCode.split('\n').filter(line => line.trim());
         return lines.map(line => `IF (NOT EXISTS \`${selector}\`) THEN ${line}`).join('\n') + '\n';
@@ -173,7 +173,7 @@ c4aGenerator.forBlock['c4a_if_not_exists'] = function(block, generator) {
 c4aGenerator.forBlock['c4a_if_js'] = function(block, generator) {
     const condition = generator.getFieldValue(block, 'CONDITION');
     const thenCode = generator.statementToCode(block, 'THEN').trim();
-    
+
     if (thenCode.includes('\n')) {
         const lines = thenCode.split('\n').filter(line => line.trim());
         return lines.map(line => `IF (\`${condition}\`) THEN ${line}`).join('\n') + '\n';
@@ -186,7 +186,7 @@ c4aGenerator.forBlock['c4a_if_js'] = function(block, generator) {
 c4aGenerator.forBlock['c4a_repeat_times'] = function(block, generator) {
     const times = generator.getFieldValue(block, 'TIMES');
     const doCode = generator.statementToCode(block, 'DO').trim();
-    
+
     if (doCode) {
         // Get first command for repeat
         const firstLine = doCode.split('\n')[0];
@@ -198,7 +198,7 @@ c4aGenerator.forBlock['c4a_repeat_times'] = function(block, generator) {
 c4aGenerator.forBlock['c4a_repeat_while'] = function(block, generator) {
     const condition = generator.getFieldValue(block, 'CONDITION');
     const doCode = generator.statementToCode(block, 'DO').trim();
-    
+
     if (doCode) {
         // Get first command for repeat
         const firstLine = doCode.split('\n')[0];
@@ -241,21 +241,21 @@ c4aGenerator.forBlock['c4a_proc_call'] = function(block, generator) {
 c4aGenerator.scrub_ = function(block, code, opt_thisOnly) {
     const nextBlock = block.nextConnection && block.nextConnection.targetBlock();
     let nextCode = '';
-    
+
     if (nextBlock) {
         if (!opt_thisOnly) {
             nextCode = c4aGenerator.blockToCode(nextBlock);
-            
+
             // Add blank line between comment and non-comment blocks
             const currentIsComment = block.type === 'c4a_comment';
             const nextIsComment = nextBlock.type === 'c4a_comment';
-            
+
             // Add blank line when transitioning from command to comment or vice versa
             if (currentIsComment !== nextIsComment && code.trim() && nextCode.trim()) {
                 nextCode = '\n' + nextCode;
             }
         }
     }
-    
+
     return code + nextCode;
 };

@@ -304,4 +304,3 @@ The Crawl4AI CLI provides:
 - Content filtering and optimization
 - Interactive Q&A capabilities
 - Various output formats
-

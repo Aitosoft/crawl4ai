@@ -8,9 +8,7 @@ Test approach:
 """
 
 import pytest
-import shutil
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from crawl4ai.browser_profiler import (
     ShrinkLevel,
@@ -103,7 +101,9 @@ class TestShrinkProfile:
         (profile / "GPUCache" / "data").write_bytes(b"g" * 2000)
         (profile / "Service Worker").mkdir()
         (profile / "Service Worker" / "CacheStorage").mkdir()
-        (profile / "Service Worker" / "CacheStorage" / "cache").write_bytes(b"s" * 50000)
+        (profile / "Service Worker" / "CacheStorage" / "cache").write_bytes(
+            b"s" * 50000
+        )
 
         # History and other files (removed at MEDIUM+)
         (profile / "History").write_bytes(b"h" * 1000)
@@ -292,12 +292,14 @@ class TestIntegrationWithPlaywright:
                 await page.goto("about:blank")
 
             # Seed test data (localStorage works on any origin)
-            await page.evaluate("""
+            await page.evaluate(
+                """
                 () => {
                     localStorage.setItem('jwt', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9');
                     localStorage.setItem('refresh', 'refresh_token_abc');
                 }
-            """)
+            """
+            )
 
             await browser.close()
 
@@ -398,11 +400,13 @@ class TestCLIIntegration:
     def test_cli_import(self):
         """Verify CLI imports work."""
         from crawl4ai.cli import shrink_cmd
+
         assert callable(shrink_cmd)
 
     def test_shrink_level_import(self):
         """Verify ShrinkLevel can be imported from cli."""
         from crawl4ai.browser_profiler import ShrinkLevel
+
         assert ShrinkLevel.AGGRESSIVE.value == "aggressive"
 
 
@@ -539,7 +543,7 @@ class TestEdgeCases:
         (profile / "Local Storage").mkdir()
         (profile / "Cache").mkdir()
 
-        result = shrink_profile(str(profile), ShrinkLevel.AGGRESSIVE)
+        shrink_profile(str(profile), ShrinkLevel.AGGRESSIVE)
 
         # storage_state.json doesn't match keep patterns, so it gets removed
         # This is expected - the shrink function preserves Chrome's auth files,
@@ -720,6 +724,7 @@ class TestEdgeCases:
 
     def test_shrink_all_levels_progressively_smaller(self, tmp_path):
         """Test that stricter levels remove more data."""
+
         def create_full_profile(path):
             path.mkdir(exist_ok=True)
             (path / "Network").mkdir(exist_ok=True)
@@ -733,16 +738,26 @@ class TestEdgeCases:
             (path / "Cache" / "data").write_bytes(b"x" * 2000)
 
         results = {}
-        for level in [ShrinkLevel.LIGHT, ShrinkLevel.MEDIUM,
-                      ShrinkLevel.AGGRESSIVE, ShrinkLevel.MINIMAL]:
+        for level in [
+            ShrinkLevel.LIGHT,
+            ShrinkLevel.MEDIUM,
+            ShrinkLevel.AGGRESSIVE,
+            ShrinkLevel.MINIMAL,
+        ]:
             profile = tmp_path / f"profile_{level.value}"
             create_full_profile(profile)
             results[level] = shrink_profile(str(profile), level)
 
         # Stricter levels should remove more
-        assert len(results[ShrinkLevel.LIGHT]["kept"]) >= len(results[ShrinkLevel.MEDIUM]["kept"])
-        assert len(results[ShrinkLevel.MEDIUM]["kept"]) >= len(results[ShrinkLevel.AGGRESSIVE]["kept"])
-        assert len(results[ShrinkLevel.AGGRESSIVE]["kept"]) >= len(results[ShrinkLevel.MINIMAL]["kept"])
+        assert len(results[ShrinkLevel.LIGHT]["kept"]) >= len(
+            results[ShrinkLevel.MEDIUM]["kept"]
+        )
+        assert len(results[ShrinkLevel.MEDIUM]["kept"]) >= len(
+            results[ShrinkLevel.AGGRESSIVE]["kept"]
+        )
+        assert len(results[ShrinkLevel.AGGRESSIVE]["kept"]) >= len(
+            results[ShrinkLevel.MINIMAL]["kept"]
+        )
 
     def test_shrink_with_broken_symlinks(self, tmp_path):
         """Test shrinking handles broken symlinks."""
@@ -967,6 +982,7 @@ class TestStressAndCornerCases:
 
     def test_shrink_minimal_vs_aggressive_indexeddb(self, tmp_path):
         """Test that MINIMAL removes IndexedDB but AGGRESSIVE keeps it."""
+
         def create_profile(path):
             path.mkdir()
             (path / "Local Storage").mkdir()

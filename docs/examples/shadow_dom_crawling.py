@@ -70,7 +70,7 @@ async def main():
     idx = md.find("Product Description")
     if idx >= 0:
         print("── Extracted product content ──")
-        print(md[idx:idx + 1200])
+        print(md[idx : idx + 1200])
 
 
 if __name__ == "__main__":

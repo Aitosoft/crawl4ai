@@ -316,7 +316,7 @@ async def demo_input_formats():
                 <span class="period">per year</span>
             </div>
         </header>
-        
+
         <section class="requirements">
             <div class="technical-skills">
                 <h3>Technical Requirements</h3>
@@ -332,7 +332,7 @@ async def demo_input_formats():
                     </li>
                 </ul>
             </div>
-            
+
             <div class="soft-skills">
                 <h3>Professional Skills</h3>
                 <ul class="required-skills">
@@ -345,13 +345,13 @@ async def demo_input_formats():
                 </ul>
             </div>
         </section>
-        
+
         <section class="timeline">
             <time class="deadline" datetime="2024-02-28">
                 Application Deadline: February 28, 2024
             </time>
         </section>
-        
+
         <footer class="contact-section">
             <div class="hiring-manager">
                 <h4>Hiring Manager</h4>
@@ -408,7 +408,7 @@ async def demo_input_formats():
         schema=JobPosting.model_json_schema(),
         extraction_type="schema",
         instruction="""
-        Extract job posting details into structured data. Focus on the visible text content 
+        Extract job posting details into structured data. Focus on the visible text content
         and organize requirements into categories.
         """,
         input_format="markdown",  # default
@@ -426,7 +426,7 @@ async def demo_input_formats():
         2. Extract contact info from the page footer or dedicated contact section
         3. Parse salary information from specially formatted elements
         4. Determine application deadline from timestamp or date elements
-        
+
         Use HTML attributes and classes to enhance extraction accuracy.
         """,
         input_format="html",  # explicitly use HTML

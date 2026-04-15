@@ -26,26 +26,26 @@ async def arun_many(
 
 ## Differences from `arun()`
 
-1. **Multiple URLs**:  
-   
-   - Instead of crawling a single URL, you pass a list of them (strings or tasks).  
+1. **Multiple URLs**:
+
+   - Instead of crawling a single URL, you pass a list of them (strings or tasks). 
    - The function returns `RunManyReturn` which contains either a **list** of `CrawlResult` or an **async generator** if streaming is enabled.
 
-2. **Concurrency & Dispatchers**:  
+2. **Concurrency & Dispatchers**:
 
-   - **`dispatcher`** param allows advanced concurrency control.  
-   - If omitted, a default dispatcher (like `MemoryAdaptiveDispatcher`) is used internally.  
+   - **`dispatcher`** param allows advanced concurrency control. 
+   - If omitted, a default dispatcher (like `MemoryAdaptiveDispatcher`) is used internally. 
    - Dispatchers handle concurrency, rate limiting, and memory-based adaptive throttling (see [Multi-URL Crawling](../advanced/multi-url-crawling.md)).
 
-3. **Streaming Support**:  
+3. **Streaming Support**:
 
    - Enable streaming by setting `stream=True` in your `CrawlerRunConfig`.
    - When streaming, use `async for` to process results as they become available.
    - Ideal for processing large numbers of URLs without waiting for all to complete.
 
-4. **Parallel** Execution**:  
+4. **Parallel** Execution**:
 
-   - `arun_many()` can run multiple requests concurrently under the hood.  
+   - `arun_many()` can run multiple requests concurrently under the hood. 
    - Each `CrawlResult` might also include a **`dispatch_result`** with concurrency details (like memory usage, start/end times).
 
 ### Basic Example (Batch Mode)
@@ -158,7 +158,7 @@ results = await crawler.arun_many(
 
 **Key Points**:
 - Each URL is processed by the same or separate sessions, depending on the dispatcher’s strategy.
-- `dispatch_result` in each `CrawlResult` (if using concurrency) can hold memory and timing info.  
+- `dispatch_result` in each `CrawlResult` (if using concurrency) can hold memory and timing info. 
 - If you need to handle authentication or session IDs, pass them in each individual task or within your run config.
 - **Important**: Always include a default config (without `url_matcher`) as the last item if you want to handle all URLs. Otherwise, unmatched URLs will fail.
 
@@ -170,8 +170,8 @@ Returns a **`RunManyReturn`** object which contains either a **list** of [`Crawl
 
 ## Dispatcher Reference
 
-- **`MemoryAdaptiveDispatcher`**: Dynamically manages concurrency based on system memory usage.  
-- **`SemaphoreDispatcher`**: Fixed concurrency limit, simpler but less adaptive.  
+- **`MemoryAdaptiveDispatcher`**: Dynamically manages concurrency based on system memory usage. 
+- **`SemaphoreDispatcher`**: Fixed concurrency limit, simpler but less adaptive. 
 
 For advanced usage or custom settings, see [Multi-URL Crawling with Dispatchers](../advanced/multi-url-crawling.md).
 
@@ -179,9 +179,9 @@ For advanced usage or custom settings, see [Multi-URL Crawling with Dispatchers]
 
 ## Common Pitfalls
 
-1. **Large Lists**: If you pass thousands of URLs, be mindful of memory or rate-limits. A dispatcher can help.  
+1. **Large Lists**: If you pass thousands of URLs, be mindful of memory or rate-limits. A dispatcher can help. 
 
-2. **Session Reuse**: If you need specialized logins or persistent contexts, ensure your dispatcher or tasks handle sessions accordingly.  
+2. **Session Reuse**: If you need specialized logins or persistent contexts, ensure your dispatcher or tasks handle sessions accordingly. 
 
 3. **Error Handling**: Each `CrawlResult` might fail for different reasons—always check `result.success` or the `error_message` before proceeding.
 

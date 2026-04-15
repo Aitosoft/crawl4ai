@@ -2,10 +2,10 @@
 
 Welcome to **Crawl4AI**, an open-source LLM-friendly Web Crawler & Scraper. In this tutorial, you’ll:
 
-1. Run your **first crawl** using minimal configuration.  
-2. Generate **Markdown** output (and learn how it’s influenced by content filters).  
-3. Experiment with a simple **CSS-based extraction** strategy.  
-4. See a glimpse of **LLM-based extraction** (including open-source and closed-source model options).  
+1. Run your **first crawl** using minimal configuration.
+2. Generate **Markdown** output (and learn how it’s influenced by content filters).
+3. Experiment with a simple **CSS-based extraction** strategy.
+4. See a glimpse of **LLM-based extraction** (including open-source and closed-source model options).
 5. Crawl a **dynamic** page that loads content via JavaScript.
 
 ---
@@ -14,9 +14,9 @@ Welcome to **Crawl4AI**, an open-source LLM-friendly Web Crawler & Scraper. In t
 
 Crawl4AI provides:
 
-- An asynchronous crawler, **`AsyncWebCrawler`**.  
-- Configurable browser and run settings via **`BrowserConfig`** and **`CrawlerRunConfig`**.  
-- Automatic HTML-to-Markdown conversion via **`DefaultMarkdownGenerator`** (supports optional filters).  
+- An asynchronous crawler, **`AsyncWebCrawler`**.
+- Configurable browser and run settings via **`BrowserConfig`** and **`CrawlerRunConfig`**.
+- Automatic HTML-to-Markdown conversion via **`DefaultMarkdownGenerator`** (supports optional filters).
 - Multiple extraction strategies (LLM-based or “traditional” CSS/XPath-based).
 
 By the end of this guide, you’ll have performed a basic crawl, generated Markdown, tried out two extraction strategies, and crawled a dynamic page that uses “Load More” buttons or JavaScript updates.
@@ -53,7 +53,7 @@ You now have a simple, working crawl!
 
 Crawl4AI’s crawler can be heavily customized using two main classes:
 
-1. **`BrowserConfig`**: Controls browser behavior (headless or full UI, user agent, JavaScript toggles, etc.).  
+1. **`BrowserConfig`**: Controls browser behavior (headless or full UI, user agent, JavaScript toggles, etc.).
 2. **`CrawlerRunConfig`**: Controls how each crawl runs (caching, extraction, timeouts, hooking, etc.).
 
 Below is an example with minimal usage:
@@ -89,9 +89,9 @@ We’ll explore more advanced config in later tutorials (like enabling proxies, 
 
 By default, Crawl4AI automatically generates Markdown from each crawled page. However, the exact output depends on whether you specify a **markdown generator** or **content filter**.
 
-- **`result.markdown`**:  
-  The direct HTML-to-Markdown conversion.  
-- **`result.markdown.fit_markdown`**:  
+- **`result.markdown`**:
+  The direct HTML-to-Markdown conversion.
+- **`result.markdown.fit_markdown`**:
   The same content after applying any configured **content filter** (e.g., `PruningContentFilter`).
 
 ### Example: Using a Filter with `DefaultMarkdownGenerator`
@@ -200,8 +200,8 @@ if __name__ == "__main__":
 
 For more complex or irregular pages, a language model can parse text intelligently into a structure you define. Crawl4AI supports **open-source** or **closed-source** providers:
 
-- **Open-Source Models** (e.g., `ollama/llama3.3`, `no_token`)  
-- **OpenAI Models** (e.g., `openai/gpt-4`, requires `api_token`)  
+- **Open-Source Models** (e.g., `ollama/llama3.3`, `no_token`)
+- **OpenAI Models** (e.g., `openai/gpt-4`, requires `api_token`)
 - Or any provider supported by the underlying library
 
 Below is an example using **open-source** style (no token) and closed-source:
@@ -244,7 +244,7 @@ async def extract_structured_data_using_llm(
             llm_config = LLMConfig(provider=provider,api_token=api_token),
             schema=OpenAIModelFee.model_json_schema(),
             extraction_type="schema",
-            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens. 
+            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens.
             Do not miss any models in the entire content.""",
             extra_args=extra_args,
         ),
@@ -283,13 +283,13 @@ from crawl4ai import AsyncWebCrawler, AdaptiveCrawler
 async def adaptive_example():
     async with AsyncWebCrawler() as crawler:
         adaptive = AdaptiveCrawler(crawler)
-        
+
         # Start adaptive crawling
         result = await adaptive.digest(
             start_url="https://docs.python.org/3/",
             query="async context managers"
         )
-        
+
         # View results
         adaptive.print_stats()
         print(f"Crawled {len(result.crawled_urls)} pages")
@@ -322,7 +322,7 @@ async def quick_parallel_example():
         "https://example.com/page2",
         "https://example.com/page3"
     ]
-    
+
     run_conf = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         stream=True  # Enable streaming mode
@@ -438,10 +438,10 @@ if __name__ == "__main__":
 
 **Key Points**:
 
-- **`BrowserConfig(headless=False)`**: We want to watch it click “Next Page.”  
-- **`CrawlerRunConfig(...)`**: We specify the extraction strategy, pass `session_id` to reuse the same page.  
-- **`js_code`** and **`wait_for`** are used for subsequent pages (`page > 0`) to click the “Next” button and wait for new commits to load.  
-- **`js_only=True`** indicates we’re not re-navigating but continuing the existing session.  
+- **`BrowserConfig(headless=False)`**: We want to watch it click “Next Page.”
+- **`CrawlerRunConfig(...)`**: We specify the extraction strategy, pass `session_id` to reuse the same page.
+- **`js_code`** and **`wait_for`** are used for subsequent pages (`page > 0`) to click the “Next” button and wait for new commits to load.
+- **`js_only=True`** indicates we’re not re-navigating but continuing the existing session.
 - Finally, we call `kill_session()` to clean up the page and browser session.
 
 ---
@@ -450,16 +450,16 @@ if __name__ == "__main__":
 
 Congratulations! You have:
 
-1. Performed a basic crawl and printed Markdown.  
-2. Used **content filters** with a markdown generator.  
-3. Extracted JSON via **CSS** or **LLM** strategies.  
+1. Performed a basic crawl and printed Markdown.
+2. Used **content filters** with a markdown generator.
+3. Extracted JSON via **CSS** or **LLM** strategies.
 4. Handled **dynamic** pages with JavaScript triggers.
 
 If you’re ready for more, check out:
 
-- **Installation**: A deeper dive into advanced installs, Docker usage (experimental), or optional dependencies.  
-- **Hooks & Auth**: Learn how to run custom JavaScript or handle logins with cookies, local storage, etc.  
-- **Deployment**: Explore ephemeral testing in Docker or plan for the upcoming stable Docker release.  
-- **Browser Management**: Delve into user simulation, stealth modes, and concurrency best practices.  
+- **Installation**: A deeper dive into advanced installs, Docker usage (experimental), or optional dependencies.
+- **Hooks & Auth**: Learn how to run custom JavaScript or handle logins with cookies, local storage, etc.
+- **Deployment**: Explore ephemeral testing in Docker or plan for the upcoming stable Docker release.
+- **Browser Management**: Delve into user simulation, stealth modes, and concurrency best practices.
 
 Crawl4AI is a powerful, flexible tool. Enjoy building out your scrapers, data pipelines, or AI-driven extraction flows. Happy crawling!

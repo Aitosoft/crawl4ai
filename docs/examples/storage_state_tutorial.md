@@ -138,16 +138,16 @@ async def on_browser_created_hook(browser):
     # Access the default context and create a page
     context = browser.contexts[0]
     page = await context.new_page()
-    
+
     # Navigate to the login page
     await page.goto("https://example.com/login", wait_until="domcontentloaded")
-    
+
     # Fill in credentials and submit
     await page.fill("input[name='username']", "myuser")
     await page.fill("input[name='password']", "mypassword")
     await page.click("button[type='submit']")
     await page.wait_for_load_state("networkidle")
-    
+
     # Now the site sets tokens in localStorage and cookies
     # Export this state to a file so we can reuse it
     await context.storage_state(path="my_storage_state.json")
@@ -162,7 +162,7 @@ async def main():
         use_persistent_context=True,
         user_data_dir="./my_user_data"
     ) as crawler:
-        
+
         # After on_browser_created_hook runs, we have storage_state saved to my_storage_state.json
         result = await crawler.arun(
             url='https://example.com/protected-page',
@@ -194,7 +194,7 @@ async def main():
         user_data_dir="./my_user_data",
         storage_state="my_storage_state.json"  # Reuse previously exported state
     ) as crawler:
-        
+
         # Now the crawler starts already logged in
         result = await crawler.arun(
             url='https://example.com/protected-page',
@@ -211,11 +211,11 @@ if __name__ == "__main__":
 
 **What’s Happening Here?**
 
-- During the first run, the `on_browser_created_hook` logs into the site.  
-- After logging in, the crawler exports the current session (cookies, localStorage, etc.) to `my_storage_state.json`.  
+- During the first run, the `on_browser_created_hook` logs into the site.
+- After logging in, the crawler exports the current session (cookies, localStorage, etc.) to `my_storage_state.json`.
 - On subsequent runs, passing `storage_state="my_storage_state.json"` starts the browser context with these tokens already in place, skipping the login steps.
 
-**Sign Out Scenario:**  
+**Sign Out Scenario:**
 If the website allows you to sign out by clearing tokens or by navigating to a sign-out URL, you can also run a script that uses `on_browser_created_hook` or `arun` to simulate signing out, then export the resulting `storage_state` again. That would give you a baseline “logged out” state to start fresh from next time.
 
 ---

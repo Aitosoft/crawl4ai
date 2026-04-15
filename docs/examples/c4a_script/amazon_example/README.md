@@ -48,7 +48,7 @@ Products are extracted with:
    ```bash
    # Ensure Crawl4AI is installed
    pip install crawl4ai
-   
+
    # Set up LLM API key (for script generation)
    export OPENAI_API_KEY="your-key-here"
    ```

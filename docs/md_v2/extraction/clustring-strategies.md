@@ -27,7 +27,7 @@ async with AsyncWebCrawler() as crawler:
         url="https://example.com/reviews",
         extraction_strategy=strategy
     )
-    
+
     content = result.extracted_content
 ```
 
@@ -41,15 +41,15 @@ CosineStrategy(
     semantic_filter: str = None,       # Keywords/topic for content filtering
     word_count_threshold: int = 10,    # Minimum words per cluster
     sim_threshold: float = 0.3,        # Similarity threshold (0.0 to 1.0)
-    
+
     # Clustering Parameters
     max_dist: float = 0.2,            # Maximum distance for clustering
     linkage_method: str = 'ward',      # Clustering linkage method
     top_k: int = 3,                   # Number of top categories to extract
-    
+
     # Model Configuration
     model_name: str = 'sentence-transformers/all-MiniLM-L6-v2',  # Embedding model
-    
+
     verbose: bool = False             # Enable logging
 )
 ```
@@ -68,7 +68,7 @@ CosineStrategy(
    ```python
    # Strict matching
    strategy = CosineStrategy(sim_threshold=0.8)
-   
+
    # Loose matching
    strategy = CosineStrategy(sim_threshold=0.3)
    ```
@@ -151,7 +151,7 @@ async def extract_pricing_features(url: str):
             url=url,
             extraction_strategy=strategy
         )
-        
+
         if result.success:
             content = json.loads(result.extracted_content)
             return {
@@ -201,14 +201,14 @@ try:
         url="https://example.com",
         extraction_strategy=strategy
     )
-    
+
     if result.success:
         content = json.loads(result.extracted_content)
         if not content:
             print("No relevant content found")
     else:
         print(f"Extraction failed: {result.error_message}")
-        
+
 except Exception as e:
     print(f"Error during extraction: {str(e)}")
 ```

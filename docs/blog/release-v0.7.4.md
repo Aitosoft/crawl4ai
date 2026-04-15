@@ -27,7 +27,7 @@ Today I'm releasing Crawl4AI v0.7.4—the Intelligent Table Extraction & Perform
 ```python
 from crawl4ai import (
     AsyncWebCrawler,
-    CrawlerRunConfig, 
+    CrawlerRunConfig,
     LLMConfig,
     LLMTableExtraction,
     CacheMode
@@ -61,14 +61,14 @@ config = CrawlerRunConfig(
 async with AsyncWebCrawler() as crawler:
     # Extract complex tables with intelligence
     result = await crawler.arun(
-        "https://en.wikipedia.org/wiki/List_of_countries_by_GDP", 
+        "https://en.wikipedia.org/wiki/List_of_countries_by_GDP",
         config=config
     )
-    
+
     # Access extracted tables directly
     for i, table in enumerate(result.tables):
         print(f"Table {i}: {len(table['data'])} rows × {len(table['headers'])} columns")
-        
+
         # Convert to pandas DataFrame instantly
         import pandas as pd
         df = pd.DataFrame(table['data'], columns=table['headers'])
@@ -139,14 +139,14 @@ async with AsyncWebCrawler() as crawler:
     # These will now run with true concurrency
     urls = [
         "https://httpbin.org/delay/1",
-        "https://httpbin.org/delay/1", 
+        "https://httpbin.org/delay/1",
         "https://httpbin.org/delay/1",
         "https://httpbin.org/delay/1"
     ]
-    
+
     # Processes in truly parallel fashion
     results = await crawler.arun_many(urls)
-    
+
     # Performance improvement: ~4x faster for fast-completing tasks
     print(f"Processed {len(results)} URLs with true concurrency")
 ```
@@ -195,7 +195,7 @@ async with AsyncWebCrawler(config=browser_config) as crawler:
 # Now properly handles all URL formats
 urls = [
     "https://example.com",
-    "raw://static-html-content", 
+    "raw://static-html-content",
     "raw:file://local-file.html"
 ]
 
@@ -219,7 +219,7 @@ from crawl4ai import BrowserConfig, ProxyConfig
 # String format
 proxy_config = ProxyConfig("http://proxy.example.com:8080")
 
-# Dictionary format  
+# Dictionary format
 proxy_config = ProxyConfig({
     "server": "http://proxy.example.com:8080",
     "username": "user",
@@ -246,7 +246,7 @@ This release includes several Docker and infrastructure improvements:
 Enhanced documentation includes:
 
 - **LLM Table Extraction Guide**: Comprehensive examples and best practices
-- **Migration Documentation**: Updated patterns for new table extraction methods  
+- **Migration Documentation**: Updated patterns for new table extraction methods
 - **Docker Deployment**: Complete deployment guide with examples
 - **Performance Optimization**: Guidelines for concurrent crawling
 

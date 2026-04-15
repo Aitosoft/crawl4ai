@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const button = document.createElement('button');
         button.id = 'ask-ai-selection-btn';
         button.className = 'ask-ai-selection-button';
-        
+
         // Add icon and text for better visibility
         button.innerHTML = `
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style="margin-right: 4px; vertical-align: middle;">
@@ -16,23 +16,23 @@ document.addEventListener('DOMContentLoaded', () => {
             </svg>
             <span>Ask AI</span>
         `;
-        
+
         // Common styles
         button.style.display = 'none'; // Initially hidden
         button.style.position = 'absolute';
         button.style.zIndex = '1500'; // Ensure it's on top
         button.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.4)'; // More pronounced shadow
         button.style.transition = 'transform 0.15s ease, background-color 0.2s ease'; // Smooth hover effect
-        
+
         // Add transform on hover
         button.addEventListener('mouseover', () => {
             button.style.transform = 'scale(1.05)';
         });
-        
+
         button.addEventListener('mouseout', () => {
             button.style.transform = 'scale(1)';
         });
-        
+
         document.body.appendChild(button);
         button.addEventListener('click', handleAskAiClick);
         return button;
@@ -66,18 +66,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get viewport dimensions
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
-        
+
         // Calculate position based on selection
         const scrollX = window.scrollX;
         const scrollY = window.scrollY;
-        
+
         // Default position (top-right of selection)
         let buttonTop = rect.top + scrollY - askAiButton.offsetHeight - 5; // 5px above
         let buttonLeft = rect.right + scrollX + 5; // 5px to the right
-        
+
         // Check if we're on mobile (which we define as less than 768px)
         const isMobile = viewportWidth <= 768;
-        
+
         if (isMobile) {
             // On mobile, position centered above selection to avoid edge issues
             buttonTop = rect.top + scrollY - askAiButton.offsetHeight - 10; // 10px above on mobile
@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 buttonLeft = scrollX + viewportWidth - askAiButton.offsetWidth - 10; // 10px from right edge
             }
         }
-        
+
         // Check top edge (for all devices)
         if (buttonTop < scrollY) {
             // If would go above viewport, position below selection instead
@@ -165,16 +165,16 @@ document.addEventListener('DOMContentLoaded', () => {
             hideButton();
         }
     });
-    
+
     document.addEventListener('touchstart', (event) => {
         // Same for touch events, but only hide if not on the button
         if (askAiButton && event.target !== askAiButton) {
             hideButton();
         }
     });
-    
+
     document.addEventListener('scroll', hideButton, true); // Capture scroll events
-    
+
     // Also hide when pressing Escape key
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {

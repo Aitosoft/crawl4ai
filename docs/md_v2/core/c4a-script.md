@@ -20,7 +20,7 @@ C4A-Script comes with a built-in Blockly visual editor, allowing you to create s
 
 **Perfect for:**
 - **UI Testing**: Automate user interaction flows
-- **Demo Creation**: Build interactive product demonstrations  
+- **Demo Creation**: Build interactive product demonstrations
 - **Data Entry**: Automate form filling and submissions
 - **Testing Workflows**: Validate complex user journeys
 - **Training**: Teach web automation without code complexity
@@ -163,7 +163,7 @@ Click, drag, and move like a human:
 | `SCROLL` | Scroll in direction | `SCROLL DOWN 500` |
 | `DRAG` | Drag from point to point | `DRAG 100 100 500 300` |
 
-### ⌨️ Keyboard Commands  
+### ⌨️ Keyboard Commands
 Type text and press keys naturally:
 
 | Command | Purpose | Example |
@@ -264,7 +264,7 @@ WAIT `.success-message` 10
 C4A-Script includes a powerful visual programming interface built on Google Blockly. Perfect for:
 
 - **Non-programmers** who want to create automation
-- **Rapid prototyping** of automation workflows  
+- **Rapid prototyping** of automation workflows
 - **Educational environments** for teaching automation concepts
 - **Collaborative development** where visual representation helps communication
 
@@ -376,7 +376,7 @@ SET `#email` $test_email
 ## Getting Help
 
 - **📖 [Complete Examples](/examples/c4a_script/)** - Real-world automation scripts
-- **🎮 [Interactive Tutorial](/examples/c4a_script/tutorial/)** - Hands-on learning environment  
+- **🎮 [Interactive Tutorial](/examples/c4a_script/tutorial/)** - Hands-on learning environment
 - **📋 [API Reference](/api/c4a-script-reference/)** - Detailed command documentation
 - **🌐 [Live Demo](https://docs.crawl4ai.com/c4a-script/demo)** - Try it in your browser
 

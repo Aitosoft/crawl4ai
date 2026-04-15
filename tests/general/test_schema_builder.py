@@ -6,11 +6,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
-import asyncio
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
-from crawl4ai import JsonCssExtractionStrategy, JsonXPathExtractionStrategy
-from crawl4ai.utils import preprocess_html_for_schema, JsonXPathExtractionStrategy
+from crawl4ai import JsonCssExtractionStrategy
 import json
 
 # Test HTML - A complex job board with companies, departments, and positions
@@ -26,7 +22,7 @@ test_html = """
                 <a href="https://google.careers" class="careers-link">Careers Page</a>
             </div>
         </div>
-        
+
         <div class="departments">
             <div class="department">
                 <h2 class="department-name">Engineering</h2>
@@ -53,7 +49,7 @@ test_html = """
                     <!-- More positions -->
                 </div>
             </div>
-            
+
             <div class="department">
                 <h2 class="department-name">Marketing</h2>
                 <div class="positions">
@@ -83,30 +79,32 @@ test_html = """
 </div>
 """
 
+
 # Test cases
 def test_schema_generation():
     # Test 1: No query (should extract everything)
     print("\nTest 1: No Query (Full Schema)")
     schema1 = JsonCssExtractionStrategy.generate_schema(test_html)
     print(json.dumps(schema1, indent=2))
-    
+
     # Test 2: Query for just basic job info
     print("\nTest 2: Basic Job Info Query")
     query2 = "I only need job titles, salaries, and locations"
     schema2 = JsonCssExtractionStrategy.generate_schema(test_html, query2)
     print(json.dumps(schema2, indent=2))
-    
+
     # Test 3: Query for company and department structure
     print("\nTest 3: Organizational Structure Query")
     query3 = "Extract company details and department names, without position details"
     schema3 = JsonCssExtractionStrategy.generate_schema(test_html, query3)
     print(json.dumps(schema3, indent=2))
-    
+
     # Test 4: Query for specific skills tracking
     print("\nTest 4: Skills Analysis Query")
     query4 = "I want to analyze required skills across all positions"
     schema4 = JsonCssExtractionStrategy.generate_schema(test_html, query4)
     print(json.dumps(schema4, indent=2))
+
 
 if __name__ == "__main__":
     test_schema_generation()

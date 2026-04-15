@@ -77,14 +77,14 @@ print_error() {
 execute_cmd() {
     local cmd="$1"
     local description="$2"
-    
+
     print_status "$description"
-    
+
     if [ "$DRY_RUN" = true ]; then
         echo "DRY RUN: $cmd"
         return 0
     fi
-    
+
     echo "Executing: $cmd"
     if eval "$cmd"; then
         print_success "✅ $description completed"
@@ -101,12 +101,12 @@ check_azure_cli() {
         print_error "Azure CLI is not installed. Please install it first."
         exit 1
     fi
-    
+
     if ! az account show &> /dev/null; then
         print_error "Not logged in to Azure. Please run 'az login' first."
         exit 1
     fi
-    
+
     print_success "Azure CLI is ready"
 }
 
@@ -121,32 +121,32 @@ deploy_crawl4ai() {
     echo "   Image: $IMAGE"
     echo "   API Token: $API_TOKEN"
     echo ""
-    
+
     if [ "$UPDATE_ONLY" = false ]; then
         # Create resource group
         execute_cmd "az group create --name $RESOURCE_GROUP --location $LOCATION" \
                    "Creating resource group"
-        
+
         # Create Log Analytics workspace
         execute_cmd "az monitor log-analytics workspace create \
                       --resource-group $RESOURCE_GROUP \
                       --workspace-name $LOG_WORKSPACE \
                       --location $LOCATION" \
                    "Creating Log Analytics workspace"
-        
+
         # Get workspace ID and key
         if [ "$DRY_RUN" = false ]; then
             WORKSPACE_ID=$(az monitor log-analytics workspace show \
                          --resource-group $RESOURCE_GROUP \
                          --workspace-name $LOG_WORKSPACE \
                          --query customerId -o tsv)
-            
+
             WORKSPACE_KEY=$(az monitor log-analytics workspace get-shared-keys \
                           --resource-group $RESOURCE_GROUP \
                           --workspace-name $LOG_WORKSPACE \
                           --query primarySharedKey -o tsv)
         fi
-        
+
         # Create Container Apps environment
         execute_cmd "az containerapp env create \
                       --name $ENVIRONMENT \
@@ -156,7 +156,7 @@ deploy_crawl4ai() {
                       --logs-workspace-key $WORKSPACE_KEY" \
                    "Creating Container Apps environment"
     fi
-    
+
     # Create or update the container app
     local app_cmd="az containerapp create \
         --name $CONTAINER_APP \
@@ -177,22 +177,22 @@ deploy_crawl4ai() {
             MAX_CONCURRENT_REQUESTS=10 \
             SECURITY_ENABLED=true \
             JWT_ENABLED=true"
-    
+
     if [ "$UPDATE_ONLY" = true ]; then
         app_cmd=$(echo "$app_cmd" | sed 's/create/update/')
     fi
-    
+
     execute_cmd "$app_cmd" "$([ "$UPDATE_ONLY" = true ] && echo "Updating" || echo "Creating") container app"
-    
+
     # Show deployment results
     if [ "$DRY_RUN" = false ]; then
         print_status "📊 Getting deployment information..."
-        
+
         APP_URL=$(az containerapp show \
                   --name $CONTAINER_APP \
                   --resource-group $RESOURCE_GROUP \
                   --query properties.configuration.ingress.fqdn -o tsv)
-        
+
         print_success "🎉 Deployment completed successfully!"
         echo ""
         echo "📋 Deployment Summary:"

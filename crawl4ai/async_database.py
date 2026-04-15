@@ -396,11 +396,12 @@ class AsyncDatabaseManager:
         Returns dict with: url, etag, last_modified, head_fingerprint, cached_at, response_headers
         This is used for cache validation without loading full content.
         """
+
         async def _get_metadata(db):
             async with db.execute(
                 """SELECT url, etag, last_modified, head_fingerprint, cached_at, response_headers
                    FROM crawled_data WHERE url = ?""",
-                (url,)
+                (url,),
             ) as cursor:
                 row = await cursor.fetchone()
                 if not row:
@@ -413,7 +414,8 @@ class AsyncDatabaseManager:
                 try:
                     row_dict["response_headers"] = (
                         json.loads(row_dict["response_headers"])
-                        if row_dict["response_headers"] else {}
+                        if row_dict["response_headers"]
+                        else {}
                     )
                 except json.JSONDecodeError:
                     row_dict["response_headers"] = {}
@@ -442,6 +444,7 @@ class AsyncDatabaseManager:
         Update only the cache validation metadata for a URL.
         Used to update etag/last_modified after a successful validation.
         """
+
         async def _update(db):
             updates = []
             values = []
@@ -462,7 +465,7 @@ class AsyncDatabaseManager:
             values.append(url)
             await db.execute(
                 f"UPDATE crawled_data SET {', '.join(updates)} WHERE url = ?",
-                tuple(values)
+                tuple(values),
             )
 
         try:
@@ -525,7 +528,11 @@ class AsyncDatabaseManager:
         # Extract cache validation headers from response
         response_headers = result.response_headers or {}
         etag = response_headers.get("etag") or response_headers.get("ETag") or ""
-        last_modified = response_headers.get("last-modified") or response_headers.get("Last-Modified") or ""
+        last_modified = (
+            response_headers.get("last-modified")
+            or response_headers.get("Last-Modified")
+            or ""
+        )
         # head_fingerprint is set by caller via result attribute (if available)
         head_fingerprint = getattr(result, "head_fingerprint", None) or ""
         cached_at = time.time()

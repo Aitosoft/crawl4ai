@@ -36,15 +36,15 @@ Below is a **field-by-field** explanation and possible usage patterns.
 
 ## 1. Basic Crawl Info
 
-### 1.1 **`url`** *(str)*  
-**What**: The final crawled URL (after any redirects).  
+### 1.1 **`url`** *(str)*
+**What**: The final crawled URL (after any redirects).
 **Usage**:
 ```python
 print(result.url)  # e.g., "https://example.com/"
 ```
 
-### 1.2 **`success`** *(bool)*  
-**What**: `True` if the crawl pipeline ended without major errors; `False` otherwise.  
+### 1.2 **`success`** *(bool)*
+**What**: `True` if the crawl pipeline ended without major errors; `False` otherwise.
 **Usage**:
 ```python
 if not result.success:
@@ -67,33 +67,33 @@ if result.status_code in (301, 302) and result.redirected_status_code == 200:
     print(f"Redirected to {result.redirected_url} (OK)")
 ```
 
-### 1.5 **`error_message`** *(Optional[str])*  
-**What**: If `success=False`, a textual description of the failure.  
+### 1.5 **`error_message`** *(Optional[str])*
+**What**: If `success=False`, a textual description of the failure.
 **Usage**:
 ```python
 if not result.success:
     print("Error:", result.error_message)
 ```
 
-### 1.5 **`session_id`** *(Optional[str])*  
-**What**: The ID used for reusing a browser context across multiple calls.  
+### 1.5 **`session_id`** *(Optional[str])*
+**What**: The ID used for reusing a browser context across multiple calls.
 **Usage**:
 ```python
 # If you used session_id="login_session" in CrawlerRunConfig, see it here:
 print("Session:", result.session_id)
 ```
 
-### 1.6 **`response_headers`** *(Optional[dict])*  
-**What**: Final HTTP response headers.  
+### 1.6 **`response_headers`** *(Optional[dict])*
+**What**: Final HTTP response headers.
 **Usage**:
 ```python
 if result.response_headers:
     print("Server:", result.response_headers.get("Server", "Unknown"))
 ```
 
-### 1.7 **`ssl_certificate`** *(Optional[SSLCertificate])*  
-**What**: If `fetch_ssl_certificate=True` in your CrawlerRunConfig, **`result.ssl_certificate`** contains a  [**`SSLCertificate`**](../advanced/ssl-certificate.md) object describing the site's certificate. You can export the cert in multiple formats (PEM/DER/JSON) or access its properties like `issuer`, 
- `subject`, `valid_from`, `valid_until`, etc. 
+### 1.7 **`ssl_certificate`** *(Optional[SSLCertificate])*
+**What**: If `fetch_ssl_certificate=True` in your CrawlerRunConfig, **`result.ssl_certificate`** contains a  [**`SSLCertificate`**](../advanced/ssl-certificate.md) object describing the site's certificate. You can export the cert in multiple formats (PEM/DER/JSON) or access its properties like `issuer`,
+ `subject`, `valid_from`, `valid_until`, etc.
 **Usage**:
 ```python
 if result.ssl_certificate:
@@ -104,16 +104,16 @@ if result.ssl_certificate:
 
 ## 2. Raw / Cleaned Content
 
-### 2.1 **`html`** *(str)*  
-**What**: The **original** unmodified HTML from the final page load.  
+### 2.1 **`html`** *(str)*
+**What**: The **original** unmodified HTML from the final page load.
 **Usage**:
 ```python
 # Possibly large
 print(len(result.html))
 ```
 
-### 2.2 **`cleaned_html`** *(Optional[str])*  
-**What**: A sanitized HTML version—scripts, styles, or excluded tags are removed based on your `CrawlerRunConfig`.  
+### 2.2 **`cleaned_html`** *(Optional[str])*
+**What**: A sanitized HTML version—scripts, styles, or excluded tags are removed based on your `CrawlerRunConfig`.
 **Usage**:
 ```python
 print(result.cleaned_html[:500])  # Show a snippet
@@ -128,16 +128,16 @@ print(result.cleaned_html[:500])  # Show a snippet
 
 Crawl4AI can convert HTML→Markdown, optionally including:
 
-- **Raw** markdown  
-- **Links as citations** (with a references section)  
+- **Raw** markdown
+- **Links as citations** (with a references section)
 - **Fit** markdown if a **content filter** is used (like Pruning or BM25)
 
 
 **`MarkdownGenerationResult`** includes:
-- **`raw_markdown`** *(str)*: The full HTML→Markdown conversion.  
-- **`markdown_with_citations`** *(str)*: Same markdown, but with link references as academic-style citations.  
-- **`references_markdown`** *(str)*: The reference list or footnotes at the end.  
-- **`fit_markdown`** *(Optional[str])*: If content filtering (Pruning/BM25) was applied, the filtered "fit" text.  
+- **`raw_markdown`** *(str)*: The full HTML→Markdown conversion.
+- **`markdown_with_citations`** *(str)*: Same markdown, but with link references as academic-style citations.
+- **`references_markdown`** *(str)*: The reference list or footnotes at the end.
+- **`fit_markdown`** *(Optional[str])*: If content filtering (Pruning/BM25) was applied, the filtered "fit" text.
 - **`fit_html`** *(Optional[str])*: The HTML that led to `fit_markdown`.
 
 **Usage**:
@@ -151,8 +151,8 @@ if result.markdown:
         print("Pruned text:", md_res.fit_markdown[:300])
 ```
 
-### 3.2 **`markdown`** *(Optional[Union[str, MarkdownGenerationResult]])*  
-**What**: Holds the `MarkdownGenerationResult`.  
+### 3.2 **`markdown`** *(Optional[Union[str, MarkdownGenerationResult]])*
+**What**: Holds the `MarkdownGenerationResult`.
 **Usage**:
 ```python
 print(result.markdown.raw_markdown[:200])
@@ -165,14 +165,14 @@ print(result.markdown.fit_html)
 
 ## 4. Media & Links
 
-### 4.1 **`media`** *(Dict[str, List[Dict]])*  
-**What**: Contains info about discovered images, videos, or audio. Typically keys: `"images"`, `"videos"`, `"audios"`.  
+### 4.1 **`media`** *(Dict[str, List[Dict]])*
+**What**: Contains info about discovered images, videos, or audio. Typically keys: `"images"`, `"videos"`, `"audios"`.
 **Common Fields** in each item:
 
-- `src` *(str)*: Media URL  
-- `alt` or `title` *(str)*: Descriptive text  
-- `score` *(float)*: Relevance score if the crawler's heuristic found it "important"  
-- `desc` or `description` *(Optional[str])*: Additional context extracted from surrounding text  
+- `src` *(str)*: Media URL
+- `alt` or `title` *(str)*: Descriptive text
+- `score` *(float)*: Relevance score if the crawler's heuristic found it "important"
+- `desc` or `description` *(Optional[str])*: Additional context extracted from surrounding text
 
 **Usage**:
 ```python
@@ -182,14 +182,14 @@ for img in images:
         print("High-value image:", img["src"])
 ```
 
-### 4.2 **`links`** *(Dict[str, List[Dict]])*  
-**What**: Holds internal and external link data. Usually two keys: `"internal"` and `"external"`.  
+### 4.2 **`links`** *(Dict[str, List[Dict]])*
+**What**: Holds internal and external link data. Usually two keys: `"internal"` and `"external"`.
 **Common Fields**:
 
-- `href` *(str)*: The link target  
-- `text` *(str)*: Link text  
-- `title` *(str)*: Title attribute  
-- `context` *(str)*: Surrounding text snippet  
+- `href` *(str)*: The link target
+- `text` *(str)*: Link text
+- `title` *(str)*: Title attribute
+- `context` *(str)*: Surrounding text snippet
 - `domain` *(str)*: If external, the domain
 
 **Usage**:
@@ -202,8 +202,8 @@ for link in result.links["internal"]:
 
 ## 5. Additional Fields
 
-### 5.1 **`extracted_content`** *(Optional[str])*  
-**What**: If you used **`extraction_strategy`** (CSS, LLM, etc.), the structured output (JSON).  
+### 5.1 **`extracted_content`** *(Optional[str])*
+**What**: If you used **`extraction_strategy`** (CSS, LLM, etc.), the structured output (JSON).
 **Usage**:
 ```python
 if result.extracted_content:
@@ -211,8 +211,8 @@ if result.extracted_content:
     print(data)
 ```
 
-### 5.2 **`downloaded_files`** *(Optional[List[str]])*  
-**What**: If `accept_downloads=True` in your `BrowserConfig` + `downloads_path`, lists local file paths for downloaded items.  
+### 5.2 **`downloaded_files`** *(Optional[List[str]])*
+**What**: If `accept_downloads=True` in your `BrowserConfig` + `downloads_path`, lists local file paths for downloaded items.
 **Usage**:
 ```python
 if result.downloaded_files:
@@ -220,8 +220,8 @@ if result.downloaded_files:
         print("Downloaded:", file_path)
 ```
 
-### 5.3 **`screenshot`** *(Optional[str])*  
-**What**: Base64-encoded screenshot if `screenshot=True` in `CrawlerRunConfig`.  
+### 5.3 **`screenshot`** *(Optional[str])*
+**What**: Base64-encoded screenshot if `screenshot=True` in `CrawlerRunConfig`.
 **Usage**:
 ```python
 import base64
@@ -230,8 +230,8 @@ if result.screenshot:
         f.write(base64.b64decode(result.screenshot))
 ```
 
-### 5.4 **`pdf`** *(Optional[bytes])*  
-**What**: Raw PDF bytes if `pdf=True` in `CrawlerRunConfig`.  
+### 5.4 **`pdf`** *(Optional[bytes])*
+**What**: Raw PDF bytes if `pdf=True` in `CrawlerRunConfig`.
 **Usage**:
 ```python
 if result.pdf:
@@ -239,8 +239,8 @@ if result.pdf:
         f.write(result.pdf)
 ```
 
-### 5.5 **`mhtml`** *(Optional[str])*  
-**What**: MHTML snapshot of the page if `capture_mhtml=True` in `CrawlerRunConfig`. MHTML (MIME HTML) format preserves the entire web page with all its resources (CSS, images, scripts, etc.) in a single file.  
+### 5.5 **`mhtml`** *(Optional[str])*
+**What**: MHTML snapshot of the page if `capture_mhtml=True` in `CrawlerRunConfig`. MHTML (MIME HTML) format preserves the entire web page with all its resources (CSS, images, scripts, etc.) in a single file.
 **Usage**:
 ```python
 if result.mhtml:
@@ -248,8 +248,8 @@ if result.mhtml:
         f.write(result.mhtml)
 ```
 
-### 5.6 **`metadata`** *(Optional[dict])*  
-**What**: Page-level metadata if discovered (title, description, OG data, etc.).  
+### 5.6 **`metadata`** *(Optional[dict])*
+**What**: Page-level metadata if discovered (title, description, OG data, etc.).
 **Usage**:
 ```python
 if result.metadata:
@@ -279,7 +279,7 @@ for result in results:
         print(f"Duration: {dr.end_time - dr.start_time}")
 ```
 
-> **Note**: This field is typically populated when using `arun_many(...)` alongside a **dispatcher** (e.g., `MemoryAdaptiveDispatcher` or `SemaphoreDispatcher`). If no concurrency or dispatcher is used, `dispatch_result` may remain `None`. 
+> **Note**: This field is typically populated when using `arun_many(...)` alongside a **dispatcher** (e.g., `MemoryAdaptiveDispatcher` or `SemaphoreDispatcher`). If no concurrency or dispatcher is used, `dispatch_result` may remain `None`.
 
 ---
 
@@ -303,12 +303,12 @@ if result.network_requests:
     requests = [r for r in result.network_requests if r.get("event_type") == "request"]
     responses = [r for r in result.network_requests if r.get("event_type") == "response"]
     failures = [r for r in result.network_requests if r.get("event_type") == "request_failed"]
-    
+
     print(f"Captured {len(requests)} requests, {len(responses)} responses, and {len(failures)} failures")
-    
+
     # Analyze API calls
     api_calls = [r for r in requests if "api" in r.get("url", "")]
-    
+
     # Identify failed resources
     for failure in failures:
         print(f"Failed to load: {failure.get('url')} - {failure.get('failure_text')}")
@@ -330,9 +330,9 @@ if result.console_messages:
     for msg in result.console_messages:
         msg_type = msg.get("type", "unknown")
         message_types[msg_type] = message_types.get(msg_type, 0) + 1
-    
+
     print(f"Message type counts: {message_types}")
-    
+
     # Display errors (which are usually most important)
     for msg in result.console_messages:
         if msg.get("type") == "error":
@@ -352,15 +352,15 @@ async def handle_result(result: CrawlResult):
     if not result.success:
         print("Crawl error:", result.error_message)
         return
-    
+
     # Basic info
     print("Crawled URL:", result.url)
     print("Status code:", result.status_code)
-    
+
     # HTML
     print("Original HTML size:", len(result.html))
     print("Cleaned HTML size:", len(result.cleaned_html or ""))
-    
+
     # Markdown output
     if result.markdown:
         print("Raw Markdown:", result.markdown.raw_markdown[:300])
@@ -377,7 +377,7 @@ async def handle_result(result: CrawlResult):
     # Extraction strategy result
     if result.extracted_content:
         print("Structured data:", result.extracted_content)
-    
+
     # Screenshot/PDF/MHTML
     if result.screenshot:
         print("Screenshot length:", len(result.screenshot))
@@ -385,7 +385,7 @@ async def handle_result(result: CrawlResult):
         print("PDF bytes length:", len(result.pdf))
     if result.mhtml:
         print("MHTML length:", len(result.mhtml))
-        
+
     # Network and console capturing
     if result.network_requests:
         print(f"Network requests captured: {len(result.network_requests)}")
@@ -395,7 +395,7 @@ async def handle_result(result: CrawlResult):
             if "resource_type" in req:
                 req_types[req["resource_type"]] = req_types.get(req["resource_type"], 0) + 1
         print(f"Resource types: {req_types}")
-        
+
     if result.console_messages:
         print(f"Console messages captured: {len(result.console_messages)}")
         # Count by message type
@@ -409,23 +409,23 @@ async def handle_result(result: CrawlResult):
 
 ## 9. Key Points & Future
 
-1. **Deprecated legacy properties of CrawlResult**  
+1. **Deprecated legacy properties of CrawlResult**
    - `markdown_v2` - Removed in v0.5 and now raises `AttributeError`. Use `result.markdown` instead.
    - `fit_markdown` and `fit_html` - No longer top-level properties in v0.5. Use `result.markdown.fit_markdown` and `result.markdown.fit_html`.
 
-2. **Fit Content**  
-   - **`fit_markdown`** and **`fit_html`** appear in MarkdownGenerationResult, only if you used a content filter (like **PruningContentFilter** or **BM25ContentFilter**) inside your **MarkdownGenerationStrategy** or set them directly.  
+2. **Fit Content**
+   - **`fit_markdown`** and **`fit_html`** appear in MarkdownGenerationResult, only if you used a content filter (like **PruningContentFilter** or **BM25ContentFilter**) inside your **MarkdownGenerationStrategy** or set them directly.
    - If no filter is used, they remain `None`.
 
-3. **References & Citations**  
+3. **References & Citations**
    - If you enable link citations in your `DefaultMarkdownGenerator` (`options={"citations": True}`), you’ll see `markdown_with_citations` plus a **`references_markdown`** block. This helps large language models or academic-like referencing.
 
-4. **Links & Media**  
-   - `links["internal"]` and `links["external"]` group discovered anchors by domain.  
+4. **Links & Media**
+   - `links["internal"]` and `links["external"]` group discovered anchors by domain.
    - `media["images"]` / `["videos"]` / `["audios"]` store extracted media elements with optional scoring or context.
 
-5. **Error Cases**  
-   - If `success=False`, check `error_message` (e.g., timeouts, invalid URLs).  
+5. **Error Cases**
+   - If `success=False`, check `error_message` (e.g., timeouts, invalid URLs).
    - `status_code` might be `None` if we failed before an HTTP response.
 
 Use **`CrawlResult`** to glean all final outputs and feed them into your data pipelines, AI models, or archives. With the synergy of a properly configured **BrowserConfig** and **CrawlerRunConfig**, the crawler can produce robust, structured results here in **`CrawlResult`**.

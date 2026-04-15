@@ -10,10 +10,10 @@ In this tutorial, you'll learn:
 4. Creating **advanced filtering chains** for sophisticated crawls
 5. Using **BestFirstCrawling** for intelligent exploration prioritization
 6. **Crash recovery** for long-running production crawls
-7. **Prefetch mode** for fast URL discovery  
+7. **Prefetch mode** for fast URL discovery
 
-> **Prerequisites**  
-> - You’ve completed or read [AsyncWebCrawler Basics](../core/simple-crawling.md) to understand how to run a simple crawl.  
+> **Prerequisites**
+> - You’ve completed or read [AsyncWebCrawler Basics](../core/simple-crawling.md) to understand how to run a simple crawl.
 > - You know how to configure `CrawlerRunConfig`.
 
 ---
@@ -32,18 +32,18 @@ async def main():
     # Configure a 2-level deep crawl
     config = CrawlerRunConfig(
         deep_crawl_strategy=BFSDeepCrawlStrategy(
-            max_depth=2, 
+            max_depth=2,
             include_external=False
         ),
         scraping_strategy=LXMLWebScrapingStrategy(),
         verbose=True
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         results = await crawler.arun("https://example.com", config=config)
-        
+
         print(f"Crawled {len(results)} pages in total")
-        
+
         # Access individual results
         for result in results[:3]:  # Show first 3 results
             print(f"URL: {result.url}")
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**What's happening?**  
+**What's happening?**
 - `BFSDeepCrawlStrategy(max_depth=2, include_external=False)` instructs Crawl4AI to:
   - Crawl the starting page (depth 0) plus 2 more levels
   - Stay within the same domain (don't follow external links)
@@ -159,7 +159,7 @@ config = CrawlerRunConfig(
 async with AsyncWebCrawler() as crawler:
     # Wait for ALL results to be collected before returning
     results = await crawler.arun("https://example.com", config=config)
-    
+
     for result in results:
         process_result(result)
 ```
@@ -226,13 +226,13 @@ from crawl4ai.deep_crawling.filters import (
 filter_chain = FilterChain([
     # Only follow URLs with specific patterns
     URLPatternFilter(patterns=["*guide*", "*tutorial*"]),
-    
+
     # Only crawl specific domains
     DomainFilter(
         allowed_domains=["docs.example.com"],
         blocked_domains=["old.docs.example.com"]
     ),
-    
+
     # Only include specific content types
     ContentTypeFilter(allowed_types=["text/html"])
 ])
@@ -370,10 +370,10 @@ async def run_advanced_crawler():
             allowed_domains=["docs.example.com"],
             blocked_domains=["old.docs.example.com"]
         ),
-        
+
         # URL patterns to include
         URLPatternFilter(patterns=["*guide*", "*tutorial*", "*blog*"]),
-        
+
         # Content type filtering
         ContentTypeFilter(allowed_types=["text/html"])
     ])
@@ -469,7 +469,7 @@ Note that for BestFirstCrawlingStrategy, score_threshold is not needed since pag
 2.**Don't neglect the scoring component.** BestFirstCrawling works best with well-tuned scorers. Experiment with keyword weights for optimal prioritization.
 
 3.**Be a good web citizen.**  Respect robots.txt. (disabled by default)
-  
+
 4.**Handle page errors gracefully.** Not all pages will be accessible. Check `result.status` when processing results.
 
 5.**Balance breadth vs. depth.** Choose your strategy wisely - BFS for comprehensive coverage, DFS for deep exploration, BestFirst for focused relevance-based crawling.

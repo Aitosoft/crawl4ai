@@ -39,7 +39,7 @@ jobs:
           DISCORD_WEBHOOK: ${{ steps.set-webhook.outputs.webhook }}
         with:
           args: |
-            ${{ github.event_name == 'issues' && format('📣 New issue created: **{0}** by {1} - {2}', github.event.issue.title, github.event.issue.user.login, github.event.issue.html_url) || 
+            ${{ github.event_name == 'issues' && format('📣 New issue created: **{0}** by {1} - {2}', github.event.issue.title, github.event.issue.user.login, github.event.issue.html_url) ||
             github.event_name == 'issue_comment' && format('💬 New comment on issue **{0}** by {1} - {2}', github.event.issue.title, github.event.comment.user.login, github.event.comment.html_url) ||
             github.event_name == 'pull_request' && format('🔄 New PR opened: **{0}** by {1} - {2}', github.event.pull_request.title, github.event.pull_request.user.login, github.event.pull_request.html_url) ||
             github.event_name == 'watch' && format('⭐ {0} starred Crawl4AI 🥳! Check out their profile: {1}', github.event.sender.login, github.event.sender.html_url) ||

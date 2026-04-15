@@ -11,7 +11,7 @@ from .filters import (
     URLPatternFilter,
     FilterStats,
     ContentRelevanceFilter,
-    SEOFilter
+    SEOFilter,
 )
 from .scorers import (
     KeywordRelevanceScorer,
@@ -20,7 +20,7 @@ from .scorers import (
     DomainAuthorityScorer,
     FreshnessScorer,
     PathDepthScorer,
-    ContentTypeScorer
+    ContentTypeScorer,
 )
 
 __all__ = [

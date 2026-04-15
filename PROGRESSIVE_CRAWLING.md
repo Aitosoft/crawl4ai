@@ -90,18 +90,18 @@ Algorithm: ProgressiveCrawl(start_url, query, θ)
   K ← ∅
   crawled ← {start_url}
   pending ← extract_links(crawl(start_url))
-  
+
   while IS(K, Q) < θ and |crawled| < max_pages:
     candidates ← rank_by_expected_gain(pending, Q, K)
     if max(ExpectedGain(candidates)) < min_gain:
       break  // Diminishing returns
-    
+
     to_crawl ← top_k(candidates)
     new_docs ← parallel_crawl(to_crawl)
     K ← K ∪ new_docs
     crawled ← crawled ∪ to_crawl
     pending ← extract_new_links(new_docs) - crawled
-  
+
   return K
 ```
 
@@ -174,14 +174,14 @@ Using LLM to create evaluation data:
 def generate_synthetic_dataset(domain_url):
     # 1. Fully crawl domain
     full_knowledge = exhaustive_crawl(domain_url)
-    
+
     # 2. Generate answerable queries
     queries = llm_generate_queries(full_knowledge)
-    
+
     # 3. Create query variations
     for q in queries:
         variations = generate_variations(q)  # synonyms, sub/super queries
-    
+
     return queries, variations, full_knowledge
 ```
 
@@ -275,7 +275,7 @@ class StatisticalStrategy:
         consistency = self.calculate_consistency(state)
         saturation = self.calculate_saturation(state)
         return min(coverage, consistency, saturation)
-    
+
     def calculate_coverage(self, state):
         # BM25-based term coverage
         term_scores = []
@@ -284,7 +284,7 @@ class StatisticalStrategy:
             idf = self.idf_cache.get(term, 1.0)
             term_scores.append(log(df + 1) * idf)
         return mean(term_scores) / max_possible_score
-    
+
     def rank_links(self, state):
         scored_links = []
         for link in state.pending_links:

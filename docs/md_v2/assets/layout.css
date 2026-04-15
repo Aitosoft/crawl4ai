@@ -72,7 +72,7 @@ body {
 #terminal-mkdocs-side-panel {
     position: fixed;
     top: var(--header-height);
-    left: max(0px, calc((90vw - var(--content-max-width)) / 2)); 
+    left: max(0px, calc((90vw - var(--content-max-width)) / 2));
     bottom: 0;
     width: var(--sidebar-width);
     background-color: var(--background-color);
@@ -258,7 +258,7 @@ footer {
     .terminal-menu {
         display: none !important;
     }
-    
+
     /* Add padding to site name to prevent hamburger overlap */
     .terminal-mkdocs-site-name,
     .terminal-logo a,
@@ -268,12 +268,12 @@ footer {
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    
+
     /* Show mobile menu toggle button */
     .mobile-menu-toggle {
         display: block;
     }
-    
+
     /* Show mobile menu close button */
     .mobile-menu-close {
         display: block;
@@ -292,22 +292,22 @@ footer {
         max-width: 320px; /* Maximum width */
         background-color: var(--background-color); /* Ensure solid background */
     }
-    
+
     #terminal-mkdocs-side-panel.sidebar-visible {
         left: 0;
     }
-    
+
     /* Make navigation links more touch-friendly */
     #terminal-mkdocs-side-panel a {
         padding: 6px 15px;
         display: block;
         /* No border as requested */
     }
-    
+
     #terminal-mkdocs-side-panel ul {
         padding-left: 0;
     }
-    
+
     #terminal-mkdocs-side-panel ul ul a {
         padding-left: 10px;
     }

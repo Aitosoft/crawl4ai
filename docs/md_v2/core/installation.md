@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
 **Expected** outcome:
 - A headless browser session loads `example.com`
-- Crawl4AI returns ~300 characters of markdown.  
+- Crawl4AI returns ~300 characters of markdown.
 If errors occur, rerun `crawl4ai-doctor` or manually ensure Playwright is installed correctly.
 
 ---
@@ -70,21 +70,21 @@ If errors occur, rerun `crawl4ai-doctor` or manually ensure Playwright is instal
 
 ### 4.1 Torch, Transformers, or All
 
-- **Text Clustering (Torch)**  
+- **Text Clustering (Torch)**
   ```bash
   pip install crawl4ai[torch]
   crawl4ai-setup
   ```
   Installs PyTorch-based features (e.g., cosine similarity or advanced semantic chunking).
 
-- **Transformers**  
+- **Transformers**
   ```bash
   pip install crawl4ai[transformer]
   crawl4ai-setup
   ```
   Adds Hugging Face-based summarization or generation strategies.
 
-- **All Features**  
+- **All Features**
   ```bash
   pip install crawl4ai[all]
   crawl4ai-setup

@@ -22,12 +22,12 @@ PROC browse_products
   # Go to catalog
   CLICK `#catalog-link`
   WAIT `.product-grid` 3
-  
+
   # Apply filters
   CLICK `.collapsible`
   WAIT 0.5
   CLICK `input[type="checkbox"]`
-  
+
   # Load some products
   SCROLL DOWN 500
   WAIT 1

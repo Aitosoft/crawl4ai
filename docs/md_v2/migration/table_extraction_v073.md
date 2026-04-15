@@ -157,7 +157,7 @@ result = await crawler.arun(url, config)
 
 # Manual filtering
 large_tables = [
-    t for t in result.tables 
+    t for t in result.tables
     if len(t['rows']) >= 5 and len(t['headers']) >= 3
 ]
 ```
@@ -196,7 +196,7 @@ crawl4ai/
   content_scraping_strategy.py
     - LXMLWebScrapingStrategy
       # Table methods removed, uses strategy
-  
+
   table_extraction.py (NEW)
     - TableExtractionStrategy    # Base class
     - DefaultTableExtraction      # Moved logic here
@@ -256,14 +256,14 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 
 async def verify_extraction():
     url = "your_url_here"
-    
+
     async with AsyncWebCrawler() as crawler:
         # Test 1: Old approach
         config_old = CrawlerRunConfig(
             table_score_threshold=7
         )
         result_old = await crawler.arun(url, config_old)
-        
+
         # Test 2: New explicit approach
         from crawl4ai import DefaultTableExtraction
         config_new = CrawlerRunConfig(
@@ -272,16 +272,16 @@ async def verify_extraction():
             )
         )
         result_new = await crawler.arun(url, config_new)
-        
+
         # Compare results
         assert len(result_old.tables) == len(result_new.tables)
         print(f"✓ Both approaches extracted {len(result_old.tables)} tables")
-        
+
         # Verify structure
         for old, new in zip(result_old.tables, result_new.tables):
             assert old['headers'] == new['headers']
             assert old['rows'] == new['rows']
-        
+
         print("✓ Table content identical")
 
 asyncio.run(verify_extraction())
@@ -318,7 +318,7 @@ While not required, using the new pattern provides:
 
 **Cause**: Threshold or filtering differences
 
-**Solution**: 
+**Solution**:
 ```python
 # Ensure same threshold
 strategy = DefaultTableExtraction(

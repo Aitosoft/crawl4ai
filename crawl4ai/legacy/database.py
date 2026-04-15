@@ -96,9 +96,9 @@ def cache_url(
                 markdown = excluded.markdown,
                 extracted_content = excluded.extracted_content,
                 success = excluded.success,
-                media = excluded.media,      
-                links = excluded.links,    
-                metadata = excluded.metadata,      
+                media = excluded.media,
+                links = excluded.links,
+                metadata = excluded.metadata,
                 screenshot = excluded.screenshot
         """,
             (

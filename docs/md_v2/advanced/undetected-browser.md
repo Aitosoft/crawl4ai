@@ -78,8 +78,8 @@ For sites with sophisticated bot detection that stealth mode can't bypass, use t
 ```python
 import asyncio
 from crawl4ai import (
-    AsyncWebCrawler, 
-    BrowserConfig, 
+    AsyncWebCrawler,
+    BrowserConfig,
     CrawlerRunConfig,
     UndetectedAdapter
 )
@@ -88,19 +88,19 @@ from crawl4ai.async_crawler_strategy import AsyncPlaywrightCrawlerStrategy
 async def main():
     # Create the undetected adapter
     undetected_adapter = UndetectedAdapter()
-    
+
     # Create browser config
     browser_config = BrowserConfig(
         headless=False,  # Headless mode can be detected easier
         verbose=True,
     )
-    
+
     # Create the crawler strategy with undetected adapter
     crawler_strategy = AsyncPlaywrightCrawlerStrategy(
         browser_config=browser_config,
         browser_adapter=undetected_adapter
     )
-    
+
     # Create the crawler with our custom strategy
     async with AsyncWebCrawler(
         crawler_strategy=crawler_strategy,
@@ -160,13 +160,13 @@ async def test_stealth_mode():
         enable_stealth=True,
         headless=False
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
             url="https://bot.sannysoft.com",
             config=CrawlerRunConfig(screenshot=True)
         )
-        
+
         if result.success:
             print("✓ Successfully accessed bot detection test site")
             # Save screenshot to verify detection results
@@ -198,16 +198,16 @@ async def main():
         headless=False,
         verbose=True,
     )
-    
+
     # Create the undetected adapter
     undetected_adapter = UndetectedAdapter()
-    
+
     # Create the crawler strategy with the undetected adapter
     crawler_strategy = AsyncPlaywrightCrawlerStrategy(
         browser_config=browser_config,
         browser_adapter=undetected_adapter
     )
-    
+
     # Create the crawler with our custom strategy
     async with AsyncWebCrawler(
         crawler_strategy=crawler_strategy,
@@ -220,14 +220,14 @@ async def main():
             ),
             capture_console_messages=True,  # Test adapter console capture
         )
-        
+
         # Test on a site that typically detects bots
         print("Testing undetected adapter...")
         result: CrawlResult = await crawler.arun(
-            url="https://www.helloworld.org", 
+            url="https://www.helloworld.org",
             config=crawler_config
         )
-        
+
         print(f"Status: {result.status_code}")
         print(f"Success: {result.success}")
         print(f"Console messages captured: {len(result.console_messages or [])}")
@@ -297,21 +297,21 @@ async def crawl_with_progressive_evasion(url):
         enable_stealth=True,
         headless=False
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(url)
         if result.success and "Access Denied" not in result.html:
             return result
-    
+
     # Step 2: If blocked, try undetected browser
     print("Regular + stealth blocked, trying undetected browser...")
-    
+
     adapter = UndetectedAdapter()
     strategy = AsyncPlaywrightCrawlerStrategy(
         browser_config=browser_config,
         browser_adapter=adapter
     )
-    
+
     async with AsyncWebCrawler(
         crawler_strategy=strategy,
         config=browser_config

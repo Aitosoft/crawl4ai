@@ -11,18 +11,18 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 async def batch_crawl():
     urls = [
         "https://example.com/page1",
-        "https://example.com/page2", 
+        "https://example.com/page2",
         "https://example.com/page3"
     ]
-    
+
     config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         stream=False  # Default: batch mode
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         results = await crawler.arun_many(urls, config=config)
-        
+
         for result in results:
             if result.success:
                 print(f"✅ {result.url}: {len(result.markdown)} chars")
@@ -35,7 +35,7 @@ async def streaming_crawl():
         cache_mode=CacheMode.BYPASS,
         stream=True  # Enable streaming
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         # Process results as they become available
         async for result in await crawler.arun_many(urls, config=config):
@@ -59,19 +59,19 @@ async def memory_adaptive_crawl():
         max_session_permit=15,          # Max concurrent tasks
         memory_wait_timeout=300.0       # Wait up to 5 minutes for memory
     )
-    
+
     config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         word_count_threshold=50
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         results = await crawler.arun_many(
             urls=large_url_list,
             config=config,
             dispatcher=dispatcher
         )
-        
+
         # Each result includes dispatch information
         for result in results:
             if result.dispatch_result:
@@ -93,17 +93,17 @@ async def rate_limited_crawl():
         max_retries=3,                  # Retry failed requests 3 times
         rate_limit_codes=[429, 503]     # Handle these status codes
     )
-    
+
     dispatcher = SemaphoreDispatcher(
         max_session_permit=5,           # Fixed concurrency limit
         rate_limiter=rate_limiter
     )
-    
+
     config = CrawlerRunConfig(
         user_agent_mode="random",       # Randomize user agents
         simulate_user=True              # Simulate human behavior
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun_many(
             urls=urls,
@@ -124,13 +124,13 @@ async def monitored_crawl():
         max_visible_rows=20,                    # Show 20 tasks in display
         display_mode=DisplayMode.DETAILED       # Show individual task details
     )
-    
+
     dispatcher = MemoryAdaptiveDispatcher(
         memory_threshold_percent=75.0,
         max_session_permit=10,
         monitor=monitor  # Attach monitor to dispatcher
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         results = await crawler.arun_many(
             urls=urls,
@@ -182,7 +182,7 @@ async with AsyncWebCrawler() as crawler:
 async def large_scale_crawl():
     # For thousands of URLs
     urls = load_urls_from_file("large_url_list.txt")  # 10,000+ URLs
-    
+
     dispatcher = MemoryAdaptiveDispatcher(
         memory_threshold_percent=70.0,  # Conservative memory usage
         max_session_permit=25,          # Higher concurrency
@@ -192,17 +192,17 @@ async def large_scale_crawl():
         ),
         monitor=CrawlerMonitor(display_mode=DisplayMode.AGGREGATED)
     )
-    
+
     config = CrawlerRunConfig(
         cache_mode=CacheMode.ENABLED,   # Use caching for efficiency
         stream=True,                    # Stream for memory efficiency
         word_count_threshold=100,       # Skip short content
         exclude_external_links=True     # Reduce processing overhead
     )
-    
+
     successful_crawls = 0
     failed_crawls = 0
-    
+
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun_many(
             urls=urls,
@@ -215,11 +215,11 @@ async def large_scale_crawl():
             else:
                 failed_crawls += 1
                 await log_failure(result.url, result.error_message)
-            
+
             # Progress reporting
             if (successful_crawls + failed_crawls) % 100 == 0:
                 print(f"Progress: {successful_crawls + failed_crawls}/{len(urls)}")
-    
+
     print(f"Completed: {successful_crawls} successful, {failed_crawls} failed")
 ```
 
@@ -233,7 +233,7 @@ async def compliant_crawl():
         mean_delay=2.0,                 # Be polite with delays
         max_range=1.0
     )
-    
+
     dispatcher = SemaphoreDispatcher(
         max_session_permit=3,           # Conservative concurrency
         rate_limiter=RateLimiter(
@@ -241,7 +241,7 @@ async def compliant_crawl():
             max_retries=1
         )
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun_many(
             urls=urls,
@@ -265,30 +265,30 @@ async def analyze_crawl_performance():
         max_session_permit=12,
         monitor=CrawlerMonitor(display_mode=DisplayMode.DETAILED)
     )
-    
+
     start_time = time.time()
-    
+
     async with AsyncWebCrawler() as crawler:
         results = await crawler.arun_many(
             urls=urls,
             dispatcher=dispatcher
         )
-    
+
     end_time = time.time()
-    
+
     # Analyze results
     successful = [r for r in results if r.success]
     failed = [r for r in results if not r.success]
-    
+
     print(f"Total time: {end_time - start_time:.2f}s")
     print(f"Success rate: {len(successful)}/{len(results)} ({len(successful)/len(results)*100:.1f}%)")
     print(f"Avg time per URL: {(end_time - start_time)/len(results):.2f}s")
-    
+
     # Memory usage analysis
     if successful and successful[0].dispatch_result:
         memory_usage = [r.dispatch_result.memory_usage for r in successful if r.dispatch_result]
         peak_memory = [r.dispatch_result.peak_memory for r in successful if r.dispatch_result]
-        
+
         print(f"Avg memory usage: {sum(memory_usage)/len(memory_usage):.1f}MB")
         print(f"Peak memory usage: {max(peak_memory):.1f}MB")
 ```
@@ -298,18 +298,18 @@ async def analyze_crawl_performance():
 ```python
 async def robust_multi_crawl():
     failed_urls = []
-    
+
     config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         stream=True,
         page_timeout=30000  # 30 second timeout
     )
-    
+
     dispatcher = MemoryAdaptiveDispatcher(
         memory_threshold_percent=85.0,
         max_session_permit=10
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun_many(
             urls=urls,
@@ -324,11 +324,11 @@ async def robust_multi_crawl():
                     'error': result.error_message,
                     'status_code': result.status_code
                 })
-                
+
                 # Retry logic for specific errors
                 if result.status_code in [503, 429]:  # Server errors
                     await schedule_retry(result.url)
-    
+
     # Report failures
     if failed_urls:
         print(f"Failed to crawl {len(failed_urls)} URLs:")

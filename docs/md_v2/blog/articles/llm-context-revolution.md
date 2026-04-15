@@ -51,7 +51,7 @@ This is your API reference—the facts, the parameters, the return types. It's t
 
 ## Why Async-First Architecture?
 
-Crawl4AI uses AsyncWebCrawler as its primary interface because modern web 
+Crawl4AI uses AsyncWebCrawler as its primary interface because modern web
 scraping demands concurrency. Here's the thinking:
 
 1. **Network I/O is slow**: Waiting synchronously wastes 90% of execution time

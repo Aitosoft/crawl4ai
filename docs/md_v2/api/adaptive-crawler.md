@@ -67,13 +67,13 @@ def confidence(self) -> float
 Dictionary containing detailed coverage statistics.
 
 ```python
-@property  
+@property
 def coverage_stats(self) -> Dict[str, float]
 ```
 
 Returns:
 - **coverage**: Query term coverage score
-- **consistency**: Information consistency score  
+- **consistency**: Information consistency score
 - **saturation**: Content saturation score
 - **confidence**: Overall confidence score
 
@@ -212,24 +212,24 @@ async def main():
         save_state=True,
         state_path="my_crawl.json"
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         adaptive = AdaptiveCrawler(crawler, config)
-        
+
         # Start crawling
         state = await adaptive.digest(
             start_url="https://example.com/docs",
             query="authentication oauth2 jwt"
         )
-        
+
         # Check results
         print(f"Confidence achieved: {adaptive.confidence:.0%}")
         adaptive.print_stats()
-        
+
         # Get most relevant pages
         for page in adaptive.get_relevant_content(top_k=3):
             print(f"- {page['url']} (score: {page['score']:.2f})")
-        
+
         # Export for later use
         adaptive.export_knowledge_base("auth_knowledge.jsonl")
 

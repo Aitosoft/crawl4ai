@@ -17,7 +17,7 @@ In **`CrawlerRunConfig`**, you can specify a **`content_filter`** to shape how c
 
 ### 1.2 Common Filters
 
-1. **PruningContentFilter** – Scores each node by text density, link density, and tag importance, discarding those below a threshold.  
+1. **PruningContentFilter** – Scores each node by text density, link density, and tag importance, discarding those below a threshold.
 2. **BM25ContentFilter** – Focuses on textual relevance using BM25 ranking, especially useful if you have a specific user query (e.g., “machine learning” or “food nutrition”).
 
 ---
@@ -38,16 +38,16 @@ async def main():
     # Step 1: Create a pruning filter
     prune_filter = PruningContentFilter(
         # Lower → more content retained, higher → more content pruned
-        threshold=0.45,           
+        threshold=0.45,
         # "fixed" or "dynamic"
-        threshold_type="dynamic",  
+        threshold_type="dynamic",
         # Ignore nodes with <5 words
-        min_word_threshold=5      
+        min_word_threshold=5
     )
 
     # Step 2: Insert it into a Markdown Generator
     md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
-    
+
     # Step 3: Pass it to CrawlerRunConfig
     config = CrawlerRunConfig(
         markdown_generator=md_generator
@@ -55,10 +55,10 @@ async def main():
 
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://news.ycombinator.com", 
+            url="https://news.ycombinator.com",
             config=config
         )
-        
+
         if result.success:
             # 'fit_markdown' is your pruned content, focusing on "denser" text
             print("Raw Markdown length:", len(result.markdown.raw_markdown))
@@ -72,17 +72,17 @@ if __name__ == "__main__":
 
 ### 2.2 Key Parameters
 
-- **`min_word_threshold`** (int): If a block has fewer words than this, it’s pruned.  
+- **`min_word_threshold`** (int): If a block has fewer words than this, it’s pruned.
 - **`threshold_type`** (str):
-  - `"fixed"` → each node must exceed `threshold` (0–1).  
-  - `"dynamic"` → node scoring adjusts according to tag type, text/link density, etc.  
-- **`threshold`** (float, default ~0.48): The base or “anchor” cutoff.  
+  - `"fixed"` → each node must exceed `threshold` (0–1).
+  - `"dynamic"` → node scoring adjusts according to tag type, text/link density, etc.
+- **`threshold`** (float, default ~0.48): The base or “anchor” cutoff.
 
 **Algorithmic Factors**:
 
-- **Text density** – Encourages blocks that have a higher ratio of text to overall content.  
-- **Link density** – Penalizes sections that are mostly links.  
-- **Tag importance** – e.g., an `<article>` or `<p>` might be more important than a `<div>`.  
+- **Text density** – Encourages blocks that have a higher ratio of text to overall content.
+- **Link density** – Penalizes sections that are mostly links.
+- **Tag importance** – e.g., an `<article>` or `<p>` might be more important than a `<div>`.
 - **Structural context** – If a node is deeply nested or in a suspected sidebar, it might be deprioritized.
 
 ---
@@ -104,12 +104,12 @@ async def main():
     bm25_filter = BM25ContentFilter(
         user_query="startup fundraising tips",
         # Adjust for stricter or looser results
-        bm25_threshold=1.2  
+        bm25_threshold=1.2
     )
 
     # 2) Insert into a Markdown Generator
     md_generator = DefaultMarkdownGenerator(content_filter=bm25_filter)
-    
+
     # 3) Pass to crawler config
     config = CrawlerRunConfig(
         markdown_generator=md_generator
@@ -117,7 +117,7 @@ async def main():
 
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://news.ycombinator.com", 
+            url="https://news.ycombinator.com",
             config=config
         )
         if result.success:
@@ -132,10 +132,10 @@ if __name__ == "__main__":
 
 ### 3.2 Parameters
 
-- **`user_query`** (str, optional): E.g. `"machine learning"`. If blank, the filter tries to glean a query from page metadata.  
-- **`bm25_threshold`** (float, default 1.0):  
-  - Higher → fewer chunks but more relevant.  
-  - Lower → more inclusive.  
+- **`user_query`** (str, optional): E.g. `"machine learning"`. If blank, the filter tries to glean a query from page metadata.
+- **`bm25_threshold`** (float, default 1.0):
+  - Higher → fewer chunks but more relevant.
+  - Lower → more inclusive.
 
 > In more advanced scenarios, you might see parameters like `language`, `case_sensitive`, or `priority_tags` to refine how text is tokenized or weighted.
 
@@ -143,7 +143,7 @@ if __name__ == "__main__":
 
 ## 4. Accessing the “Fit” Output
 
-After the crawl, your “fit” content is found in **`result.markdown.fit_markdown`**. 
+After the crawl, your “fit” content is found in **`result.markdown.fit_markdown`**.
 
 ```python
 fit_md = result.markdown.fit_markdown
@@ -198,8 +198,8 @@ config = CrawlerRunConfig(
 
 Thus, **multi-level** filtering occurs:
 
-1. The crawler’s `excluded_tags` are removed from the HTML first.  
-2. The content filter (Pruning, BM25, or custom) prunes or ranks the remaining text blocks.  
+1. The crawler’s `excluded_tags` are removed from the HTML first.
+2. The content filter (Pruning, BM25, or custom) prunes or ranks the remaining text blocks.
 3. The final “fit” content is generated in `result.markdown.fit_markdown`.
 
 ---
@@ -220,8 +220,8 @@ class MyCustomFilter(RelevantContentFilter):
 
 **Steps**:
 
-1. Subclass `RelevantContentFilter`.  
-2. Implement `filter_content(...)`.  
+1. Subclass `RelevantContentFilter`.
+2. Implement `filter_content(...)`.
 3. Use it in your `DefaultMarkdownGenerator(content_filter=MyCustomFilter(...))`.
 
 ---
@@ -230,14 +230,14 @@ class MyCustomFilter(RelevantContentFilter):
 
 **Fit Markdown** is a crucial feature for:
 
-- **Summaries**: Quickly get the important text from a cluttered page.  
-- **Search**: Combine with **BM25** to produce content relevant to a query.  
+- **Summaries**: Quickly get the important text from a cluttered page.
+- **Search**: Combine with **BM25** to produce content relevant to a query.
 - **AI Pipelines**: Filter out boilerplate so LLM-based extraction or summarization runs on denser text.
 
 **Key Points**:
-- **PruningContentFilter**: Great if you just want the “meatiest” text without a user query.  
-- **BM25ContentFilter**: Perfect for query-based extraction or searching.  
-- Combine with **`excluded_tags`, `exclude_external_links`, `word_count_threshold`** to refine your final “fit” text.  
+- **PruningContentFilter**: Great if you just want the “meatiest” text without a user query.
+- **BM25ContentFilter**: Perfect for query-based extraction or searching.
+- Combine with **`excluded_tags`, `exclude_external_links`, `word_count_threshold`** to refine your final “fit” text.
 - Fit markdown ends up in **`result.markdown.fit_markdown`**; eventually **`result.markdown.fit_markdown`** in future versions.
 
 With these tools, you can **zero in** on the text that truly matters, ignoring spammy or boilerplate content, and produce a concise, relevant “fit markdown” for your AI or data pipelines. Happy pruning and searching!

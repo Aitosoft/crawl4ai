@@ -12,11 +12,11 @@ CLICK `#infinite-scroll-btn`
 PROC load_more_products
   # Get current product count
   EVAL `window.initialCount = document.querySelectorAll('.product-card').length`
-  
+
   # Scroll down
   SCROLL DOWN 1000
   WAIT 2
-  
+
   # Check if more products loaded
   EVAL `
     const newCount = document.querySelectorAll('.product-card').length;

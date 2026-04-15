@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderReferenceTable();
     setupActionHandlers();
     setupColumnHeaderHandlers();
-    
+
     // Initialize first component as selected with available context types
     const firstComponent = components[0];
     state.selectedComponents.add(firstComponent.id);
@@ -98,7 +98,7 @@ function estimateTokens(text) {
 // Update total token count display
 function updateTotalTokenCount() {
     let totalTokens = 0;
-    
+
     state.selectedComponents.forEach(compId => {
         const types = state.selectedContextTypes.get(compId);
         if (types) {
@@ -108,7 +108,7 @@ function updateTotalTokenCount() {
             });
         }
     });
-    
+
     document.getElementById('total-tokens').textContent = totalTokens.toLocaleString();
 }
 
@@ -116,12 +116,12 @@ function updateTotalTokenCount() {
 function renderComponents() {
     const tbody = document.getElementById('components-tbody');
     tbody.innerHTML = '';
-    
+
     components.forEach(component => {
         const row = createComponentRow(component);
         tbody.appendChild(row);
     });
-    
+
     // Fetch token counts for all files
     fetchAllTokenCounts();
 }
@@ -130,29 +130,29 @@ function renderComponents() {
 function createComponentRow(component) {
     const tr = document.createElement('tr');
     tr.id = `component-${component.id}`;
-    
+
     // Component checkbox cell
     const checkboxCell = document.createElement('td');
     checkboxCell.innerHTML = `
-        <input type="checkbox" id="check-${component.id}" 
+        <input type="checkbox" id="check-${component.id}"
                data-component="${component.id}">
     `;
     tr.appendChild(checkboxCell);
-    
+
     // Component name cell
     const nameCell = document.createElement('td');
     nameCell.innerHTML = `<span class="component-name">${component.name}</span>`;
     tr.appendChild(nameCell);
-    
+
     // Context type cells
     contextTypes.forEach(type => {
         const td = document.createElement('td');
         const key = `${component.id}-${type}`;
         const tokenCount = state.tokenCounts.get(key) || 0;
         const isDisabled = type === 'examples' ? 'disabled' : '';
-        
+
         td.innerHTML = `
-            <input type="checkbox" id="check-${component.id}-${type}" 
+            <input type="checkbox" id="check-${component.id}-${type}"
                    data-component="${component.id}" data-type="${type}"
                    ${isDisabled}>
             <span class="token-info" id="tokens-${component.id}-${type}">
@@ -161,13 +161,13 @@ function createComponentRow(component) {
         `;
         tr.appendChild(td);
     });
-    
+
     // Add event listeners
     const mainCheckbox = tr.querySelector(`#check-${component.id}`);
     mainCheckbox.addEventListener('change', (e) => {
         handleComponentToggle(component.id, e.target.checked);
     });
-    
+
     // Add event listeners for context type checkboxes
     contextTypes.forEach(type => {
         const typeCheckbox = tr.querySelector(`#check-${component.id}-${type}`);
@@ -177,7 +177,7 @@ function createComponentRow(component) {
             });
         }
     });
-    
+
     return tr;
 }
 
@@ -214,14 +214,14 @@ function handleContextTypeToggle(componentId, type, checked) {
     if (!state.selectedContextTypes.has(componentId)) {
         state.selectedContextTypes.set(componentId, new Set());
     }
-    
+
     const types = state.selectedContextTypes.get(componentId);
     if (checked) {
         types.add(type);
     } else {
         types.delete(type);
     }
-    
+
     updateComponentSelection(componentId);
     updateComponentUI();
 }
@@ -231,37 +231,37 @@ function updateComponentUI() {
     components.forEach(component => {
         const row = document.getElementById(`component-${component.id}`);
         if (!row) return;
-        
+
         const mainCheckbox = row.querySelector(`#check-${component.id}`);
         const hasSelection = state.selectedComponents.has(component.id);
         const selectedTypes = state.selectedContextTypes.get(component.id) || new Set();
-        
+
         // Update main checkbox
         mainCheckbox.checked = hasSelection;
-        
+
         // Update row disabled state
         row.classList.toggle('disabled', !hasSelection);
-        
+
         // Update context type checkboxes
         contextTypes.forEach(type => {
             const typeCheckbox = row.querySelector(`#check-${component.id}-${type}`);
             typeCheckbox.checked = selectedTypes.has(type);
         });
     });
-    
+
     updateTotalTokenCount();
 }
 
 // Fetch token counts for all files
 async function fetchAllTokenCounts() {
     const promises = [];
-    
+
     components.forEach(component => {
         contextTypes.forEach(type => {
             promises.push(fetchTokenCount(component.id, type));
         });
     });
-    
+
     await Promise.all(promises);
     updateComponentUI();
     renderReferenceTable(); // Update reference table with token counts
@@ -270,17 +270,17 @@ async function fetchAllTokenCounts() {
 // Fetch token count for a specific file
 async function fetchTokenCount(componentId, type) {
     const key = `${componentId}-${type}`;
-    
+
     try {
         const fileName = getFileName(componentId, type);
         const baseUrl = getBaseUrl(type);
         const response = await fetch(baseUrl + fileName);
-        
+
         if (response.ok) {
             const content = await response.text();
             const tokens = estimateTokens(content);
             state.tokenCounts.set(key, tokens);
-            
+
             // Update UI
             const tokenSpan = document.getElementById(`tokens-${componentId}-${type}`);
             if (tokenSpan) {
@@ -315,7 +315,7 @@ function getFileName(componentId, type) {
 function getBaseUrl(type) {
     // For MkDocs, we need to go up to the root level
     const basePrefix = window.location.pathname.includes('/apps/') ? '../../' : '/';
-    
+
     switch(type) {
         case 'memory':
             return basePrefix + 'assets/llm.txt/txt/';
@@ -338,13 +338,13 @@ function setupActionHandlers() {
         });
         updateComponentUI();
     });
-    
+
     document.getElementById('deselect-all').addEventListener('click', () => {
         state.selectedComponents.clear();
         state.selectedContextTypes.clear();
         updateComponentUI();
     });
-    
+
     // Download button
     document.getElementById('download-btn').addEventListener('click', handleDownload);
 }
@@ -364,7 +364,7 @@ function setupColumnHeaderHandlers() {
 function toggleColumnSelection(type) {
     // Don't toggle examples column
     if (type === 'examples') return;
-    
+
     // Check if all are currently selected
     let allSelected = true;
     components.forEach(comp => {
@@ -373,23 +373,23 @@ function toggleColumnSelection(type) {
             allSelected = false;
         }
     });
-    
+
     // Toggle all
     components.forEach(comp => {
         if (!state.selectedContextTypes.has(comp.id)) {
             state.selectedContextTypes.set(comp.id, new Set());
         }
-        
+
         const types = state.selectedContextTypes.get(comp.id);
         if (allSelected) {
             types.delete(type);
         } else {
             types.add(type);
         }
-        
+
         updateComponentSelection(comp.id);
     });
-    
+
     updateComponentUI();
 }
 
@@ -398,28 +398,28 @@ async function handleDownload() {
     const statusEl = document.getElementById('status');
     statusEl.textContent = 'Preparing context files...';
     statusEl.className = 'status loading';
-    
+
     try {
         const files = getSelectedFiles();
         if (files.length === 0) {
             throw new Error('No files selected. Please select at least one component or preset.');
         }
-        
+
         statusEl.textContent = `Fetching ${files.length} files...`;
-        
+
         const contents = await fetchFiles(files);
         const combined = combineContents(contents);
-        
+
         downloadFile(combined, 'crawl4ai_custom_context.md');
-        
+
         statusEl.textContent = 'Download complete!';
         statusEl.className = 'status success';
-        
+
         setTimeout(() => {
             statusEl.textContent = '';
             statusEl.className = 'status';
         }, 3000);
-        
+
     } catch (error) {
         statusEl.textContent = `Error: ${error.message}`;
         statusEl.className = 'status error';
@@ -429,7 +429,7 @@ async function handleDownload() {
 // Get list of selected files based on current state
 function getSelectedFiles() {
     const files = [];
-    
+
     // Build list of selected files with their context info
     state.selectedComponents.forEach(compId => {
         const types = state.selectedContextTypes.get(compId);
@@ -444,7 +444,7 @@ function getSelectedFiles() {
             });
         }
     });
-    
+
     return files;
 }
 
@@ -455,9 +455,9 @@ async function fetchFiles(fileInfos) {
             const response = await fetch(fileInfo.baseUrl + fileInfo.fileName);
             if (!response.ok) {
                 if (fileInfo.type === 'examples') {
-                    return { 
-                        fileInfo, 
-                        content: `<!-- Examples for ${fileInfo.componentId} coming soon -->\n\nExamples are currently being developed for this component.` 
+                    return {
+                        fileInfo,
+                        content: `<!-- Examples for ${fileInfo.componentId} coming soon -->\n\nExamples are currently being developed for this component.`
                     };
                 }
                 console.warn(`Failed to fetch ${fileInfo.fileName} from ${fileInfo.baseUrl + fileInfo.fileName}`);
@@ -467,16 +467,16 @@ async function fetchFiles(fileInfos) {
             return { fileInfo, content };
         } catch (error) {
             if (fileInfo.type === 'examples') {
-                return { 
-                    fileInfo, 
-                    content: `<!-- Examples for ${fileInfo.componentId} coming soon -->\n\nExamples are currently being developed for this component.` 
+                return {
+                    fileInfo,
+                    content: `<!-- Examples for ${fileInfo.componentId} coming soon -->\n\nExamples are currently being developed for this component.`
                 };
             }
             console.warn(`Error fetching ${fileInfo.fileName}:`, error);
             return { fileInfo, content: `<!-- Error loading ${fileInfo.fileName} -->` };
         }
     });
-    
+
     return Promise.all(promises);
 }
 
@@ -487,7 +487,7 @@ function combineContents(fileContents) {
     fileContents.forEach(({ content }) => {
         totalTokens += estimateTokens(content);
     });
-    
+
     const header = `# Crawl4AI Custom LLM Context
 Generated on: ${new Date().toISOString()}
 Total files: ${fileContents.length}
@@ -496,13 +496,13 @@ Estimated tokens: ${totalTokens.toLocaleString()}
 ---
 
 `;
-    
+
     const sections = fileContents.map(({ fileInfo, content }) => {
         const component = components.find(c => c.id === fileInfo.componentId);
         const componentName = component ? component.name : fileInfo.componentId;
         const contextType = getContextTypeName(fileInfo.type);
         const tokens = estimateTokens(content);
-        
+
         return `## ${componentName} - ${contextType}
 Component ID: ${fileInfo.componentId}
 Context Type: ${fileInfo.type}
@@ -514,7 +514,7 @@ ${content}
 
 `;
     });
-    
+
     return header + sections.join('\n');
 }
 
@@ -545,16 +545,16 @@ function downloadFile(content, fileName) {
 function renderReferenceTable() {
     const tbody = document.getElementById('reference-table-body');
     tbody.innerHTML = '';
-    
+
     // Get base path for links
     const basePrefix = window.location.pathname.includes('/apps/') ? '../../' : '/';
-    
+
     components.forEach(component => {
         const row = document.createElement('tr');
         const memoryTokens = state.tokenCounts.get(`${component.id}-memory`) || 0;
         const reasoningTokens = state.tokenCounts.get(`${component.id}-reasoning`) || 0;
         const examplesTokens = state.tokenCounts.get(`${component.id}-examples`) || 0;
-        
+
         row.innerHTML = `
             <td><strong>${component.name}</strong></td>
             <td>
@@ -566,7 +566,7 @@ function renderReferenceTable() {
                 ${reasoningTokens > 0 ? `<span class="file-size">${reasoningTokens.toLocaleString()} tokens</span>` : ''}
             </td>
             <td>
-                ${examplesTokens > 0 
+                ${examplesTokens > 0
                     ? `<a href="${basePrefix}assets/llm.txt/examples/${component.id}.txt" class="file-link" target="_blank">Examples</a>
                        <span class="file-size">${examplesTokens.toLocaleString()} tokens</span>`
                     : '-'
@@ -577,4 +577,3 @@ function renderReferenceTable() {
         tbody.appendChild(row);
     });
 }
-

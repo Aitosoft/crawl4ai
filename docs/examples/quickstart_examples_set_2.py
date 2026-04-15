@@ -211,10 +211,10 @@ async def extract_structured_data_using_llm(
         word_count_threshold=1,
         page_timeout=80000,
         extraction_strategy=LLMExtractionStrategy(
-            llm_config=LLMConfig(provider=provider,api_token=api_token),
+            llm_config=LLMConfig(provider=provider, api_token=api_token),
             schema=OpenAIModelFee.model_json_schema(),
             extraction_type="schema",
-            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens. 
+            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens.
             Do not miss any models in the entire content.""",
             extra_args=extra_args,
         ),
@@ -280,7 +280,7 @@ async def extract_structured_data_using_css_extractor():
         cache_mode=CacheMode.BYPASS,
         extraction_strategy=JsonCssExtractionStrategy(schema),
         js_code=[js_click_tabs],
-        delay_before_return_html=1
+        delay_before_return_html=1,
     )
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -417,6 +417,7 @@ async def crawl_dynamic_content_pages_method_2():
 
 async def cosine_similarity_extraction():
     from crawl4ai import CosineStrategy
+
     crawl_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         extraction_strategy=CosineStrategy(
@@ -522,14 +523,10 @@ async def ssl_certification():
             print("\nCertificate exported to:")
             print(f"- JSON: {os.path.join(tmp_dir, 'certificate.json')}")
 
-            pem_data = cert.to_pem(
-                os.path.join(tmp_dir, "certificate.pem")
-            )  # For web servers
+            cert.to_pem(os.path.join(tmp_dir, "certificate.pem"))  # For web servers
             print(f"- PEM: {os.path.join(tmp_dir, 'certificate.pem')}")
 
-            der_data = cert.to_der(
-                os.path.join(tmp_dir, "certificate.der")
-            )  # For Java apps
+            cert.to_der(os.path.join(tmp_dir, "certificate.der"))  # For Java apps
             print(f"- DER: {os.path.join(tmp_dir, 'certificate.der')}")
 
 
@@ -554,7 +551,7 @@ async def main():
     # Screenshot example
     await capture_and_save_screenshot(
         "https://www.example.com",
-        os.path.join(__location__, "tmp/example_screenshot.jpg")
+        os.path.join(__location__, "tmp/example_screenshot.jpg"),
     )
 
 

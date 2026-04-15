@@ -69,6 +69,7 @@ def require_auth() -> tuple[str, str]:
 
 # ==================== Cloud Command Group ====================
 
+
 @click.group("cloud")
 def cloud_cmd():
     """Crawl4AI Cloud commands - manage cloud profiles and authentication.
@@ -85,6 +86,7 @@ def cloud_cmd():
 
 
 # ==================== Auth Commands ====================
+
 
 @cloud_cmd.command("auth")
 @click.option("--api-key", "-k", help="API key (will prompt if not provided)")
@@ -116,23 +118,31 @@ def auth_cmd(api_key: str, api_url: str, logout: bool, status: bool):
 
         if current_key:
             # Mask the key for display
-            masked = current_key[:8] + "..." + current_key[-4:] if len(current_key) > 12 else "***"
-            console.print(Panel(
-                f"[green]Authenticated[/green]\n\n"
-                f"API Key: [cyan]{masked}[/cyan]\n"
-                f"API URL: [blue]{current_url}[/blue]",
-                title="Cloud Auth Status",
-                border_style="green"
-            ))
+            masked = (
+                current_key[:8] + "..." + current_key[-4:]
+                if len(current_key) > 12
+                else "***"
+            )
+            console.print(
+                Panel(
+                    f"[green]Authenticated[/green]\n\n"
+                    f"API Key: [cyan]{masked}[/cyan]\n"
+                    f"API URL: [blue]{current_url}[/blue]",
+                    title="Cloud Auth Status",
+                    border_style="green",
+                )
+            )
         else:
-            console.print(Panel(
-                "[yellow]Not authenticated[/yellow]\n\n"
-                "Run [cyan]crwl cloud auth[/cyan] to authenticate.\n\n"
-                "Get your API key at:\n"
-                "[blue]https://api.crawl4ai.com/dashboard[/blue]",
-                title="Cloud Auth Status",
-                border_style="yellow"
-            ))
+            console.print(
+                Panel(
+                    "[yellow]Not authenticated[/yellow]\n\n"
+                    "Run [cyan]crwl cloud auth[/cyan] to authenticate.\n\n"
+                    "Get your API key at:\n"
+                    "[blue]https://api.crawl4ai.com/dashboard[/blue]",
+                    title="Cloud Auth Status",
+                    border_style="yellow",
+                )
+            )
         return
 
     if logout:
@@ -146,16 +156,18 @@ def auth_cmd(api_key: str, api_url: str, logout: bool, status: bool):
 
     # Interactive auth
     if not api_key:
-        console.print(Panel(
-            "[cyan]Crawl4AI Cloud Authentication[/cyan]\n\n"
-            "To get your API key:\n"
-            "  1. Go to [blue]https://api.crawl4ai.com/dashboard[/blue]\n"
-            "  2. Sign in or create an account\n"
-            "  3. Navigate to API Keys section\n"
-            "  4. Create a new key and paste it below",
-            title="Setup",
-            border_style="cyan"
-        ))
+        console.print(
+            Panel(
+                "[cyan]Crawl4AI Cloud Authentication[/cyan]\n\n"
+                "To get your API key:\n"
+                "  1. Go to [blue]https://api.crawl4ai.com/dashboard[/blue]\n"
+                "  2. Sign in or create an account\n"
+                "  3. Navigate to API Keys section\n"
+                "  4. Create a new key and paste it below",
+                title="Setup",
+                border_style="cyan",
+            )
+        )
         api_key = click.prompt("\nEnter your API key", hide_input=True)
 
     if not api_key:
@@ -169,9 +181,7 @@ def auth_cmd(api_key: str, api_url: str, logout: bool, status: bool):
 
     try:
         response = httpx.get(
-            f"{test_url}/v1/profiles",
-            headers={"X-API-Key": api_key},
-            timeout=10.0
+            f"{test_url}/v1/profiles", headers={"X-API-Key": api_key}, timeout=10.0
         )
 
         if response.status_code == 401:
@@ -197,6 +207,7 @@ def auth_cmd(api_key: str, api_url: str, logout: bool, status: bool):
 
 # ==================== Profiles Command Group ====================
 
+
 @cloud_cmd.group("profiles")
 def profiles_cmd():
     """Manage cloud browser profiles.
@@ -215,10 +226,13 @@ def profiles_cmd():
 @profiles_cmd.command("upload")
 @click.argument("profile_name")
 @click.option("--name", "-n", help="Cloud profile name (defaults to local name)")
-@click.option("--level", "-l",
-              type=click.Choice(["light", "medium", "aggressive", "minimal"]),
-              default="aggressive",
-              help="Shrink level before upload (default: aggressive)")
+@click.option(
+    "--level",
+    "-l",
+    type=click.Choice(["light", "medium", "aggressive", "minimal"]),
+    default="aggressive",
+    help="Shrink level before upload (default: aggressive)",
+)
 @click.option("--no-shrink", is_flag=True, help="Skip shrinking (upload as-is)")
 def upload_cmd(profile_name: str, name: str, level: str, no_shrink: bool):
     """Upload a browser profile to Crawl4AI Cloud.
@@ -287,12 +301,14 @@ def upload_cmd(profile_name: str, name: str, level: str, no_shrink: bool):
                 headers={"X-API-Key": api_key},
                 files={"file": (f"{cloud_name}.tar.gz", f, "application/gzip")},
                 data={"name": cloud_name},
-                timeout=120.0
+                timeout=120.0,
             )
 
         if response.status_code == 409:
             console.print(f"[red]Profile '{cloud_name}' already exists in cloud.[/red]")
-            console.print("Use --name to specify a different name, or delete the existing profile first.")
+            console.print(
+                "Use --name to specify a different name, or delete the existing profile first."
+            )
             sys.exit(1)
         elif response.status_code == 400:
             error = response.json().get("detail", "Unknown error")
@@ -309,16 +325,18 @@ def upload_cmd(profile_name: str, name: str, level: str, no_shrink: bool):
         console.print("[dim][4/4] Done![/dim]")
 
         # Success output
-        console.print(Panel(
-            f"[green]Profile uploaded successfully![/green]\n\n"
-            f"Profile ID: [cyan]{profile_id}[/cyan]\n"
-            f"Name: [blue]{cloud_name}[/blue]\n"
-            f"Size: {_format_size(size_bytes)}\n\n"
-            f"[dim]Use in API:[/dim]\n"
-            f'  {{"browser_config": {{"profile_id": "{profile_id}"}}}}',
-            title="Upload Complete",
-            border_style="green"
-        ))
+        console.print(
+            Panel(
+                f"[green]Profile uploaded successfully![/green]\n\n"
+                f"Profile ID: [cyan]{profile_id}[/cyan]\n"
+                f"Name: [blue]{cloud_name}[/blue]\n"
+                f"Size: {_format_size(size_bytes)}\n\n"
+                f"[dim]Use in API:[/dim]\n"
+                f'  {{"browser_config": {{"profile_id": "{profile_id}"}}}}',
+                title="Upload Complete",
+                border_style="green",
+            )
+        )
 
         if result.get("scan_warnings"):
             console.print("\n[yellow]Scan warnings:[/yellow]")
@@ -342,9 +360,7 @@ def list_cmd():
 
     try:
         response = httpx.get(
-            f"{api_url}/v1/profiles",
-            headers={"X-API-Key": api_key},
-            timeout=30.0
+            f"{api_url}/v1/profiles", headers={"X-API-Key": api_key}, timeout=30.0
         )
 
         if response.status_code != 200:
@@ -356,13 +372,15 @@ def list_cmd():
         profiles = data.get("profiles", [])
 
         if not profiles:
-            console.print(Panel(
-                "[yellow]No cloud profiles found.[/yellow]\n\n"
-                "Upload a profile with:\n"
-                "  [cyan]crwl cloud profiles upload <profile_name>[/cyan]",
-                title="Cloud Profiles",
-                border_style="yellow"
-            ))
+            console.print(
+                Panel(
+                    "[yellow]No cloud profiles found.[/yellow]\n\n"
+                    "Upload a profile with:\n"
+                    "  [cyan]crwl cloud profiles upload <profile_name>[/cyan]",
+                    title="Cloud Profiles",
+                    border_style="yellow",
+                )
+            )
             return
 
         # Create table
@@ -376,15 +394,11 @@ def list_cmd():
         for p in profiles:
             size = _format_size(p.get("size_bytes", 0)) if p.get("size_bytes") else "-"
             created = p.get("created_at", "-")[:10] if p.get("created_at") else "-"
-            last_used = p.get("last_used_at", "-")[:10] if p.get("last_used_at") else "Never"
-
-            table.add_row(
-                p["name"],
-                p["id"][:8] + "...",
-                size,
-                created,
-                last_used
+            last_used = (
+                p.get("last_used_at", "-")[:10] if p.get("last_used_at") else "Never"
             )
+
+            table.add_row(p["name"], p["id"][:8] + "...", size, created, last_used)
 
         console.print(table)
         console.print(f"\nTotal: {len(profiles)} profile(s)")
@@ -415,9 +429,7 @@ def delete_cmd(profile_name_or_id: str, yes: bool):
     try:
         # List profiles to find by name
         response = httpx.get(
-            f"{api_url}/v1/profiles",
-            headers={"X-API-Key": api_key},
-            timeout=30.0
+            f"{api_url}/v1/profiles", headers={"X-API-Key": api_key}, timeout=30.0
         )
 
         if response.status_code != 200:
@@ -429,7 +441,11 @@ def delete_cmd(profile_name_or_id: str, yes: bool):
         # Find matching profile
         profile = None
         for p in profiles:
-            if p["name"] == profile_name_or_id or p["id"] == profile_name_or_id or p["id"].startswith(profile_name_or_id):
+            if (
+                p["name"] == profile_name_or_id
+                or p["id"] == profile_name_or_id
+                or p["id"].startswith(profile_name_or_id)
+            ):
                 profile = p
                 break
 
@@ -455,18 +471,22 @@ def delete_cmd(profile_name_or_id: str, yes: bool):
         response = httpx.delete(
             f"{api_url}/v1/profiles/{profile['id']}",
             headers={"X-API-Key": api_key},
-            timeout=30.0
+            timeout=30.0,
         )
 
         if response.status_code == 404:
-            console.print("[red]Profile not found (may have been already deleted).[/red]")
+            console.print(
+                "[red]Profile not found (may have been already deleted).[/red]"
+            )
             sys.exit(1)
         elif response.status_code != 200:
             console.print(f"[red]Error: {response.status_code}[/red]")
             console.print(response.text)
             sys.exit(1)
 
-        console.print(f"[green]Profile '{profile['name']}' deleted successfully.[/green]")
+        console.print(
+            f"[green]Profile '{profile['name']}' deleted successfully.[/green]"
+        )
 
     except httpx.RequestError as e:
         console.print(f"[red]Connection error: {e}[/red]")

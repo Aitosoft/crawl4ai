@@ -6,7 +6,7 @@ Advanced URL filtering and scoring strategies for intelligent deep crawling with
 
 ```python
 from crawl4ai.deep_crawling.filters import (
-    URLPatternFilter, DomainFilter, ContentTypeFilter, 
+    URLPatternFilter, DomainFilter, ContentTypeFilter,
     FilterChain, ContentRelevanceFilter, SEOFilter
 )
 
@@ -238,7 +238,7 @@ advanced_patterns = URLPatternFilter(
 exclude_filter = URLPatternFilter(
     patterns=[
         "*/admin/*",
-        "*/login/*", 
+        "*/login/*",
         "*/private/*",
         "**/.*",          # Hidden files
         "*.{jpg,png,gif,css,js}$"  # Media and assets
@@ -252,7 +252,7 @@ detailed_content_filter = ContentTypeFilter(
     check_extension=True,
     ext_map={
         "html": "text/html",
-        "htm": "text/html", 
+        "htm": "text/html",
         "md": "text/markdown",
         "pdf": "application/pdf",
         "doc": "application/msword",
@@ -277,7 +277,7 @@ class OptimizedFilterChain:
                 "*.html", "*.pdf", "*/blog/*", "*/docs/*"
             ])
         ]
-        
+
         # Slower filters last (content analysis)
         self.slow_filters = [
             ContentRelevanceFilter(
@@ -285,32 +285,32 @@ class OptimizedFilterChain:
                 threshold=0.3
             )
         ]
-    
+
     async def apply_optimized(self, url: str) -> bool:
         # Apply fast filters first
         for filter_obj in self.fast_filters:
             if not filter_obj.apply(url):
                 return False
-        
+
         # Only apply slow filters if fast filters pass
         for filter_obj in self.slow_filters:
             if not await filter_obj.apply(url):
                 return False
-        
+
         return True
 
 # Batch filtering with concurrency
 async def batch_filter_urls(urls, filter_chain, max_concurrent=50):
     import asyncio
     semaphore = asyncio.Semaphore(max_concurrent)
-    
+
     async def filter_single(url):
         async with semaphore:
             return await filter_chain.apply(url), url
-    
+
     tasks = [filter_single(url) for url in urls]
     results = await asyncio.gather(*tasks)
-    
+
     return [url for passed, url in results if passed]
 
 # Usage with 1000 URLs
@@ -327,7 +327,7 @@ import re
 
 class CustomLanguageFilter(URLFilter):
     """Filter URLs by language indicators"""
-    
+
     def __init__(self, allowed_languages=["en"], weight=1.0):
         super().__init__()
         self.allowed_languages = set(allowed_languages)
@@ -337,21 +337,21 @@ class CustomLanguageFilter(URLFilter):
             "fr": re.compile(r"/fr/|/french/|lang=fr"),
             "de": re.compile(r"/de/|/german/|lang=de")
         }
-    
+
     def apply(self, url: str) -> bool:
         # Default to English if no language indicators
         if not any(pattern.search(url) for pattern in self.lang_patterns.values()):
             result = "en" in self.allowed_languages
             self._update_stats(result)
             return result
-        
+
         # Check for allowed languages
         for lang in self.allowed_languages:
             if lang in self.lang_patterns:
                 if self.lang_patterns[lang].search(url):
                     self._update_stats(True)
                     return True
-        
+
         self._update_stats(False)
         return False
 
@@ -360,25 +360,25 @@ from crawl4ai.deep_crawling.scorers import URLScorer
 
 class CustomComplexityScorer(URLScorer):
     """Score URLs by content complexity indicators"""
-    
+
     def __init__(self, weight=1.0):
         super().__init__(weight)
         self.complexity_indicators = {
             "tutorial": 0.9,
-            "guide": 0.8, 
+            "guide": 0.8,
             "example": 0.7,
             "reference": 0.6,
             "api": 0.5
         }
-    
+
     def _calculate_score(self, url: str) -> float:
         url_lower = url.lower()
         max_score = 0.0
-        
+
         for indicator, score in self.complexity_indicators.items():
             if indicator in url_lower:
                 max_score = max(max_score, score)
-        
+
         return max_score
 
 # Use custom filters and scorers
@@ -407,14 +407,14 @@ async def deep_crawl_with_filtering():
         ContentTypeFilter(["text/html"]),
         SEOFilter(threshold=0.6, keywords=["python", "programming"])
     ])
-    
+
     # Create composite scorer
     scorer = CompositeScorer([
         KeywordRelevanceScorer(["python", "tutorial"], weight=1.5),
         FreshnessScorer(weight=0.8),
         PathDepthScorer(optimal_depth=3, weight=1.0)
     ], normalize=True)
-    
+
     # Configure deep crawl strategy with filters and scorers
     deep_strategy = DeepCrawlStrategy(
         max_depth=3,
@@ -423,18 +423,18 @@ async def deep_crawl_with_filtering():
         url_scorer=scorer,
         score_threshold=0.6  # Only crawl URLs scoring above 0.6
     )
-    
+
     config = CrawlerRunConfig(
         deep_crawl_strategy=deep_strategy,
         cache_mode=CacheMode.BYPASS
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://python.org",
             config=config
         )
-        
+
         print(f"Deep crawl completed: {result.success}")
         if hasattr(result, 'deep_crawl_results'):
             print(f"Pages crawled: {len(result.deep_crawl_results)}")

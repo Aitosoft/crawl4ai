@@ -94,7 +94,7 @@ def to_serializable_dict(obj: Any, ignore_default_value : bool = False) -> Dict:
             if not (is_empty_value(value) and is_empty_value(param.default)):
                 if value != param.default and not ignore_default_value:
                     current_values[name] = to_serializable_dict(value)
-        
+
         if hasattr(obj, '__slots__'):
             for slot in obj.__slots__:
                 if slot.startswith('_'):  # Handle private slots
@@ -103,13 +103,13 @@ def to_serializable_dict(obj: Any, ignore_default_value : bool = False) -> Dict:
                     if value is not None:
                         current_values[attr_name] = to_serializable_dict(value)
 
-            
-        
+
+
         return {
             "type": obj.__class__.__name__,
             "params": current_values
         }
-        
+
     return str(obj)
 
 
@@ -175,7 +175,7 @@ class ProxyConfig:
         ip: Optional[str] = None,
     ):
         """Configuration class for a single proxy.
-        
+
         Args:
             server: Proxy server URL (e.g., "http://127.0.0.1:8080")
             username: Optional username for proxy authentication
@@ -185,10 +185,10 @@ class ProxyConfig:
         self.server = server
         self.username = username
         self.password = password
-        
+
         # Extract IP from server if not explicitly provided
         self.ip = ip or self._extract_ip_from_server()
-    
+
     def _extract_ip_from_server(self) -> Optional[str]:
         """Extract IP address from server URL."""
         try:
@@ -201,7 +201,7 @@ class ProxyConfig:
                 return parts[0]
         except Exception:
             return None
-    
+
     @staticmethod
     def from_string(proxy_str: str) -> "ProxyConfig":
         """Create a ProxyConfig from a string in the format 'ip:port:username:password'."""
@@ -222,7 +222,7 @@ class ProxyConfig:
             )
         else:
             raise ValueError(f"Invalid proxy string format: {proxy_str}")
-    
+
     @staticmethod
     def from_dict(proxy_dict: Dict) -> "ProxyConfig":
         """Create a ProxyConfig from a dictionary."""
@@ -232,14 +232,14 @@ class ProxyConfig:
             password=proxy_dict.get("password"),
             ip=proxy_dict.get("ip")
         )
-    
+
     @staticmethod
     def from_env(env_var: str = "PROXIES") -> List["ProxyConfig"]:
         """Load proxies from environment variable.
-        
+
         Args:
             env_var: Name of environment variable containing comma-separated proxy strings
-            
+
         Returns:
             List of ProxyConfig objects
         """
@@ -253,7 +253,7 @@ class ProxyConfig:
         except Exception as e:
             print(f"Error loading proxies from environment: {e}")
         return proxies
-    
+
     def to_dict(self) -> Dict:
         """Convert to dictionary representation."""
         return {
@@ -262,7 +262,7 @@ class ProxyConfig:
             "password": self.password,
             "ip": self.ip
         }
-    
+
     def clone(self, **kwargs) -> "ProxyConfig":
         """Create a copy of this configuration with updated values.
 
@@ -526,7 +526,7 @@ class BrowserConfig:
             "host": self.host,
         }
 
-                
+
         return result
 
     def clone(self, **kwargs):
@@ -659,13 +659,13 @@ class CrawlerRunConfig():
                           Default: False.
         css_selector (str or None): CSS selector to extract a specific portion of the page.
                                     Default: None.
-        
-        target_elements (list of str or None): List of CSS selectors for specific elements for Markdown generation 
-                                                and structured data extraction. When you set this, only the contents 
-                                                of these elements are processed for extraction and Markdown generation. 
-                                                If you do not set any value, the entire page is processed. 
-                                                The difference between this and css_selector is that this will shrink 
-                                                the initial raw HTML to the selected element, while this will only affect 
+
+        target_elements (list of str or None): List of CSS selectors for specific elements for Markdown generation
+                                                and structured data extraction. When you set this, only the contents
+                                                of these elements are processed for extraction and Markdown generation.
+                                                If you do not set any value, the entire page is processed.
+                                                The difference between this and css_selector is that this will shrink
+                                                the initial raw HTML to the selected element, while this will only affect
                                                 the extraction and Markdown generation.
                                     Default: None
         excluded_tags (list of str or None): List of HTML tags to exclude from processing.
@@ -809,7 +809,7 @@ class CrawlerRunConfig():
 
         # Experimental Parameters
         experimental (dict): Dictionary containing experimental parameters that are in beta phase.
-                            This allows passing temporary features that are not yet fully integrated 
+                            This allows passing temporary features that are not yet fully integrated
                             into the main parameter set.
                             Default: None.
 
@@ -984,7 +984,7 @@ class CrawlerRunConfig():
         # Debugging and Logging Parameters
         self.verbose = verbose
         self.log_console = log_console
-        
+
         # Network and Console Capturing Parameters
         self.capture_network_requests = capture_network_requests
         self.capture_console_messages = capture_console_messages
@@ -1021,7 +1021,7 @@ class CrawlerRunConfig():
 
         # Deep Crawl Parameters
         self.deep_crawl_strategy = deep_crawl_strategy
-        
+
         # Experimental Parameters
         self.experimental = experimental or {}
 
@@ -1040,7 +1040,7 @@ class CrawlerRunConfig():
 
         if name in self._UNWANTED_PROPS and value is not all_params[name].default:
             raise AttributeError(f"Setting '{name}' is deprecated. {self._UNWANTED_PROPS[name]}")
-        
+
         super().__setattr__(name, value)
 
     @staticmethod
@@ -1137,7 +1137,7 @@ class CrawlerRunConfig():
             # Deep Crawl Parameters
             deep_crawl_strategy=kwargs.get("deep_crawl_strategy"),
             url=kwargs.get("url"),
-            # Experimental Parameters 
+            # Experimental Parameters
             experimental=kwargs.get("experimental"),
         )
 
@@ -1269,7 +1269,7 @@ class LLMConfig:
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
         stop: Optional[List[str]] = None,
-        n: Optional[int] = None,    
+        n: Optional[int] = None,
     ):
         """Configuaration class for LLM provider and API token."""
         self.provider = provider
@@ -1286,7 +1286,7 @@ class LLMConfig:
                     (prefix for prefix in prefixes if provider.startswith(prefix)),
                     None,
                 )
-                self.api_token = PROVIDER_MODELS_PREFIXES.get(selected_prefix)                    
+                self.api_token = PROVIDER_MODELS_PREFIXES.get(selected_prefix)
             else:
                 self.provider = DEFAULT_PROVIDER
                 self.api_token = os.getenv(DEFAULT_PROVIDER_API_KEY)
@@ -2126,15 +2126,15 @@ from rich.prompt import Prompt, Confirm
 
 from crawl4ai import (
     CacheMode,
-    AsyncWebCrawler, 
+    AsyncWebCrawler,
     CrawlResult,
-    BrowserConfig, 
+    BrowserConfig,
     CrawlerRunConfig,
-    LLMExtractionStrategy, 
+    LLMExtractionStrategy,
     LXMLWebScrapingStrategy,
     JsonCssExtractionStrategy,
     JsonXPathExtractionStrategy,
-    BM25ContentFilter, 
+    BM25ContentFilter,
     PruningContentFilter,
     BrowserProfiler,
     DefaultMarkdownGenerator,
@@ -2151,11 +2151,11 @@ console = Console()
 def get_global_config() -> dict:
     config_dir = Path.home() / ".crawl4ai"
     config_file = config_dir / "global.yml"
-    
+
     if not config_file.exists():
         config_dir.mkdir(parents=True, exist_ok=True)
         return {}
-        
+
     with open(config_file) as f:
         return yaml.safe_load(f) or {}
 
@@ -2168,25 +2168,25 @@ def setup_llm_config() -> tuple[str, str]:
     config = get_global_config()
     provider = config.get("DEFAULT_LLM_PROVIDER")
     token = config.get("DEFAULT_LLM_PROVIDER_TOKEN")
-    
+
     if not provider:
         click.echo("\nNo default LLM provider configured.")
         click.echo("Provider format: 'company/model' (e.g., 'openai/gpt-4o', 'anthropic/claude-3-sonnet')")
         click.echo("See available providers at: https://docs.litellm.ai/docs/providers")
         provider = click.prompt("Enter provider")
-        
+
     if not provider.startswith("ollama/"):
         if not token:
             token = click.prompt("Enter API token for " + provider, hide_input=True)
     else:
         token = "no-token"
-    
+
     if not config.get("DEFAULT_LLM_PROVIDER") or not config.get("DEFAULT_LLM_PROVIDER_TOKEN"):
         config["DEFAULT_LLM_PROVIDER"] = provider
         config["DEFAULT_LLM_PROVIDER_TOKEN"] = token
         save_global_config(config)
         click.echo("\nConfiguration saved to ~/.crawl4ai/global.yml")
-    
+
     return provider, token
 
 async def stream_llm_response(url: str, markdown: str, query: str, provider: str, token: str):
@@ -2205,7 +2205,7 @@ async def stream_llm_response(url: str, markdown: str, query: str, provider: str
         ],
         stream=True,
     )
-    
+
     for chunk in response:
         if content := chunk["choices"][0]["delta"].get("content"):
             print(content, end="", flush=True)
@@ -2221,7 +2221,7 @@ def parse_key_values(ctx, param, value) -> Dict[str, Any]:
     for pair in pairs:
         try:
             k, v = pair.split('=', 1)
-            # Handle common value types 
+            # Handle common value types
             if v.lower() == 'true': v = True
             elif v.lower() == 'false': v = False
             elif v.isdigit(): v = int(v)
@@ -2241,7 +2241,7 @@ def parse_key_values(ctx, param, value) -> Dict[str, Any]:
 def load_config_file(path: Optional[str]) -> dict:
     if not path:
         return {}
-    
+
     try:
         with open(path) as f:
             if path.endswith((".yaml", ".yml")):
@@ -2291,7 +2291,7 @@ def show_examples():
 
     # LLM-based extraction with config file
     crwl https://example.com -e extract_llm.yml -s llm_schema.json -o json
-    
+
     # Quick LLM-based JSON extraction (prompts for LLM provider first time)
     crwl https://example.com -j  # Auto-extracts structured data
     crwl https://example.com -j "Extract product details including name, price, and features"  # With specific instructions
@@ -2333,7 +2333,7 @@ def show_examples():
     # Use the CDP URL with other tools (Puppeteer, Playwright, etc.)
     # The URL will be displayed in the terminal when the browser starts
 
-    
+
 6️⃣  Sample Config Files:
 
 browser.yml:
@@ -2404,7 +2404,7 @@ llm_schema.json:
         -s llm_schema.json \\
         -o json \\
         -v
-        
+
     # Quick LLM-based extraction with specific instructions
     crwl https://amazon.com/dp/B01DFKC2SO \\
         -j "Extract product title, current price, original price, rating, and all product specifications" \\
@@ -2441,7 +2441,7 @@ For more documentation visit: https://github.com/unclecode/crawl4ai
 
     Note: First time using -q will prompt for LLM provider and API token.
     These will be saved in ~/.crawl4ai/global.yml for future use.
-    
+
     Supported provider format: 'company/model'
     Examples:
       - ollama/llama3.3
@@ -2449,13 +2449,13 @@ For more documentation visit: https://github.com/unclecode/crawl4ai
       - anthropic/claude-3-sonnet
       - cohere/command
       - google/gemini-pro
-    
+
     See full list of providers: https://docs.litellm.ai/docs/providers
-    
+
     # Set default LLM provider and token in advance
     crwl config set DEFAULT_LLM_PROVIDER "anthropic/claude-3-sonnet"
     crwl config set DEFAULT_LLM_PROVIDER_TOKEN "your-api-token-here"
-    
+
     # Set default browser behavior
     crwl config set BROWSER_HEADLESS false  # Always show browser window
     crwl config set USER_AGENT_MODE random  # Use random user agent
@@ -2477,26 +2477,26 @@ For more documentation visit: https://github.com/unclecode/crawl4ai
 🔄 Builtin Browser Management:
     # Start a builtin browser (runs in the background)
     crwl browser start
-    
+
     # Check builtin browser status
     crwl browser status
-    
+
     # Open a visible window to see the browser
     crwl browser view --url https://example.com
-    
+
     # Stop the builtin browser
     crwl browser stop
-    
+
     # Restart with different options
     crwl browser restart --browser-type chromium --port 9223 --no-headless
-    
+
     # Use the builtin browser in your code
     # (Just set browser_mode="builtin" in your BrowserConfig)
     browser_config = BrowserConfig(
-        browser_mode="builtin", 
+        browser_mode="builtin",
         headless=True
     )
-    
+
     # Usage via CLI:
     crwl https://example.com -b "browser_mode=builtin"
 """
@@ -2515,10 +2515,10 @@ def get_directory_size(path: str) -> int:
 def display_profiles_table(profiles: List[Dict[str, Any]]):
     """Display a rich table of browser profiles"""
     if not profiles:
-        console.print(Panel("[yellow]No profiles found. Create one with the 'create' command.[/yellow]", 
+        console.print(Panel("[yellow]No profiles found. Create one with the 'create' command.[/yellow]",
                           title="Browser Profiles", border_style="blue"))
         return
-    
+
     table = Table(title="Browser Profiles", show_header=True, header_style="bold cyan", border_style="blue")
     table.add_column("#", style="dim", width=4)
     table.add_column("Name", style="cyan", no_wrap=True)
@@ -2526,25 +2526,25 @@ def display_profiles_table(profiles: List[Dict[str, Any]]):
     table.add_column("Created", style="yellow")
     table.add_column("Browser", style="magenta")
     table.add_column("Size", style="blue", justify="right")
-    
+
     for i, profile in enumerate(profiles):
         # Calculate folder size
         size = get_directory_size(profile["path"])
         human_size = humanize.naturalsize(size)
-        
+
         # Format creation date
         created = profile["created"].strftime("%Y-%m-%d %H:%M")
-        
+
         # Add row to table
         table.add_row(
-            str(i+1), 
-            profile["name"], 
-            profile["path"], 
-            created, 
-            profile["type"].capitalize(), 
+            str(i+1),
+            profile["name"],
+            profile["path"],
+            created,
+            profile["type"].capitalize(),
             human_size
         )
-    
+
     console.print(table)
 
 async def create_profile_interactive(profiler: BrowserProfiler):
@@ -2553,16 +2553,16 @@ async def create_profile_interactive(profiler: BrowserProfiler):
                       "This will open a browser window for you to set up your identity.\n"
                       "Log in to sites, adjust settings, then press 'q' to save.",
                       border_style="cyan"))
-    
+
     profile_name = Prompt.ask("[cyan]Enter profile name[/cyan]", default=f"profile_{int(time.time())}")
-    
+
     console.print("[cyan]Creating profile...[/cyan]")
     console.print("[yellow]A browser window will open. After logging in to sites, press 'q' in this terminal to save.[/yellow]")
-    
+
     # Create the profile
     try:
         profile_path = await profiler.create_profile(profile_name)
-        
+
         if profile_path:
             console.print(f"[green]Profile successfully created at:[/green] {profile_path}")
         else:
@@ -2573,62 +2573,62 @@ async def create_profile_interactive(profiler: BrowserProfiler):
 def delete_profile_interactive(profiler: BrowserProfiler):
     """Interactive profile deletion"""
     profiles = profiler.list_profiles()
-    
+
     if not profiles:
         console.print("[yellow]No profiles found to delete.[/yellow]")
         return
-    
+
     # Display profiles
     display_profiles_table(profiles)
-    
+
     # Get profile selection
     idx = Prompt.ask(
-        "[red]Enter number of profile to delete[/red]", 
+        "[red]Enter number of profile to delete[/red]",
         console=console,
         choices=[str(i+1) for i in range(len(profiles))],
         show_choices=False
     )
-    
+
     try:
         idx = int(idx) - 1
         profile = profiles[idx]
-        
+
         # Confirm deletion
         if Confirm.ask(f"[red]Are you sure you want to delete profile '{profile['name']}'?[/red]"):
             success = profiler.delete_profile(profile["path"])
-            
+
             if success:
                 console.print(f"[green]Profile '{profile['name']}' deleted successfully.[/green]")
             else:
                 console.print(f"[red]Failed to delete profile '{profile['name']}'.[/red]")
     except (ValueError, IndexError):
         console.print("[red]Invalid selection.[/red]")
-        
+
 async def crawl_with_profile_cli(profile_path, url):
     """Use a profile to crawl a website via CLI"""
     console.print(f"[cyan]Crawling [bold]{url}[/bold] using profile at [bold]{profile_path}[/bold][/cyan]")
-    
+
     # Create browser config with the profile
     browser_cfg = BrowserConfig(
         headless=False,  # Set to False to see the browser in action
         use_managed_browser=True,
         user_data_dir=profile_path
     )
-    
+
     # Default crawler config
     crawler_cfg = CrawlerRunConfig()
-    
+
     # Ask for output format
     output_format = Prompt.ask(
         "[cyan]Output format[/cyan]",
         choices=["all", "json", "markdown", "md", "title"],
         default="markdown"
     )
-    
+
     try:
         # Run the crawler
         result = await run_crawler(url, browser_cfg, crawler_cfg, True)
-        
+
         # Handle output
         if output_format == "all":
             console.print(json.dumps(result.model_dump(), indent=2))
@@ -2638,37 +2638,37 @@ async def crawl_with_profile_cli(profile_path, url):
             console.print(result.markdown.raw_markdown)
         elif output_format == "title":
             console.print(result.metadata.get("title", "No title found"))
-        
+
         console.print(f"[green]Successfully crawled[/green] {url}")
         return result
     except Exception as e:
         console.print(f"[red]Error crawling:[/red] {str(e)}")
         return None
-        
+
 async def use_profile_to_crawl():
     """Interactive profile selection for crawling"""
     profiler = BrowserProfiler()
     profiles = profiler.list_profiles()
-    
+
     if not profiles:
         console.print("[yellow]No profiles found. Create one first.[/yellow]")
         return
-        
+
     # Display profiles
     display_profiles_table(profiles)
-    
+
     # Get profile selection
     idx = Prompt.ask(
-        "[cyan]Enter number of profile to use[/cyan]", 
+        "[cyan]Enter number of profile to use[/cyan]",
         console=console,
         choices=[str(i+1) for i in range(len(profiles))],
         show_choices=False
     )
-    
+
     try:
         idx = int(idx) - 1
         profile = profiles[idx]
-        
+
         # Get URL
         url = Prompt.ask("[cyan]Enter URL to crawl[/cyan]")
         if url:
@@ -2682,7 +2682,7 @@ async def use_profile_to_crawl():
 async def manage_profiles():
     """Interactive profile management menu"""
     profiler = BrowserProfiler()
-    
+
     options = {
         "1": "List profiles",
         "2": "Create new profile",
@@ -2690,38 +2690,38 @@ async def manage_profiles():
         "4": "Use a profile to crawl a website",
         "5": "Exit",
     }
-    
+
     while True:
         console.print(Panel("[bold cyan]Browser Profile Manager[/bold cyan]", border_style="cyan"))
-        
+
         for key, value in options.items():
             color = "green" if key == "1" else "yellow" if key == "2" else "red" if key == "3" else "blue" if key == "4" else "cyan"
             console.print(f"[{color}]{key}[/{color}]. {value}")
-        
+
         choice = Prompt.ask("Enter choice", choices=list(options.keys()), default="1")
-        
+
         if choice == "1":
             # List profiles
             profiles = profiler.list_profiles()
             display_profiles_table(profiles)
-        
+
         elif choice == "2":
             # Create profile
             await create_profile_interactive(profiler)
-        
+
         elif choice == "3":
             # Delete profile
             delete_profile_interactive(profiler)
-            
+
         elif choice == "4":
             # Use profile to crawl
             await use_profile_to_crawl()
-        
+
         elif choice == "5":
             # Exit
             console.print("[cyan]Exiting profile manager.[/cyan]")
             break
-        
+
         # Add a separator between operations
         console.print("\n")
 
@@ -2736,7 +2736,7 @@ def cli():
 @cli.group("browser")
 def browser_cmd():
     """Manage browser instances for Crawl4AI
-    
+
     Commands to manage browser instances for Crawl4AI, including:
     - status - Check status of the builtin browser
     - start - Start a new builtin browser
@@ -2744,15 +2744,15 @@ def browser_cmd():
     - restart - Restart the builtin browser
     """
     pass
-    
+
 @browser_cmd.command("status")
 def browser_status_cmd():
     """Show status of the builtin browser"""
     profiler = BrowserProfiler()
-    
+
     try:
         status = anyio.run(profiler.get_builtin_browser_status)
-        
+
         if status["running"]:
             info = status["info"]
             console.print(Panel(
@@ -2772,24 +2772,24 @@ def browser_status_cmd():
                 title="Builtin Browser Status",
                 border_style="yellow"
             ))
-            
+
     except Exception as e:
         console.print(f"[red]Error checking browser status: {str(e)}[/red]")
         sys.exit(1)
-        
+
 @browser_cmd.command("start")
-@click.option("--browser-type", "-b", type=click.Choice(["chromium", "firefox"]), default="chromium", 
+@click.option("--browser-type", "-b", type=click.Choice(["chromium", "firefox"]), default="chromium",
               help="Browser type (default: chromium)")
 @click.option("--port", "-p", type=int, default=9222, help="Debugging port (default: 9222)")
 @click.option("--headless/--no-headless", default=True, help="Run browser in headless mode")
 def browser_start_cmd(browser_type: str, port: int, headless: bool):
     """Start a builtin browser instance
-    
+
     This will start a persistent browser instance that can be used by Crawl4AI
     by setting browser_mode="builtin" in BrowserConfig.
     """
     profiler = BrowserProfiler()
-    
+
     # First check if browser is already running
     status = anyio.run(profiler.get_builtin_browser_status)
     if status["running"]:
@@ -2801,7 +2801,7 @@ def browser_start_cmd(browser_type: str, port: int, headless: bool):
             border_style="yellow"
         ))
         return
-    
+
     try:
         console.print(Panel(
             f"[cyan]Starting builtin browser[/cyan]\n\n"
@@ -2811,14 +2811,14 @@ def browser_start_cmd(browser_type: str, port: int, headless: bool):
             title="Builtin Browser Start",
             border_style="cyan"
         ))
-        
+
         cdp_url = anyio.run(
             profiler.launch_builtin_browser,
             browser_type,
             port,
             headless
         )
-        
+
         if cdp_url:
             console.print(Panel(
                 f"[green]Builtin browser started successfully[/green]\n\n"
@@ -2834,16 +2834,16 @@ def browser_start_cmd(browser_type: str, port: int, headless: bool):
                 border_style="red"
             ))
             sys.exit(1)
-            
+
     except Exception as e:
         console.print(f"[red]Error starting builtin browser: {str(e)}[/red]")
         sys.exit(1)
-        
+
 @browser_cmd.command("stop")
 def browser_stop_cmd():
     """Stop the running builtin browser"""
     profiler = BrowserProfiler()
-    
+
     try:
         # First check if browser is running
         status = anyio.run(profiler.get_builtin_browser_status)
@@ -2854,15 +2854,15 @@ def browser_stop_cmd():
                 border_style="yellow"
             ))
             return
-            
+
         console.print(Panel(
             "[cyan]Stopping builtin browser...[/cyan]",
-            title="Builtin Browser Stop", 
+            title="Builtin Browser Stop",
             border_style="cyan"
         ))
-        
+
         success = anyio.run(profiler.kill_builtin_browser)
-        
+
         if success:
             console.print(Panel(
                 "[green]Builtin browser stopped successfully[/green]",
@@ -2876,22 +2876,22 @@ def browser_stop_cmd():
                 border_style="red"
             ))
             sys.exit(1)
-            
+
     except Exception as e:
         console.print(f"[red]Error stopping builtin browser: {str(e)}[/red]")
         sys.exit(1)
-        
+
 @browser_cmd.command("view")
 @click.option("--url", "-u", help="URL to navigate to (defaults to about:blank)")
 def browser_view_cmd(url: Optional[str]):
     """
     Open a visible window of the builtin browser
-    
+
     This command connects to the running builtin browser and opens a visible window,
     allowing you to see what the browser is currently viewing or navigate to a URL.
     """
     profiler = BrowserProfiler()
-    
+
     try:
         # First check if browser is running
         status = anyio.run(profiler.get_builtin_browser_status)
@@ -2903,10 +2903,10 @@ def browser_view_cmd(url: Optional[str]):
                 border_style="yellow"
             ))
             return
-        
+
         info = status["info"]
         cdp_url = info["cdp_url"]
-        
+
         console.print(Panel(
             f"[cyan]Opening visible window connected to builtin browser[/cyan]\n\n"
             f"CDP URL: [green]{cdp_url}[/green]\n"
@@ -2914,11 +2914,11 @@ def browser_view_cmd(url: Optional[str]):
             title="Builtin Browser View",
             border_style="cyan"
         ))
-        
+
         # Use the CDP URL to launch a new visible window
         import subprocess
         import os
-        
+
         # Determine the browser command based on platform
         if sys.platform == "darwin":  # macOS
             browser_cmd = ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
@@ -2926,7 +2926,7 @@ def browser_view_cmd(url: Optional[str]):
             browser_cmd = ["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"]
         else:  # Linux
             browser_cmd = ["google-chrome"]
-        
+
         # Add arguments
         browser_args = [
             f"--remote-debugging-port={info['debugging_port']}",
@@ -2934,11 +2934,11 @@ def browser_view_cmd(url: Optional[str]):
             "--no-first-run",
             "--no-default-browser-check"
         ]
-        
+
         # Add URL if provided
         if url:
             browser_args.append(url)
-        
+
         # Launch browser
         try:
             subprocess.Popen(browser_cmd + browser_args)
@@ -2946,29 +2946,29 @@ def browser_view_cmd(url: Optional[str]):
         except Exception as e:
             console.print(f"[red]Error launching browser: {str(e)}[/red]")
             console.print(f"[yellow]Try connecting manually to {cdp_url} in Chrome or using the '--remote-debugging-port' flag.[/yellow]")
-    
+
     except Exception as e:
         console.print(f"[red]Error viewing builtin browser: {str(e)}[/red]")
         sys.exit(1)
 
 @browser_cmd.command("restart")
-@click.option("--browser-type", "-b", type=click.Choice(["chromium", "firefox"]), default=None, 
+@click.option("--browser-type", "-b", type=click.Choice(["chromium", "firefox"]), default=None,
               help="Browser type (defaults to same as current)")
 @click.option("--port", "-p", type=int, default=None, help="Debugging port (defaults to same as current)")
 @click.option("--headless/--no-headless", default=None, help="Run browser in headless mode")
 def browser_restart_cmd(browser_type: Optional[str], port: Optional[int], headless: Optional[bool]):
     """Restart the builtin browser
-    
+
     Stops the current builtin browser if running and starts a new one.
     By default, uses the same configuration as the current browser.
     """
     profiler = BrowserProfiler()
-    
+
     try:
         # First check if browser is running and get its config
         status = anyio.run(profiler.get_builtin_browser_status)
         current_config = {}
-        
+
         if status["running"]:
             info = status["info"]
             current_config = {
@@ -2976,14 +2976,14 @@ def browser_restart_cmd(browser_type: Optional[str], port: Optional[int], headle
                 "port": info["debugging_port"],
                 "headless": True  # Default assumption
             }
-            
+
             # Stop the browser
             console.print(Panel(
                 "[cyan]Stopping current builtin browser...[/cyan]",
-                title="Builtin Browser Restart", 
+                title="Builtin Browser Restart",
                 border_style="cyan"
             ))
-            
+
             success = anyio.run(profiler.kill_builtin_browser)
             if not success:
                 console.print(Panel(
@@ -2992,12 +2992,12 @@ def browser_restart_cmd(browser_type: Optional[str], port: Optional[int], headle
                     border_style="red"
                 ))
                 sys.exit(1)
-        
+
         # Use provided options or defaults from current config
         browser_type = browser_type or current_config.get("browser_type", "chromium")
         port = port or current_config.get("port", 9222)
         headless = headless if headless is not None else current_config.get("headless", True)
-        
+
         # Start a new browser
         console.print(Panel(
             f"[cyan]Starting new builtin browser[/cyan]\n\n"
@@ -3007,14 +3007,14 @@ def browser_restart_cmd(browser_type: Optional[str], port: Optional[int], headle
             title="Builtin Browser Restart",
             border_style="cyan"
         ))
-        
+
         cdp_url = anyio.run(
             profiler.launch_builtin_browser,
             browser_type,
             port,
             headless
         )
-        
+
         if cdp_url:
             console.print(Panel(
                 f"[green]Builtin browser restarted successfully[/green]\n\n"
@@ -3029,7 +3029,7 @@ def browser_restart_cmd(browser_type: Optional[str], port: Optional[int], headle
                 border_style="red"
             ))
             sys.exit(1)
-            
+
     except Exception as e:
         console.print(f"[red]Error restarting builtin browser: {str(e)}[/red]")
         sys.exit(1)
@@ -3037,47 +3037,47 @@ def browser_restart_cmd(browser_type: Optional[str], port: Optional[int], headle
 @cli.command("cdp")
 @click.option("--user-data-dir", "-d", help="Directory to use for browser data (will be created if it doesn't exist)")
 @click.option("--port", "-P", type=int, default=9222, help="Debugging port (default: 9222)")
-@click.option("--browser-type", "-b", type=click.Choice(["chromium", "firefox"]), default="chromium", 
+@click.option("--browser-type", "-b", type=click.Choice(["chromium", "firefox"]), default="chromium",
               help="Browser type (default: chromium)")
 @click.option("--headless", is_flag=True, help="Run browser in headless mode")
 @click.option("--incognito", is_flag=True, help="Run in incognito/private mode (ignores user-data-dir)")
 def cdp_cmd(user_data_dir: Optional[str], port: int, browser_type: str, headless: bool, incognito: bool):
     """Launch a standalone browser with CDP debugging enabled
-    
+
     This command launches a browser with Chrome DevTools Protocol (CDP) debugging enabled,
     prints the CDP URL, and keeps the browser running until you press 'q'.
-    
+
     The CDP URL can be used for various automation and debugging tasks.
-    
+
     Examples:
         # Launch Chromium with CDP on default port 9222
         crwl cdp
-        
+
         # Use a specific directory for browser data and custom port
         crwl cdp --user-data-dir ~/browser-data --port 9223
-        
+
         # Launch in headless mode
         crwl cdp --headless
-        
+
         # Launch in incognito mode (ignores user-data-dir)
         crwl cdp --incognito
     """
     profiler = BrowserProfiler()
-    
+
     try:
         # Handle data directory
         data_dir = None
         if not incognito and user_data_dir:
             # Expand user path (~/something)
             expanded_path = os.path.expanduser(user_data_dir)
-            
+
             # Create directory if it doesn't exist
             if not os.path.exists(expanded_path):
                 console.print(f"[yellow]Directory '{expanded_path}' doesn't exist. Creating it.[/yellow]")
                 os.makedirs(expanded_path, exist_ok=True)
-            
+
             data_dir = expanded_path
-        
+
         # Print launch info
         console.print(Panel(
             f"[cyan]Launching browser with CDP debugging[/cyan]\n\n"
@@ -3090,7 +3090,7 @@ def cdp_cmd(user_data_dir: Optional[str], port: int, browser_type: str, headless
             title="CDP Browser",
             border_style="cyan"
         ))
-        
+
         # Run the browser
         cdp_url = anyio.run(
             profiler.launch_standalone_browser,
@@ -3099,11 +3099,11 @@ def cdp_cmd(user_data_dir: Optional[str], port: int, browser_type: str, headless
             port,
             headless
         )
-        
+
         if not cdp_url:
             console.print("[red]Failed to launch browser or get CDP URL[/red]")
             sys.exit(1)
-            
+
     except Exception as e:
         console.print(f"[red]Error launching CDP browser: {str(e)}[/red]")
         sys.exit(1)
@@ -3125,51 +3125,51 @@ def cdp_cmd(user_data_dir: Optional[str], port: int, browser_type: str, headless
 @click.option("--question", "-q", help="Ask a question about the crawled content")
 @click.option("--verbose", "-v", is_flag=True)
 @click.option("--profile", "-p", help="Use a specific browser profile (by name)")
-def crawl_cmd(url: str, browser_config: str, crawler_config: str, filter_config: str, 
+def crawl_cmd(url: str, browser_config: str, crawler_config: str, filter_config: str,
            extraction_config: str, json_extract: str, schema: str, browser: Dict, crawler: Dict,
            output: str, output_file: str, bypass_cache: bool, question: str, verbose: bool, profile: str):
     """Crawl a website and extract content
-    
+
     Simple Usage:
         crwl crawl https://example.com
     """
-    
+
     # Handle profile option
     if profile:
         profiler = BrowserProfiler()
         profile_path = profiler.get_profile_path(profile)
-        
+
         if not profile_path:
             profiles = profiler.list_profiles()
-            
+
             if profiles:
                 console.print(f"[red]Profile '{profile}' not found. Available profiles:[/red]")
                 display_profiles_table(profiles)
             else:
                 console.print("[red]No profiles found. Create one with 'crwl profiles'[/red]")
-            
+
             return
-        
+
         # Include the profile in browser config
         if not browser:
             browser = {}
         browser["user_data_dir"] = profile_path
         browser["use_managed_browser"] = True
-        
+
         if verbose:
             console.print(f"[green]Using browser profile:[/green] {profile}")
-            
+
     try:
         # Load base configurations
         browser_cfg = BrowserConfig.load(load_config_file(browser_config))
         crawler_cfg = CrawlerRunConfig.load(load_config_file(crawler_config))
-        
+
         # Override with CLI params
         if browser:
             browser_cfg = browser_cfg.clone(**browser)
         if crawler:
             crawler_cfg = crawler_cfg.clone(**crawler)
-            
+
         # Handle content filter config
         if filter_config or output in ["markdown-fit", "md-fit"]:
             if filter_config:
@@ -3194,25 +3194,25 @@ def crawl_cmd(url: str, browser_config: str, crawler_config: str, filter_config:
                         threshold=filter_conf.get("threshold", 0.48)
                     )
                 )
-        
+
         # Handle json-extract option (takes precedence over extraction-config)
         if json_extract is not None:
             # Get LLM provider and token
             provider, token = setup_llm_config()
-            
+
             # Default sophisticated instruction for structured data extraction
-            default_instruction = """Analyze the web page content and extract structured data as JSON. 
-If the page contains a list of items with repeated patterns, extract all items in an array. 
+            default_instruction = """Analyze the web page content and extract structured data as JSON.
+If the page contains a list of items with repeated patterns, extract all items in an array.
 If the page is an article or contains unique content, extract a comprehensive JSON object with all relevant information.
 Look at the content, intention of content, what it offers and find the data item(s) in the page.
 Always return valid, properly formatted JSON."""
-            
-            
+
+
             default_instruction_with_user_query = """Analyze the web page content and extract structured data as JSON, following the below instruction and explanation of schema and always return valid, properly formatted JSON. \n\nInstruction:\n\n""" + json_extract
-            
+
             # Determine instruction based on whether json_extract is empty or has content
             instruction = default_instruction_with_user_query if json_extract else default_instruction
-            
+
             # Create LLM extraction strategy
             crawler_cfg.extraction_strategy = LLMExtractionStrategy(
                 llm_config=LLMConfig(provider=provider, api_token=token),
@@ -3223,22 +3223,22 @@ Always return valid, properly formatted JSON."""
                 force_json_response=True,
                 verbose=verbose,
             )
-            
+
             # Set output to JSON if not explicitly specified
             if output == "all":
                 output = "json"
-                
+
         # Handle extraction strategy from config file (only if json-extract wasn't used)
         elif extraction_config:
             extract_conf = load_config_file(extraction_config)
             schema_data = load_schema_file(schema)
-            
+
             # Check if type does not exist show proper message
             if not extract_conf.get("type"):
                 raise click.ClickException("Extraction type not specified")
             if extract_conf["type"] not in ["llm", "json-css", "json-xpath"]:
                 raise click.ClickException(f"Invalid extraction type: {extract_conf['type']}")
-            
+
             if extract_conf["type"] == "llm":
                 # if no provider show error emssage
                 if not extract_conf.get("provider") or not extract_conf.get("api_token"):
@@ -3258,19 +3258,19 @@ Always return valid, properly formatted JSON."""
                 crawler_cfg.extraction_strategy = JsonXPathExtractionStrategy(
                     schema=schema_data
                 )
-                
+
 
         # No cache
         if bypass_cache:
             crawler_cfg.cache_mode = CacheMode.BYPASS
 
-        crawler_cfg.scraping_strategy = LXMLWebScrapingStrategy()    
+        crawler_cfg.scraping_strategy = LXMLWebScrapingStrategy()
 
         config = get_global_config()
-        
+
         browser_cfg.verbose = config.get("VERBOSE", False)
         crawler_cfg.verbose = config.get("VERBOSE", False)
-        
+
         # Run crawler
         result : CrawlResult = anyio.run(
             run_crawler,
@@ -3286,7 +3286,7 @@ Always return valid, properly formatted JSON."""
             markdown = result.markdown.raw_markdown
             anyio.run(stream_llm_response, url, markdown, question, provider, token)
             return
-        
+
         # Handle output
         if not output_file:
             if output == "all":
@@ -3295,7 +3295,7 @@ Always return valid, properly formatted JSON."""
                 print(result.extracted_content)
                 extracted_items = json.loads(result.extracted_content)
                 click.echo(json.dumps(extracted_items, indent=2))
-                
+
             elif output in ["markdown", "md"]:
                 click.echo(result.markdown.raw_markdown)
             elif output in ["markdown-fit", "md-fit"]:
@@ -3313,7 +3313,7 @@ Always return valid, properly formatted JSON."""
             elif output in ["markdown-fit", "md-fit"]:
                 with open(output_file, "w") as f:
                     f.write(result.markdown.fit_markdown)
-            
+
     except Exception as e:
         raise click.ClickException(str(e))
 
@@ -3325,7 +3325,7 @@ def examples_cmd():
 @cli.group("config")
 def config_cmd():
     """Manage global configuration settings
-    
+
     Commands to view and update global configuration settings:
     - list: Display all current configuration settings
     - get: Get the value of a specific setting
@@ -3337,35 +3337,35 @@ def config_cmd():
 def config_list_cmd():
     """List all configuration settings"""
     config = get_global_config()
-    
+
     table = Table(title="Crawl4AI Configuration", show_header=True, header_style="bold cyan", border_style="blue")
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
     table.add_column("Default", style="yellow")
     table.add_column("Description", style="white")
-    
+
     for key, setting in USER_SETTINGS.items():
         value = config.get(key, setting["default"])
-        
+
         # Handle secret values
         display_value = value
         if setting.get("secret", False) and value:
             display_value = "********"
-            
+
         # Handle boolean values
         if setting["type"] == "boolean":
             display_value = str(value).lower()
             default_value = str(setting["default"]).lower()
         else:
             default_value = str(setting["default"])
-        
+
         table.add_row(
             key,
             str(display_value),
             default_value,
             setting["description"]
         )
-    
+
     console.print(table)
 
 @config_cmd.command("get")
@@ -3373,21 +3373,21 @@ def config_list_cmd():
 def config_get_cmd(key: str):
     """Get a specific configuration setting"""
     config = get_global_config()
-    
+
     # Normalize key to uppercase
     key = key.upper()
-    
+
     if key not in USER_SETTINGS:
         console.print(f"[red]Error: Unknown setting '{key}'[/red]")
         return
-    
+
     value = config.get(key, USER_SETTINGS[key]["default"])
-    
+
     # Handle secret values
     display_value = value
     if USER_SETTINGS[key].get("secret", False) and value:
         display_value = "********"
-    
+
     console.print(f"[cyan]{key}[/cyan] = [green]{display_value}[/green]")
     console.print(f"[dim]Description: {USER_SETTINGS[key]['description']}[/dim]")
 
@@ -3397,17 +3397,17 @@ def config_get_cmd(key: str):
 def config_set_cmd(key: str, value: str):
     """Set a configuration setting"""
     config = get_global_config()
-    
+
     # Normalize key to uppercase
     key = key.upper()
-    
+
     if key not in USER_SETTINGS:
         console.print(f"[red]Error: Unknown setting '{key}'[/red]")
         console.print(f"[yellow]Available settings: {', '.join(USER_SETTINGS.keys())}[/yellow]")
         return
-    
+
     setting = USER_SETTINGS[key]
-    
+
     # Type conversion and validation
     if setting["type"] == "boolean":
         if value.lower() in ["true", "yes", "1", "y"]:
@@ -3419,27 +3419,27 @@ def config_set_cmd(key: str, value: str):
             return
     elif setting["type"] == "string":
         typed_value = value
-        
+
         # Check if the value should be one of the allowed options
         if "options" in setting and value not in setting["options"]:
             console.print(f"[red]Error: Value must be one of: {', '.join(setting['options'])}[/red]")
             return
-    
+
     # Update config
     config[key] = typed_value
     save_global_config(config)
-    
+
     # Handle secret values for display
     display_value = typed_value
     if setting.get("secret", False) and typed_value:
         display_value = "********"
-        
+
     console.print(f"[green]Successfully set[/green] [cyan]{key}[/cyan] = [green]{display_value}[/green]")
 
 @cli.command("profiles")
 def profiles_cmd():
     """Manage browser profiles interactively
-    
+
     Launch an interactive browser profile manager where you can:
     - List all existing profiles
     - Create new profiles for authenticated browsing
@@ -3464,16 +3464,16 @@ def profiles_cmd():
 @click.option("--question", "-q", help="Ask a question about the crawled content")
 @click.option("--verbose", "-v", is_flag=True)
 @click.option("--profile", "-p", help="Use a specific browser profile (by name)")
-def default(url: str, example: bool, browser_config: str, crawler_config: str, filter_config: str, 
+def default(url: str, example: bool, browser_config: str, crawler_config: str, filter_config: str,
         extraction_config: str, json_extract: str, schema: str, browser: Dict, crawler: Dict,
         output: str, bypass_cache: bool, question: str, verbose: bool, profile: str):
     """Crawl4AI CLI - Web content extraction tool
 
     Simple Usage:
         crwl https://example.com
-    
+
     Run with --example to see detailed usage examples.
-    
+
     Other commands:
         crwl profiles   - Manage browser profiles for identity-based crawling
         crwl crawl      - Crawl a website with advanced options
@@ -3481,7 +3481,7 @@ def default(url: str, example: bool, browser_config: str, crawler_config: str, f
         crwl browser    - Manage builtin browser (start, stop, status, restart)
         crwl config     - Manage global configuration settings
         crwl examples   - Show more usage examples
-        
+
     Configuration Examples:
         crwl config list                         - List all configuration settings
         crwl config get DEFAULT_LLM_PROVIDER     - Show current LLM provider
@@ -3492,18 +3492,18 @@ def default(url: str, example: bool, browser_config: str, crawler_config: str, f
     if example:
         show_examples()
         return
-        
+
     if not url:
         # Show help without error message
         ctx = click.get_current_context()
         click.echo(ctx.get_help())
         return
-        
+
     # Forward to crawl command
     ctx = click.get_current_context()
     ctx.invoke(
-        crawl_cmd, 
-        url=url, 
+        crawl_cmd,
+        url=url,
         browser_config=browser_config,
         crawler_config=crawler_config,
         filter_config=filter_config,
@@ -4106,7 +4106,7 @@ class LLMExtractionStrategy(ExtractionStrategy):
         self.base_url = base_url
         self.api_base = api_base
 
-    
+
     def __setattr__(self, name, value):
         """Handle attribute setting."""
         # TODO: Planning to set properties dynamically based on the __init__ signature
@@ -4115,9 +4115,9 @@ class LLMExtractionStrategy(ExtractionStrategy):
 
         if name in self._UNWANTED_PROPS and value is not all_params[name].default:
             raise AttributeError(f"Setting '{name}' is deprecated. {self._UNWANTED_PROPS[name]}")
-        
-        super().__setattr__(name, value)  
-        
+
+        super().__setattr__(name, value)
+
     def extract(self, url: str, ix: int, html: str) -> List[Dict[str, Any]]:
         """
         Extract meaningful blocks or chunks from the given HTML using an LLM.
@@ -4205,7 +4205,7 @@ class LLMExtractionStrategy(ExtractionStrategy):
                     elif isinstance(blocks, list):
                         # If it is a list then assign that to blocks
                         blocks = blocks
-                else: 
+                else:
                     # blocks = extract_xml_data(["blocks"], response.choices[0].message.content)["blocks"]
                     blocks = extract_xml_data(["blocks"], response)["blocks"]
                     blocks = json.loads(blocks)
@@ -4632,16 +4632,16 @@ class JsonElementExtractionStrategy(ExtractionStrategy):
     ) -> dict:
         """
         Generate extraction schema from HTML content and optional query.
-        
+
         Args:
             html (str): The HTML content to analyze
             query (str, optional): Natural language description of what data to extract
-            provider (str): Legacy Parameter. LLM provider to use 
+            provider (str): Legacy Parameter. LLM provider to use
             api_token (str): Legacy Parameter. API token for LLM provider
             llm_config (LLMConfig): LLM configuration object
             prompt (str, optional): Custom prompt template to use
             **kwargs: Additional args passed to LLM processor
-            
+
         Returns:
             dict: Generated schema following the JsonElementExtractionStrategy format
         """
@@ -4650,13 +4650,13 @@ class JsonElementExtractionStrategy(ExtractionStrategy):
         for name, message in JsonElementExtractionStrategy._GENERATE_SCHEMA_UNWANTED_PROPS.items():
             if locals()[name] is not None:
                 raise AttributeError(f"Setting '{name}' is deprecated. {message}")
-        
+
         # Use default or custom prompt
         prompt_template = JSON_SCHEMA_BUILDER if schema_type == "CSS" else JSON_SCHEMA_BUILDER_XPATH
-        
+
         # Build the prompt
         system_message = {
-            "role": "system", 
+            "role": "system",
             "content": f"""You specialize in generating special JSON schemas for web scraping. This schema uses CSS or XPATH selectors to present a repetitive pattern in crawled HTML, such as a product in a product list or a search result item in a list of search results. We use this JSON schema to pass to a language model along with the HTML content to extract structured data from the HTML. The language model uses the JSON schema to extract data from the HTML and retrieve values for fields in the JSON schema, following the schema.
 
 Generating this HTML manually is not feasible, so you need to generate the JSON schema using the HTML content. The HTML copied from the crawled website is provided below, which we believe contains the repetitive pattern.
@@ -4679,7 +4679,7 @@ In this scenario, use your best judgment to generate the schema. You need to exa
 # What are the instructions and details for this schema generation?
 {prompt_template}"""
         }
-        
+
         user_message = {
             "role": "user",
             "content": f"""
@@ -4701,7 +4701,7 @@ In this scenario, use your best judgment to generate the schema. You need to exa
             user_message["content"] += """IMPORTANT: Please remember that in this process, we provided a proper example of a target JSON object. Make sure to adhere to the structure and create a schema that exactly fits this example. If you find that some elements on the page do not match completely, vote for the majority."""
         elif not query and not target_json_example:
             user_message["content"] += """IMPORTANT: Since we neither have a query nor an example, it is crucial to rely solely on the HTML content provided. Leverage your expertise to determine the schema based on the repetitive patterns observed in the content."""
-        
+
         user_message["content"] += """IMPORTANT: Ensure your schema remains reliable by avoiding selectors that appear to generate dynamically and are not dependable. You want a reliable schema, as it consistently returns the same data even after many page reloads.
 
         Analyze the HTML and generate a JSON schema that follows the specified format. Only output valid JSON schema, nothing else.
@@ -4712,15 +4712,15 @@ In this scenario, use your best judgment to generate the schema. You need to exa
             response = perform_completion_with_backoff(
                 provider=llm_config.provider,
                 prompt_with_variables="\n\n".join([system_message["content"], user_message["content"]]),
-                json_response = True,                
+                json_response = True,
                 api_token=llm_config.api_token,
                 base_url=llm_config.base_url,
                 extra_args=kwargs
             )
-            
+
             # Extract and return schema
             return json.loads(response.choices[0].message.content)
-            
+
         except Exception as e:
             raise Exception(f"Failed to generate schema: {str(e)}")
 
@@ -4778,18 +4778,18 @@ class JsonLxmlExtractionStrategy(JsonElementExtractionStrategy):
         self._selector_cache = {}
         self._xpath_cache = {}
         self._result_cache = {}
-        
+
         # Control selector optimization strategy
         self.use_caching = kwargs.get("use_caching", True)
         self.optimize_common_patterns = kwargs.get("optimize_common_patterns", True)
-        
+
         # Load lxml dependencies once
         from lxml import etree, html
         from lxml.cssselect import CSSSelector
         self.etree = etree
         self.html_parser = html
         self.CSSSelector = CSSSelector
-    
+
     def _parse_html(self, html_content: str):
         """Parse HTML content with error recovery"""
         try:
@@ -4805,79 +4805,79 @@ class JsonLxmlExtractionStrategy(JsonElementExtractionStrategy):
                     print(f"Critical error parsing HTML: {e2}")
                 # Create minimal document as fallback
                 return self.etree.Element("html")
-    
+
     def _optimize_selector(self, selector_str):
         """Optimize common selector patterns for better performance"""
         if not self.optimize_common_patterns:
             return selector_str
-            
+
         # Handle td:nth-child(N) pattern which is very common in table scraping
         import re
         if re.search(r'td:nth-child\(\d+\)', selector_str):
             return selector_str  # Already handled specially in _apply_selector
-            
+
         # Split complex selectors into parts for optimization
         parts = selector_str.split()
         if len(parts) <= 1:
             return selector_str
-            
+
         # For very long selectors, consider using just the last specific part
         if len(parts) > 3 and any(p.startswith('.') or p.startswith('#') for p in parts):
             specific_parts = [p for p in parts if p.startswith('.') or p.startswith('#')]
             if specific_parts:
                 return specific_parts[-1]  # Use most specific class/id selector
-                
+
         return selector_str
-    
+
     def _create_selector_function(self, selector_str):
         """Create a selector function that handles all edge cases"""
         original_selector = selector_str
-        
+
         # Try to optimize the selector if appropriate
         if self.optimize_common_patterns:
             selector_str = self._optimize_selector(selector_str)
-        
+
         try:
             # Attempt to compile the CSS selector
             compiled = self.CSSSelector(selector_str)
             xpath = compiled.path
-            
+
             # Store XPath for later use
             self._xpath_cache[selector_str] = xpath
-            
+
             # Create the wrapper function that implements the selection strategy
             def selector_func(element, context_sensitive=True):
                 cache_key = None
-                
+
                 # Use result caching if enabled
                 if self.use_caching:
                     # Create a cache key based on element and selector
                     element_id = element.get('id', '') or str(hash(element))
                     cache_key = f"{element_id}::{selector_str}"
-                    
+
                     if cache_key in self._result_cache:
                         return self._result_cache[cache_key]
-                
+
                 results = []
                 try:
                     # Strategy 1: Direct CSS selector application (fastest)
                     results = compiled(element)
-                    
+
                     # If that fails and we need context sensitivity
                     if not results and context_sensitive:
                         # Strategy 2: Try XPath with context adjustment
                         context_xpath = self._make_context_sensitive_xpath(xpath, element)
                         if context_xpath:
                             results = element.xpath(context_xpath)
-                        
+
                         # Strategy 3: Handle special case - nth-child
                         if not results and 'nth-child' in original_selector:
                             results = self._handle_nth_child_selector(element, original_selector)
-                        
+
                         # Strategy 4: Direct descendant search for class/ID selectors
                         if not results:
                             results = self._fallback_class_id_search(element, original_selector)
-                            
+
                         # Strategy 5: Last resort - tag name search for the final part
                         if not results:
                             parts = original_selector.split()
@@ -4888,39 +4888,39 @@ class JsonLxmlExtractionStrategy(JsonElementExtractionStrategy):
                                 if tag_match:
                                     tag_name = tag_match.group(1)
                                     results = element.xpath(f".//{tag_name}")
-                    
+
                     # Cache results if caching is enabled
                     if self.use_caching and cache_key:
                         self._result_cache[cache_key] = results
-                        
+
                 except Exception as e:
                     if self.verbose:
                         print(f"Error applying selector '{selector_str}': {e}")
-                
+
                 return results
-                
+
             return selector_func
-            
+
         except Exception as e:
             if self.verbose:
                 print(f"Error compiling selector '{selector_str}': {e}")
-            
+
             # Fallback function for invalid selectors
             return lambda element, context_sensitive=True: []
-    
+
     def _make_context_sensitive_xpath(self, xpath, element):
         """Convert absolute XPath to context-sensitive XPath"""
         try:
             # If starts with descendant-or-self, it's already context-sensitive
             if xpath.startswith('descendant-or-self::'):
                 return xpath
-                
+
             # Remove leading slash if present
             if xpath.startswith('/'):
                 context_xpath = f".{xpath}"
             else:
                 context_xpath = f".//{xpath}"
-                
+
             # Validate the XPath by trying it
             try:
                 element.xpath(context_xpath)
@@ -4930,21 +4930,21 @@ class JsonLxmlExtractionStrategy(JsonElementExtractionStrategy):
                 return f".//{xpath.split('/')[-1]}"
         except:
             return None
-    
+
     def _handle_nth_child_selector(self, element, selector_str):
         """Special handling for nth-child selectors in tables"""
         import re
         results = []
-        
+
         try:
             # Extract the column number from td:nth-child(N)
             match = re.search(r'td:nth-child\((\d+)\)', selector_str)
             if match:
                 col_num = match.group(1)
-                
+
                 # Check if there's content after the nth-child part
                 remaining_selector = selector_str.split(f"td:nth-child({col_num})", 1)[-1].strip()
-                
+
                 if remaining_selector:
                     # If there's a specific element we're looking for after the column
                     # Extract any tag names from the remaining selector
@@ -4957,26 +4957,26 @@ class JsonLxmlExtractionStrategy(JsonElementExtractionStrategy):
         except Exception as e:
             if self.verbose:
                 print(f"Error handling nth-child selector: {e}")
-                
+
         return results
-    
+
     def _fallback_class_id_search(self, element, selector_str):
         """Fallback to search by class or ID"""
         results = []
-        
+
         try:
             # Extract class selectors (.classname)
             import re
             class_matches = re.findall(r'\.([a-zA-Z0-9_-]+)', selector_str)
-            
+
             # Extract ID selectors (#idname)
             id_matches = re.findall(r'#([a-zA-Z0-9_-]+)', selector_str)
-            
+
             # Try each class
             for class_name in class_matches:
                 class_results = element.xpath(f".//*[contains(@class, '{class_name}')]")
                 results.extend(class_results)
-                
+
             # Try each ID (usually more specific)
             for id_name in id_matches:
                 id_results = element.xpath(f".//*[@id='{id_name}']")
@@ -4984,26 +4984,26 @@ class JsonLxmlExtractionStrategy(JsonElementExtractionStrategy):
         except Exception as e:
             if self.verbose:
                 print(f"Error in fallback class/id search: {e}")
-                
+
         return results
-    
+
     def _get_selector(self, selector_str):
         """Get or create a selector function with caching"""
         if selector_str not in self._selector_cache:
             self._selector_cache[selector_str] = self._create_selector_function(selector_str)
         return self._selector_cache[selector_str]
-    
+
     def _get_base_elements(self, parsed_html, selector: str):
         """Get all base elements using the selector"""
         selector_func = self._get_selector(selector)
         # For base elements, we don't need context sensitivity
         return selector_func(parsed_html, context_sensitive=False)
-    
+
     def _get_elements(self, element, selector: str):
         """Get child elements using the selector with context sensitivity"""
         selector_func = self._get_selector(selector)
         return selector_func(element, context_sensitive=True)
-    
+
     def _get_element_text(self, element) -> str:
         """Extract normalized text from element"""
         try:
@@ -5018,7 +5018,7 @@ class JsonLxmlExtractionStrategy(JsonElementExtractionStrategy):
                 return element.text_content().strip()
             except:
                 return ""
-    
+
     def _get_element_html(self, element) -> str:
         """Get HTML string representation of element"""
         try:
@@ -5027,7 +5027,7 @@ class JsonLxmlExtractionStrategy(JsonElementExtractionStrategy):
             if self.verbose:
                 print(f"Error serializing HTML: {e}")
             return ""
-    
+
     def _get_element_attribute(self, element, attribute: str):
         """Get attribute value safely"""
         try:
@@ -5036,7 +5036,7 @@ class JsonLxmlExtractionStrategy(JsonElementExtractionStrategy):
             if self.verbose:
                 print(f"Error getting attribute '{attribute}': {e}")
             return None
-            
+
     def _clear_caches(self):
         """Clear caches to free memory"""
         if self.use_caching:
@@ -5047,12 +5047,12 @@ class JsonLxmlExtractionStrategy_naive(JsonElementExtractionStrategy):
         kwargs["input_format"] = "html"  # Force HTML input
         super().__init__(schema, **kwargs)
         self._selector_cache = {}
-    
+
     def _parse_html(self, html_content: str):
         from lxml import etree
         parser = etree.HTMLParser(recover=True)
         return etree.fromstring(html_content, parser)
-    
+
     def _get_selector(self, selector_str):
         """Get a selector function that works within the context of an element"""
         if selector_str not in self._selector_cache:
@@ -5060,7 +5060,7 @@ class JsonLxmlExtractionStrategy_naive(JsonElementExtractionStrategy):
             try:
                 # Store both the compiled selector and its xpath translation
                 compiled = CSSSelector(selector_str)
-                
+
                 # Create a function that will apply this selector appropriately
                 def select_func(element):
                     try:
@@ -5068,22 +5068,22 @@ class JsonLxmlExtractionStrategy_naive(JsonElementExtractionStrategy):
                         results = compiled(element)
                         if results:
                             return results
-                        
+
                         # Second attempt: contextual XPath selection
                         # Convert the root-based XPath to a context-based XPath
                         xpath = compiled.path
-                        
+
                         # If the XPath already starts with descendant-or-self, handle it specially
                         if xpath.startswith('descendant-or-self::'):
                             context_xpath = xpath
                         else:
                             # For normal XPath expressions, make them relative to current context
                             context_xpath = f"./{xpath.lstrip('/')}"
-                        
+
                         results = element.xpath(context_xpath)
                         if results:
                             return results
-                        
+
                         # Final fallback: simple descendant search for common patterns
                         if 'nth-child' in selector_str:
                             # Handle td:nth-child(N) pattern
@@ -5096,48 +5096,48 @@ class JsonLxmlExtractionStrategy_naive(JsonElementExtractionStrategy):
                                     return element.xpath(f".//td[{col_num}]//{sub_selector}")
                                 else:
                                     return element.xpath(f".//td[{col_num}]")
-                        
+
                         # Last resort: try each part of the selector separately
                         parts = selector_str.split()
                         if len(parts) > 1 and parts[-1]:
                             return element.xpath(f".//{parts[-1]}")
-                            
+
                         return []
                     except Exception as e:
                         if self.verbose:
                             print(f"Error applying selector '{selector_str}': {e}")
                         return []
-                
+
                 self._selector_cache[selector_str] = select_func
             except Exception as e:
                 if self.verbose:
                     print(f"Error compiling selector '{selector_str}': {e}")
-                
+
                 # Fallback function for invalid selectors
                 def fallback_func(element):
                     return []
-                
+
                 self._selector_cache[selector_str] = fallback_func
-                
+
         return self._selector_cache[selector_str]
-    
+
     def _get_base_elements(self, parsed_html, selector: str):
         selector_func = self._get_selector(selector)
         return selector_func(parsed_html)
-    
+
     def _get_elements(self, element, selector: str):
         selector_func = self._get_selector(selector)
         return selector_func(element)
-    
+
     def _get_element_text(self, element) -> str:
         return "".join(element.xpath(".//text()")).strip()
-    
+
     def _get_element_html(self, element) -> str:
         from lxml import etree
         return etree.tostring(element, encoding='unicode')
-    
+
     def _get_element_attribute(self, element, attribute: str):
-        return element.get(attribute)    
+        return element.get(attribute)
 
 class JsonXPathExtractionStrategy(JsonElementExtractionStrategy):
     """
@@ -5243,7 +5243,7 @@ class CrawlerTaskResult:
     error_message: str = ""
     retry_count: int = 0
     wait_time: float = 0.0
-    
+
     @property
     def success(self) -> bool:
         return self.result.success
@@ -5272,18 +5272,18 @@ class CrawlStats:
     def duration(self) -> str:
         if not self.start_time:
             return "0:00"
-            
+
         # Convert start_time to datetime if it's a float
         start = self.start_time
         if isinstance(start, float):
             start = datetime.fromtimestamp(start)
-            
+
         # Get end time or use current time
         end = self.end_time or datetime.now()
         # Convert end_time to datetime if it's a float
         if isinstance(end, float):
             end = datetime.fromtimestamp(end)
-            
+
         duration = end - start
         return str(timedelta(seconds=int(duration.total_seconds())))
 
@@ -5337,7 +5337,7 @@ class MarkdownGenerationResult(BaseModel):
 
     def __str__(self):
         return self.raw_markdown
-    
+
 class CrawlResult(BaseModel):
     url: str
     html: str
@@ -5369,15 +5369,15 @@ class CrawlResult(BaseModel):
 # NOTE: The StringCompatibleMarkdown class, custom __init__ method, property getters/setters,
 # and model_dump override all exist to support a smooth transition from markdown as a string
 # to markdown as a MarkdownGenerationResult object, while maintaining backward compatibility.
-# 
+#
 # This allows code that expects markdown to be a string to continue working, while also
 # providing access to the full MarkdownGenerationResult object's properties.
-# 
+#
 # The markdown_v2 property is deprecated and raises an error directing users to use markdown.
-# 
+#
 # When backward compatibility is no longer needed in future versions, this entire mechanism
 # can be simplified to a standard field with no custom accessors or serialization logic.
-    
+
     def __init__(self, **data):
         markdown_result = data.pop('markdown', None)
         super().__init__(**data)
@@ -5387,27 +5387,27 @@ class CrawlResult(BaseModel):
                 if isinstance(markdown_result, dict)
                 else markdown_result
             )
-    
+
     @property
     def markdown(self):
         """
         Property that returns a StringCompatibleMarkdown object that behaves like
         a string but also provides access to MarkdownGenerationResult attributes.
-        
+
         This approach allows backward compatibility with code that expects 'markdown'
         to be a string, while providing access to the full MarkdownGenerationResult.
         """
         if self._markdown is None:
             return None
         return StringCompatibleMarkdown(self._markdown)
-    
+
     @markdown.setter
     def markdown(self, value):
         """
         Setter for the markdown property.
         """
         self._markdown = value
-    
+
     @property
     def markdown_v2(self):
         """
@@ -5426,7 +5426,7 @@ class CrawlResult(BaseModel):
             - fit_markdown: The markdown string with fit text
             """
         )
-    
+
     @property
     def fit_markdown(self):
         """
@@ -5436,7 +5436,7 @@ class CrawlResult(BaseModel):
             "The 'fit_markdown' attribute is deprecated and has been removed. "
             "Please use 'markdown.fit_markdown' instead."
         )
-    
+
     @property
     def fit_html(self):
         """
@@ -5450,31 +5450,31 @@ class CrawlResult(BaseModel):
     def model_dump(self, *args, **kwargs):
         """
         Override model_dump to include the _markdown private attribute in serialization.
-        
+
         This override is necessary because:
         1. PrivateAttr fields are excluded from serialization by default
         2. We need to maintain backward compatibility by including the 'markdown' field
            in the serialized output
         3. We're transitioning from 'markdown_v2' to enhancing 'markdown' to hold
            the same type of data
-        
+
         Future developers: This method ensures that the markdown content is properly
         serialized despite being stored in a private attribute. If the serialization
         requirements change, this is where you would update the logic.
         """
         result = super().model_dump(*args, **kwargs)
         if self._markdown is not None:
-            result["markdown"] = self._markdown.model_dump() 
+            result["markdown"] = self._markdown.model_dump()
         return result
 
 class StringCompatibleMarkdown(str):
     """A string subclass that also provides access to MarkdownGenerationResult attributes"""
     def __new__(cls, markdown_result):
         return super().__new__(cls, markdown_result.raw_markdown)
-    
+
     def __init__(self, markdown_result):
         self._markdown_result = markdown_result
-    
+
     def __getattr__(self, name):
         return getattr(self._markdown_result, name)
 
@@ -6443,7 +6443,7 @@ class LLMContentFilter(RelevantContentFilter):
 
         self.usages = []
         self.total_usage = TokenUsage()
-    
+
     def __setattr__(self, name, value):
         """Handle attribute setting."""
         # TODO: Planning to set properties dynamically based on the __init__ signature
@@ -6452,9 +6452,9 @@ class LLMContentFilter(RelevantContentFilter):
 
         if name in self._UNWANTED_PROPS and value is not all_params[name].default:
             raise AttributeError(f"Setting '{name}' is deprecated. {self._UNWANTED_PROPS[name]}")
-        
-        super().__setattr__(name, value)  
-        
+
+        super().__setattr__(name, value)
+
     def _get_cache_key(self, html: str, instruction: str) -> str:
         """Generate a unique cache key based on HTML and instruction"""
         content = f"{html}{instruction}"
@@ -7027,7 +7027,7 @@ class ManagedBrowser:
         logger=None,
         host: str = "localhost",
         debugging_port: int = 9222,
-        cdp_url: Optional[str] = None, 
+        cdp_url: Optional[str] = None,
         browser_config: Optional[BrowserConfig] = None,
     ):
         """
@@ -7063,7 +7063,7 @@ class ManagedBrowser:
         Starts the browser process or returns CDP endpoint URL.
         If cdp_url is provided, returns it directly.
         If user_data_dir is not provided for local browser, creates a temporary directory.
-        
+
         Returns:
             str: CDP endpoint URL
         """
@@ -7079,7 +7079,7 @@ class ManagedBrowser:
         # Get browser path and args based on OS and browser type
         # browser_path = self._get_browser_path()
         args = await self._get_browser_args()
-        
+
         if self.browser_config.extra_args:
             args.extend(self.browser_config.extra_args)
 
@@ -7089,19 +7089,19 @@ class ManagedBrowser:
             # On Unix, we'll use preexec_fn=os.setpgrp to start the process in a new process group
             if sys.platform == "win32":
                 self.browser_process = subprocess.Popen(
-                    args, 
-                    stdout=subprocess.PIPE, 
+                    args,
+                    stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
                 )
             else:
                 self.browser_process = subprocess.Popen(
-                    args, 
-                    stdout=subprocess.PIPE, 
+                    args,
+                    stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     preexec_fn=os.setpgrp  # Start in a new process group
                 )
-                
+
             # We'll monitor for a short time to make sure it starts properly, but won't keep monitoring
             await asyncio.sleep(0.5)  # Give browser time to start
             await self._initial_startup_check()
@@ -7118,7 +7118,7 @@ class ManagedBrowser:
         """
         if not self.browser_process:
             return
-            
+
         # Check that process started without immediate termination
         await asyncio.sleep(0.5)
         if self.browser_process.poll() is not None:
@@ -7128,7 +7128,7 @@ class ManagedBrowser:
                 stdout, stderr = self.browser_process.communicate(timeout=0.5)
             except subprocess.TimeoutExpired:
                 pass
-                
+
             self.logger.error(
                 message="Browser process terminated during startup | Code: {code} | STDOUT: {stdout} | STDERR: {stderr}",
                 tag="ERROR",
@@ -7138,7 +7138,7 @@ class ManagedBrowser:
                     "stderr": stderr.decode() if stderr else "",
                 },
             )
-    
+
     async def _monitor_browser_process(self):
         """
         Monitor the browser process for unexpected termination.
@@ -7271,7 +7271,7 @@ class ManagedBrowser:
             except Exception as e:
                 self.logger.error(
                     message="Error terminating browser: {error}",
-                    tag="ERROR", 
+                    tag="ERROR",
                     params={"error": str(e)},
                 )
 
@@ -7284,75 +7284,75 @@ class ManagedBrowser:
                     tag="ERROR",
                     params={"error": str(e)},
                 )
-                
+
     # These methods have been moved to BrowserProfiler class
     @staticmethod
     async def create_profile(browser_config=None, profile_name=None, logger=None):
         """
         This method has been moved to the BrowserProfiler class.
-        
+
         Creates a browser profile by launching a browser for interactive user setup
         and waits until the user closes it. The profile is stored in a directory that
         can be used later with BrowserConfig.user_data_dir.
-        
+
         Please use BrowserProfiler.create_profile() instead.
-        
+
         Example:
             ```python
             from crawl4ai.browser_profiler import BrowserProfiler
-            
+
             profiler = BrowserProfiler()
             profile_path = await profiler.create_profile(profile_name="my-login-profile")
             ```
         """
         from .browser_profiler import BrowserProfiler
-        
+
         # Create a BrowserProfiler instance and delegate to it
         profiler = BrowserProfiler(logger=logger)
         return await profiler.create_profile(profile_name=profile_name, browser_config=browser_config)
-    
+
     @staticmethod
     def list_profiles():
         """
         This method has been moved to the BrowserProfiler class.
-        
+
         Lists all available browser profiles in the Crawl4AI profiles directory.
-        
+
         Please use BrowserProfiler.list_profiles() instead.
-        
+
         Example:
             ```python
             from crawl4ai.browser_profiler import BrowserProfiler
-            
+
             profiler = BrowserProfiler()
             profiles = profiler.list_profiles()
             ```
         """
         from .browser_profiler import BrowserProfiler
-        
+
         # Create a BrowserProfiler instance and delegate to it
         profiler = BrowserProfiler()
         return profiler.list_profiles()
-        
+
     @staticmethod
     def delete_profile(profile_name_or_path):
         """
         This method has been moved to the BrowserProfiler class.
-        
+
         Delete a browser profile by name or path.
-        
+
         Please use BrowserProfiler.delete_profile() instead.
-        
+
         Example:
             ```python
             from crawl4ai.browser_profiler import BrowserProfiler
-            
+
             profiler = BrowserProfiler()
             success = profiler.delete_profile("my-profile")
             ```
         """
         from .browser_profiler import BrowserProfiler
-        
+
         # Create a BrowserProfiler instance and delegate to it
         profiler = BrowserProfiler()
         return profiler.delete_profile(profile_name_or_path)
@@ -7376,12 +7376,12 @@ class BrowserManager:
     """
 
     _playwright_instance = None
-    
+
     @classmethod
     async def get_playwright(cls):
         from playwright.async_api import async_playwright
         cls._playwright_instance = await async_playwright().start()
-        return cls._playwright_instance    
+        return cls._playwright_instance
 
     def __init__(self, browser_config: BrowserConfig, logger=None):
         """
@@ -7406,7 +7406,7 @@ class BrowserManager:
 
         # Keep track of contexts by a "config signature," so each unique config reuses a single context
         self.contexts_by_config = {}
-        self._contexts_lock = asyncio.Lock() 
+        self._contexts_lock = asyncio.Lock()
 
         # Initialize ManagedBrowser if needed
         if self.config.use_managed_browser:
@@ -7434,7 +7434,7 @@ class BrowserManager:
         """
         if self.playwright is not None:
             await self.close()
-            
+
         from playwright.async_api import async_playwright
 
         self.playwright = await async_playwright().start()
@@ -7508,7 +7508,7 @@ class BrowserManager:
 
         # Deduplicate args
         args = list(dict.fromkeys(args))
-        
+
         browser_args = {"headless": self.config.headless, "args": args}
 
         if self.config.chrome_channel:
@@ -7618,7 +7618,7 @@ class BrowserManager:
                 or crawlerRunConfig.simulate_user
                 or crawlerRunConfig.magic
             ):
-                await context.add_init_script(load_js_script("navigator_overrider"))        
+                await context.add_init_script(load_js_script("navigator_overrider"))
 
     async def create_browser_context(self, crawlerRunConfig: CrawlerRunConfig = None):
         """
@@ -7629,7 +7629,7 @@ class BrowserManager:
             Context: Browser context object with the specified configurations
         """
         # Base settings
-        user_agent = self.config.headers.get("User-Agent", self.config.user_agent) 
+        user_agent = self.config.headers.get("User-Agent", self.config.user_agent)
         viewport_settings = {
             "width": self.config.viewport_width,
             "height": self.config.viewport_height,
@@ -7702,7 +7702,7 @@ class BrowserManager:
             "device_scale_factor": self.config.device_scale_factor,
             "java_script_enabled": self.config.java_script_enabled,
         }
-        
+
         if crawlerRunConfig:
             # Check if there is value for crawlerRunConfig.proxy_config set add that to context
             if crawlerRunConfig.proxy_config:
@@ -7843,7 +7843,7 @@ class BrowserManager:
         """Close all browser resources and clean up."""
         if self.config.cdp_url:
             return
-        
+
         if self.config.sleep_on_close:
             await asyncio.sleep(0.5)
 
@@ -8100,7 +8100,7 @@ async def extract_structured_data_using_llm(
             llm_config=LLMConfig(provider=provider,api_token=api_token),
             schema=OpenAIModelFee.model_json_schema(),
             extraction_type="schema",
-            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens. 
+            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens.
             Do not miss any models in the entire content.""",
             extra_args=extra_args,
         ),
@@ -9047,7 +9047,7 @@ async def example_cdp():
             config=crawler_config,
         )
         print(result.js_execution_result)
-                   
+
 
 async def main():
     browser_config = BrowserConfig(headless=True, verbose=True)
@@ -9266,8 +9266,8 @@ from ..types import AsyncWebCrawler, CrawlerRunConfig, CrawlResult, RunManyRetur
 class DeepCrawlDecorator:
     """Decorator that adds deep crawling capability to arun method."""
     deep_crawl_active = ContextVar("deep_crawl_active", default=False)
-    
-    def __init__(self, crawler: AsyncWebCrawler): 
+
+    def __init__(self, crawler: AsyncWebCrawler):
         self.crawler = crawler
 
     def __call__(self, original_arun):
@@ -9301,7 +9301,7 @@ class DeepCrawlDecorator:
 class DeepCrawlStrategy(ABC):
     """
     Abstract base class for deep crawling strategies.
-    
+
     Core functions:
       - arun: Main entry point that returns an async generator of CrawlResults.
       - shutdown: Clean up resources.
@@ -9334,7 +9334,7 @@ class DeepCrawlStrategy(ABC):
         Processes one BFS level at a time and yields results immediately as they arrive.
         """
         pass
-    
+
     async def arun(
         self,
         start_url: str,
@@ -9343,12 +9343,12 @@ class DeepCrawlStrategy(ABC):
     ) -> RunManyReturn:
         """
         Traverse the given URL using the specified crawler.
-        
+
         Args:
             start_url (str): The URL from which to start crawling.
             crawler (AsyncWebCrawler): The crawler instance to use.
             crawler_run_config (Optional[CrawlerRunConfig]): Crawler configuration.
-        
+
         Returns:
             Union[CrawlResultT, List[CrawlResultT], AsyncGenerator[CrawlResultT, None]]
         """
@@ -9374,11 +9374,11 @@ class DeepCrawlStrategy(ABC):
     async def can_process_url(self, url: str, depth: int) -> bool:
         """
         Validate the URL format and apply custom filtering logic.
-        
+
         Args:
             url (str): The URL to validate.
             depth (int): The current depth in the crawl.
-        
+
         Returns:
             bool: True if the URL should be processed, False otherwise.
         """
@@ -9396,13 +9396,13 @@ class DeepCrawlStrategy(ABC):
     ) -> None:
         """
         Extract and process links from the given crawl result.
-        
+
         This method should:
           - Validate each extracted URL using can_process_url.
           - Optionally score URLs.
           - Append valid URLs (and their parent references) to the next_level list.
           - Update the depths dictionary with the new depth for each URL.
-        
+
         Args:
             result (CrawlResult): The result from a crawl operation.
             source_url (str): The URL from which this result was obtained.
@@ -9443,11 +9443,11 @@ BATCH_SIZE = 10
 class BestFirstCrawlingStrategy(DeepCrawlStrategy):
     """
     Best-First Crawling Strategy using a priority queue.
-    
+
     This strategy prioritizes URLs based on their score, ensuring that higher-value
     pages are crawled first. It reimplements the core traversal loop to use a priority
     queue while keeping URL validation and link discovery consistent with our design.
-    
+
     Core methods:
       - arun: Returns either a list (batch mode) or an async generator (stream mode).
       - _arun_best_first: Core generator that uses a priority queue to yield CrawlResults.
@@ -9512,7 +9512,7 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
         new_depth = current_depth + 1
         if new_depth > self.max_depth:
             return
-            
+
         # If we've reached the max pages limit, don't discover new links
         remaining_capacity = self.max_pages - self._pages_crawled
         if remaining_capacity <= 0:
@@ -9533,14 +9533,14 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
             if not await self.can_process_url(url, new_depth):
                 self.stats.urls_skipped += 1
                 continue
-                
+
             valid_links.append(url)
-            
+
         # If we have more valid links than capacity, limit them
         if len(valid_links) > remaining_capacity:
             valid_links = valid_links[:remaining_capacity]
             self.logger.info(f"Limiting to {remaining_capacity} URLs due to max_pages limit")
-            
+
         # Record the new depths and add to next_links
         for url in valid_links:
             depths[url] = new_depth
@@ -9554,7 +9554,7 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
     ) -> AsyncGenerator[CrawlResult, None]:
         """
         Core best-first crawl method using a priority queue.
-        
+
         The queue items are tuples of (score, depth, url, parent_url). Lower scores
         are treated as higher priority. URLs are processed in batches for efficiency.
         """
@@ -9569,7 +9569,7 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
             if self._pages_crawled >= self.max_pages:
                 self.logger.info(f"Max pages limit ({self.max_pages}) reached, stopping crawl")
                 break
-                
+
             batch: List[Tuple[float, int, str, Optional[str]]] = []
             # Retrieve up to BATCH_SIZE items from the priority queue.
             for _ in range(BATCH_SIZE):
@@ -9600,19 +9600,19 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
                 result.metadata["depth"] = depth
                 result.metadata["parent_url"] = parent_url
                 result.metadata["score"] = score
-                
+
                 # Count only successful crawls toward max_pages limit
                 if result.success:
                     self._pages_crawled += 1
-                
+
                 yield result
-                
+
                 # Only discover links from successful crawls
                 if result.success:
                     # Discover new links from this result
                     new_links: List[Tuple[str, Optional[str]]] = []
                     await self.link_discovery(result, result_url, depth, visited, new_links, depths)
-                    
+
                     for new_url, new_parent in new_links:
                         new_depth = depths.get(new_url, depth + 1)
                         new_score = self.url_scorer.score(new_url) if self.url_scorer else 0
@@ -9628,7 +9628,7 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
     ) -> List[CrawlResult]:
         """
         Best-first crawl in batch mode.
-        
+
         Aggregates all CrawlResults into a list.
         """
         results: List[CrawlResult] = []
@@ -9644,7 +9644,7 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
     ) -> AsyncGenerator[CrawlResult, None]:
         """
         Best-first crawl in streaming mode.
-        
+
         Yields CrawlResults as they become available.
         """
         async for result in self._arun_best_first(start_url, crawler, config):
@@ -9658,7 +9658,7 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
     ) -> "RunManyReturn":
         """
         Main entry point for best-first crawling.
-        
+
         Returns either a list (batch mode) or an async generator (stream mode)
         of CrawlResults.
         """
@@ -9692,7 +9692,7 @@ from urllib.parse import urlparse
 from ..models import TraversalStats
 from .filters import FilterChain
 from .scorers import URLScorer
-from . import DeepCrawlStrategy  
+from . import DeepCrawlStrategy
 from ..types import AsyncWebCrawler, CrawlerRunConfig, CrawlResult
 from ..utils import normalize_url_for_deep_crawl, efficient_normalize_url_for_deep_crawl
 from math import inf as infinity
@@ -9700,7 +9700,7 @@ from math import inf as infinity
 class BFSDeepCrawlStrategy(DeepCrawlStrategy):
     """
     Breadth-First Search deep crawling strategy.
-    
+
     Core functions:
       - arun: Main entry point; splits execution into batch or stream modes.
       - link_discovery: Extracts, filters, and (if needed) scores the outgoing URLs.
@@ -9710,7 +9710,7 @@ class BFSDeepCrawlStrategy(DeepCrawlStrategy):
         self,
         max_depth: int,
         filter_chain: FilterChain = FilterChain(),
-        url_scorer: Optional[URLScorer] = None,        
+        url_scorer: Optional[URLScorer] = None,
         include_external: bool = False,
         score_threshold: float = -infinity,
         max_pages: int = infinity,
@@ -9763,7 +9763,7 @@ class BFSDeepCrawlStrategy(DeepCrawlStrategy):
         prepares the next level of URLs.
         Each valid URL is appended to next_level as a tuple (url, parent_url)
         and its depth is tracked.
-        """            
+        """
         next_depth = current_depth + 1
         if next_depth > self.max_depth:
             return
@@ -9780,7 +9780,7 @@ class BFSDeepCrawlStrategy(DeepCrawlStrategy):
             links += result.links.get("external", [])
 
         valid_links = []
-        
+
         # First collect all valid links
         for link in links:
             url = link.get("href")
@@ -9795,15 +9795,15 @@ class BFSDeepCrawlStrategy(DeepCrawlStrategy):
 
             # Score the URL if a scorer is provided
             score = self.url_scorer.score(base_url) if self.url_scorer else 0
-            
+
             # Skip URLs with scores below the threshold
             if score < self.score_threshold:
                 self.logger.debug(f"URL {url} skipped: score {score} below threshold {self.score_threshold}")
                 self.stats.urls_skipped += 1
                 continue
-            
+
             valid_links.append((base_url, score))
-        
+
         # If we have more valid links than capacity, sort by score and take the top ones
         if len(valid_links) > remaining_capacity:
             if self.url_scorer:
@@ -9812,7 +9812,7 @@ class BFSDeepCrawlStrategy(DeepCrawlStrategy):
             # Take only as many as we have capacity for
             valid_links = valid_links[:remaining_capacity]
             self.logger.info(f"Limiting to {remaining_capacity} URLs due to max_pages limit")
-            
+
         # Process the final selected links
         for url, score in valid_links:
             # attach the score to metadata if needed
@@ -9847,11 +9847,11 @@ class BFSDeepCrawlStrategy(DeepCrawlStrategy):
             # Clone the config to disable deep crawling recursion and enforce batch mode.
             batch_config = config.clone(deep_crawl_strategy=None, stream=False)
             batch_results = await crawler.arun_many(urls=urls, config=batch_config)
-            
+
             # Update pages crawled counter - count only successful crawls
             successful_results = [r for r in batch_results if r.success]
             self._pages_crawled += len(successful_results)
-            
+
             for result in batch_results:
                 url = result.url
                 depth = depths.get(url, 0)
@@ -9860,7 +9860,7 @@ class BFSDeepCrawlStrategy(DeepCrawlStrategy):
                 parent_url = next((parent for (u, parent) in current_level if u == url), None)
                 result.metadata["parent_url"] = parent_url
                 results.append(result)
-                
+
                 # Only discover links from successful crawls
                 if result.success:
                     # Link discovery will handle the max pages limit internally
@@ -9891,7 +9891,7 @@ class BFSDeepCrawlStrategy(DeepCrawlStrategy):
 
             stream_config = config.clone(deep_crawl_strategy=None, stream=True)
             stream_gen = await crawler.arun_many(urls=urls, config=stream_config)
-            
+
             # Keep track of processed results for this batch
             results_count = 0
             async for result in stream_gen:
@@ -9901,24 +9901,24 @@ class BFSDeepCrawlStrategy(DeepCrawlStrategy):
                 result.metadata["depth"] = depth
                 parent_url = next((parent for (u, parent) in current_level if u == url), None)
                 result.metadata["parent_url"] = parent_url
-                
+
                 # Count only successful crawls
                 if result.success:
                     self._pages_crawled += 1
-                
+
                 results_count += 1
                 yield result
-                
+
                 # Only discover links from successful crawls
                 if result.success:
                     # Link discovery will handle the max pages limit internally
                     await self.link_discovery(result, url, depth, visited, next_level, depths)
-            
+
             # If we didn't get results back (e.g. due to errors), avoid getting stuck in an infinite loop
             # by considering these URLs as visited but not counting them toward the max_pages limit
             if results_count == 0 and urls:
                 self.logger.warning(f"No results returned for {len(urls)} URLs, marking as visited")
-                
+
             current_level = next_level
 
     async def shutdown(self) -> None:
@@ -10370,7 +10370,7 @@ class DomainFilter(URLFilter):
         if isinstance(domains, str):
             return {domains.lower()}
         return {d.lower() for d in domains}
-    
+
     @staticmethod
     def _is_subdomain(domain: str, parent_domain: str) -> bool:
         """Check if domain is a subdomain of parent_domain"""
@@ -10634,18 +10634,18 @@ _FRESHNESS_SCORES = [
 
 class ScoringStats:
     __slots__ = ('_urls_scored', '_total_score', '_min_score', '_max_score')
-    
+
     def __init__(self):
         self._urls_scored = 0
         self._total_score = 0.0
         self._min_score = None  # Lazy initialization
         self._max_score = None
-    
+
     def update(self, score: float) -> None:
         """Optimized update with minimal operations"""
         self._urls_scored += 1
         self._total_score += score
-        
+
         # Lazy min/max tracking - only if actually accessed
         if self._min_score is not None:
             if score < self._min_score:
@@ -10653,17 +10653,17 @@ class ScoringStats:
         if self._max_score is not None:
             if score > self._max_score:
                 self._max_score = score
-                
+
     def get_average(self) -> float:
         """Direct calculation instead of property"""
         return self._total_score / self._urls_scored if self._urls_scored else 0.0
-    
+
     def get_min(self) -> float:
         """Lazy min calculation"""
         if self._min_score is None:
             self._min_score = self._total_score / self._urls_scored if self._urls_scored else 0.0
         return self._min_score
-        
+
     def get_max(self) -> float:
         """Lazy max calculation"""
         if self._max_score is None:
@@ -10671,44 +10671,44 @@ class ScoringStats:
         return self._max_score
 class URLScorer(ABC):
     __slots__ = ('_weight', '_stats')
-    
+
     def __init__(self, weight: float = 1.0):
         # Store weight directly as float32 for memory efficiency
         self._weight = ctypes.c_float(weight).value
         self._stats = ScoringStats()
-    
+
     @abstractmethod
     def _calculate_score(self, url: str) -> float:
         """Calculate raw score for URL."""
         pass
-    
+
     def score(self, url: str) -> float:
         """Calculate weighted score with minimal overhead."""
         score = self._calculate_score(url) * self._weight
         self._stats.update(score)
         return score
-    
+
     @property
     def stats(self):
         """Access to scoring statistics."""
         return self._stats
-    
+
     @property
     def weight(self):
         return self._weight
 
 class CompositeScorer(URLScorer):
     __slots__ = ('_scorers', '_normalize', '_weights_array', '_score_array')
-    
+
     def __init__(self, scorers: List[URLScorer], normalize: bool = True):
         """Initialize composite scorer combining multiple scoring strategies.
-        
+
         Optimized for:
         - Fast parallel scoring
         - Memory efficient score aggregation
         - Quick short-circuit conditions
         - Pre-allocated arrays
-        
+
         Args:
             scorers: List of scoring strategies to combine
             normalize: Whether to normalize final score by scorer count
@@ -10716,7 +10716,7 @@ class CompositeScorer(URLScorer):
         super().__init__(weight=1.0)
         self._scorers = scorers
         self._normalize = normalize
-        
+
         # Pre-allocate arrays for scores and weights
         self._weights_array = array('f', [s.weight for s in scorers])
         self._score_array = array('f', [0.0] * len(scorers))
@@ -10724,41 +10724,41 @@ class CompositeScorer(URLScorer):
     @lru_cache(maxsize=10000)
     def _calculate_score(self, url: str) -> float:
         """Calculate combined score from all scoring strategies.
-        
+
         Uses:
         1. Pre-allocated arrays for scores
         2. Short-circuit on zero scores
         3. Optimized normalization
         4. Vectorized operations where possible
-        
+
         Args:
             url: URL to score
-            
+
         Returns:
             Combined and optionally normalized score
         """
         total_score = 0.0
         scores = self._score_array
-        
+
         # Get scores from all scorers
         for i, scorer in enumerate(self._scorers):
             # Use public score() method which applies weight
             scores[i] = scorer.score(url)
             total_score += scores[i]
-            
+
         # Normalize if requested
         if self._normalize and self._scorers:
             count = len(self._scorers)
             return total_score / count
-            
+
         return total_score
 
     def score(self, url: str) -> float:
         """Public scoring interface with stats tracking.
-        
+
         Args:
             url: URL to score
-            
+
         Returns:
             Final combined score
         """
@@ -10768,37 +10768,37 @@ class CompositeScorer(URLScorer):
 
 class KeywordRelevanceScorer(URLScorer):
     __slots__ = ('_weight', '_stats', '_keywords', '_case_sensitive')
-    
+
     def __init__(self, keywords: List[str], weight: float = 1.0, case_sensitive: bool = False):
         super().__init__(weight=weight)
         self._case_sensitive = case_sensitive
         # Pre-process keywords once
         self._keywords = [k if case_sensitive else k.lower() for k in keywords]
-    
+
     @lru_cache(maxsize=10000)
     def _url_bytes(self, url: str) -> bytes:
         """Cache decoded URL bytes"""
         return url.encode('utf-8') if self._case_sensitive else url.lower().encode('utf-8')
-    
-    
+
+
     def _calculate_score(self, url: str) -> float:
         """Fast string matching without regex or byte conversion"""
         if not self._case_sensitive:
             url = url.lower()
-            
+
         matches = sum(1 for k in self._keywords if k in url)
-        
+
         # Fast return paths
         if not matches:
             return 0.0
         if matches == len(self._keywords):
             return 1.0
-            
+
         return matches / len(self._keywords)
 
 class PathDepthScorer(URLScorer):
     __slots__ = ('_weight', '_stats', '_optimal_depth')  # Remove _url_cache
-    
+
     def __init__(self, optimal_depth: int = 3, weight: float = 1.0):
         super().__init__(weight=weight)
         self._optimal_depth = optimal_depth
@@ -10807,7 +10807,7 @@ class PathDepthScorer(URLScorer):
     @lru_cache(maxsize=10000)
     def _quick_depth(path: str) -> int:
         """Ultra fast path depth calculation.
-        
+
         Examples:
             - "http://example.com" -> 0  # No path segments
             - "http://example.com/" -> 0  # Empty path
@@ -10816,13 +10816,13 @@ class PathDepthScorer(URLScorer):
         """
         if not path or path == '/':
             return 0
-            
+
         if '/' not in path:
             return 0
-            
+
         depth = 0
         last_was_slash = True
-        
+
         for c in path:
             if c == '/':
                 if not last_was_slash:
@@ -10830,10 +10830,10 @@ class PathDepthScorer(URLScorer):
                 last_was_slash = True
             else:
                 last_was_slash = False
-                
+
         if not last_was_slash:
             depth += 1
-            
+
         return depth
 
     @lru_cache(maxsize=10000)  # Cache the whole calculation
@@ -10843,22 +10843,22 @@ class PathDepthScorer(URLScorer):
             depth = 0
         else:
             depth = self._quick_depth(url[pos:])
-            
+
         # Use lookup table for common distances
         distance = depth - self._optimal_depth
         distance = distance if distance >= 0 else -distance  # Faster than abs()
-        
+
         if distance < 4:
             return _SCORE_LOOKUP[distance]
-            
-        return 1.0 / (1.0 + distance)                                             
+
+        return 1.0 / (1.0 + distance)
 
 class ContentTypeScorer(URLScorer):
     __slots__ = ('_weight', '_exact_types', '_regex_types')
 
     def __init__(self, type_weights: Dict[str, float], weight: float = 1.0):
         """Initialize scorer with type weights map.
-        
+
         Args:
             type_weights: Dict mapping file extensions/patterns to scores (e.g. {'.html$': 1.0})
             weight: Overall weight multiplier for this scorer
@@ -10866,7 +10866,7 @@ class ContentTypeScorer(URLScorer):
         super().__init__(weight=weight)
         self._exact_types = {}  # Fast lookup for simple extensions
         self._regex_types = []  # Fallback for complex patterns
-        
+
         # Split into exact vs regex matchers for performance
         for pattern, score in type_weights.items():
             if pattern.startswith('.') and pattern.endswith('$'):
@@ -10874,7 +10874,7 @@ class ContentTypeScorer(URLScorer):
                 self._exact_types[ext] = score
             else:
                 self._regex_types.append((re.compile(pattern), score))
-                
+
         # Sort complex patterns by score for early exit
         self._regex_types.sort(key=lambda x: -x[1])
 
@@ -10882,23 +10882,23 @@ class ContentTypeScorer(URLScorer):
     @lru_cache(maxsize=10000)
     def _quick_extension(url: str) -> str:
         """Extract file extension ultra-fast without regex/splits.
-        
+
         Handles:
         - Basic extensions: "example.html" -> "html"
-        - Query strings: "page.php?id=1" -> "php" 
+        - Query strings: "page.php?id=1" -> "php"
         - Fragments: "doc.pdf#page=1" -> "pdf"
         - Path params: "file.jpg;width=100" -> "jpg"
-        
+
         Args:
             url: URL to extract extension from
-            
+
         Returns:
             Extension without dot, or empty string if none found
         """
         pos = url.rfind('.')
         if pos == -1:
             return ''
-        
+
         # Find first non-alphanumeric char after extension
         end = len(url)
         for i in range(pos + 1, len(url)):
@@ -10907,20 +10907,20 @@ class ContentTypeScorer(URLScorer):
             if c in '?#;' or not c.isalnum():
                 end = i
                 break
-                
+
         return url[pos + 1:end].lower()
 
     @lru_cache(maxsize=10000)
     def _calculate_score(self, url: str) -> float:
         """Calculate content type score for URL.
-        
+
         Uses staged approach:
         1. Try exact extension match (fast path)
         2. Fall back to regex patterns if needed
-        
+
         Args:
             url: URL to score
-            
+
         Returns:
             Score between 0.0 and 1.0 * weight
         """
@@ -10930,7 +10930,7 @@ class ContentTypeScorer(URLScorer):
             score = self._exact_types.get(ext, None)
             if score is not None:
                 return score
-                
+
         # Slow path: regex patterns
         for pattern, score in self._regex_types:
             if pattern.search(url):
@@ -10943,20 +10943,20 @@ class FreshnessScorer(URLScorer):
 
     def __init__(self, weight: float = 1.0, current_year: int = 2024):
         """Initialize freshness scorer.
-        
+
         Extracts and scores dates from URLs using format:
-        - YYYY/MM/DD 
+        - YYYY/MM/DD
         - YYYY-MM-DD
         - YYYY_MM_DD
         - YYYY (year only)
-        
+
         Args:
             weight: Score multiplier
             current_year: Year to calculate freshness against (default 2024)
         """
         super().__init__(weight=weight)
         self._current_year = current_year
-        
+
         # Combined pattern for all date formats
         # Uses non-capturing groups (?:) and alternation
         self._date_pattern = re.compile(
@@ -10964,7 +10964,7 @@ class FreshnessScorer(URLScorer):
             r'|[-_])'  # or date separators
             r'((?:19|20)\d{2})'  # Year group (1900-2099)
             r'(?:'  # Optional month/day group
-            r'(?:/|[-_])'  # Date separator  
+            r'(?:/|[-_])'  # Date separator
             r'(?:\d{2})'  # Month
             r'(?:'  # Optional day
             r'(?:/|[-_])'  # Date separator
@@ -10976,53 +10976,53 @@ class FreshnessScorer(URLScorer):
     @lru_cache(maxsize=10000)
     def _extract_year(self, url: str) -> Optional[int]:
         """Extract the most recent year from URL.
-        
+
         Args:
             url: URL to extract year from
-            
+
         Returns:
             Year as int or None if no valid year found
         """
         matches = self._date_pattern.finditer(url)
         latest_year = None
-        
+
         # Find most recent year
         for match in matches:
             year = int(match.group(1))
             if (year <= self._current_year and  # Sanity check
                 (latest_year is None or year > latest_year)):
                 latest_year = year
-                
+
         return latest_year
 
-    @lru_cache(maxsize=10000) 
+    @lru_cache(maxsize=10000)
     def _calculate_score(self, url: str) -> float:
         """Calculate freshness score based on URL date.
-        
+
         More recent years score higher. Uses pre-computed scoring
         table for common year differences.
-        
+
         Args:
             url: URL to score
-            
+
         Returns:
             Score between 0.0 and 1.0 * weight
         """
         year = self._extract_year(url)
         if year is None:
             return 0.5  # Default score
-            
+
         # Use lookup table for common year differences
         year_diff = self._current_year - year
         if year_diff < len(_FRESHNESS_SCORES):
             return _FRESHNESS_SCORES[year_diff]
-            
+
         # Fallback calculation for older content
         return max(0.1, 1.0 - year_diff * 0.1)
 
 class DomainAuthorityScorer(URLScorer):
     __slots__ = ('_weight', '_domain_weights', '_default_weight', '_top_domains')
-    
+
     def __init__(
         self,
         domain_weights: Dict[str, float],
@@ -11030,12 +11030,12 @@ class DomainAuthorityScorer(URLScorer):
         weight: float = 1.0,
     ):
         """Initialize domain authority scorer.
-        
+
         Args:
             domain_weights: Dict mapping domains to authority scores
             default_weight: Score for unknown domains
             weight: Overall scorer weight multiplier
-            
+
         Example:
             {
                 'python.org': 1.0,
@@ -11044,19 +11044,19 @@ class DomainAuthorityScorer(URLScorer):
             }
         """
         super().__init__(weight=weight)
-        
+
         # Pre-process domains for faster lookup
         self._domain_weights = {
-            domain.lower(): score 
+            domain.lower(): score
             for domain, score in domain_weights.items()
         }
         self._default_weight = default_weight
-        
+
         # Cache top domains for fast path
         self._top_domains = {
             domain: score
             for domain, score in sorted(
-                domain_weights.items(), 
+                domain_weights.items(),
                 key=lambda x: -x[1]
             )[:5]  # Keep top 5 highest scoring domains
         }
@@ -11065,26 +11065,26 @@ class DomainAuthorityScorer(URLScorer):
     @lru_cache(maxsize=10000)
     def _extract_domain(url: str) -> str:
         """Extract domain from URL ultra-fast.
-        
+
         Handles:
         - Basic domains: "example.com"
-        - Subdomains: "sub.example.com" 
+        - Subdomains: "sub.example.com"
         - Ports: "example.com:8080"
         - IPv4: "192.168.1.1"
-        
+
         Args:
             url: Full URL to extract domain from
-            
+
         Returns:
             Lowercase domain without port
         """
         # Find domain start
-        start = url.find('://') 
+        start = url.find('://')
         if start == -1:
             start = 0
         else:
             start += 3
-            
+
         # Find domain end
         end = url.find('/', start)
         if end == -1:
@@ -11093,37 +11093,37 @@ class DomainAuthorityScorer(URLScorer):
                 end = url.find('#', start)
                 if end == -1:
                     end = len(url)
-                    
+
         # Extract domain and remove port
         domain = url[start:end]
         port_idx = domain.rfind(':')
         if port_idx != -1:
             domain = domain[:port_idx]
-            
+
         return domain.lower()
 
     @lru_cache(maxsize=10000)
     def _calculate_score(self, url: str) -> float:
         """Calculate domain authority score.
-        
+
         Uses staged approach:
         1. Check top domains (fastest)
         2. Check full domain weights
         3. Return default weight
-        
+
         Args:
             url: URL to score
-            
+
         Returns:
             Authority score between 0.0 and 1.0 * weight
         """
         domain = self._extract_domain(url)
-        
+
         # Fast path: check top domains first
         score = self._top_domains.get(domain)
         if score is not None:
             return score
-            
+
         # Regular path: check all domains
         return self._domain_weights.get(domain, self._default_weight)
 ```
@@ -11348,7 +11348,7 @@ async def filters_and_scorers():
         )
 
         config = CrawlerRunConfig(
-            deep_crawl_strategy=BestFirstCrawlingStrategy(  
+            deep_crawl_strategy=BestFirstCrawlingStrategy(
                 max_depth=1, include_external=False, url_scorer=keyword_scorer
             ),
             scraping_strategy=LXMLWebScrapingStrategy(),
@@ -11435,30 +11435,30 @@ async def advanced_filters():
 async def max_pages_and_thresholds():
     """
     PART 5: Demonstrates using max_pages and score_threshold parameters with different strategies.
-    
+
     This function shows:
     - How to limit the number of pages crawled
     - How to set score thresholds for more targeted crawling
     - Comparing BFS, DFS, and Best-First strategies with these parameters
     """
     print("\n===== MAX PAGES AND SCORE THRESHOLDS =====")
-    
+
     from crawl4ai.deep_crawling import DFSDeepCrawlStrategy
-    
+
     async with AsyncWebCrawler() as crawler:
         # Define a common keyword scorer for all examples
         keyword_scorer = KeywordRelevanceScorer(
-            keywords=["browser", "crawler", "web", "automation"], 
+            keywords=["browser", "crawler", "web", "automation"],
             weight=1.0
         )
-        
+
         # EXAMPLE 1: BFS WITH MAX PAGES
         print("\n📊 EXAMPLE 1: BFS STRATEGY WITH MAX PAGES LIMIT")
         print("  Limit the crawler to a maximum of 5 pages")
-        
+
         bfs_config = CrawlerRunConfig(
             deep_crawl_strategy=BFSDeepCrawlStrategy(
-                max_depth=2, 
+                max_depth=2,
                 include_external=False,
                 url_scorer=keyword_scorer,
                 max_pages=5  # Only crawl 5 pages
@@ -11467,22 +11467,22 @@ async def max_pages_and_thresholds():
             verbose=True,
             cache_mode=CacheMode.BYPASS,
         )
-        
+
         results = await crawler.arun(url="https://docs.crawl4ai.com", config=bfs_config)
-        
+
         print(f"  ✅ Crawled exactly {len(results)} pages as specified by max_pages")
         for result in results:
             depth = result.metadata.get("depth", 0)
             print(f"  → Depth: {depth} | {result.url}")
-            
+
         # EXAMPLE 2: DFS WITH SCORE THRESHOLD
         print("\n📊 EXAMPLE 2: DFS STRATEGY WITH SCORE THRESHOLD")
         print("  Only crawl pages with a relevance score above 0.5")
-        
+
         dfs_config = CrawlerRunConfig(
             deep_crawl_strategy=DFSDeepCrawlStrategy(
                 max_depth=2,
-                include_external=False, 
+                include_external=False,
                 url_scorer=keyword_scorer,
                 score_threshold=0.7,  # Only process URLs with scores above 0.5
                 max_pages=10
@@ -11491,19 +11491,19 @@ async def max_pages_and_thresholds():
             verbose=True,
             cache_mode=CacheMode.BYPASS,
         )
-        
+
         results = await crawler.arun(url="https://docs.crawl4ai.com", config=dfs_config)
-        
+
         print(f"  ✅ Crawled {len(results)} pages with scores above threshold")
         for result in results:
             score = result.metadata.get("score", 0)
             depth = result.metadata.get("depth", 0)
             print(f"  → Depth: {depth} | Score: {score:.2f} | {result.url}")
-            
+
         # EXAMPLE 3: BEST-FIRST WITH BOTH CONSTRAINTS
         print("\n📊 EXAMPLE 3: BEST-FIRST STRATEGY WITH BOTH CONSTRAINTS")
         print("  Limit to 7 pages with scores above 0.3, prioritizing highest scores")
-        
+
         bf_config = CrawlerRunConfig(
             deep_crawl_strategy=BestFirstCrawlingStrategy(
                 max_depth=2,
@@ -11516,14 +11516,14 @@ async def max_pages_and_thresholds():
             cache_mode=CacheMode.BYPASS,
             stream=True,
         )
-        
+
         results = []
         async for result in await crawler.arun(url="https://docs.crawl4ai.com", config=bf_config):
             results.append(result)
             score = result.metadata.get("score", 0)
             depth = result.metadata.get("depth", 0)
             print(f"  → Depth: {depth} | Score: {score:.2f} | {result.url}")
-            
+
         print(f"  ✅ Crawled {len(results)} high-value pages with scores above 0.3")
         if results:
             avg_score = sum(r.metadata.get('score', 0) for r in results) / len(results)
@@ -11614,7 +11614,7 @@ async def run_tutorial():
         basic_deep_crawl,
         stream_vs_nonstream,
         filters_and_scorers,
-        max_pages_and_thresholds, 
+        max_pages_and_thresholds,
         advanced_filters,
         wrap_up,
     ]

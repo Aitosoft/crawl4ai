@@ -1,17 +1,17 @@
-# Overview of Some Important Advanced Features 
+# Overview of Some Important Advanced Features
 (Proxy, PDF, Screenshot, SSL, Headers, & Storage State)
 
 Crawl4AI offers multiple power-user features that go beyond simple crawling. This tutorial covers:
 
-1. **Proxy Usage**  
-2. **Capturing PDFs & Screenshots**  
-3. **Handling SSL Certificates**  
-4. **Custom Headers**  
-5. **Session Persistence & Local Storage**  
-6. **Robots.txt Compliance**  
+1. **Proxy Usage**
+2. **Capturing PDFs & Screenshots**
+3. **Handling SSL Certificates**
+4. **Custom Headers**
+5. **Session Persistence & Local Storage**
+6. **Robots.txt Compliance**
 
-> **Prerequisites**  
-> - You have a basic grasp of [AsyncWebCrawler Basics](../core/simple-crawling.md)  
+> **Prerequisites**
+> - You have a basic grasp of [AsyncWebCrawler Basics](../core/simple-crawling.md)
 > - You know how to run or configure your Python environment with Playwright installed
 
 ---
@@ -52,9 +52,9 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Key Points**  
-- **`proxy_config`** expects a dict with `server` and optional auth credentials.  
-- Many commercial proxies provide an HTTP/HTTPS “gateway” server that you specify in `server`.  
+**Key Points**
+- **`proxy_config`** expects a dict with `server` and optional auth credentials.
+- Many commercial proxies provide an HTTP/HTTPS “gateway” server that you specify in `server`.
 - If your proxy doesn’t need auth, omit `username`/`password`.
 
 ---
@@ -105,14 +105,14 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Why PDF + Screenshot?**  
-- Large or complex pages can be slow or error-prone with “traditional” full-page screenshots.  
-- Exporting a PDF is more reliable for very long pages. Crawl4AI automatically converts the first PDF page into an image if you request both.  
+**Why PDF + Screenshot?**
+- Large or complex pages can be slow or error-prone with “traditional” full-page screenshots.
+- Exporting a PDF is more reliable for very long pages. Crawl4AI automatically converts the first PDF page into an image if you request both.
 
-**Relevant Parameters**  
-- **`pdf=True`**: Exports the current page as a PDF (base64-encoded in `result.pdf`).  
-- **`screenshot=True`**: Creates a screenshot (base64-encoded in `result.screenshot`).  
-- **`scroll_delay`**: Controls the delay (seconds) between scroll steps when taking a full-page screenshot of a tall page. Defaults to `0.2`. Increase for pages with slow-loading assets.  
+**Relevant Parameters**
+- **`pdf=True`**: Exports the current page as a PDF (base64-encoded in `result.pdf`).
+- **`screenshot=True`**: Creates a screenshot (base64-encoded in `result.screenshot`).
+- **`scroll_delay`**: Controls the delay (seconds) between scroll steps when taking a full-page screenshot of a tall page. Defaults to `0.2`. Increase for pages with slow-loading assets.
 - **`scan_full_page`** or advanced hooking can further refine how the crawler captures content.
 
 ---
@@ -128,7 +128,7 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 async def main():
     tmp_dir = os.path.join(os.getcwd(), "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
-    
+
     config = CrawlerRunConfig(
         fetch_ssl_certificate=True,
         cache_mode=CacheMode.BYPASS
@@ -136,7 +136,7 @@ async def main():
 
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url="https://example.com", config=config)
-        
+
         if result.success and result.ssl_certificate:
             cert = result.ssl_certificate
             print("\nCertificate Information:")
@@ -148,7 +148,7 @@ async def main():
             cert.to_json(os.path.join(tmp_dir, "certificate.json"))
             cert.to_pem(os.path.join(tmp_dir, "certificate.pem"))
             cert.to_der(os.path.join(tmp_dir, "certificate.der"))
-            
+
             print("\nCertificate exported to JSON/PEM/DER in 'tmp' folder.")
         else:
             print("[ERROR] No certificate or crawl failed.")
@@ -157,8 +157,8 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Key Points**  
-- **`fetch_ssl_certificate=True`** triggers certificate retrieval.  
+**Key Points**
+- **`fetch_ssl_certificate=True`** triggers certificate retrieval.
 - `result.ssl_certificate` includes methods (`to_json`, `to_pem`, `to_der`) for saving in various formats (handy for server config, Java keystores, etc.).
 
 ---
@@ -196,8 +196,8 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Notes**  
-- Some sites may react differently to certain headers (e.g., `Accept-Language`).  
+**Notes**
+- Some sites may react differently to certain headers (e.g., `Accept-Language`).
 - If you need advanced user-agent randomization or client hints, see [Identity-Based Crawling (Anti-Bot)](./identity-based-crawling.md) or use `UserAgentGenerator`.
 
 ---
@@ -255,7 +255,7 @@ if __name__ == "__main__":
 
 You can sign in once, export the browser context, and reuse it later—without re-entering credentials.
 
-- **`await context.storage_state(path="my_storage.json")`**: Exports cookies, localStorage, etc. to a file.  
+- **`await context.storage_state(path="my_storage.json")`**: Exports cookies, localStorage, etc. to a file.
 - Provide `storage_state="my_storage.json"` on subsequent runs to skip the login step.
 
 **See**: [Detailed session management tutorial](./session-management.md) or [Explanations → Browser Context & Managed Browser](./identity-based-crawling.md) for more advanced scenarios (like multi-step logins, or capturing after interactive pages).
@@ -281,7 +281,7 @@ async def main():
             "https://example.com",
             config=config
         )
-        
+
         if not result.success and result.status_code == 403:
             print("Access denied by robots.txt")
 
@@ -332,13 +332,13 @@ async def main():
     # 3. Crawl
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         result = await crawler.arun(
-            url = "https://secure.example.com/protected", 
+            url = "https://secure.example.com/protected",
             config=crawler_cfg
         )
-        
+
         if result.success:
             print("[OK] Crawled the secure page. Links found:", len(result.links.get("internal", [])))
-            
+
             # Save PDF & screenshot
             if result.pdf:
                 with open("result.pdf", "wb") as f:
@@ -346,7 +346,7 @@ async def main():
             if result.screenshot:
                 with open("result.png", "wb") as f:
                     f.write(b64decode(result.screenshot))
-            
+
             # Check SSL cert
             if result.ssl_certificate:
                 print("SSL Issuer CN:", result.ssl_certificate.issuer.get("CN", ""))
@@ -431,10 +431,10 @@ See [Undetected Browser Mode](undetected-browser.md) for detailed examples.
 
 You've now explored several **advanced** features:
 
-- **Proxy Usage**  
-- **PDF & Screenshot** capturing for large or critical pages  
-- **SSL Certificate** retrieval & exporting  
-- **Custom Headers** for language or specialized requests  
+- **Proxy Usage**
+- **PDF & Screenshot** capturing for large or critical pages
+- **SSL Certificate** retrieval & exporting
+- **Custom Headers** for language or specialized requests
 - **Session Persistence** via storage state
 - **Robots.txt Compliance**
 - **Anti-Bot Features** (Stealth Mode & Undetected Browser)

@@ -4,7 +4,7 @@
 // Color scheme for different block categories
 const BlockColors = {
     NAVIGATION: '#1E88E5',    // Blue
-    ACTIONS: '#43A047',       // Green  
+    ACTIONS: '#43A047',       // Green
     CONTROL: '#FB8C00',       // Orange
     VARIABLES: '#8E24AA',     // Purple
     WAIT: '#E53935',          // Red

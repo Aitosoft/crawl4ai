@@ -10,7 +10,7 @@ if __name__ == "__main__":
             browser_type="chromium",
             user_data_dir="~/.crawl4ai/browser_profile/test-browser-data",
             debugging_port=9222,
-            headless=False
+            headless=False,
         )
         print(f"CDP URL: {cdp_url}")
 

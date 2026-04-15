@@ -21,11 +21,11 @@ class MarkdownPreviewModal {
 
   show(generateMarkdownCallback) {
     this.onGenerateMarkdown = generateMarkdownCallback;
-    
+
     if (!this.modal) {
       this.createModal();
     }
-    
+
     // Generate initial markdown
     this.updateContent();
     this.modal.style.display = 'block';
@@ -75,21 +75,21 @@ class MarkdownPreviewModal {
         <button class="c4ai-cloud-btn" disabled>Send to Cloud (Coming Soon)</button>
       </div>
     `;
-    
+
     document.body.appendChild(this.modal);
-    
+
     // Make modal draggable
     if (window.C4AI_Utils && window.C4AI_Utils.makeDraggable) {
       window.C4AI_Utils.makeDraggable(this.modal);
     }
-    
+
     // Position preview modal
     this.modal.style.position = 'fixed';
     this.modal.style.top = '50%';
     this.modal.style.left = '50%';
     this.modal.style.transform = 'translate(-50%, -50%)';
     this.modal.style.zIndex = '999999';
-    
+
     this.setupEventListeners();
   }
 
@@ -98,7 +98,7 @@ class MarkdownPreviewModal {
     this.modal.querySelector('.c4ai-preview-close').addEventListener('click', () => {
       this.hide();
     });
-    
+
     // Tab switching
     this.modal.querySelectorAll('.c4ai-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
@@ -106,7 +106,7 @@ class MarkdownPreviewModal {
         this.switchTab(tabName);
       });
     });
-    
+
     // Wrap toggle
     const wrapToggle = this.modal.querySelector('.c4ai-wrap-toggle');
     wrapToggle.addEventListener('click', () => {
@@ -116,12 +116,12 @@ class MarkdownPreviewModal {
       });
       wrapToggle.classList.toggle('active');
     });
-    
+
     // Options change
     this.modal.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
       checkbox.addEventListener('change', async (e) => {
         this.markdownOptions[e.target.name] = e.target.checked;
-        
+
         // Handle text-only mode dependencies
         if (e.target.name === 'textOnly' && e.target.checked) {
           const preserveLinksCheckbox = this.modal.querySelector('input[name="preserveLinks"]');
@@ -130,7 +130,7 @@ class MarkdownPreviewModal {
             preserveLinksCheckbox.disabled = true;
             this.markdownOptions.preserveLinks = false;
           }
-          
+
           const includeImagesCheckbox = this.modal.querySelector('input[name="includeImages"]');
           if (includeImagesCheckbox) {
             includeImagesCheckbox.disabled = true;
@@ -141,23 +141,23 @@ class MarkdownPreviewModal {
           if (preserveLinksCheckbox) {
             preserveLinksCheckbox.disabled = false;
           }
-          
+
           const includeImagesCheckbox = this.modal.querySelector('input[name="includeImages"]');
           if (includeImagesCheckbox) {
             includeImagesCheckbox.disabled = false;
           }
         }
-        
+
         // Update markdown content
         await this.updateContent();
       });
     });
-    
+
     // Action buttons
     this.modal.querySelector('.c4ai-copy-markdown-btn').addEventListener('click', () => {
       this.copyToClipboard();
     });
-    
+
     this.modal.querySelector('.c4ai-download-btn').addEventListener('click', () => {
       this.downloadMarkdown();
     });
@@ -168,7 +168,7 @@ class MarkdownPreviewModal {
     this.modal.querySelectorAll('.c4ai-tab').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.tab === tabName);
     });
-    
+
     // Update active pane
     this.modal.querySelectorAll('.c4ai-preview-pane').forEach(pane => {
       pane.classList.toggle('active', pane.dataset.pane === tabName);
@@ -177,18 +177,18 @@ class MarkdownPreviewModal {
 
   async updateContent() {
     if (!this.onGenerateMarkdown) return;
-    
+
     try {
       // Generate markdown with current options
       this.currentMarkdown = await this.onGenerateMarkdown(this.markdownOptions);
-      
+
       // Update markdown pane
       const markdownPane = this.modal.querySelector('[data-pane="markdown"]');
       markdownPane.innerHTML = `<pre><code>${this.escapeHtml(this.currentMarkdown)}</code></pre>`;
-      
+
       // Update preview pane
       const previewPane = this.modal.querySelector('[data-pane="preview"]');
-      
+
       // Use marked.js if available
       if (window.marked) {
         marked.setOptions({
@@ -198,7 +198,7 @@ class MarkdownPreviewModal {
           headerIds: false,
           mangle: false
         });
-        
+
         const html = marked.parse(this.currentMarkdown);
         previewPane.innerHTML = `<div class="c4ai-markdown-preview">${html}</div>`;
       } else {
@@ -224,11 +224,11 @@ class MarkdownPreviewModal {
   async downloadMarkdown() {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     const filename = `crawl4ai-export-${timestamp}.md`;
-    
+
     // Create blob and download
     const blob = new Blob([this.currentMarkdown], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
@@ -236,7 +236,7 @@ class MarkdownPreviewModal {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     this.showNotification(`Downloaded ${filename}`);
   }
 
@@ -244,12 +244,12 @@ class MarkdownPreviewModal {
     const notification = document.createElement('div');
     notification.className = `c4ai-notification c4ai-notification-${type}`;
     notification.textContent = message;
-    
+
     document.body.appendChild(notification);
-    
+
     // Animate in
     setTimeout(() => notification.classList.add('show'), 10);
-    
+
     // Remove after 3 seconds
     setTimeout(() => {
       notification.classList.remove('show');
@@ -274,7 +274,7 @@ class MarkdownPreviewModal {
   // Update options programmatically
   setOptions(options) {
     this.markdownOptions = { ...this.markdownOptions, ...options };
-    
+
     // Update checkboxes to reflect new options
     Object.entries(options).forEach(([key, value]) => {
       const checkbox = this.modal?.querySelector(`input[name="${key}"]`);

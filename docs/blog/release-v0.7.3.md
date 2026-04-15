@@ -36,14 +36,14 @@ configs = [
         cache_mode="write",
         markdown_generator_options={"include_links": True}
     ),
-    
+
     # News/blog sites - fresh content, scroll for lazy loading
     CrawlerRunConfig(
         url_matcher=lambda url: 'blog' in url or 'news' in url,
         cache_mode="bypass",
         js_code="window.scrollTo(0, document.body.scrollHeight/2);"
     ),
-    
+
     # API endpoints - structured extraction
     CrawlerRunConfig(
         url_matcher=["*.json", "*api*"],
@@ -52,7 +52,7 @@ configs = [
             extraction_type="structured"
         )
     ),
-    
+
     # Default fallback for everything else
     CrawlerRunConfig()  # No url_matcher = matches everything
 ]
@@ -62,7 +62,7 @@ async with AsyncWebCrawler() as crawler:
     results = await crawler.arun_many(
         urls=[
             "https://docs.python.org/3/",      # → Uses documentation config
-            "https://blog.python.org/",        # → Uses blog config  
+            "https://blog.python.org/",        # → Uses blog config
             "https://api.github.com/users",    # → Uses API config
             "https://example.com/"             # → Uses default config
         ],
@@ -107,7 +107,7 @@ browser_config = BrowserConfig(
 async with AsyncWebCrawler(config=browser_config) as crawler:
     # This will bypass most bot detection systems
     result = await crawler.arun("https://protected-site.com")
-    
+
     if result.success:
         print("✅ Successfully bypassed bot detection!")
         print(f"Content length: {len(result.markdown)}")
@@ -126,7 +126,7 @@ config = CrawlerRunConfig(
         "Accept-Encoding": "gzip, deflate, br",
         "DNT": "1"
     },
-    
+
     # Human-like behavior simulation
     js_code="""
         // Random mouse movements
@@ -138,7 +138,7 @@ config = CrawlerRunConfig(
             document.dispatchEvent(event);
         };
         setInterval(simulateHuman, 100 + Math.random() * 200);
-        
+
         // Random scrolling
         const randomScroll = () => {
             const scrollY = Math.random() * (document.body.scrollHeight - window.innerHeight);
@@ -146,7 +146,7 @@ config = CrawlerRunConfig(
         };
         setTimeout(randomScroll, 500 + Math.random() * 1000);
     """,
-    
+
     # Delay to appear more human
     delay_before_return_html=2.0
 )
@@ -178,19 +178,19 @@ monitor = MemoryMonitor()
 async with AsyncWebCrawler() as crawler:
     # Start monitoring
     monitor.start_monitoring()
-    
+
     # Perform memory-intensive operations
     results = await crawler.arun_many([
         "https://heavy-js-site.com",
-        "https://large-images-site.com", 
+        "https://large-images-site.com",
         "https://dynamic-content-site.com"
     ])
-    
+
     # Get detailed memory report
     memory_report = monitor.get_report()
     print(f"Peak memory usage: {memory_report['peak_mb']:.1f} MB")
     print(f"Memory efficiency: {memory_report['efficiency']:.1f}%")
-    
+
     # Automatic cleanup suggestions
     if memory_report['peak_mb'] > 1000:  # > 1GB
         print("💡 Consider batch size optimization")
@@ -221,15 +221,15 @@ result = await crawler.arun("https://site-with-tables.com")
 # Direct table access
 if result.tables:
     print(f"Found {len(result.tables)} tables")
-    
+
     # Convert to pandas DataFrame instantly
     import pandas as pd
-    
+
     for i, table in enumerate(result.tables):
         df = pd.DataFrame(table['data'])
         print(f"Table {i}: {df.shape[0]} rows × {df.shape[1]} columns")
         print(df.head())
-        
+
         # Table metadata
         print(f"Source: {table.get('source_xpath', 'Unknown')}")
         print(f"Headers: {table.get('headers', [])}")

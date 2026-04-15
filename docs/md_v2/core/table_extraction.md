@@ -11,9 +11,9 @@
 - **Same Default Behavior**: By default, uses `DefaultTableExtraction` (same as before)
 
 ### Key Points
-✅ **Old code still works** - No breaking changes  
-✅ **Same default behavior** - Uses the proven extraction algorithm  
-✅ **New capabilities** - Add LLM extraction or custom strategies when needed  
+✅ **Old code still works** - No breaking changes
+✅ **Same default behavior** - Uses the proven extraction algorithm
+✅ **New capabilities** - Add LLM extraction or custom strategies when needed
 ✅ **Strategy pattern** - Clean, extensible architecture
 
 ## Quick Start
@@ -30,7 +30,7 @@ async def extract_tables():
     async with AsyncWebCrawler() as crawler:
         # This works exactly like before - uses DefaultTableExtraction internally
         result = await crawler.arun("https://example.com/data")
-        
+
         # Tables are automatically extracted and available in result.tables
         for table in result.tables:
             print(f"Table with {len(table['rows'])} rows and {len(table['headers'])} columns")
@@ -72,10 +72,10 @@ The strategy pattern allows you to choose different table extraction algorithms 
 | `NoTableExtraction` | Disables table extraction | When tables aren't needed | Free | For text-only extraction |
 | Custom strategies | User-defined extraction logic | Specialized requirements | Free | Domain-specific needs |
 
-> **⚠️ CRITICAL COST WARNING for LLMTableExtraction**: 
-> 
+> **⚠️ CRITICAL COST WARNING for LLMTableExtraction**:
+>
 > **DO NOT USE `LLMTableExtraction` UNLESS ABSOLUTELY NECESSARY!**
-> 
+>
 > - **Always try `DefaultTableExtraction` first** - It's free and handles most tables perfectly
 > - LLM extraction **costs money** with every API call
 > - For large tables (100+ rows), LLM extraction can be **very slow**
@@ -83,8 +83,8 @@ The strategy pattern allows you to choose different table extraction algorithms 
 >   - ✅ **Groq** (fastest inference)
 >   - ✅ **Cerebras** (optimized for speed)
 >   - ⚠️ Avoid: OpenAI, Anthropic for large tables (slower)
-> 
-> **🚧 WORK IN PROGRESS**: 
+>
+> **🚧 WORK IN PROGRESS**:
 > We are actively developing an **advanced non-LLM algorithm** that will handle complex table structures (rowspan, colspan, nested tables) for **FREE**. This will replace the need for costly LLM extraction in most cases. Coming soon!
 
 ### DefaultTableExtraction
@@ -254,7 +254,7 @@ config = CrawlerRunConfig(
     # Table extraction settings
     table_score_threshold=7,      # Default threshold (backward compatible)
     table_extraction=strategy,     # Optional: custom strategy
-    
+
     # Filter what to process
     css_selector="main",          # Focus on specific area
     excluded_tags=["nav", "aside"] # Exclude page sections
@@ -292,7 +292,7 @@ import pandas as pd
 async def tables_to_dataframes(url):
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url)
-        
+
         dataframes = []
         for table_data in result.tables:
             # Create DataFrame
@@ -303,13 +303,13 @@ async def tables_to_dataframes(url):
                 )
             else:
                 df = pd.DataFrame(table_data['rows'])
-            
+
             # Add metadata as DataFrame attributes
             df.attrs['caption'] = table_data.get('caption', '')
             df.attrs['metadata'] = table_data.get('metadata', {})
-            
+
             dataframes.append(df)
-        
+
         return dataframes
 ```
 
@@ -324,20 +324,20 @@ async def extract_large_tables(url):
             min_cols=3,
             table_score_threshold=6
         )
-        
+
         config = CrawlerRunConfig(
             table_extraction=strategy
         )
-        
+
         result = await crawler.arun(url, config)
-        
+
         # Further filter results
         large_tables = [
             table for table in result.tables
             if table['metadata']['row_count'] > 10
             and table['metadata']['column_count'] > 3
         ]
-        
+
         return large_tables
 ```
 
@@ -350,26 +350,26 @@ import csv
 async def export_tables(url):
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url)
-        
+
         for i, table in enumerate(result.tables):
             # Export as JSON
             with open(f'table_{i}.json', 'w') as f:
                 json.dump(table, f, indent=2)
-            
+
             # Export as CSV
             with open(f'table_{i}.csv', 'w', newline='') as f:
                 writer = csv.writer(f)
                 if table['headers']:
                     writer.writerow(table['headers'])
                 writer.writerows(table['rows'])
-            
+
             # Export as Markdown
             with open(f'table_{i}.md', 'w') as f:
                 # Write headers
                 if table['headers']:
                     f.write('| ' + ' | '.join(table['headers']) + ' |\n')
                     f.write('|' + '---|' * len(table['headers']) + '\n')
-                
+
                 # Write rows
                 for row in table['rows']:
                     f.write('| ' + ' | '.join(str(cell) for cell in row) + ' |\n')
@@ -388,47 +388,47 @@ import re
 
 class FinancialTableExtractor(TableExtractionStrategy):
     """Extract tables containing financial data."""
-    
+
     def __init__(self, currency_symbols=None, require_numbers=True, **kwargs):
         super().__init__(**kwargs)
         self.currency_symbols = currency_symbols or ['$', '€', '£', '¥']
         self.require_numbers = require_numbers
         self.number_pattern = re.compile(r'\d+[,.]?\d*')
-    
+
     def extract_tables(self, element, **kwargs):
         tables_data = []
-        
+
         for table in element.xpath(".//table"):
             # Check if table contains financial indicators
             table_text = ''.join(table.itertext())
-            
+
             # Must contain currency symbols
             has_currency = any(sym in table_text for sym in self.currency_symbols)
             if not has_currency:
                 continue
-            
+
             # Must contain numbers if required
             if self.require_numbers:
                 numbers = self.number_pattern.findall(table_text)
                 if len(numbers) < 3:  # Arbitrary minimum
                     continue
-            
+
             # Extract the table data
             table_data = self._extract_financial_data(table)
             if table_data:
                 tables_data.append(table_data)
-        
+
         return tables_data
-    
+
     def _extract_financial_data(self, table):
         """Extract and clean financial data from table."""
         headers = []
         rows = []
-        
+
         # Extract headers
         for th in table.xpath(".//thead//th | .//tr[1]//th"):
             headers.append(th.text_content().strip())
-        
+
         # Extract and clean rows
         for tr in table.xpath(".//tbody//tr | .//tr[position()>1]"):
             row = []
@@ -439,7 +439,7 @@ class FinancialTableExtractor(TableExtractionStrategy):
                 row.append(text)
             if row:
                 rows.append(row)
-        
+
         return {
             "headers": headers,
             "rows": rows,
@@ -451,7 +451,7 @@ class FinancialTableExtractor(TableExtractionStrategy):
                 "column_count": len(headers) or len(rows[0]) if rows else 0
             }
         }
-    
+
     def _get_caption(self, table):
         caption = table.xpath(".//caption/text()")
         return caption[0].strip() if caption else ""
@@ -472,9 +472,9 @@ config = CrawlerRunConfig(
 ```python
 class SpecificTableExtractor(TableExtractionStrategy):
     """Extract only tables matching specific criteria."""
-    
-    def __init__(self, 
-                 required_headers=None, 
+
+    def __init__(self,
+                 required_headers=None,
                  id_pattern=None,
                  class_pattern=None,
                  **kwargs):
@@ -482,35 +482,35 @@ class SpecificTableExtractor(TableExtractionStrategy):
         self.required_headers = required_headers or []
         self.id_pattern = id_pattern
         self.class_pattern = class_pattern
-    
+
     def extract_tables(self, element, **kwargs):
         tables_data = []
-        
+
         for table in element.xpath(".//table"):
             # Check ID pattern
             if self.id_pattern:
                 table_id = table.get('id', '')
                 if not re.match(self.id_pattern, table_id):
                     continue
-            
+
             # Check class pattern
             if self.class_pattern:
                 table_class = table.get('class', '')
                 if not re.match(self.class_pattern, table_class):
                     continue
-            
+
             # Extract headers to check requirements
             headers = self._extract_headers(table)
-            
+
             # Check if required headers are present
             if self.required_headers:
                 if not all(req in headers for req in self.required_headers):
                     continue
-            
+
             # Extract full table data
             table_data = self._extract_table_data(table, headers)
             tables_data.append(table_data)
-        
+
         return tables_data
 ```
 
@@ -535,24 +535,24 @@ async def combined_extraction(url):
                 table_score_threshold=6,
                 min_rows=2
             ),
-            
+
             # CSS-based extraction for specific elements
             extraction_strategy=JsonCssExtractionStrategy({
                 "title": "h1",
                 "summary": "p.summary",
                 "date": "time"
             }),
-            
+
             # Focus on main content
             css_selector="main.content"
         )
-        
+
         result = await crawler.arun(url, config)
-        
+
         # Access different extraction results
         tables = result.tables  # Table data
         structured = json.loads(result.extracted_content)  # CSS extraction
-        
+
         return {
             "tables": tables,
             "structured_data": structured,
@@ -574,17 +574,17 @@ async def combined_extraction(url):
 config = CrawlerRunConfig(
     # Only process main content area
     css_selector="article.main-content",
-    
+
     # Exclude navigation and sidebars
     excluded_tags=["nav", "aside", "footer"],
-    
+
     # Higher threshold for stricter filtering
     table_extraction=DefaultTableExtraction(
         table_score_threshold=8,
         min_rows=5,
         min_cols=3
     ),
-    
+
     # Enable caching for repeated access
     cache_mode=CacheMode.ENABLED
 )
@@ -673,7 +673,7 @@ config = CrawlerRunConfig(
 
 **Decision Flow**:
 ```
-1. Do you need tables? 
+1. Do you need tables?
    → No: Use NoTableExtraction
    → Yes: Continue to #2
 
@@ -705,22 +705,22 @@ def validate_table(table):
     # Check structure
     if not table.get('rows'):
         return False
-    
+
     # Check consistency
     if table.get('headers'):
         expected_cols = len(table['headers'])
         for row in table['rows']:
             if len(row) != expected_cols:
                 return False
-    
+
     # Check minimum content
     total_cells = sum(len(row) for row in table['rows'])
-    non_empty = sum(1 for row in table['rows'] 
+    non_empty = sum(1 for row in table['rows']
                     for cell in row if cell.strip())
-    
+
     if non_empty / total_cells < 0.5:  # Less than 50% non-empty
         return False
-    
+
     return True
 
 # Filter valid tables
@@ -740,13 +740,13 @@ async def robust_table_extraction(url):
                     verbose=True
                 )
             )
-            
+
             result = await crawler.arun(url, config)
-            
+
             if not result.success:
                 print(f"Crawl failed: {result.error}")
                 return []
-            
+
             # Process tables safely
             processed_tables = []
             for table in result.tables:
@@ -757,9 +757,9 @@ async def robust_table_extraction(url):
                 except Exception as e:
                     print(f"Error processing table: {e}")
                     continue
-            
+
             return processed_tables
-            
+
         except Exception as e:
             print(f"Extraction error: {e}")
             return []

@@ -186,7 +186,7 @@ async def test_llm_extraction():
                     "api_key": os.getenv("OLLAMA_API_KEY"),
                     "schema": schema,
                     "extraction_type": "schema",
-                    "instruction": """Extract the main article information including title, a brief summary, and main topics discussed. 
+                    "instruction": """Extract the main article information including title, a brief summary, and main topics discussed.
                     Focus on the primary business news article on the page.""",
                 },
             },

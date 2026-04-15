@@ -90,8 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 Crawl4AI’s flexibility stems from two key classes:
 
-1. **`BrowserConfig`** – Dictates **how** the browser is launched and behaves (e.g., headless or visible, proxy, user agent).  
-2. **`CrawlerRunConfig`** – Dictates **how** each **crawl** operates (e.g., caching, extraction, timeouts, JavaScript code to run, etc.).  
+1. **`BrowserConfig`** – Dictates **how** the browser is launched and behaves (e.g., headless or visible, proxy, user agent).
+2. **`CrawlerRunConfig`** – Dictates **how** each **crawl** operates (e.g., caching, extraction, timeouts, JavaScript code to run, etc.).
 3. **`LLMConfig`** - Dictates **how** LLM providers are configured. (model, api token, base url, temperature etc.)
 
 In most examples, you create **one** `BrowserConfig` for the entire crawler session, then pass a **fresh** or re-used `CrawlerRunConfig` whenever you call `arun()`. This tutorial shows the most commonly used parameters. If you need advanced or rarely used fields, see the [Configuration Parameters](../api/parameters.md).
@@ -126,52 +126,52 @@ class BrowserConfig:
 
 
 
-1. **`browser_type`**  
-- Options: `"chromium"`, `"firefox"`, or `"webkit"`.  
-- Defaults to `"chromium"`.  
+1. **`browser_type`**
+- Options: `"chromium"`, `"firefox"`, or `"webkit"`.
+- Defaults to `"chromium"`.
 - If you need a different engine, specify it here.
 
-2. **`headless`**  
-   - `True`: Runs the browser in headless mode (invisible browser).  
+2. **`headless`**
+   - `True`: Runs the browser in headless mode (invisible browser).
    - `False`: Runs the browser in visible mode, which helps with debugging.
 
-3. **`proxy_config`**  
-   - A dictionary with fields like:  
+3. **`proxy_config`**
+   - A dictionary with fields like:
 ```json
 {
-    "server": "http://proxy.example.com:8080", 
-    "username": "...", 
+    "server": "http://proxy.example.com:8080",
+    "username": "...",
     "password": "..."
 }
 ```
    - Leave as `None` if a proxy is not required.
 
-4. **`viewport_width` & `viewport_height`**:  
-   - The initial window size.  
+4. **`viewport_width` & `viewport_height`**:
+   - The initial window size.
    - Some sites behave differently with smaller or bigger viewports.
 
-5. **`verbose`**:  
-   - If `True`, prints extra logs.  
+5. **`verbose`**:
+   - If `True`, prints extra logs.
    - Handy for debugging.
 
-6. **`use_persistent_context`**:  
-   - If `True`, uses a **persistent** browser profile, storing cookies/local storage across runs.  
+6. **`use_persistent_context`**:
+   - If `True`, uses a **persistent** browser profile, storing cookies/local storage across runs.
    - Typically also set `user_data_dir` to point to a folder.
 
-7. **`cookies`** & **`headers`**:  
-   - If you want to start with specific cookies or add universal HTTP headers, set them here.  
+7. **`cookies`** & **`headers`**:
+   - If you want to start with specific cookies or add universal HTTP headers, set them here.
    - E.g. `cookies=[{"name": "session", "value": "abc123", "domain": "example.com"}]`.
 
-8. **`user_agent`**:  
-   - Custom User-Agent string. If `None`, a default is used.  
+8. **`user_agent`**:
+   - Custom User-Agent string. If `None`, a default is used.
    - You can also set `user_agent_mode="random"` for randomization (if you want to fight bot detection).
 
-9. **`text_mode`** & **`light_mode`**:  
-   - `text_mode=True` disables images, possibly speeding up text-only crawls.  
-   - `light_mode=True` turns off certain background features for performance.  
+9. **`text_mode`** & **`light_mode`**:
+   - `text_mode=True` disables images, possibly speeding up text-only crawls.
+   - `light_mode=True` turns off certain background features for performance.
 
-10. **`extra_args`**:  
-    - Additional flags for the underlying browser.  
+10. **`extra_args`**:
+    - Additional flags for the underlying browser.
     - E.g. `["--disable-extensions"]`.
 
 ### Helper Methods
@@ -240,55 +240,55 @@ class CrawlerRunConfig:
 
 ### Key Fields to Note
 
-1. **`word_count_threshold`**:  
-   - The minimum word count before a block is considered.  
+1. **`word_count_threshold`**:
+   - The minimum word count before a block is considered.
    - If your site has lots of short paragraphs or items, you can lower it.
 
-2. **`extraction_strategy`**:  
-   - Where you plug in JSON-based extraction (CSS, LLM, etc.).  
+2. **`extraction_strategy`**:
+   - Where you plug in JSON-based extraction (CSS, LLM, etc.).
    - If `None`, no structured extraction is done (only raw/cleaned HTML + markdown).
 
-3. **`markdown_generator`**:  
-   - E.g., `DefaultMarkdownGenerator(...)`, controlling how HTML→Markdown conversion is done.  
+3. **`markdown_generator`**:
+   - E.g., `DefaultMarkdownGenerator(...)`, controlling how HTML→Markdown conversion is done.
    - If `None`, a default approach is used.
 
-4. **`cache_mode`**:  
-   - Controls caching behavior (`ENABLED`, `BYPASS`, `DISABLED`, etc.).  
+4. **`cache_mode`**:
+   - Controls caching behavior (`ENABLED`, `BYPASS`, `DISABLED`, etc.).
    - If `None`, defaults to some level of caching or you can specify `CacheMode.ENABLED`.
 
-5. **`js_code`**:  
-   - A string or list of JS strings to execute.  
-   - Great for “Load More” buttons or user interactions.  
+5. **`js_code`**:
+   - A string or list of JS strings to execute.
+   - Great for “Load More” buttons or user interactions.
 
-6. **`wait_for`**:  
-   - A CSS or JS expression to wait for before extracting content.  
+6. **`wait_for`**:
+   - A CSS or JS expression to wait for before extracting content.
    - Common usage: `wait_for="css:.main-loaded"` or `wait_for="js:() => window.loaded === true"`.
 
-7. **`screenshot`**, **`pdf`**, & **`capture_mhtml`**:  
-   - If `True`, captures a screenshot, PDF, or MHTML snapshot after the page is fully loaded.  
+7. **`screenshot`**, **`pdf`**, & **`capture_mhtml`**:
+   - If `True`, captures a screenshot, PDF, or MHTML snapshot after the page is fully loaded.
    - The results go to `result.screenshot` (base64), `result.pdf` (bytes), or `result.mhtml` (string).
-8. **`verbose`**:  
-   - Logs additional runtime details.  
+8. **`verbose`**:
+   - Logs additional runtime details.
    - Overlaps with the browser’s verbosity if also set to `True` in `BrowserConfig`.
 
-9. **`enable_rate_limiting`**:  
-   - If `True`, enables rate limiting for batch processing.  
+9. **`enable_rate_limiting`**:
+   - If `True`, enables rate limiting for batch processing.
    - Requires `rate_limit_config` to be set.
 
-10. **`memory_threshold_percent`**:  
-    - The memory threshold (as a percentage) to monitor.  
+10. **`memory_threshold_percent`**:
+    - The memory threshold (as a percentage) to monitor.
     - If exceeded, the crawler will pause or slow down.
 
-11. **`check_interval`**:  
-    - The interval (in seconds) to check system resources.  
+11. **`check_interval`**:
+    - The interval (in seconds) to check system resources.
     - Affects how often memory and CPU usage are monitored.
 
-12. **`max_session_permit`**:  
-    - The maximum number of concurrent crawl sessions.  
+12. **`max_session_permit`**:
+    - The maximum number of concurrent crawl sessions.
     - Helps prevent overwhelming the system.
 
-13. **`display_mode`**:  
-    - The display mode for progress information (`DETAILED`, `BRIEF`, etc.).  
+13. **`display_mode`**:
+    - The display mode for progress information (`DETAILED`, `BRIEF`, etc.).
     - Affects how much information is printed during the crawl.
 
 ### Helper Methods
@@ -331,16 +331,16 @@ The `clone()` method:
 
 ### Key fields to note
 
-1. **`provider`**:  
-- Which LLM provider to use. 
+1. **`provider`**:
+- Which LLM provider to use.
 - Possible values are `"ollama/llama3","groq/llama3-70b-8192","groq/llama3-8b-8192", "openai/gpt-4o-mini" ,"openai/gpt-4o","openai/o1-mini","openai/o1-preview","openai/o3-mini","openai/o3-mini-high","anthropic/claude-3-haiku-20240307","anthropic/claude-3-opus-20240229","anthropic/claude-3-sonnet-20240229","anthropic/claude-3-5-sonnet-20240620","gemini/gemini-pro","gemini/gemini-1.5-pro","gemini/gemini-2.0-flash","gemini/gemini-2.0-flash-exp","gemini/gemini-2.0-flash-lite-preview-02-05","deepseek/deepseek-chat"`<br/>*(default: `"openai/gpt-4o-mini"`)*
 
-2. **`api_token`**:  
-    - Optional. When not provided explicitly, api_token will be read from environment variables based on provider. For example: If a gemini model is passed as provider then,`"GEMINI_API_KEY"` will be read from environment variables  
+2. **`api_token`**:
+    - Optional. When not provided explicitly, api_token will be read from environment variables based on provider. For example: If a gemini model is passed as provider then,`"GEMINI_API_KEY"` will be read from environment variables
     - API token of LLM provider <br/> eg: `api_token = "gsk_1ClHGGJ7Lpn4WGybR7vNWGdyb3FY7zXEw3SCiy0BAVM9lL8CQv"`
-    - Environment variable - use with prefix "env:" <br/> eg:`api_token = "env: GROQ_API_KEY"`            
+    - Environment variable - use with prefix "env:" <br/> eg:`api_token = "env: GROQ_API_KEY"`
 
-3. **`base_url`**:  
+3. **`base_url`**:
    - If your provider has a custom endpoint
 
 ```python
@@ -378,7 +378,7 @@ async def main():
     # 3) Example LLM content filtering
 
     gemini_config = LLMConfig(
-        provider="gemini/gemini-1.5-pro" 
+        provider="gemini/gemini-1.5-pro"
         api_token = "env:GEMINI_API_TOKEN"
     )
 
@@ -431,14 +431,14 @@ if __name__ == "__main__":
 
 For a **detailed list** of available parameters (including advanced ones), see:
 
-- [BrowserConfig, CrawlerRunConfig & LLMConfig Reference](../api/parameters.md)  
+- [BrowserConfig, CrawlerRunConfig & LLMConfig Reference](../api/parameters.md)
 
 You can explore topics like:
 
-- **Custom Hooks & Auth** (Inject JavaScript or handle login forms).  
-- **Session Management** (Re-use pages, preserve state across multiple calls).  
-- **Magic Mode** or **Identity-based Crawling** (Fight bot detection by simulating user behavior).  
-- **Advanced Caching** (Fine-tune read/write cache modes).  
+- **Custom Hooks & Auth** (Inject JavaScript or handle login forms).
+- **Session Management** (Re-use pages, preserve state across multiple calls).
+- **Magic Mode** or **Identity-based Crawling** (Fight bot detection by simulating user behavior).
+- **Advanced Caching** (Fine-tune read/write cache modes).
 
 ---
 
@@ -446,7 +446,7 @@ You can explore topics like:
 
 **BrowserConfig**, **CrawlerRunConfig** and **LLMConfig** give you straightforward ways to define:
 
-- **Which** browser to launch, how it should run, and any proxy or user agent needs.  
+- **Which** browser to launch, how it should run, and any proxy or user agent needs.
 - **How** each crawl should behave—caching, timeouts, JavaScript code, extraction strategies, etc.
 - **Which** LLM provider to use, api token, temperature and base url for custom endpoints
 
@@ -509,7 +509,7 @@ from crawl4ai.async_configs import CrawlerRunConfig
 
 async def use_proxy():
     # Use CacheMode in CrawlerRunConfig
-    config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)  
+    config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
     async with AsyncWebCrawler(verbose=True) as crawler:
         result = await crawler.arun(
             url="https://www.nbcnews.com/business",
@@ -872,11 +872,11 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 async def main():
     config = CrawlerRunConfig(
         # e.g., first 30 items from Hacker News
-        css_selector=".athing:nth-child(-n+30)"  
+        css_selector=".athing:nth-child(-n+30)"
     )
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://news.ycombinator.com/newest", 
+            url="https://news.ycombinator.com/newest",
             config=config
         )
         print("Partial HTML length:", len(result.cleaned_html))
@@ -902,7 +902,7 @@ async def main():
     )
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://example.com/blog-post", 
+            url="https://example.com/blog-post",
             config=config
         )
         print("Markdown focused on target elements")
@@ -929,10 +929,10 @@ config = CrawlerRunConfig(
     excluded_tags=['form', 'header', 'footer', 'nav'],
 
     # Link filtering
-    exclude_external_links=True,    
+    exclude_external_links=True,
     exclude_social_media_links=True,
     # Block entire domains
-    exclude_domains=["adtrackers.com", "spammynews.org"],    
+    exclude_domains=["adtrackers.com", "spammynews.org"],
     exclude_social_media_domains=["facebook.com", "twitter.com"],
 
     # Media filtering
@@ -942,14 +942,14 @@ config = CrawlerRunConfig(
 
 **Explanation**:
 
-- **`word_count_threshold`**: Ignores text blocks under X words. Helps skip trivial blocks like short nav or disclaimers.  
-- **`excluded_tags`**: Removes entire tags (`<form>`, `<header>`, `<footer>`, etc.).  
-- **Link Filtering**:  
-  - `exclude_external_links`: Strips out external links and may remove them from `result.links`.  
-  - `exclude_social_media_links`: Removes links pointing to known social media domains.  
-  - `exclude_domains`: A custom list of domains to block if discovered in links.  
-  - `exclude_social_media_domains`: A curated list (override or add to it) for social media sites.  
-- **Media Filtering**:  
+- **`word_count_threshold`**: Ignores text blocks under X words. Helps skip trivial blocks like short nav or disclaimers.
+- **`excluded_tags`**: Removes entire tags (`<form>`, `<header>`, `<footer>`, etc.).
+- **Link Filtering**:
+  - `exclude_external_links`: Strips out external links and may remove them from `result.links`.
+  - `exclude_social_media_links`: Removes links pointing to known social media domains.
+  - `exclude_domains`: A custom list of domains to block if discovered in links.
+  - `exclude_social_media_domains`: A curated list (override or add to it) for social media sites.
+- **Media Filtering**:
   - `exclude_external_images`: Discards images not hosted on the same domain as the main page (or its subdomains).
 
 By default in case you set `exclude_social_media_links=True`, the following social media domains are excluded:
@@ -976,7 +976,7 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 
 async def main():
     config = CrawlerRunConfig(
-        css_selector="main.content", 
+        css_selector="main.content",
         word_count_threshold=10,
         excluded_tags=["nav", "footer"],
         exclude_external_links=True,
@@ -1004,7 +1004,7 @@ Some sites embed content in `<iframe>` tags. If you want that inline:
 ```python
 config = CrawlerRunConfig(
     # Merge iframe content into the final output
-    process_iframes=True,    
+    process_iframes=True,
     remove_overlay_elements=True
 )
 ```
@@ -1021,7 +1021,7 @@ async def main():
     )
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://example.org/iframe-demo", 
+            url="https://example.org/iframe-demo",
             config=config
         )
         print("Iframe-merged length:", len(result.cleaned_html))
@@ -1052,9 +1052,9 @@ async def main():
         "fields": [
             {"name": "title", "selector": "span.titleline a", "type": "text"},
             {
-                "name": "link", 
-                "selector": "span.titleline a", 
-                "type": "attribute", 
+                "name": "link",
+                "selector": "span.titleline a",
+                "type": "attribute",
                 "attribute": "href"
             }
         ]
@@ -1064,7 +1064,7 @@ async def main():
         # Content filtering
         excluded_tags=["form", "header"],
         exclude_domains=["adsite.com"],
-        
+
         # CSS selection or entire page
         css_selector="table.itemlist",
 
@@ -1077,7 +1077,7 @@ async def main():
 
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://news.ycombinator.com/newest", 
+            url="https://news.ycombinator.com/newest",
             config=config
         )
         data = json.loads(result.extracted_content)
@@ -1125,8 +1125,8 @@ if __name__ == "__main__":
 
 Here, the crawler:
 
-- Filters out external links (`exclude_external_links=True`).  
-- Ignores very short text blocks (`word_count_threshold=20`).  
+- Filters out external links (`exclude_external_links=True`).
+- Ignores very short text blocks (`word_count_threshold=20`).
 - Passes the final HTML to your LLM strategy for an AI-driven parse.
 
 ---
@@ -1162,17 +1162,17 @@ async def extract_main_articles(url: str):
     config = CrawlerRunConfig(
         # Keep only #main-content
         css_selector="#main-content",
-        
+
         # Filtering
         word_count_threshold=10,
-        excluded_tags=["nav", "footer"],  
+        excluded_tags=["nav", "footer"],
         exclude_external_links=True,
         exclude_domains=["somebadsite.com"],
         exclude_external_images=True,
 
         # Extraction
         extraction_strategy=JsonCssExtractionStrategy(schema),
-        
+
         cache_mode=CacheMode.BYPASS
     )
 
@@ -1193,8 +1193,8 @@ if __name__ == "__main__":
 ```
 
 **Why This Works**:
-- **CSS** scoping with `#main-content`.  
-- Multiple **exclude_** parameters to remove domains, external images, etc.  
+- **CSS** scoping with `#main-content`.
+- Multiple **exclude_** parameters to remove domains, external images, etc.
 - A **JsonCssExtractionStrategy** to parse repeated article blocks.
 
 ---
@@ -1212,7 +1212,7 @@ async def main():
     )
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://example.com", 
+            url="https://example.com",
             config=config
         )
 ```
@@ -1299,23 +1299,23 @@ async def main():
     config = CrawlerRunConfig(
         # Focus markdown on main content and sidebar
         target_elements=["#main-content", ".sidebar"],
-        
+
         # Global filters applied to entire page
         excluded_tags=["nav", "footer", "header"],
         exclude_external_links=True,
-        
+
         # Use basic content thresholds
         word_count_threshold=15,
-        
+
         cache_mode=CacheMode.BYPASS
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://example.com/article",
             config=config
         )
-        
+
         print(f"Content focuses on specific elements, but all links still analyzed")
         print(f"Internal links: {len(result.links.get('internal', []))}")
         print(f"External links: {len(result.links.get('external', []))}")
@@ -1334,12 +1334,12 @@ This approach gives you the best of both worlds:
 By mixing **target_elements** or **css_selector** scoping, **content filtering** parameters, and advanced **extraction strategies**, you can precisely **choose** which data to keep. Key parameters in **`CrawlerRunConfig`** for content selection include:
 
 1. **`target_elements`** – Array of CSS selectors to focus markdown generation and data extraction, while preserving full page context for links and media.
-2. **`css_selector`** – Basic scoping to an element or region for all extraction processes.  
-3. **`word_count_threshold`** – Skip short blocks.  
-4. **`excluded_tags`** – Remove entire HTML tags.  
-5. **`exclude_external_links`**, **`exclude_social_media_links`**, **`exclude_domains`** – Filter out unwanted links or domains.  
-6. **`exclude_external_images`** – Remove images from external sources.  
-7. **`process_iframes`** – Merge iframe content if needed.  
+2. **`css_selector`** – Basic scoping to an element or region for all extraction processes.
+3. **`word_count_threshold`** – Skip short blocks.
+4. **`excluded_tags`** – Remove entire HTML tags.
+5. **`exclude_external_links`**, **`exclude_social_media_links`**, **`exclude_domains`** – Filter out unwanted links or domains.
+6. **`exclude_external_images`** – Remove images from external sources.
+7. **`process_iframes`** – Merge iframe content if needed.
 
 Combine these with structured extraction (CSS, LLM-based, or others) to build powerful crawls that yield exactly the content you want, from raw or cleaned HTML up to sophisticated JSON structures. For more detail, see [Configuration Reference](../api/parameters.md). Enjoy curating your data to the max!
 ```
@@ -1350,7 +1350,7 @@ Combine these with structured extraction (CSS, LLM-based, or others) to build po
 ```md
 # Crawl Result and Output
 
-When you call `arun()` on a page, Crawl4AI returns a **`CrawlResult`** object containing everything you might need—raw HTML, a cleaned version, optional screenshots or PDFs, structured extraction results, and more. This document explains those fields and how they map to different output types.  
+When you call `arun()` on a page, Crawl4AI returns a **`CrawlResult`** object containing everything you might need—raw HTML, a cleaned version, optional screenshots or PDFs, structured extraction results, and more. This document explains those fields and how they map to different output types.
 
 ---
 
@@ -1442,7 +1442,7 @@ print(result.cleaned_html)  # Freed of forms, header, footer, data-* attributes
 
 ### 3.1 `markdown`
 
-- **`markdown`**: The current location for detailed markdown output, returning a **`MarkdownGenerationResult`** object.  
+- **`markdown`**: The current location for detailed markdown output, returning a **`MarkdownGenerationResult`** object.
 - **`markdown_v2`**: Deprecated since v0.5.
 
 **`MarkdownGenerationResult`** Fields:
@@ -1517,7 +1517,7 @@ if __name__ == "__main__":
 ```
 
 Here:
-- `url="raw://..."` passes the HTML content directly, no network requests.  
+- `url="raw://..."` passes the HTML content directly, no network requests.
 - The **CSS** extraction strategy populates `result.extracted_content` with the JSON array `[{"title": "...", "link": "..."}]`.
 
 ---
@@ -1599,9 +1599,9 @@ as it's properties.
 
 ## 7. Next Steps
 
-- **Markdown Generation**: Dive deeper into how to configure `DefaultMarkdownGenerator` and various filters.  
+- **Markdown Generation**: Dive deeper into how to configure `DefaultMarkdownGenerator` and various filters.
 - **Content Filtering**: Learn how to use `BM25ContentFilter` and `PruningContentFilter`.
-- **Session & Hooks**: If you want to manipulate the page or preserve state across multiple `arun()` calls, see the hooking or session docs.  
+- **Session & Hooks**: If you want to manipulate the page or preserve state across multiple `arun()` calls, see the hooking or session docs.
 - **LLM Extraction**: For complex or unstructured content requiring AI-driven parsing, check the LLM-based strategies doc.
 
 **Enjoy** exploring all that `CrawlResult` offers—whether you need raw HTML, sanitized output, markdown, or fully structured data, Crawl4AI has you covered!
@@ -1617,14 +1617,14 @@ One of Crawl4AI's most powerful features is its ability to perform **configurabl
 
 In this tutorial, you'll learn:
 
-1. How to set up a **Basic Deep Crawler** with BFS strategy  
-2. Understanding the difference between **streamed and non-streamed** output  
-3. Implementing **filters and scorers** to target specific content  
-4. Creating **advanced filtering chains** for sophisticated crawls  
-5. Using **BestFirstCrawling** for intelligent exploration prioritization  
+1. How to set up a **Basic Deep Crawler** with BFS strategy
+2. Understanding the difference between **streamed and non-streamed** output
+3. Implementing **filters and scorers** to target specific content
+4. Creating **advanced filtering chains** for sophisticated crawls
+5. Using **BestFirstCrawling** for intelligent exploration prioritization
 
-> **Prerequisites**  
-> - You’ve completed or read [AsyncWebCrawler Basics](../core/simple-crawling.md) to understand how to run a simple crawl.  
+> **Prerequisites**
+> - You’ve completed or read [AsyncWebCrawler Basics](../core/simple-crawling.md) to understand how to run a simple crawl.
 > - You know how to configure `CrawlerRunConfig`.
 
 ---
@@ -1643,18 +1643,18 @@ async def main():
     # Configure a 2-level deep crawl
     config = CrawlerRunConfig(
         deep_crawl_strategy=BFSDeepCrawlStrategy(
-            max_depth=2, 
+            max_depth=2,
             include_external=False
         ),
         scraping_strategy=LXMLWebScrapingStrategy(),
         verbose=True
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         results = await crawler.arun("https://example.com", config=config)
-        
+
         print(f"Crawled {len(results)} pages in total")
-        
+
         # Access individual results
         for result in results[:3]:  # Show first 3 results
             print(f"URL: {result.url}")
@@ -1664,7 +1664,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**What's happening?**  
+**What's happening?**
 - `BFSDeepCrawlStrategy(max_depth=2, include_external=False)` instructs Crawl4AI to:
   - Crawl the starting page (depth 0) plus 2 more levels
   - Stay within the same domain (don't follow external links)
@@ -1770,7 +1770,7 @@ config = CrawlerRunConfig(
 async with AsyncWebCrawler() as crawler:
     # Wait for ALL results to be collected before returning
     results = await crawler.arun("https://example.com", config=config)
-    
+
     for result in results:
         process_result(result)
 ```
@@ -1837,13 +1837,13 @@ from crawl4ai.deep_crawling.filters import (
 filter_chain = FilterChain([
     # Only follow URLs with specific patterns
     URLPatternFilter(patterns=["*guide*", "*tutorial*"]),
-    
+
     # Only crawl specific domains
     DomainFilter(
         allowed_domains=["docs.example.com"],
         blocked_domains=["old.docs.example.com"]
     ),
-    
+
     # Only include specific content types
     ContentTypeFilter(allowed_types=["text/html"])
 ])
@@ -1981,10 +1981,10 @@ async def run_advanced_crawler():
             allowed_domains=["docs.example.com"],
             blocked_domains=["old.docs.example.com"]
         ),
-        
+
         # URL patterns to include
         URLPatternFilter(patterns=["*guide*", "*tutorial*", "*blog*"]),
-        
+
         # Content type filtering
         ContentTypeFilter(allowed_types=["text/html"])
     ])
@@ -2080,7 +2080,7 @@ Note that for BestFirstCrawlingStrategy, score_threshold is not needed since pag
 2.**Don't neglect the scoring component.** BestFirstCrawling works best with well-tuned scorers. Experiment with keyword weights for optimal prioritization.
 
 3.**Be a good web citizen.**  Respect robots.txt. (disabled by default)
-  
+
 4.**Handle page errors gracefully.** Not all pages will be accessible. Check `result.status` when processing results.
 
 5.**Balance breadth vs. depth.** Choose your strategy wisely - BFS for comprehensive coverage, DFS for deep exploration, BestFirst for focused relevance-based crawling.
@@ -2282,7 +2282,7 @@ async def main():
     async with Crawl4aiDockerClient(base_url="http://localhost:8000", verbose=True) as client:
       # If JWT is enabled, you can authenticate like this: (more on this later)
         # await client.authenticate("test@example.com")
-        
+
         # Non-streaming crawl
         results = await client.crawl(
             ["https://example.com", "https://python.org"],
@@ -2290,7 +2290,7 @@ async def main():
             crawler_config=CrawlerRunConfig()
         )
         print(f"Non-streaming results: {results}")
-        
+
         # Streaming crawl
         crawler_config = CrawlerRunConfig(stream=True)
         async for result in await client.crawl(
@@ -2299,7 +2299,7 @@ async def main():
             crawler_config=crawler_config
         ):
             print(f"Streamed result: {result}")
-        
+
         # Get schema
         schema = await client.get_schema()
         print(f"Schema: {schema}")
@@ -2613,7 +2613,7 @@ print(config.dump())  # Use this JSON in your API calls
                   "type": "PathDepthScorer",
                   "params": {
                     "weight": 0.5,
-                    "optimal_depth": 3  
+                    "optimal_depth": 3
                   }
                 }
               ]
@@ -2657,22 +2657,22 @@ async def test_stream_crawl(session, token: str):
     payload = {
         "urls": [
             "https://example.com",
-            "https://example.com/page1",  
-            "https://example.com/page2",  
-            "https://example.com/page3",  
+            "https://example.com/page1",
+            "https://example.com/page2",
+            "https://example.com/page3",
         ],
         "browser_config": {"headless": True, "viewport": {"width": 1200}},
         "crawler_config": {"stream": True, "cache_mode": "bypass"}
     }
 
     # headers = {"Authorization": f"Bearer {token}"} # If JWT is enabled, more on this later
-    
+
     try:
         async with session.post(url, json=payload, headers=headers) as response:
             status = response.status
             print(f"Status: {status} (Expected: 200)")
             assert status == 200, f"Expected 200, got {status}"
-            
+
             # Read streaming response line-by-line (NDJSON)
             async for line in response.content:
                 if line:
@@ -2807,7 +2807,7 @@ from crawl4ai.docker_client import Crawl4aiDockerClient
 async with Crawl4aiDockerClient() as client:
     # Authenticate first
     await client.authenticate("user@example.com")
-    
+
     # Now all requests will include the token automatically
     result = await client.crawl(urls=["https://example.com"])
 ```
@@ -2828,11 +2828,11 @@ The default implementation uses a simple email verification. For production use,
    app:
      reload: False              # Disable reload in production
      timeout_keep_alive: 120    # Lower timeout for better resource management
-   
+
    rate_limiting:
      storage_uri: "redis://redis:6379"  # Use Redis for distributed rate limiting
      default_limit: "50/minute"         # More conservative rate limit
-   
+
    security:
      enabled: true                      # Enable all security features
      trusted_hosts: ["your-domain.com"] # Restrict to your domain
@@ -2844,7 +2844,7 @@ The default implementation uses a simple email verification. For production use,
    app:
      reload: True               # Enable hot reloading
      timeout_keep_alive: 300    # Longer timeout for debugging
-   
+
    logging:
      level: "DEBUG"            # More verbose logging
    ```
@@ -2878,7 +2878,7 @@ Use a custom config during build:
 ```bash
 # Build with custom config
 docker build --platform=linux/amd64 --no-cache \
-  --build-arg CONFIG_PATH=/path/to/custom-config.yml \ 
+  --build-arg CONFIG_PATH=/path/to/custom-config.yml \
   -t crawl4ai:latest .
 ```
 
@@ -2964,7 +2964,7 @@ In **`CrawlerRunConfig`**, you can specify a **`content_filter`** to shape how c
 
 ### 1.2 Common Filters
 
-1. **PruningContentFilter** – Scores each node by text density, link density, and tag importance, discarding those below a threshold.  
+1. **PruningContentFilter** – Scores each node by text density, link density, and tag importance, discarding those below a threshold.
 2. **BM25ContentFilter** – Focuses on textual relevance using BM25 ranking, especially useful if you have a specific user query (e.g., “machine learning” or “food nutrition”).
 
 ---
@@ -2985,16 +2985,16 @@ async def main():
     # Step 1: Create a pruning filter
     prune_filter = PruningContentFilter(
         # Lower → more content retained, higher → more content pruned
-        threshold=0.45,           
+        threshold=0.45,
         # "fixed" or "dynamic"
-        threshold_type="dynamic",  
+        threshold_type="dynamic",
         # Ignore nodes with <5 words
-        min_word_threshold=5      
+        min_word_threshold=5
     )
 
     # Step 2: Insert it into a Markdown Generator
     md_generator = DefaultMarkdownGenerator(content_filter=prune_filter)
-    
+
     # Step 3: Pass it to CrawlerRunConfig
     config = CrawlerRunConfig(
         markdown_generator=md_generator
@@ -3002,10 +3002,10 @@ async def main():
 
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://news.ycombinator.com", 
+            url="https://news.ycombinator.com",
             config=config
         )
-        
+
         if result.success:
             # 'fit_markdown' is your pruned content, focusing on "denser" text
             print("Raw Markdown length:", len(result.markdown.raw_markdown))
@@ -3019,17 +3019,17 @@ if __name__ == "__main__":
 
 ### 2.2 Key Parameters
 
-- **`min_word_threshold`** (int): If a block has fewer words than this, it’s pruned.  
+- **`min_word_threshold`** (int): If a block has fewer words than this, it’s pruned.
 - **`threshold_type`** (str):
-  - `"fixed"` → each node must exceed `threshold` (0–1).  
-  - `"dynamic"` → node scoring adjusts according to tag type, text/link density, etc.  
-- **`threshold`** (float, default ~0.48): The base or “anchor” cutoff.  
+  - `"fixed"` → each node must exceed `threshold` (0–1).
+  - `"dynamic"` → node scoring adjusts according to tag type, text/link density, etc.
+- **`threshold`** (float, default ~0.48): The base or “anchor” cutoff.
 
 **Algorithmic Factors**:
 
-- **Text density** – Encourages blocks that have a higher ratio of text to overall content.  
-- **Link density** – Penalizes sections that are mostly links.  
-- **Tag importance** – e.g., an `<article>` or `<p>` might be more important than a `<div>`.  
+- **Text density** – Encourages blocks that have a higher ratio of text to overall content.
+- **Link density** – Penalizes sections that are mostly links.
+- **Tag importance** – e.g., an `<article>` or `<p>` might be more important than a `<div>`.
 - **Structural context** – If a node is deeply nested or in a suspected sidebar, it might be deprioritized.
 
 ---
@@ -3051,12 +3051,12 @@ async def main():
     bm25_filter = BM25ContentFilter(
         user_query="startup fundraising tips",
         # Adjust for stricter or looser results
-        bm25_threshold=1.2  
+        bm25_threshold=1.2
     )
 
     # 2) Insert into a Markdown Generator
     md_generator = DefaultMarkdownGenerator(content_filter=bm25_filter)
-    
+
     # 3) Pass to crawler config
     config = CrawlerRunConfig(
         markdown_generator=md_generator
@@ -3064,7 +3064,7 @@ async def main():
 
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://news.ycombinator.com", 
+            url="https://news.ycombinator.com",
             config=config
         )
         if result.success:
@@ -3079,10 +3079,10 @@ if __name__ == "__main__":
 
 ### 3.2 Parameters
 
-- **`user_query`** (str, optional): E.g. `"machine learning"`. If blank, the filter tries to glean a query from page metadata.  
-- **`bm25_threshold`** (float, default 1.0):  
-  - Higher → fewer chunks but more relevant.  
-  - Lower → more inclusive.  
+- **`user_query`** (str, optional): E.g. `"machine learning"`. If blank, the filter tries to glean a query from page metadata.
+- **`bm25_threshold`** (float, default 1.0):
+  - Higher → fewer chunks but more relevant.
+  - Lower → more inclusive.
 
 > In more advanced scenarios, you might see parameters like `use_stemming`, `case_sensitive`, or `priority_tags` to refine how text is tokenized or weighted.
 
@@ -3090,7 +3090,7 @@ if __name__ == "__main__":
 
 ## 4. Accessing the “Fit” Output
 
-After the crawl, your “fit” content is found in **`result.markdown.fit_markdown`**. 
+After the crawl, your “fit” content is found in **`result.markdown.fit_markdown`**.
 
 ```python
 fit_md = result.markdown.fit_markdown
@@ -3145,8 +3145,8 @@ config = CrawlerRunConfig(
 
 Thus, **multi-level** filtering occurs:
 
-1. The crawler’s `excluded_tags` are removed from the HTML first.  
-2. The content filter (Pruning, BM25, or custom) prunes or ranks the remaining text blocks.  
+1. The crawler’s `excluded_tags` are removed from the HTML first.
+2. The content filter (Pruning, BM25, or custom) prunes or ranks the remaining text blocks.
 3. The final “fit” content is generated in `result.markdown.fit_markdown`.
 
 ---
@@ -3167,8 +3167,8 @@ class MyCustomFilter(RelevantContentFilter):
 
 **Steps**:
 
-1. Subclass `RelevantContentFilter`.  
-2. Implement `filter_content(...)`.  
+1. Subclass `RelevantContentFilter`.
+2. Implement `filter_content(...)`.
 3. Use it in your `DefaultMarkdownGenerator(content_filter=MyCustomFilter(...))`.
 
 ---
@@ -3177,14 +3177,14 @@ class MyCustomFilter(RelevantContentFilter):
 
 **Fit Markdown** is a crucial feature for:
 
-- **Summaries**: Quickly get the important text from a cluttered page.  
-- **Search**: Combine with **BM25** to produce content relevant to a query.  
+- **Summaries**: Quickly get the important text from a cluttered page.
+- **Search**: Combine with **BM25** to produce content relevant to a query.
 - **AI Pipelines**: Filter out boilerplate so LLM-based extraction or summarization runs on denser text.
 
 **Key Points**:
-- **PruningContentFilter**: Great if you just want the “meatiest” text without a user query.  
-- **BM25ContentFilter**: Perfect for query-based extraction or searching.  
-- Combine with **`excluded_tags`, `exclude_external_links`, `word_count_threshold`** to refine your final “fit” text.  
+- **PruningContentFilter**: Great if you just want the “meatiest” text without a user query.
+- **BM25ContentFilter**: Perfect for query-based extraction or searching.
+- Combine with **`excluded_tags`, `exclude_external_links`, `word_count_threshold`** to refine your final “fit” text.
 - Fit markdown ends up in **`result.markdown.fit_markdown`**; eventually **`result.markdown.fit_markdown`** in future versions.
 
 With these tools, you can **zero in** on the text that truly matters, ignoring spammy or boilerplate content, and produce a concise, relevant “fit markdown” for your AI or data pipelines. Happy pruning and searching!
@@ -3257,7 +3257,7 @@ if __name__ == "__main__":
 
 **Expected** outcome:
 - A headless browser session loads `example.com`
-- Crawl4AI returns ~300 characters of markdown.  
+- Crawl4AI returns ~300 characters of markdown.
 If errors occur, rerun `crawl4ai-doctor` or manually ensure Playwright is installed correctly.
 
 ---
@@ -3268,21 +3268,21 @@ If errors occur, rerun `crawl4ai-doctor` or manually ensure Playwright is instal
 
 ### 4.1 Torch, Transformers, or All
 
-- **Text Clustering (Torch)**  
+- **Text Clustering (Torch)**
   ```bash
   pip install crawl4ai[torch]
   crawl4ai-setup
   ```
   Installs PyTorch-based features (e.g., cosine similarity or advanced semantic chunking).
 
-- **Transformers**  
+- **Transformers**
   ```bash
   pip install crawl4ai[transformer]
   crawl4ai-setup
   ```
   Adds Hugging Face-based summarization or generation strategies.
 
-- **All Features**  
+- **All Features**
   ```bash
   pip install crawl4ai[all]
   crawl4ai-setup
@@ -3331,12 +3331,12 @@ Some older docs mention running Crawl4AI as a local server. This approach has be
 ## File: docs/md_v2/core/link-media.md
 
 ```md
-# Link & Media 
+# Link & Media
 
 In this tutorial, you’ll learn how to:
 
-1. Extract links (internal, external) from crawled pages  
-2. Filter or exclude specific domains (e.g., social media or custom domains)  
+1. Extract links (internal, external) from crawled pages
+2. Filter or exclude specific domains (e.g., social media or custom domains)
 3. Access and ma### 3.2 Excluding Images
 
 #### Excluding External Images
@@ -3365,11 +3365,11 @@ This setting removes all images very early in the processing pipeline, which sig
 - You don't need image data in your results
 - You're crawling image-heavy pages that cause memory issues
 - You want to focus only on text content
-- You need to maximize crawling speeddata (especially images) in the crawl result  
+- You need to maximize crawling speeddata (especially images) in the crawl result
 4. Configure your crawler to exclude or prioritize certain images
 
-> **Prerequisites**  
-> - You have completed or are familiar with the [AsyncWebCrawler Basics](../core/simple-crawling.md) tutorial.  
+> **Prerequisites**
+> - You have completed or are familiar with the [AsyncWebCrawler Basics](../core/simple-crawling.md) tutorial.
 > - You can run Crawl4AI in your environment (Playwright, Python, etc.).
 
 ---
@@ -3431,9 +3431,9 @@ result.links = {
 }
 ```
 
-- **`href`**: The raw hyperlink URL.  
-- **`text`**: The link text (if any) within the `<a>` tag.  
-- **`title`**: The `title` attribute of the link (if present).  
+- **`href`**: The raw hyperlink URL.
+- **`text`**: The link text (if any) within the `<a>` tag.
+- **`title`**: The `title` attribute of the link (if present).
 - **`base_domain`**: The domain extracted from `href`. Helpful for filtering or grouping by domain.
 
 ---
@@ -3442,9 +3442,9 @@ result.links = {
 
 Some websites contain hundreds of third-party or affiliate links. You can filter out certain domains at **crawl time** by configuring the crawler. The most relevant parameters in `CrawlerRunConfig` are:
 
-- **`exclude_external_links`**: If `True`, discard any link pointing outside the root domain.  
-- **`exclude_social_media_domains`**: Provide a list of social media platforms (e.g., `["facebook.com", "twitter.com"]`) to exclude from your crawl.  
-- **`exclude_social_media_links`**: If `True`, automatically skip known social platforms.  
+- **`exclude_external_links`**: If `True`, discard any link pointing outside the root domain.
+- **`exclude_social_media_domains`**: Provide a list of social media platforms (e.g., `["facebook.com", "twitter.com"]`) to exclude from your crawl.
+- **`exclude_social_media_links`**: If `True`, automatically skip known social platforms.
 - **`exclude_domains`**: Provide a list of custom domains you want to exclude (e.g., `["spammyads.com", "tracker.net"]`).
 
 ### 2.1 Example: Excluding External & Social Media Links
@@ -3467,7 +3467,7 @@ async def main():
         if result.success:
             print("[OK] Crawled:", result.url)
             print("Internal links count:", len(result.links.get("internal", [])))
-            print("External links count:", len(result.links.get("external", [])))  
+            print("External links count:", len(result.links.get("external", [])))
             # Likely zero external links in this scenario
         else:
             print("[ERROR]", result.error_message)
@@ -3508,7 +3508,7 @@ if result.success:
         print(f"           Alt text: {img.get('alt', '')}")
         print(f"           Score: {img.get('score')}")
         print(f"           Description: {img.get('desc', '')}\n")
-    
+
     # Get tables
     tables = result.media.get("tables", [])
     print(f"Found {len(tables)} data tables in total.")
@@ -3560,13 +3560,13 @@ result.media = {
 
 Depending on your Crawl4AI version or scraping strategy, these dictionaries can include fields like:
 
-- **`src`**: The media URL (e.g., image source)  
-- **`alt`**: The alt text for images (if present)  
-- **`desc`**: A snippet of nearby text or a short description (optional)  
-- **`score`**: A heuristic relevance score if you’re using content-scoring features  
-- **`width`**, **`height`**: If the crawler detects dimensions for the image/video  
-- **`type`**: Usually `"image"`, `"video"`, or `"audio"`  
-- **`group_id`**: If you’re grouping related media items, the crawler might assign an ID  
+- **`src`**: The media URL (e.g., image source)
+- **`alt`**: The alt text for images (if present)
+- **`desc`**: A snippet of nearby text or a short description (optional)
+- **`score`**: A heuristic relevance score if you’re using content-scoring features
+- **`width`**, **`height`**: If the crawler detects dimensions for the image/video
+- **`type`**: Usually `"image"`, `"video"`, or `"audio"`
+- **`group_id`**: If you’re grouping related media items, the crawler might assign an ID
 
 With these details, you can easily filter out or focus on certain images (for instance, ignoring images with very low scores or a different domain), or gather metadata for analytics.
 
@@ -3600,13 +3600,13 @@ Tables that score above the threshold (default: 7) are extracted and stored in `
 if result.success:
     tables = result.media.get("tables", [])
     print(f"Found {len(tables)} data tables on the page")
-    
+
     if tables:
         # Access the first table
         first_table = tables[0]
         print(f"Table caption: {first_table.get('caption', 'No caption')}")
         print(f"Headers: {first_table.get('headers', [])}")
-        
+
         # Print the first 3 rows
         for i, row in enumerate(first_table.get('rows', [])[:3]):
             print(f"Row {i+1}: {row}")
@@ -3630,8 +3630,8 @@ Each extracted table contains:
 
 ### 3.4 Additional Media Config
 
-- **`screenshot`**: Set to `True` if you want a full-page screenshot stored as `base64` in `result.screenshot`.  
-- **`pdf`**: Set to `True` if you want a PDF version of the page in `result.pdf`.  
+- **`screenshot`**: Set to `True` if you want a full-page screenshot stored as `base64` in `result.screenshot`.
+- **`pdf`**: Set to `True` if you want a PDF version of the page in `result.pdf`.
 - **`capture_mhtml`**: Set to `True` if you want an MHTML snapshot of the page in `result.mhtml`. This format preserves the entire web page with all its resources (CSS, images, scripts) in a single file, making it perfect for archiving or offline viewing.
 - **`wait_for_images`**: If `True`, attempts to wait until images are fully loaded before final extraction.
 
@@ -3645,10 +3645,10 @@ async def main():
     crawler_cfg = CrawlerRunConfig(
         capture_mhtml=True  # Enable MHTML capture
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun("https://example.com", config=crawler_cfg)
-        
+
         if result.success and result.mhtml:
             # Save the MHTML snapshot to a file
             with open("example.mhtml", "w", encoding="utf-8") as f:
@@ -3678,7 +3678,7 @@ import asyncio
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 
 async def main():
-    # Suppose we want to keep only internal links, remove certain domains, 
+    # Suppose we want to keep only internal links, remove certain domains,
     # and discard external images from the final crawl data.
     crawler_cfg = CrawlerRunConfig(
         exclude_external_links=True,
@@ -3694,17 +3694,17 @@ async def main():
 
         if result.success:
             print("[OK] Crawled:", result.url)
-            
+
             # 1. Links
             in_links = result.links.get("internal", [])
             ext_links = result.links.get("external", [])
             print("Internal link count:", len(in_links))
             print("External link count:", len(ext_links))  # should be zero with exclude_external_links=True
-            
+
             # 2. Images
             images = result.media.get("images", [])
             print("Images found:", len(images))
-            
+
             # Let's see a snippet of these images
             for i, img in enumerate(images[:3]):
                 print(f"  - {img['src']} (alt={img.get('alt','')}, score={img.get('score','N/A')})")
@@ -3719,18 +3719,18 @@ if __name__ == "__main__":
 
 ## 5. Common Pitfalls & Tips
 
-1. **Conflicting Flags**:  
-   - `exclude_external_links=True` but then also specifying `exclude_social_media_links=True` is typically fine, but understand that the first setting already discards *all* external links. The second becomes somewhat redundant.  
+1. **Conflicting Flags**:
+   - `exclude_external_links=True` but then also specifying `exclude_social_media_links=True` is typically fine, but understand that the first setting already discards *all* external links. The second becomes somewhat redundant.
    - `exclude_external_images=True` but want to keep some external images? Currently no partial domain-based setting for images, so you might need a custom approach or hook logic.
 
-2. **Relevancy Scores**:  
+2. **Relevancy Scores**:
    - If your version of Crawl4AI or your scraping strategy includes an `img["score"]`, it’s typically a heuristic based on size, position, or content analysis. Evaluate carefully if you rely on it.
 
-3. **Performance**:  
-   - Excluding certain domains or external images can speed up your crawl, especially for large, media-heavy pages.  
+3. **Performance**:
+   - Excluding certain domains or external images can speed up your crawl, especially for large, media-heavy pages.
    - If you want a “full” link map, do *not* exclude them. Instead, you can post-filter in your own code.
 
-4. **Social Media Lists**:  
+4. **Social Media Lists**:
    - `exclude_social_media_links=True` typically references an internal list of known social domains like Facebook, Twitter, LinkedIn, etc. If you need to add or remove from that list, look for library settings or a local config file (depending on your version).
 
 ---
@@ -3767,7 +3767,7 @@ async def crawl_web():
     config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://en.wikipedia.org/wiki/apple", 
+            url="https://en.wikipedia.org/wiki/apple",
             config=config
         )
         if result.success:
@@ -3792,7 +3792,7 @@ async def crawl_local_file():
     local_file_path = "/path/to/apple.html"  # Replace with your file path
     file_url = f"file://{local_file_path}"
     config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url=file_url, config=config)
         if result.success:
@@ -3817,7 +3817,7 @@ async def crawl_raw_html():
     raw_html = "<html><body><h1>Hello, World!</h1></body></html>"
     raw_html_url = f"raw:{raw_html}"
     config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url=raw_html_url, config=config)
         if result.success:
@@ -3923,12 +3923,12 @@ One of Crawl4AI’s core features is generating **clean, structured markdown** f
 
 In this tutorial, you’ll learn:
 
-1. How to configure the **Default Markdown Generator**  
-2. How **content filters** (BM25 or Pruning) help you refine markdown and discard junk  
-3. The difference between raw markdown (`result.markdown`) and filtered markdown (`fit_markdown`)  
+1. How to configure the **Default Markdown Generator**
+2. How **content filters** (BM25 or Pruning) help you refine markdown and discard junk
+3. The difference between raw markdown (`result.markdown`) and filtered markdown (`fit_markdown`)
 
-> **Prerequisites**  
-> - You’ve completed or read [AsyncWebCrawler Basics](../core/simple-crawling.md) to understand how to run a simple crawl.  
+> **Prerequisites**
+> - You’ve completed or read [AsyncWebCrawler Basics](../core/simple-crawling.md) to understand how to run a simple crawl.
 > - You know how to configure `CrawlerRunConfig`.
 
 ---
@@ -3948,7 +3948,7 @@ async def main():
     )
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun("https://example.com", config=config)
-        
+
         if result.success:
             print("Raw Markdown Output:\n")
             print(result.markdown)  # The unfiltered markdown from the page
@@ -3959,8 +3959,8 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**What’s happening?**  
-- `CrawlerRunConfig( markdown_generator = DefaultMarkdownGenerator() )` instructs Crawl4AI to convert the final HTML into markdown at the end of each crawl.  
+**What’s happening?**
+- `CrawlerRunConfig( markdown_generator = DefaultMarkdownGenerator() )` instructs Crawl4AI to convert the final HTML into markdown at the end of each crawl.
 - The resulting markdown is accessible via `result.markdown`.
 
 ---
@@ -3971,8 +3971,8 @@ if __name__ == "__main__":
 
 Under the hood, **DefaultMarkdownGenerator** uses a specialized HTML-to-text approach that:
 
-- Preserves headings, code blocks, bullet points, etc.  
-- Removes extraneous tags (scripts, styles) that don’t add meaningful content.  
+- Preserves headings, code blocks, bullet points, etc.
+- Removes extraneous tags (scripts, styles) that don’t add meaningful content.
 - Can optionally generate references for links or skip them altogether.
 
 A set of **options** (passed as a dict) allows you to customize precisely how HTML converts to markdown. These map to standard html2text-like configuration plus your own enhancements (e.g., ignoring internal links, preserving certain tags verbatim, or adjusting line widths).
@@ -4023,11 +4023,11 @@ if __name__ == "__main__":
 
 Some commonly used `options`:
 
-- **`ignore_links`** (bool): Whether to remove all hyperlinks in the final markdown.  
-- **`ignore_images`** (bool): Remove all `![image]()` references.  
-- **`escape_html`** (bool): Turn HTML entities into text (default is often `True`).  
-- **`body_width`** (int): Wrap text at N characters. `0` or `None` means no wrapping.  
-- **`skip_internal_links`** (bool): If `True`, omit `#localAnchors` or internal links referencing the same page.  
+- **`ignore_links`** (bool): Whether to remove all hyperlinks in the final markdown.
+- **`ignore_images`** (bool): Remove all `![image]()` references.
+- **`escape_html`** (bool): Turn HTML entities into text (default is often `True`).
+- **`body_width`** (int): Wrap text at N characters. `0` or `None` means no wrapping.
+- **`skip_internal_links`** (bool): If `True`, omit `#localAnchors` or internal links referencing the same page.
 - **`include_sup_sub`** (bool): Attempt to handle `<sup>` / `<sub>` in a more readable way.
 
 ## 4. Selecting the HTML Source for Markdown Generation
@@ -4044,24 +4044,24 @@ async def main():
         content_source="raw_html",
         options={"ignore_links": True}
     )
-    
+
     # Option 2: Use the cleaned HTML (after scraping strategy processing - default)
     cleaned_md_generator = DefaultMarkdownGenerator(
         content_source="cleaned_html",  # This is the default
         options={"ignore_links": True}
     )
-    
+
     # Option 3: Use preprocessed HTML optimized for schema extraction
     fit_md_generator = DefaultMarkdownGenerator(
         content_source="fit_html",
         options={"ignore_links": True}
     )
-    
+
     # Use one of the generators in your crawler config
     config = CrawlerRunConfig(
         markdown_generator=raw_md_generator  # Try each of the generators
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun("https://example.com", config=config)
         if result.success:
@@ -4117,8 +4117,8 @@ md_generator = DefaultMarkdownGenerator(
 config = CrawlerRunConfig(markdown_generator=md_generator)
 ```
 
-- **`user_query`**: The term you want to focus on. BM25 tries to keep only content blocks relevant to that query.  
-- **`bm25_threshold`**: Raise it to keep fewer blocks; lower it to keep more.  
+- **`user_query`**: The term you want to focus on. BM25 tries to keep only content blocks relevant to that query.
+- **`bm25_threshold`**: Raise it to keep fewer blocks; lower it to keep more.
 - **`use_stemming`**: If `True`, variations of words match (e.g., “learn,” “learning,” “learnt”).
 
 **No query provided?** BM25 tries to glean a context from page metadata, or you can simply treat it as a scorched-earth approach that discards text with low generic score. Realistically, you want to supply a query for best results.
@@ -4137,14 +4137,14 @@ prune_filter = PruningContentFilter(
 )
 ```
 
-- **`threshold`**: Score boundary. Blocks below this score get removed.  
-- **`threshold_type`**:  
-    - `"fixed"`: Straight comparison (`score >= threshold` keeps the block).  
-    - `"dynamic"`: The filter adjusts threshold in a data-driven manner.  
+- **`threshold`**: Score boundary. Blocks below this score get removed.
+- **`threshold_type`**:
+    - `"fixed"`: Straight comparison (`score >= threshold` keeps the block).
+    - `"dynamic"`: The filter adjusts threshold in a data-driven manner.
 - **`min_word_threshold`**: Discard blocks under N words as likely too short or unhelpful.
 
-**When to Use PruningContentFilter**  
-- You want a broad cleanup without a user query.  
+**When to Use PruningContentFilter**
+- You want a broad cleanup without a user query.
 - The page has lots of repeated sidebars, footers, or disclaimers that hamper text extraction.
 
 ### 5.3 LLMContentFilter
@@ -4233,7 +4233,7 @@ filter = LLMContentFilter(
 
 When a content filter is active, the library produces two forms of markdown inside `result.markdown`:
 
-1. **`raw_markdown`**: The full unfiltered markdown.  
+1. **`raw_markdown`**: The full unfiltered markdown.
 2. **`fit_markdown`**: A “fit” version where the filter has removed or trimmed noisy segments.
 
 ```python
@@ -4253,7 +4253,7 @@ async def main():
         result = await crawler.arun("https://news.example.com/tech", config=config)
         if result.success:
             print("Raw markdown:\n", result.markdown)
-            
+
             # If a filter is used, we also have .fit_markdown:
             md_object = result.markdown  # or your equivalent
             print("Filtered markdown:\n", md_object.fit_markdown)
@@ -4270,10 +4270,10 @@ if __name__ == "__main__":
 
 If your library stores detailed markdown output in an object like `MarkdownGenerationResult`, you’ll see fields such as:
 
-- **`raw_markdown`**: The direct HTML-to-markdown transformation (no filtering).  
-- **`markdown_with_citations`**: A version that moves links to reference-style footnotes.  
-- **`references_markdown`**: A separate string or section containing the gathered references.  
-- **`fit_markdown`**: The filtered markdown if you used a content filter.  
+- **`raw_markdown`**: The direct HTML-to-markdown transformation (no filtering).
+- **`markdown_with_citations`**: A version that moves links to reference-style footnotes.
+- **`references_markdown`**: A separate string or section containing the gathered references.
+- **`fit_markdown`**: The filtered markdown if you used a content filter.
 - **`fit_html`**: The corresponding HTML snippet used to generate `fit_markdown` (helpful for debugging or advanced usage).
 
 **Example**:
@@ -4286,9 +4286,9 @@ print("REFERENCES:\n", md_obj.references_markdown)
 print("FIT:\n", md_obj.fit_markdown)
 ```
 
-**Why Does This Matter?**  
-- You can supply `raw_markdown` to an LLM if you want the entire text.  
-- Or feed `fit_markdown` into a vector database to reduce token usage.  
+**Why Does This Matter?**
+- You can supply `raw_markdown` to an LLM if you want the entire text.
+- Or feed `fit_markdown` into a vector database to reduce token usage.
 - `references_markdown` can help you keep track of link provenance.
 
 ---
@@ -4301,7 +4301,7 @@ Below is a **revised section** under “Combining Filters (BM25 + Pruning)” th
 
 You might want to **prune out** noisy boilerplate first (with `PruningContentFilter`), and then **rank what’s left** against a user query (with `BM25ContentFilter`). You don’t have to crawl the page twice. Instead:
 
-1. **First pass**: Apply `PruningContentFilter` directly to the raw HTML from `result.html` (the crawler’s downloaded HTML).  
+1. **First pass**: Apply `PruningContentFilter` directly to the raw HTML from `result.html` (the crawler’s downloaded HTML).
 2. **Second pass**: Take the pruned HTML (or text) from step 1, and feed it into `BM25ContentFilter`, focusing on a user query.
 
 ### Two-Pass Example
@@ -4318,44 +4318,44 @@ async def main():
         # If you only want raw HTML, you can skip passing a markdown_generator
         # or provide one but focus on .html in this example
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun("https://example.com/tech-article", config=config)
 
         if not result.success or not result.html:
             print("Crawl failed or no HTML content.")
             return
-        
+
         raw_html = result.html
-        
+
         # 2. First pass: PruningContentFilter on raw HTML
         pruning_filter = PruningContentFilter(threshold=0.5, min_word_threshold=50)
-        
+
         # filter_content returns a list of "text chunks" or cleaned HTML sections
         pruned_chunks = pruning_filter.filter_content(raw_html)
         # This list is basically pruned content blocks, presumably in HTML or text form
-        
+
         # For demonstration, let's combine these chunks back into a single HTML-like string
         # or you could do further processing. It's up to your pipeline design.
         pruned_html = "\n".join(pruned_chunks)
-        
+
         # 3. Second pass: BM25ContentFilter with a user query
         bm25_filter = BM25ContentFilter(
             user_query="machine learning",
             bm25_threshold=1.2,
             language="english"
         )
-        
+
         # returns a list of text chunks
-        bm25_chunks = bm25_filter.filter_content(pruned_html)  
-        
+        bm25_chunks = bm25_filter.filter_content(pruned_html)
+
         if not bm25_chunks:
             print("Nothing matched the BM25 query after pruning.")
             return
-        
+
         # 4. Combine or display final results
         final_text = "\n---\n".join(bm25_chunks)
-        
+
         print("==== PRUNED OUTPUT (first pass) ====")
         print(pruned_html[:500], "... (truncated)")  # preview
 
@@ -4368,17 +4368,17 @@ if __name__ == "__main__":
 
 ### What’s Happening?
 
-1. **Raw HTML**: We crawl once and store the raw HTML in `result.html`.  
-2. **PruningContentFilter**: Takes HTML + optional parameters. It extracts blocks of text or partial HTML, removing headings/sections deemed “noise.” It returns a **list of text chunks**.  
-3. **Combine or Transform**: We join these pruned chunks back into a single HTML-like string. (Alternatively, you could store them in a list for further logic—whatever suits your pipeline.)  
+1. **Raw HTML**: We crawl once and store the raw HTML in `result.html`.
+2. **PruningContentFilter**: Takes HTML + optional parameters. It extracts blocks of text or partial HTML, removing headings/sections deemed “noise.” It returns a **list of text chunks**.
+3. **Combine or Transform**: We join these pruned chunks back into a single HTML-like string. (Alternatively, you could store them in a list for further logic—whatever suits your pipeline.)
 4. **BM25ContentFilter**: We feed the pruned string into `BM25ContentFilter` with a user query. This second pass further narrows the content to chunks relevant to “machine learning.”
 
 **No Re-Crawling**: We used `raw_html` from the first pass, so there’s no need to run `arun()` again—**no second network request**.
 
 ### Tips & Variations
 
-- **Plain Text vs. HTML**: If your pruned output is mostly text, BM25 can still handle it; just keep in mind it expects a valid string input. If you supply partial HTML (like `"<p>some text</p>"`), it will parse it as HTML.  
-- **Chaining in a Single Pipeline**: If your code supports it, you can chain multiple filters automatically. Otherwise, manual two-pass filtering (as shown) is straightforward.  
+- **Plain Text vs. HTML**: If your pruned output is mostly text, BM25 can still handle it; just keep in mind it expects a valid string input. If you supply partial HTML (like `"<p>some text</p>"`), it will parse it as HTML.
+- **Chaining in a Single Pipeline**: If your code supports it, you can chain multiple filters automatically. Otherwise, manual two-pass filtering (as shown) is straightforward.
 - **Adjust Thresholds**: If you see too much or too little text in step one, tweak `threshold=0.5` or `min_word_threshold=50`. Similarly, `bm25_threshold=1.2` can be raised/lowered for more or fewer chunks in step two.
 
 ### One-Pass Combination?
@@ -4391,20 +4391,20 @@ If your codebase or pipeline design allows applying multiple filters in one pass
 
 ## 9. Common Pitfalls & Tips
 
-1. **No Markdown Output?**  
-   - Make sure the crawler actually retrieved HTML. If the site is heavily JS-based, you may need to enable dynamic rendering or wait for elements.  
+1. **No Markdown Output?**
+   - Make sure the crawler actually retrieved HTML. If the site is heavily JS-based, you may need to enable dynamic rendering or wait for elements.
    - Check if your content filter is too aggressive. Lower thresholds or disable the filter to see if content reappears.
 
-2. **Performance Considerations**  
-   - Very large pages with multiple filters can be slower. Consider `cache_mode` to avoid re-downloading.  
+2. **Performance Considerations**
+   - Very large pages with multiple filters can be slower. Consider `cache_mode` to avoid re-downloading.
    - If your final use case is LLM ingestion, consider summarizing further or chunking big texts.
 
-3. **Take Advantage of `fit_markdown`**  
-   - Great for RAG pipelines, semantic search, or any scenario where extraneous boilerplate is unwanted.  
+3. **Take Advantage of `fit_markdown`**
+   - Great for RAG pipelines, semantic search, or any scenario where extraneous boilerplate is unwanted.
    - Still verify the textual quality—some sites have crucial data in footers or sidebars.
 
-4. **Adjusting `html2text` Options**  
-   - If you see lots of raw HTML slipping into the text, turn on `escape_html`.  
+4. **Adjusting `html2text` Options**
+   - If you see lots of raw HTML slipping into the text, turn on `escape_html`.
    - If code blocks look messy, experiment with `mark_code` or `handle_code_in_pre`.
 
 ---
@@ -4413,10 +4413,10 @@ If your codebase or pipeline design allows applying multiple filters in one pass
 
 In this **Markdown Generation Basics** tutorial, you learned to:
 
-- Configure the **DefaultMarkdownGenerator** with HTML-to-text options.  
-- Select different HTML sources using the `content_source` parameter.  
-- Use **BM25ContentFilter** for query-specific extraction or **PruningContentFilter** for general noise removal.  
-- Distinguish between raw and filtered markdown (`fit_markdown`).  
+- Configure the **DefaultMarkdownGenerator** with HTML-to-text options.
+- Select different HTML sources using the `content_source` parameter.
+- Use **BM25ContentFilter** for query-specific extraction or **PruningContentFilter** for general noise removal.
+- Distinguish between raw and filtered markdown (`fit_markdown`).
 - Leverage the `MarkdownGenerationResult` object to handle different forms of output (citations, references, etc.).
 
 Now you can produce high-quality Markdown from any website, focusing on exactly the content you need—an essential step for powering AI models, summarization pipelines, or knowledge-base queries.
@@ -4433,10 +4433,10 @@ Now you can produce high-quality Markdown from any website, focusing on exactly 
 
 Crawl4AI provides powerful features for interacting with **dynamic** webpages, handling JavaScript execution, waiting for conditions, and managing multi-step flows. By combining **js_code**, **wait_for**, and certain **CrawlerRunConfig** parameters, you can:
 
-1. Click “Load More” buttons  
-2. Fill forms and submit them  
-3. Wait for elements or data to appear  
-4. Reuse sessions across multiple steps  
+1. Click “Load More” buttons
+2. Fill forms and submit them
+3. Wait for elements or data to appear
+4. Reuse sessions across multiple steps
 
 Below is a quick overview of how to do it.
 
@@ -4446,7 +4446,7 @@ Below is a quick overview of how to do it.
 
 ### Basic Execution
 
-**`js_code`** in **`CrawlerRunConfig`** accepts either a single JS string or a list of JS snippets.  
+**`js_code`** in **`CrawlerRunConfig`** accepts either a single JS string or a list of JS snippets.
 **Example**: We’ll scroll to the bottom of the page, then optionally click a “Load More” button.
 
 ```python
@@ -4470,7 +4470,7 @@ async def main():
     js_commands = [
         "window.scrollTo(0, document.body.scrollHeight);",
         # 'More' link on Hacker News
-        "document.querySelector('a.morelink')?.click();",  
+        "document.querySelector('a.morelink')?.click();",
     ]
     config = CrawlerRunConfig(js_code=js_commands)
 
@@ -4487,7 +4487,7 @@ if __name__ == "__main__":
 
 **Relevant `CrawlerRunConfig` params**:
 - **`js_code`**: A string or list of strings with JavaScript to run after the page loads.
-- **`js_only`**: If set to `True` on subsequent calls, indicates we’re continuing an existing session without a new full navigation.  
+- **`js_only`**: If set to `True` on subsequent calls, indicates we’re continuing an existing session without a new full navigation.
 - **`session_id`**: If you want to keep the same page across multiple calls, specify an ID.
 
 ---
@@ -4505,7 +4505,7 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 async def main():
     config = CrawlerRunConfig(
         # Wait for at least 30 items on Hacker News
-        wait_for="css:.athing:nth-child(30)"  
+        wait_for="css:.athing:nth-child(30)"
     )
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
@@ -4514,7 +4514,7 @@ async def main():
         )
         print("We have at least 30 items loaded!")
         # Rough check
-        print("Total items in HTML:", result.cleaned_html.count("athing"))  
+        print("Total items in HTML:", result.cleaned_html.count("athing"))
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -4566,9 +4566,9 @@ async def main():
         load_more_js = [
             "window.scrollTo(0, document.body.scrollHeight);",
             # The "More" link at page bottom
-            "document.querySelector('a.morelink')?.click();"  
+            "document.querySelector('a.morelink')?.click();"
         ]
-        
+
         next_page_conf = CrawlerRunConfig(
             js_code=load_more_js,
             wait_for="""js:() => {
@@ -4621,8 +4621,8 @@ result = await crawler.arun(url="https://github.com/search", config=config)
 
 ## 4. Timing Control
 
-1. **`page_timeout`** (ms): Overall page load or script execution time limit.  
-2. **`delay_before_return_html`** (seconds): Wait an extra moment before capturing the final HTML.  
+1. **`page_timeout`** (ms): Overall page load or script execution time limit.
+2. **`delay_before_return_html`** (seconds): Wait an extra moment before capturing the final HTML.
 3. **`mean_delay`** & **`max_range`**: If you call `arun_many()` with multiple URLs, these add a random pause between each request.
 
 **Example**:
@@ -4650,7 +4650,7 @@ async def multi_page_commits():
         verbose=True
     )
     session_id = "github_ts_commits"
-    
+
     base_wait = """js:() => {
         const commits = document.querySelectorAll('li.Box-sc-g0xbh4-0 h4');
         return commits.length > 0;
@@ -4677,7 +4677,7 @@ async def multi_page_commits():
         const button = document.querySelector(selector);
         if (button) button.click();
         """
-        
+
         # Wait until new commits appear
         wait_for_more = """js:() => {
             const commits = document.querySelectorAll('li.Box-sc-g0xbh4-0 h4');
@@ -4716,8 +4716,8 @@ if __name__ == "__main__":
 
 **Key Points**:
 
-- **`session_id`**: Keep the same page open.  
-- **`js_code`** + **`wait_for`** + **`js_only=True`**: We do partial refreshes, waiting for new commits to appear.  
+- **`session_id`**: Keep the same page open.
+- **`js_code`** + **`wait_for`** + **`js_only=True`**: We do partial refreshes, waiting for new commits to appear.
 - **`cache_mode=CacheMode.BYPASS`** ensures we always see fresh data each step.
 
 ---
@@ -4752,12 +4752,12 @@ When done, check `result.extracted_content` for the JSON.
 
 Below are the key interaction-related parameters in `CrawlerRunConfig`. For a full list, see [Configuration Parameters](../api/parameters.md).
 
-- **`js_code`**: JavaScript to run after initial load.  
-- **`js_only`**: If `True`, no new page navigation—only JS in the existing session.  
-- **`wait_for`**: CSS (`"css:..."`) or JS (`"js:..."`) expression to wait for.  
-- **`session_id`**: Reuse the same page across calls.  
-- **`cache_mode`**: Whether to read/write from the cache or bypass.  
-- **`remove_overlay_elements`**: Remove certain popups automatically.  
+- **`js_code`**: JavaScript to run after initial load.
+- **`js_only`**: If `True`, no new page navigation—only JS in the existing session.
+- **`wait_for`**: CSS (`"css:..."`) or JS (`"js:..."`) expression to wait for.
+- **`session_id`**: Reuse the same page across calls.
+- **`cache_mode`**: Whether to read/write from the cache or bypass.
+- **`remove_overlay_elements`**: Remove certain popups automatically.
 - **`simulate_user`, `override_navigator`, `magic`**: Anti-bot or “human-like” interactions.
 
 ---
@@ -4766,9 +4766,9 @@ Below are the key interaction-related parameters in `CrawlerRunConfig`. For a fu
 
 Crawl4AI’s **page interaction** features let you:
 
-1. **Execute JavaScript** for scrolling, clicks, or form filling.  
-2. **Wait** for CSS or custom JS conditions before capturing data.  
-3. **Handle** multi-step flows (like “Load More”) with partial reloads or persistent sessions.  
+1. **Execute JavaScript** for scrolling, clicks, or form filling.
+2. **Wait** for CSS or custom JS conditions before capturing data.
+3. **Handle** multi-step flows (like “Load More”) with partial reloads or persistent sessions.
 4. Combine with **structured extraction** for dynamic sites.
 
 With these tools, you can scrape modern, interactive webpages confidently. For advanced hooking, user simulation, or in-depth config, check the [API reference](../api/parameters.md) or related advanced docs. Happy scripting!
@@ -4782,10 +4782,10 @@ With these tools, you can scrape modern, interactive webpages confidently. For a
 
 Welcome to **Crawl4AI**, an open-source LLM-friendly Web Crawler & Scraper. In this tutorial, you’ll:
 
-1. Run your **first crawl** using minimal configuration.  
-2. Generate **Markdown** output (and learn how it’s influenced by content filters).  
-3. Experiment with a simple **CSS-based extraction** strategy.  
-4. See a glimpse of **LLM-based extraction** (including open-source and closed-source model options).  
+1. Run your **first crawl** using minimal configuration.
+2. Generate **Markdown** output (and learn how it’s influenced by content filters).
+3. Experiment with a simple **CSS-based extraction** strategy.
+4. See a glimpse of **LLM-based extraction** (including open-source and closed-source model options).
 5. Crawl a **dynamic** page that loads content via JavaScript.
 
 ---
@@ -4794,9 +4794,9 @@ Welcome to **Crawl4AI**, an open-source LLM-friendly Web Crawler & Scraper. In t
 
 Crawl4AI provides:
 
-- An asynchronous crawler, **`AsyncWebCrawler`**.  
-- Configurable browser and run settings via **`BrowserConfig`** and **`CrawlerRunConfig`**.  
-- Automatic HTML-to-Markdown conversion via **`DefaultMarkdownGenerator`** (supports optional filters).  
+- An asynchronous crawler, **`AsyncWebCrawler`**.
+- Configurable browser and run settings via **`BrowserConfig`** and **`CrawlerRunConfig`**.
+- Automatic HTML-to-Markdown conversion via **`DefaultMarkdownGenerator`** (supports optional filters).
 - Multiple extraction strategies (LLM-based or “traditional” CSS/XPath-based).
 
 By the end of this guide, you’ll have performed a basic crawl, generated Markdown, tried out two extraction strategies, and crawled a dynamic page that uses “Load More” buttons or JavaScript updates.
@@ -4833,7 +4833,7 @@ You now have a simple, working crawl!
 
 Crawl4AI’s crawler can be heavily customized using two main classes:
 
-1. **`BrowserConfig`**: Controls browser behavior (headless or full UI, user agent, JavaScript toggles, etc.).  
+1. **`BrowserConfig`**: Controls browser behavior (headless or full UI, user agent, JavaScript toggles, etc.).
 2. **`CrawlerRunConfig`**: Controls how each crawl runs (caching, extraction, timeouts, hooking, etc.).
 
 Below is an example with minimal usage:
@@ -4869,9 +4869,9 @@ We’ll explore more advanced config in later tutorials (like enabling proxies, 
 
 By default, Crawl4AI automatically generates Markdown from each crawled page. However, the exact output depends on whether you specify a **markdown generator** or **content filter**.
 
-- **`result.markdown`**:  
-  The direct HTML-to-Markdown conversion.  
-- **`result.markdown.fit_markdown`**:  
+- **`result.markdown`**:
+  The direct HTML-to-Markdown conversion.
+- **`result.markdown.fit_markdown`**:
   The same content after applying any configured **content filter** (e.g., `PruningContentFilter`).
 
 ### Example: Using a Filter with `DefaultMarkdownGenerator`
@@ -4980,8 +4980,8 @@ if __name__ == "__main__":
 
 For more complex or irregular pages, a language model can parse text intelligently into a structure you define. Crawl4AI supports **open-source** or **closed-source** providers:
 
-- **Open-Source Models** (e.g., `ollama/llama3.3`, `no_token`)  
-- **OpenAI Models** (e.g., `openai/gpt-4`, requires `api_token`)  
+- **Open-Source Models** (e.g., `ollama/llama3.3`, `no_token`)
+- **OpenAI Models** (e.g., `openai/gpt-4`, requires `api_token`)
 - Or any provider supported by the underlying library
 
 Below is an example using **open-source** style (no token) and closed-source:
@@ -5024,7 +5024,7 @@ async def extract_structured_data_using_llm(
             llm_config = LLMConfig(provider=provider,api_token=api_token),
             schema=OpenAIModelFee.model_json_schema(),
             extraction_type="schema",
-            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens. 
+            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens.
             Do not miss any models in the entire content.""",
             extra_args=extra_args,
         ),
@@ -5066,7 +5066,7 @@ async def quick_parallel_example():
         "https://example.com/page2",
         "https://example.com/page3"
     ]
-    
+
     run_conf = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         stream=True  # Enable streaming mode
@@ -5182,10 +5182,10 @@ if __name__ == "__main__":
 
 **Key Points**:
 
-- **`BrowserConfig(headless=False)`**: We want to watch it click “Next Page.”  
-- **`CrawlerRunConfig(...)`**: We specify the extraction strategy, pass `session_id` to reuse the same page.  
-- **`js_code`** and **`wait_for`** are used for subsequent pages (`page > 0`) to click the “Next” button and wait for new commits to load.  
-- **`js_only=True`** indicates we’re not re-navigating but continuing the existing session.  
+- **`BrowserConfig(headless=False)`**: We want to watch it click “Next Page.”
+- **`CrawlerRunConfig(...)`**: We specify the extraction strategy, pass `session_id` to reuse the same page.
+- **`js_code`** and **`wait_for`** are used for subsequent pages (`page > 0`) to click the “Next” button and wait for new commits to load.
+- **`js_only=True`** indicates we’re not re-navigating but continuing the existing session.
 - Finally, we call `kill_session()` to clean up the page and browser session.
 
 ---
@@ -5194,17 +5194,17 @@ if __name__ == "__main__":
 
 Congratulations! You have:
 
-1. Performed a basic crawl and printed Markdown.  
-2. Used **content filters** with a markdown generator.  
-3. Extracted JSON via **CSS** or **LLM** strategies.  
+1. Performed a basic crawl and printed Markdown.
+2. Used **content filters** with a markdown generator.
+3. Extracted JSON via **CSS** or **LLM** strategies.
 4. Handled **dynamic** pages with JavaScript triggers.
 
 If you’re ready for more, check out:
 
-- **Installation**: A deeper dive into advanced installs, Docker usage (experimental), or optional dependencies.  
-- **Hooks & Auth**: Learn how to run custom JavaScript or handle logins with cookies, local storage, etc.  
-- **Deployment**: Explore ephemeral testing in Docker or plan for the upcoming stable Docker release.  
-- **Browser Management**: Delve into user simulation, stealth modes, and concurrency best practices.  
+- **Installation**: A deeper dive into advanced installs, Docker usage (experimental), or optional dependencies.
+- **Hooks & Auth**: Learn how to run custom JavaScript or handle logins with cookies, local storage, etc.
+- **Deployment**: Explore ephemeral testing in Docker or plan for the upcoming stable Docker release.
+- **Browser Management**: Delve into user simulation, stealth modes, and concurrency best practices.
 
 Crawl4AI is a powerful, flexible tool. Enjoy building out your scrapers, data pipelines, or AI-driven extraction flows. Happy crawling!
 ```
@@ -5325,11 +5325,11 @@ async def main():
         word_count_threshold=10,
         excluded_tags=['form', 'header'],
         exclude_external_links=True,
-        
+
         # Content processing
         process_iframes=True,
         remove_overlay_elements=True,
-        
+
         # Cache control
         cache_mode=CacheMode.ENABLED  # Use cache if available
     )
@@ -5339,19 +5339,19 @@ async def main():
             url="https://example.com",
             config=run_config
         )
-        
+
         if result.success:
             # Print clean content
             print("Content:", result.markdown[:500])  # First 500 chars
-            
+
             # Process images
             for image in result.media["images"]:
                 print(f"Found image: {image['src']}")
-            
+
             # Process links
             for link in result.links["internal"]:
                 print(f"Internal link: {link['href']}")
-                
+
         else:
             print(f"Crawl failed: {result.error_message}")
 
@@ -5365,20 +5365,20 @@ if __name__ == "__main__":
 ## File: docs/md_v2/advanced/advanced-features.md
 
 ```md
-# Overview of Some Important Advanced Features 
+# Overview of Some Important Advanced Features
 (Proxy, PDF, Screenshot, SSL, Headers, & Storage State)
 
 Crawl4AI offers multiple power-user features that go beyond simple crawling. This tutorial covers:
 
-1. **Proxy Usage**  
-2. **Capturing PDFs & Screenshots**  
-3. **Handling SSL Certificates**  
-4. **Custom Headers**  
-5. **Session Persistence & Local Storage**  
-6. **Robots.txt Compliance**  
+1. **Proxy Usage**
+2. **Capturing PDFs & Screenshots**
+3. **Handling SSL Certificates**
+4. **Custom Headers**
+5. **Session Persistence & Local Storage**
+6. **Robots.txt Compliance**
 
-> **Prerequisites**  
-> - You have a basic grasp of [AsyncWebCrawler Basics](../core/simple-crawling.md)  
+> **Prerequisites**
+> - You have a basic grasp of [AsyncWebCrawler Basics](../core/simple-crawling.md)
 > - You know how to run or configure your Python environment with Playwright installed
 
 ---
@@ -5419,9 +5419,9 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Key Points**  
-- **`proxy_config`** expects a dict with `server` and optional auth credentials.  
-- Many commercial proxies provide an HTTP/HTTPS “gateway” server that you specify in `server`.  
+**Key Points**
+- **`proxy_config`** expects a dict with `server` and optional auth credentials.
+- Many commercial proxies provide an HTTP/HTTPS “gateway” server that you specify in `server`.
 - If your proxy doesn’t need auth, omit `username`/`password`.
 
 ---
@@ -5472,13 +5472,13 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Why PDF + Screenshot?**  
-- Large or complex pages can be slow or error-prone with “traditional” full-page screenshots.  
-- Exporting a PDF is more reliable for very long pages. Crawl4AI automatically converts the first PDF page into an image if you request both.  
+**Why PDF + Screenshot?**
+- Large or complex pages can be slow or error-prone with “traditional” full-page screenshots.
+- Exporting a PDF is more reliable for very long pages. Crawl4AI automatically converts the first PDF page into an image if you request both.
 
-**Relevant Parameters**  
-- **`pdf=True`**: Exports the current page as a PDF (base64-encoded in `result.pdf`).  
-- **`screenshot=True`**: Creates a screenshot (base64-encoded in `result.screenshot`).  
+**Relevant Parameters**
+- **`pdf=True`**: Exports the current page as a PDF (base64-encoded in `result.pdf`).
+- **`screenshot=True`**: Creates a screenshot (base64-encoded in `result.screenshot`).
 - **`scan_full_page`** or advanced hooking can further refine how the crawler captures content.
 
 ---
@@ -5494,7 +5494,7 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 async def main():
     tmp_dir = os.path.join(os.getcwd(), "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
-    
+
     config = CrawlerRunConfig(
         fetch_ssl_certificate=True,
         cache_mode=CacheMode.BYPASS
@@ -5502,7 +5502,7 @@ async def main():
 
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url="https://example.com", config=config)
-        
+
         if result.success and result.ssl_certificate:
             cert = result.ssl_certificate
             print("\nCertificate Information:")
@@ -5514,7 +5514,7 @@ async def main():
             cert.to_json(os.path.join(tmp_dir, "certificate.json"))
             cert.to_pem(os.path.join(tmp_dir, "certificate.pem"))
             cert.to_der(os.path.join(tmp_dir, "certificate.der"))
-            
+
             print("\nCertificate exported to JSON/PEM/DER in 'tmp' folder.")
         else:
             print("[ERROR] No certificate or crawl failed.")
@@ -5523,8 +5523,8 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Key Points**  
-- **`fetch_ssl_certificate=True`** triggers certificate retrieval.  
+**Key Points**
+- **`fetch_ssl_certificate=True`** triggers certificate retrieval.
 - `result.ssl_certificate` includes methods (`to_json`, `to_pem`, `to_der`) for saving in various formats (handy for server config, Java keystores, etc.).
 
 ---
@@ -5562,8 +5562,8 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Notes**  
-- Some sites may react differently to certain headers (e.g., `Accept-Language`).  
+**Notes**
+- Some sites may react differently to certain headers (e.g., `Accept-Language`).
 - If you need advanced user-agent randomization or client hints, see [Identity-Based Crawling (Anti-Bot)](./identity-based-crawling.md) or use `UserAgentGenerator`.
 
 ---
@@ -5621,7 +5621,7 @@ if __name__ == "__main__":
 
 You can sign in once, export the browser context, and reuse it later—without re-entering credentials.
 
-- **`await context.storage_state(path="my_storage.json")`**: Exports cookies, localStorage, etc. to a file.  
+- **`await context.storage_state(path="my_storage.json")`**: Exports cookies, localStorage, etc. to a file.
 - Provide `storage_state="my_storage.json"` on subsequent runs to skip the login step.
 
 **See**: [Detailed session management tutorial](./session-management.md) or [Explanations → Browser Context & Managed Browser](./identity-based-crawling.md) for more advanced scenarios (like multi-step logins, or capturing after interactive pages).
@@ -5647,7 +5647,7 @@ async def main():
             "https://example.com",
             config=config
         )
-        
+
         if not result.success and result.status_code == 403:
             print("Access denied by robots.txt")
 
@@ -5698,13 +5698,13 @@ async def main():
     # 3. Crawl
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         result = await crawler.arun(
-            url = "https://secure.example.com/protected", 
+            url = "https://secure.example.com/protected",
             config=crawler_cfg
         )
-        
+
         if result.success:
             print("[OK] Crawled the secure page. Links found:", len(result.links.get("internal", [])))
-            
+
             # Save PDF & screenshot
             if result.pdf:
                 with open("result.pdf", "wb") as f:
@@ -5712,7 +5712,7 @@ async def main():
             if result.screenshot:
                 with open("result.png", "wb") as f:
                     f.write(b64decode(result.screenshot))
-            
+
             # Check SSL cert
             if result.ssl_certificate:
                 print("SSL Issuer CN:", result.ssl_certificate.issuer.get("CN", ""))
@@ -5729,10 +5729,10 @@ if __name__ == "__main__":
 
 You’ve now explored several **advanced** features:
 
-- **Proxy Usage**  
-- **PDF & Screenshot** capturing for large or critical pages  
-- **SSL Certificate** retrieval & exporting  
-- **Custom Headers** for language or specialized requests  
+- **Proxy Usage**
+- **PDF & Screenshot** capturing for large or critical pages
+- **SSL Certificate** retrieval & exporting
+- **Custom Headers** for language or specialized requests
 - **Session Persistence** via storage state
 - **Robots.txt Compliance**
 
@@ -5852,7 +5852,7 @@ async def download_multiple_files(url: str, download_path: str):
                 for (const link of downloadLinks) {
                     link.click();
                     // Delay between clicks
-                    await new Promise(r => setTimeout(r, 2000));  
+                    await new Promise(r => setTimeout(r, 2000));
                 }
             """,
             wait_for=10  # Wait for all downloads to start
@@ -5891,19 +5891,19 @@ This revised guide ensures consistency with the `Crawl4AI` codebase by using `Br
 
 Crawl4AI’s **hooks** let you customize the crawler at specific points in the pipeline:
 
-1. **`on_browser_created`** – After browser creation.  
-2. **`on_page_context_created`** – After a new context & page are created.  
-3. **`before_goto`** – Just before navigating to a page.  
-4. **`after_goto`** – Right after navigation completes.  
-5. **`on_user_agent_updated`** – Whenever the user agent changes.  
-6. **`on_execution_started`** – Once custom JavaScript execution begins.  
-7. **`before_retrieve_html`** – Just before the crawler retrieves final HTML.  
+1. **`on_browser_created`** – After browser creation.
+2. **`on_page_context_created`** – After a new context & page are created.
+3. **`before_goto`** – Just before navigating to a page.
+4. **`after_goto`** – Right after navigation completes.
+5. **`on_user_agent_updated`** – Whenever the user agent changes.
+6. **`on_execution_started`** – Once custom JavaScript execution begins.
+7. **`before_retrieve_html`** – Just before the crawler retrieves final HTML.
 8. **`before_return_html`** – Right before returning the HTML content.
 
 **Important**: Avoid heavy tasks in `on_browser_created` since you don’t yet have a page context. If you need to *log in*, do so in **`on_page_context_created`**.
 
 > note "Important Hook Usage Warning"
-    **Avoid Misusing Hooks**: Do not manipulate page objects in the wrong hook or at the wrong time, as it can crash the pipeline or produce incorrect results. A common mistake is attempting to handle authentication prematurely—such as creating or closing pages in `on_browser_created`. 
+    **Avoid Misusing Hooks**: Do not manipulate page objects in the wrong hook or at the wrong time, as it can crash the pipeline or produce incorrect results. A common mistake is attempting to handle authentication prematurely—such as creating or closing pages in `on_browser_created`.
 
 >   **Use the Right Hook for Auth**: If you need to log in or set tokens, use `on_page_context_created`. This ensures you have a valid page/context to work with, without disrupting the main crawling flow.
 
@@ -5956,7 +5956,7 @@ async def main():
     async def on_page_context_created(page: Page, context: BrowserContext, **kwargs):
         # Called right after a new page + context are created (ideal for auth or route config).
         print("[HOOK] on_page_context_created - Setting up page & context.")
-        
+
         # Example 1: Route filtering (e.g., block images)
         async def route_filter(route):
             if route.request.resource_type == "image":
@@ -5993,7 +5993,7 @@ async def main():
         return page
 
     async def after_goto(
-        page: Page, context: BrowserContext, 
+        page: Page, context: BrowserContext,
         url: str, response, **kwargs
     ):
         # Called after navigation completes.
@@ -6007,7 +6007,7 @@ async def main():
         return page
 
     async def on_user_agent_updated(
-        page: Page, context: BrowserContext, 
+        page: Page, context: BrowserContext,
         user_agent: str, **kwargs
     ):
         # Called whenever the user agent updates.
@@ -6061,7 +6061,7 @@ async def main():
     # 4) Run the crawler on an example page
     url = "https://example.com"
     result = await crawler.arun(url, config=crawler_run_config)
-    
+
     if result.success:
         print("\nCrawled URL:", result.url)
         print("HTML length:", len(result.html))
@@ -6078,30 +6078,30 @@ if __name__ == "__main__":
 
 ## Hook Lifecycle Summary
 
-1. **`on_browser_created`**:  
-   - Browser is up, but **no** pages or contexts yet.  
+1. **`on_browser_created`**:
+   - Browser is up, but **no** pages or contexts yet.
    - Light setup only—don’t try to open or close pages here (that belongs in `on_page_context_created`).
 
-2. **`on_page_context_created`**:  
-   - Perfect for advanced **auth** or route blocking.  
+2. **`on_page_context_created`**:
+   - Perfect for advanced **auth** or route blocking.
    - You have a **page** + **context** ready but haven’t navigated to the target URL yet.
 
-3. **`before_goto`**:  
+3. **`before_goto`**:
    - Right before navigation. Typically used for setting **custom headers** or logging the target URL.
 
-4. **`after_goto`**:  
-   - After page navigation is done. Good place for verifying content or waiting on essential elements. 
+4. **`after_goto`**:
+   - After page navigation is done. Good place for verifying content or waiting on essential elements.
 
-5. **`on_user_agent_updated`**:  
+5. **`on_user_agent_updated`**:
    - Whenever the user agent changes (for stealth or different UA modes).
 
-6. **`on_execution_started`**:  
+6. **`on_execution_started`**:
    - If you set `js_code` or run custom scripts, this runs once your JS is about to start.
 
-7. **`before_retrieve_html`**:  
+7. **`before_retrieve_html`**:
    - Just before the final HTML snapshot is taken. Often you do a final scroll or lazy-load triggers here.
 
-8. **`before_return_html`**:  
+8. **`before_return_html`**:
    - The last hook before returning HTML to the `CrawlResult`. Good for logging HTML length or minor modifications.
 
 ---
@@ -6120,9 +6120,9 @@ This ensures the newly created context is under your control **before** `arun()`
 
 ## Additional Considerations
 
-- **Session Management**: If you want multiple `arun()` calls to reuse a single session, pass `session_id=` in your `CrawlerRunConfig`. Hooks remain the same.  
-- **Performance**: Hooks can slow down crawling if they do heavy tasks. Keep them concise.  
-- **Error Handling**: If a hook fails, the overall crawl might fail. Catch exceptions or handle them gracefully.  
+- **Session Management**: If you want multiple `arun()` calls to reuse a single session, pass `session_id=` in your `CrawlerRunConfig`. Hooks remain the same.
+- **Performance**: Hooks can slow down crawling if they do heavy tasks. Keep them concise.
+- **Error Handling**: If a hook fails, the overall crawl might fail. Catch exceptions or handle them gracefully.
 - **Concurrency**: If you run `arun_many()`, each URL triggers these hooks in parallel. Ensure your hooks are thread/async-safe.
 
 ---
@@ -6137,8 +6137,8 @@ Hooks provide **fine-grained** control over:
 - **Final HTML** retrieval
 
 Follow the recommended usage:
-- **Login** or advanced tasks in `on_page_context_created`  
-- **Custom headers** or logs in `before_goto` / `after_goto`  
+- **Login** or advanced tasks in `on_page_context_created`
+- **Custom headers** or logs in `before_goto` / `after_goto`
 - **Scrolling** or final checks in `before_retrieve_html` / `before_return_html`
 
 
@@ -6152,7 +6152,7 @@ Follow the recommended usage:
 
 Crawl4AI empowers you to navigate and interact with the web using your **authentic digital identity**, ensuring you’re recognized as a human and not mistaken for a bot. This tutorial covers:
 
-1. **Managed Browsers** – The recommended approach for persistent profiles and identity-based crawling.  
+1. **Managed Browsers** – The recommended approach for persistent profiles and identity-based crawling.
 2. **Magic Mode** – A simplified fallback solution for quick automation without persistent identity.
 
 ---
@@ -6163,8 +6163,8 @@ Crawl4AI empowers you to navigate and interact with the web using your **authent
 
 ### Key Benefits
 
-- **Authentic Browsing Experience**: Retain session data and browser fingerprints as though you’re a normal user.  
-- **Effortless Configuration**: Once you log in or solve CAPTCHAs in your chosen data directory, you can re-run crawls without repeating those steps.  
+- **Authentic Browsing Experience**: Retain session data and browser fingerprints as though you’re a normal user.
+- **Effortless Configuration**: Once you log in or solve CAPTCHAs in your chosen data directory, you can re-run crawls without repeating those steps.
 - **Empowered Data Access**: If you can see the data in your own browser, you can automate its retrieval with your genuine identity.
 
 ---
@@ -6178,7 +6178,7 @@ Below is a **partial update** to your **Managed Browsers** tutorial, specificall
 If you installed Crawl4AI (which installs Playwright under the hood), you already have a Playwright-managed Chromium on your system. Follow these steps to launch that **Chromium** from your command line, specifying a **custom** data directory:
 
 1. **Find** the Playwright Chromium binary:
-   - On most systems, installed browsers go under a `~/.cache/ms-playwright/` folder or similar path.  
+   - On most systems, installed browsers go under a `~/.cache/ms-playwright/` folder or similar path.
    - To see an overview of installed browsers, run:
      ```bash
      python -m playwright install --dry-run
@@ -6211,10 +6211,10 @@ If you installed Crawl4AI (which installs Playwright under the hood), you alread
    "C:\Users\<you>\AppData\Local\ms-playwright\chromium-1234\chrome-win\chrome.exe" ^
        --user-data-dir="C:\Users\<you>\my_chrome_profile"
    ```
-   
-   **Replace** the path with the actual subfolder indicated in your `ms-playwright` cache structure.  
-   - This **opens** a fresh Chromium with your new or existing data folder.  
-   - **Log into** any sites or configure your browser the way you want.  
+
+   **Replace** the path with the actual subfolder indicated in your `ms-playwright` cache structure.
+   - This **opens** a fresh Chromium with your new or existing data folder.
+   - **Log into** any sites or configure your browser the way you want.
    - **Close** when done—your profile data is saved in that folder.
 
 3. **Use** that folder in **`BrowserConfig.user_data_dir`**:
@@ -6268,9 +6268,9 @@ if __name__ == "__main__":
 
 ### Workflow
 
-1. **Login** externally (via CLI or your normal Chrome with `--user-data-dir=...`).  
-2. **Close** that browser.  
-3. **Use** the same folder in `user_data_dir=` in Crawl4AI.  
+1. **Login** externally (via CLI or your normal Chrome with `--user-data-dir=...`).
+2. **Close** that browser.
+3. **Use** the same folder in `user_data_dir=` in Crawl4AI.
 4. **Crawl** – The site sees your identity as if you’re the same user who just logged in.
 
 ---
@@ -6295,11 +6295,11 @@ async with AsyncWebCrawler() as crawler:
 
 **Magic Mode**:
 
-- Simulates a user-like experience  
+- Simulates a user-like experience
 - Randomizes user agent & navigator
-- Randomizes interactions & timings  
-- Masks automation signals  
-- Attempts pop-up handling  
+- Randomizes interactions & timings
+- Masks automation signals
+- Attempts pop-up handling
 
 **But** it’s no substitute for **true** user-based sessions if you want a fully legitimate identity-based solution.
 
@@ -6332,29 +6332,29 @@ from crawl4ai import BrowserProfiler
 async def manage_profiles():
     # Create a profiler instance
     profiler = BrowserProfiler()
-    
+
     # Create a profile interactively - opens a browser window
     profile_path = await profiler.create_profile(
         profile_name="my-login-profile"  # Optional: name your profile
     )
-    
+
     print(f"Profile saved at: {profile_path}")
-    
+
     # List all available profiles
     profiles = profiler.list_profiles()
-    
+
     for profile in profiles:
         print(f"Profile: {profile['name']}")
         print(f"  Path: {profile['path']}")
         print(f"  Created: {profile['created']}")
         print(f"  Browser type: {profile['type']}")
-    
+
     # Get a specific profile path by name
     specific_profile = profiler.get_profile_path("my-login-profile")
-    
+
     # Delete a profile when no longer needed
     success = profiler.delete_profile("old-profile-name")
-    
+
 asyncio.run(manage_profiles())
 ```
 
@@ -6380,7 +6380,7 @@ async def crawl_with_profile(profile_path, url):
         use_managed_browser=True,
         user_data_dir=profile_path
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(url)
         return result
@@ -6388,11 +6388,11 @@ async def crawl_with_profile(profile_path, url):
 async def main():
     # Create a profiler instance
     profiler = BrowserProfiler()
-    
+
     # Launch the interactive profile manager
     # Passing the crawl function as a callback adds a "crawl with profile" option
     await profiler.interactive_manager(crawl_callback=crawl_with_profile)
-    
+
 asyncio.run(main())
 ```
 
@@ -6416,7 +6416,7 @@ See the full example in `docs/examples/identity_based_browsing.py` for a complet
 ## 7. Summary
 
 - **Create** your user-data directory either:
-  - By launching Chrome/Chromium externally with `--user-data-dir=/some/path` 
+  - By launching Chrome/Chromium externally with `--user-data-dir=/some/path`
   - Or by using the built-in `BrowserProfiler.create_profile()` method
   - Or through the interactive interface with `profiler.interactive_manager()`
 - **Log in** or configure sites as needed, then close the browser
@@ -6439,9 +6439,9 @@ With these approaches, you preserve your **authentic** browsing environment, ens
 
 Many websites now load images **lazily** as you scroll. If you need to ensure they appear in your final crawl (and in `result.media`), consider:
 
-1. **`wait_for_images=True`** – Wait for images to fully load.  
-2. **`scan_full_page`** – Force the crawler to scroll the entire page, triggering lazy loads.  
-3. **`scroll_delay`** – Add small delays between scroll steps.  
+1. **`wait_for_images=True`** – Wait for images to fully load.
+2. **`scan_full_page`** – Force the crawler to scroll the entire page, triggering lazy loads.
+3. **`scroll_delay`** – Add small delays between scroll steps.
 
 **Note**: If the site requires multiple “Load More” triggers or complex interactions, see the [Page Interaction docs](../core/page-interaction.md).
 
@@ -6470,7 +6470,7 @@ async def main():
 
     async with AsyncWebCrawler(config=BrowserConfig(headless=True)) as crawler:
         result = await crawler.arun("https://www.example.com/gallery", config=config)
-        
+
         if result.success:
             images = result.media.get("images", [])
             print("Images found:", len(images))
@@ -6485,16 +6485,16 @@ if __name__ == "__main__":
 
 **Explanation**:
 
-- **`wait_for_images=True`**  
-  The crawler tries to ensure images have finished loading before finalizing the HTML.  
-- **`scan_full_page=True`**  
-  Tells the crawler to attempt scrolling from top to bottom. Each scroll step helps trigger lazy loading.  
-- **`scroll_delay=0.5`**  
+- **`wait_for_images=True`**
+  The crawler tries to ensure images have finished loading before finalizing the HTML.
+- **`scan_full_page=True`**
+  Tells the crawler to attempt scrolling from top to bottom. Each scroll step helps trigger lazy loading.
+- **`scroll_delay=0.5`**
   Pause half a second between each scroll step. Helps the site load images before continuing.
 
 **When to Use**:
 
-- **Lazy-Loading**: If images appear only when the user scrolls into view, `scan_full_page` + `scroll_delay` helps the crawler see them.  
+- **Lazy-Loading**: If images appear only when the user scrolls into view, `scan_full_page` + `scroll_delay` helps the crawler see them.
 - **Heavier Pages**: If a page is extremely long, be mindful that scanning the entire page can be slow. Adjust `scroll_delay` or the max scroll steps as needed.
 
 ---
@@ -6523,17 +6523,17 @@ This approach ensures you see **all** images from the main domain while ignoring
 
 ## Tips & Troubleshooting
 
-1. **Long Pages**  
-   - Setting `scan_full_page=True` on extremely long or infinite-scroll pages can be resource-intensive.  
+1. **Long Pages**
+   - Setting `scan_full_page=True` on extremely long or infinite-scroll pages can be resource-intensive.
    - Consider using [hooks](../core/page-interaction.md) or specialized logic to load specific sections or “Load More” triggers repeatedly.
 
-2. **Mixed Image Behavior**  
+2. **Mixed Image Behavior**
    - Some sites load images in batches as you scroll. If you’re missing images, increase your `scroll_delay` or call multiple partial scrolls in a loop with JS code or hooks.
 
-3. **Combining with Dynamic Wait**  
+3. **Combining with Dynamic Wait**
    - If the site has a placeholder that only changes to a real image after a certain event, you might do `wait_for="css:img.loaded"` or a custom JS `wait_for`.
 
-4. **Caching**  
+4. **Caching**
    - If `cache_mode` is enabled, repeated crawls might skip some network fetches. If you suspect caching is missing new images, set `cache_mode=CacheMode.BYPASS` for fresh fetches.
 
 ---
@@ -6557,7 +6557,7 @@ When crawling many URLs:
 - **Better**: Use `arun_many()`, which efficiently handles multiple URLs with proper concurrency control
 - **Best**: Customize dispatcher behavior for your specific needs (memory management, rate limits, etc.)
 
-**Why Dispatchers?**  
+**Why Dispatchers?**
 
 - **Adaptive**: Memory-based dispatchers can pause or slow down based on system resources
 - **Rate-limiting**: Built-in rate limiting with exponential backoff for 429/503 responses
@@ -6574,16 +6574,16 @@ When crawling many URLs:
 class RateLimiter:
     def __init__(
         # Random delay range between requests
-        base_delay: Tuple[float, float] = (1.0, 3.0),  
-        
+        base_delay: Tuple[float, float] = (1.0, 3.0),
+
         # Maximum backoff delay
-        max_delay: float = 60.0,                        
-        
+        max_delay: float = 60.0,
+
         # Retries before giving up
-        max_retries: int = 3,                          
-        
+        max_retries: int = 3,
+
         # Status codes triggering backoff
-        rate_limit_codes: List[int] = [429, 503]        
+        rate_limit_codes: List[int] = [429, 503]
     )
 ```
 
@@ -6595,46 +6595,46 @@ The **RateLimiter** is a utility that helps manage the pace of requests to avoid
 
 **Parameters of the `RateLimiter` constructor:**
 
-1. **`base_delay`** (`Tuple[float, float]`, default: `(1.0, 3.0)`)  
+1. **`base_delay`** (`Tuple[float, float]`, default: `(1.0, 3.0)`)
   The range for a random delay (in seconds) between consecutive requests to the same domain.
 
-- A random delay is chosen between `base_delay[0]` and `base_delay[1]` for each request.  
+- A random delay is chosen between `base_delay[0]` and `base_delay[1]` for each request.
 - This prevents sending requests at a predictable frequency, reducing the chances of triggering rate limits.
 
-**Example:**  
+**Example:**
 If `base_delay = (2.0, 5.0)`, delays could be randomly chosen as `2.3s`, `4.1s`, etc.
 
 ---
 
-2. **`max_delay`** (`float`, default: `60.0`)  
+2. **`max_delay`** (`float`, default: `60.0`)
   The maximum allowable delay when rate-limiting errors occur.
 
-- When servers return rate-limit responses (e.g., 429 or 503), the delay increases exponentially with jitter.  
+- When servers return rate-limit responses (e.g., 429 or 503), the delay increases exponentially with jitter.
 - The `max_delay` ensures the delay doesn’t grow unreasonably high, capping it at this value.
 
-**Example:**  
+**Example:**
 For a `max_delay = 30.0`, even if backoff calculations suggest a delay of `45s`, it will cap at `30s`.
 
 ---
 
-3. **`max_retries`** (`int`, default: `3`)  
+3. **`max_retries`** (`int`, default: `3`)
   The maximum number of retries for a request if rate-limiting errors occur.
 
-- After encountering a rate-limit response, the `RateLimiter` retries the request up to this number of times.  
+- After encountering a rate-limit response, the `RateLimiter` retries the request up to this number of times.
 - If all retries fail, the request is marked as failed, and the process continues.
 
-**Example:**  
+**Example:**
 If `max_retries = 3`, the system retries a failed request three times before giving up.
 
 ---
 
-4. **`rate_limit_codes`** (`List[int]`, default: `[429, 503]`)  
+4. **`rate_limit_codes`** (`List[int]`, default: `[429, 503]`)
   A list of HTTP status codes that trigger the rate-limiting logic.
 
-- These status codes indicate the server is overwhelmed or actively limiting requests.  
+- These status codes indicate the server is overwhelmed or actively limiting requests.
 - You can customize this list to include other codes based on specific server behavior.
 
-**Example:**  
+**Example:**
 If `rate_limit_codes = [429, 503, 504]`, the crawler will back off on these three error codes.
 
 ---
@@ -6669,10 +6669,10 @@ The CrawlerMonitor provides real-time visibility into crawling operations:
 from crawl4ai import CrawlerMonitor, DisplayMode
 monitor = CrawlerMonitor(
     # Maximum rows in live display
-    max_visible_rows=15,          
+    max_visible_rows=15,
 
     # DETAILED or AGGREGATED view
-    display_mode=DisplayMode.DETAILED  
+    display_mode=DisplayMode.DETAILED
 )
 ```
 
@@ -6710,22 +6710,22 @@ dispatcher = MemoryAdaptiveDispatcher(
 
 **Constructor Parameters:**
 
-1. **`memory_threshold_percent`** (`float`, default: `90.0`)  
+1. **`memory_threshold_percent`** (`float`, default: `90.0`)
   Specifies the memory usage threshold (as a percentage). If system memory usage exceeds this value, the dispatcher pauses crawling to prevent system overload.
 
-2. **`check_interval`** (`float`, default: `1.0`)  
+2. **`check_interval`** (`float`, default: `1.0`)
   The interval (in seconds) at which the dispatcher checks system memory usage.
 
-3. **`max_session_permit`** (`int`, default: `10`)  
+3. **`max_session_permit`** (`int`, default: `10`)
   The maximum number of concurrent crawling tasks allowed. This ensures resource limits are respected while maintaining concurrency.
 
 4. **`memory_wait_timeout`** (`float`, default: `600.0`)
   Optional timeout (in seconds). If memory usage exceeds `memory_threshold_percent` for longer than this duration, a `MemoryError` is raised.
 
-5. **`rate_limiter`** (`RateLimiter`, default: `None`)  
+5. **`rate_limiter`** (`RateLimiter`, default: `None`)
   Optional rate-limiting logic to avoid server-side blocking (e.g., for handling 429 or 503 errors). See **RateLimiter** for details.
 
-6. **`monitor`** (`CrawlerMonitor`, default: `None`)  
+6. **`monitor`** (`CrawlerMonitor`, default: `None`)
   Optional monitoring for real-time task tracking and performance insights. See **CrawlerMonitor** for details.
 
 ---
@@ -6752,13 +6752,13 @@ dispatcher = SemaphoreDispatcher(
 
 **Constructor Parameters:**
 
-1. **`max_session_permit`** (`int`, default: `20`)  
+1. **`max_session_permit`** (`int`, default: `20`)
   The maximum number of concurrent crawling tasks allowed, irrespective of semaphore slots.
 
-2. **`rate_limiter`** (`RateLimiter`, default: `None`)  
+2. **`rate_limiter`** (`RateLimiter`, default: `None`)
   Optional rate-limiting logic to avoid overwhelming servers. See **RateLimiter** for details.
 
-3. **`monitor`** (`CrawlerMonitor`, default: `None`)  
+3. **`monitor`** (`CrawlerMonitor`, default: `None`)
   Optional monitoring for tracking task progress and resource usage. See **CrawlerMonitor** for details.
 
 ---
@@ -6774,7 +6774,7 @@ async def crawl_batch():
         cache_mode=CacheMode.BYPASS,
         stream=False  # Default: get all results at once
     )
-    
+
     dispatcher = MemoryAdaptiveDispatcher(
         memory_threshold_percent=70.0,
         check_interval=1.0,
@@ -6791,7 +6791,7 @@ async def crawl_batch():
             config=run_config,
             dispatcher=dispatcher
         )
-        
+
         # Process all results after completion
         for result in results:
             if result.success:
@@ -6800,10 +6800,10 @@ async def crawl_batch():
                 print(f"Failed to crawl {result.url}: {result.error_message}")
 ```
 
-**Review:**  
-- **Purpose:** Executes a batch crawl with all URLs processed together after crawling is complete.  
-- **Dispatcher:** Uses `MemoryAdaptiveDispatcher` to manage concurrency and system memory.  
-- **Stream:** Disabled (`stream=False`), so all results are collected at once for post-processing.  
+**Review:**
+- **Purpose:** Executes a batch crawl with all URLs processed together after crawling is complete.
+- **Dispatcher:** Uses `MemoryAdaptiveDispatcher` to manage concurrency and system memory.
+- **Stream:** Disabled (`stream=False`), so all results are collected at once for post-processing.
 - **Best Use Case:** When you need to analyze results in bulk rather than individually during the crawl.
 
 ---
@@ -6817,7 +6817,7 @@ async def crawl_streaming():
         cache_mode=CacheMode.BYPASS,
         stream=True  # Enable streaming mode
     )
-    
+
     dispatcher = MemoryAdaptiveDispatcher(
         memory_threshold_percent=70.0,
         check_interval=1.0,
@@ -6841,10 +6841,10 @@ async def crawl_streaming():
                 print(f"Failed to crawl {result.url}: {result.error_message}")
 ```
 
-**Review:**  
-- **Purpose:** Enables streaming to process results as soon as they’re available.  
-- **Dispatcher:** Uses `MemoryAdaptiveDispatcher` for concurrency and memory management.  
-- **Stream:** Enabled (`stream=True`), allowing real-time processing during crawling.  
+**Review:**
+- **Purpose:** Enables streaming to process results as soon as they’re available.
+- **Dispatcher:** Uses `MemoryAdaptiveDispatcher` for concurrency and memory management.
+- **Stream:** Enabled (`stream=True`), allowing real-time processing during crawling.
 - **Best Use Case:** When you need to act on results immediately, such as for real-time analytics or progressive data storage.
 
 ---
@@ -6855,7 +6855,7 @@ async def crawl_streaming():
 async def crawl_with_semaphore(urls):
     browser_config = BrowserConfig(headless=True, verbose=False)
     run_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
-    
+
     dispatcher = SemaphoreDispatcher(
         semaphore_count=5,
         rate_limiter=RateLimiter(
@@ -6867,20 +6867,20 @@ async def crawl_with_semaphore(urls):
             display_mode=DisplayMode.DETAILED
         )
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         results = await crawler.arun_many(
-            urls, 
+            urls,
             config=run_config,
             dispatcher=dispatcher
         )
         return results
 ```
 
-**Review:**  
-- **Purpose:** Uses `SemaphoreDispatcher` to limit concurrency with a fixed number of slots.  
-- **Dispatcher:** Configured with a semaphore to control parallel crawling tasks.  
-- **Rate Limiter:** Prevents servers from being overwhelmed by pacing requests.  
+**Review:**
+- **Purpose:** Uses `SemaphoreDispatcher` to limit concurrency with a fixed number of slots.
+- **Dispatcher:** Configured with a semaphore to control parallel crawling tasks.
+- **Rate Limiter:** Prevents servers from being overwhelmed by pacing requests.
 - **Best Use Case:** When you want precise control over the number of concurrent requests, independent of system memory.
 
 ---
@@ -6897,13 +6897,13 @@ async def main():
         "https://example2.com",
         "https://example3.com"
     ]
-    
+
     config = CrawlerRunConfig(
         cache_mode=CacheMode.ENABLED,
         check_robots_txt=True,  # Will respect robots.txt for each URL
         semaphore_count=3      # Max concurrent requests
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         async for result in crawler.arun_many(urls, config=config):
             if result.success:
@@ -6917,10 +6917,10 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Review:**  
-- **Purpose:** Ensures compliance with `robots.txt` rules for ethical and legal web crawling.  
-- **Configuration:** Set `check_robots_txt=True` to validate each URL against `robots.txt` before crawling.  
-- **Dispatcher:** Handles requests with concurrency limits (`semaphore_count=3`).  
+**Review:**
+- **Purpose:** Ensures compliance with `robots.txt` rules for ethical and legal web crawling.
+- **Configuration:** Set `check_robots_txt=True` to validate each URL against `robots.txt` before crawling.
+- **Dispatcher:** Handles requests with concurrency limits (`semaphore_count=3`).
 - **Best Use Case:** When crawling websites that strictly enforce robots.txt policies or for responsible crawling practices.
 
 ---
@@ -7012,52 +7012,52 @@ async def main():
         capture_network_requests=True,
         capture_console_messages=True
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://example.com",
             config=config
         )
-        
+
         if result.success:
             # Analyze network requests
             if result.network_requests:
                 print(f"Captured {len(result.network_requests)} network events")
-                
+
                 # Count request types
                 request_count = len([r for r in result.network_requests if r.get("event_type") == "request"])
                 response_count = len([r for r in result.network_requests if r.get("event_type") == "response"])
                 failed_count = len([r for r in result.network_requests if r.get("event_type") == "request_failed"])
-                
+
                 print(f"Requests: {request_count}, Responses: {response_count}, Failed: {failed_count}")
-                
+
                 # Find API calls
-                api_calls = [r for r in result.network_requests 
+                api_calls = [r for r in result.network_requests
                             if r.get("event_type") == "request" and "api" in r.get("url", "")]
                 if api_calls:
                     print(f"Detected {len(api_calls)} API calls:")
                     for call in api_calls[:3]:  # Show first 3
                         print(f"  - {call.get('method')} {call.get('url')}")
-            
+
             # Analyze console messages
             if result.console_messages:
                 print(f"Captured {len(result.console_messages)} console messages")
-                
+
                 # Group by type
                 message_types = {}
                 for msg in result.console_messages:
                     msg_type = msg.get("type", "unknown")
                     message_types[msg_type] = message_types.get(msg_type, 0) + 1
-                
+
                 print("Message types:", message_types)
-                
+
                 # Show errors (often the most important)
                 errors = [msg for msg in result.console_messages if msg.get("type") == "error"]
                 if errors:
                     print(f"Found {len(errors)} console errors:")
                     for err in errors[:2]:  # Show first 2
                         print(f"  - {err.get('text', '')[:100]}")
-            
+
             # Export all captured data to a file for detailed analysis
             with open("network_capture.json", "w") as f:
                 json.dump({
@@ -7065,7 +7065,7 @@ async def main():
                     "network_requests": result.network_requests or [],
                     "console_messages": result.console_messages or []
                 }, f, indent=2)
-            
+
             print("Exported detailed capture data to network_capture.json")
 
 if __name__ == "__main__":
@@ -7154,7 +7154,7 @@ The `result.console_messages` contains a list of dictionaries, each representing
   - Requests (URLs, methods, headers, post data)
   - Responses (status codes, headers, timing)
   - Failed requests (with error messages)
-  
+
 - **Console Message Access**: View all JavaScript console output:
   - Log messages
   - Warnings
@@ -7192,7 +7192,7 @@ This capability is especially valuable for complex sites with heavy JavaScript, 
 ## File: docs/md_v2/advanced/proxy-security.md
 
 ```md
-# Proxy 
+# Proxy
 
 ## Basic Proxy Setup
 
@@ -7232,7 +7232,7 @@ async with AsyncWebCrawler(config=browser_config) as crawler:
 
 Here's the corrected documentation:
 
-## Rotating Proxies 
+## Rotating Proxies
 
 Example using a proxy rotation service dynamically:
 
@@ -7246,7 +7246,7 @@ async def get_next_proxy():
 async def main():
     browser_config = BrowserConfig()
     run_config = CrawlerRunConfig()
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         # For each URL, create a new run config with different proxy
         for url in urls:
@@ -7384,7 +7384,7 @@ async def basic_session_crawl():
                 css_selector=".content-item",
                 cache_mode=CacheMode.BYPASS
             )
-            
+
             result = await crawler.arun(config=config)
             print(f"Page {page + 1}: Found {result.extracted_content.count('.content-item')} items")
 
@@ -7514,7 +7514,7 @@ asyncio.run(integrated_js_and_wait_crawl())
 ```md
 # `SSLCertificate` Reference
 
-The **`SSLCertificate`** class encapsulates an SSL certificate’s data and allows exporting it in various formats (PEM, DER, JSON, or text). It’s used within **Crawl4AI** whenever you set **`fetch_ssl_certificate=True`** in your **`CrawlerRunConfig`**.  
+The **`SSLCertificate`** class encapsulates an SSL certificate’s data and allows exporting it in various formats (PEM, DER, JSON, or text). It’s used within **Crawl4AI** whenever you set **`fetch_ssl_certificate=True`** in your **`CrawlerRunConfig`**.
 
 ## 1. Overview
 
@@ -7548,7 +7548,7 @@ class SSLCertificate:
    ```python
    CrawlerRunConfig(fetch_ssl_certificate=True, ...)
    ```
-2. After `arun()`, if `result.ssl_certificate` is present, it’s an instance of **`SSLCertificate`**.  
+2. After `arun()`, if `result.ssl_certificate` is present, it’s an instance of **`SSLCertificate`**.
 3. You can **read** basic properties (issuer, subject, validity) or **export** them in multiple formats.
 
 ---
@@ -7584,16 +7584,16 @@ cert = SSLCertificate.from_binary(raw_bytes)
 
 After obtaining a **`SSLCertificate`** instance (e.g. `result.ssl_certificate` from a crawl), you can read:
 
-1. **`issuer`** *(dict)*  
+1. **`issuer`** *(dict)*
    - E.g. `{"CN": "My Root CA", "O": "..."}`
-2. **`subject`** *(dict)*  
+2. **`subject`** *(dict)*
    - E.g. `{"CN": "example.com", "O": "ExampleOrg"}`
-3. **`valid_from`** *(str)*  
+3. **`valid_from`** *(str)*
    - NotBefore date/time. Often in ASN.1/UTC format.
-4. **`valid_until`** *(str)*  
+4. **`valid_until`** *(str)*
    - NotAfter date/time.
-5. **`fingerprint`** *(str)*  
-   - The SHA-256 digest (lowercase hex).  
+5. **`fingerprint`** *(str)*
+   - The SHA-256 digest (lowercase hex).
    - E.g. `"d14d2e..."`
 
 ---
@@ -7603,7 +7603,7 @@ After obtaining a **`SSLCertificate`** instance (e.g. `result.ssl_certificate` f
 Once you have a **`SSLCertificate`** object, you can **export** or **inspect** it:
 
 ### 4.1 **`to_json(filepath=None)` → `Optional[str]`**
-- Returns a JSON string containing the parsed certificate fields.  
+- Returns a JSON string containing the parsed certificate fields.
 - If `filepath` is provided, saves it to disk instead, returning `None`.
 
 **Usage**:
@@ -7613,7 +7613,7 @@ cert.to_json("certificate.json")  # writes file, returns None
 ```
 
 ### 4.2 **`to_pem(filepath=None)` → `Optional[str]`**
-- Returns a PEM-encoded string (common for web servers).  
+- Returns a PEM-encoded string (common for web servers).
 - If `filepath` is provided, saves it to disk instead.
 
 ```python
@@ -7622,7 +7622,7 @@ cert.to_pem("/path/to/cert.pem")     # saved to file
 ```
 
 ### 4.3 **`to_der(filepath=None)` → `Optional[bytes]`**
-- Returns the original DER (binary ASN.1) bytes.  
+- Returns the original DER (binary ASN.1) bytes.
 - If `filepath` is specified, writes the bytes there instead.
 
 ```python
@@ -7631,7 +7631,7 @@ cert.to_der("certificate.der")
 ```
 
 ### 4.4 (Optional) **`export_as_text()`**
-- If you see a method like `export_as_text()`, it typically returns an OpenSSL-style textual representation.  
+- If you see a method like `export_as_text()`, it typically returns an OpenSSL-style textual representation.
 - Not always needed, but can help for debugging or manual inspection.
 
 ---
@@ -7662,12 +7662,12 @@ async def main():
             print("Issuer CN:", cert.issuer.get("CN", ""))
             print("Valid until:", cert.valid_until)
             print("Fingerprint:", cert.fingerprint)
-            
+
             # 2. Export
             cert.to_json(os.path.join(tmp_dir, "certificate.json"))
             cert.to_pem(os.path.join(tmp_dir, "certificate.pem"))
             cert.to_der(os.path.join(tmp_dir, "certificate.der"))
-    
+
 if __name__ == "__main__":
     asyncio.run(main())
 ```
@@ -7676,18 +7676,18 @@ if __name__ == "__main__":
 
 ## 6. Notes & Best Practices
 
-1. **Timeout**: `SSLCertificate.from_url` internally uses a default **10s** socket connect and wraps SSL.  
-2. **Binary Form**: The certificate is loaded in ASN.1 (DER) form, then re-parsed by `OpenSSL.crypto`.  
-3. **Validation**: This does **not** validate the certificate chain or trust store. It only fetches and parses.  
-4. **Integration**: Within Crawl4AI, you typically just set `fetch_ssl_certificate=True` in `CrawlerRunConfig`; the final result’s `ssl_certificate` is automatically built.  
+1. **Timeout**: `SSLCertificate.from_url` internally uses a default **10s** socket connect and wraps SSL.
+2. **Binary Form**: The certificate is loaded in ASN.1 (DER) form, then re-parsed by `OpenSSL.crypto`.
+3. **Validation**: This does **not** validate the certificate chain or trust store. It only fetches and parses.
+4. **Integration**: Within Crawl4AI, you typically just set `fetch_ssl_certificate=True` in `CrawlerRunConfig`; the final result’s `ssl_certificate` is automatically built.
 5. **Export**: If you need to store or analyze a cert, the `to_json` and `to_pem` are quite universal.
 
 ---
 
 ### Summary
 
-- **`SSLCertificate`** is a convenience class for capturing and exporting the **TLS certificate** from your crawled site(s).  
-- Common usage is in the **`CrawlResult.ssl_certificate`** field, accessible after setting `fetch_ssl_certificate=True`.  
+- **`SSLCertificate`** is a convenience class for capturing and exporting the **TLS certificate** from your crawled site(s).
+- Common usage is in the **`CrawlResult.ssl_certificate`** field, accessible after setting `fetch_ssl_certificate=True`.
 - Offers quick access to essential certificate details (`issuer`, `subject`, `fingerprint`) and is easy to export (PEM, DER, JSON) for further analysis or server usage.
 
 Use it whenever you need **insight** into a site’s certificate or require some form of cryptographic or compliance check.
@@ -7830,7 +7830,7 @@ class CosineSimilarityExtractor:
         return [(chunks[i], similarities[i]) for i in range(len(chunks))]
 
 # Example Workflow
-text = """This is a sample document. It has multiple sentences. 
+text = """This is a sample document. It has multiple sentences.
 We are testing chunking and similarity."""
 
 chunker = SlidingWindowChunking(window_size=5, step=3)
@@ -7877,7 +7877,7 @@ async with AsyncWebCrawler() as crawler:
         url="https://example.com/reviews",
         extraction_strategy=strategy
     )
-    
+
     content = result.extracted_content
 ```
 
@@ -7891,15 +7891,15 @@ CosineStrategy(
     semantic_filter: str = None,       # Keywords/topic for content filtering
     word_count_threshold: int = 10,    # Minimum words per cluster
     sim_threshold: float = 0.3,        # Similarity threshold (0.0 to 1.0)
-    
+
     # Clustering Parameters
     max_dist: float = 0.2,            # Maximum distance for clustering
     linkage_method: str = 'ward',      # Clustering linkage method
     top_k: int = 3,                   # Number of top categories to extract
-    
+
     # Model Configuration
     model_name: str = 'sentence-transformers/all-MiniLM-L6-v2',  # Embedding model
-    
+
     verbose: bool = False             # Enable logging
 )
 ```
@@ -7918,7 +7918,7 @@ CosineStrategy(
    ```python
    # Strict matching
    strategy = CosineStrategy(sim_threshold=0.8)
-   
+
    # Loose matching
    strategy = CosineStrategy(sim_threshold=0.3)
    ```
@@ -8001,7 +8001,7 @@ async def extract_pricing_features(url: str):
             url=url,
             extraction_strategy=strategy
         )
-        
+
         if result.success:
             content = json.loads(result.extracted_content)
             return {
@@ -8051,14 +8051,14 @@ try:
         url="https://example.com",
         extraction_strategy=strategy
     )
-    
+
     if result.success:
         content = json.loads(result.extracted_content)
         if not content:
             print("No relevant content found")
     else:
         print(f"Extraction failed: {result.error_message}")
-        
+
 except Exception as e:
     print(f"Error during extraction: {str(e)}")
 ```
@@ -8080,8 +8080,8 @@ It works well with other strategies and can be used as a pre-processing step for
 
 In some cases, you need to extract **complex or unstructured** information from a webpage that a simple CSS/XPath schema cannot easily parse. Or you want **AI**-driven insights, classification, or summarization. For these scenarios, Crawl4AI provides an **LLM-based extraction strategy** that:
 
-1. Works with **any** large language model supported by [LightLLM](https://github.com/LightLLM) (Ollama, OpenAI, Claude, and more).  
-2. Automatically splits content into chunks (if desired) to handle token limits, then combines results.  
+1. Works with **any** large language model supported by [LightLLM](https://github.com/LightLLM) (Ollama, OpenAI, Claude, and more).
+2. Automatically splits content into chunks (if desired) to handle token limits, then combines results.
 3. Lets you define a **schema** (like a Pydantic model) or a simpler “block” extraction approach.
 
 **Important**: LLM-based extraction can be slower and costlier than schema-based approaches. If your page data is highly structured, consider using [`JsonCssExtractionStrategy`](./no-llm-strategies.md) or [`JsonXPathExtractionStrategy`](./no-llm-strategies.md) first. But if you need AI to interpret or reorganize content, read on!
@@ -8090,8 +8090,8 @@ In some cases, you need to extract **complex or unstructured** information from 
 
 ## 1. Why Use an LLM?
 
-- **Complex Reasoning**: If the site’s data is unstructured, scattered, or full of natural language context.  
-- **Semantic Extraction**: Summaries, knowledge graphs, or relational data that require comprehension.  
+- **Complex Reasoning**: If the site’s data is unstructured, scattered, or full of natural language context.
+- **Semantic Extraction**: Summaries, knowledge graphs, or relational data that require comprehension.
 - **Flexible**: You can pass instructions to the model to do more advanced transformations or classification.
 
 ---
@@ -8100,9 +8100,9 @@ In some cases, you need to extract **complex or unstructured** information from 
 
 Crawl4AI uses a “provider string” (e.g., `"openai/gpt-4o"`, `"ollama/llama2.0"`, `"aws/titan"`) to identify your LLM. **Any** model that LightLLM supports is fair game. You just provide:
 
-- **`provider`**: The `<provider>/<model_name>` identifier (e.g., `"openai/gpt-4"`, `"ollama/llama2"`, `"huggingface/google-flan"`, etc.).  
-- **`api_token`**: If needed (for OpenAI, HuggingFace, etc.); local models or Ollama might not require it.  
-- **`api_base`** (optional): If your provider has a custom endpoint.  
+- **`provider`**: The `<provider>/<model_name>` identifier (e.g., `"openai/gpt-4"`, `"ollama/llama2"`, `"huggingface/google-flan"`, etc.).
+- **`api_token`**: If needed (for OpenAI, HuggingFace, etc.); local models or Ollama might not require it.
+- **`api_base`** (optional): If your provider has a custom endpoint.
 
 This means you **aren’t locked** into a single LLM vendor. Switch or experiment easily.
 
@@ -8112,15 +8112,15 @@ This means you **aren’t locked** into a single LLM vendor. Switch or experimen
 
 ### 3.1 Flow
 
-1. **Chunking** (optional): The HTML or markdown is split into smaller segments if it’s very long (based on `chunk_token_threshold`, overlap, etc.).  
-2. **Prompt Construction**: For each chunk, the library forms a prompt that includes your **`instruction`** (and possibly schema or examples).  
-3. **LLM Inference**: Each chunk is sent to the model in parallel or sequentially (depending on your concurrency).  
+1. **Chunking** (optional): The HTML or markdown is split into smaller segments if it’s very long (based on `chunk_token_threshold`, overlap, etc.).
+2. **Prompt Construction**: For each chunk, the library forms a prompt that includes your **`instruction`** (and possibly schema or examples).
+3. **LLM Inference**: Each chunk is sent to the model in parallel or sequentially (depending on your concurrency).
 4. **Combining**: The results from each chunk are merged and parsed into JSON.
 
 ### 3.2 `extraction_type`
 
-- **`"schema"`**: The model tries to return JSON conforming to your Pydantic-based schema.  
-- **`"block"`**: The model returns freeform text, or smaller JSON structures, which the library collects.  
+- **`"schema"`**: The model tries to return JSON conforming to your Pydantic-based schema.
+- **`"block"`**: The model returns freeform text, or smaller JSON structures, which the library collects.
 
 For structured data, `"schema"` is recommended. You provide `schema=YourPydanticModel.model_json_schema()`.
 
@@ -8130,20 +8130,20 @@ For structured data, `"schema"` is recommended. You provide `schema=YourPydantic
 
 Below is an overview of important LLM extraction parameters. All are typically set inside `LLMExtractionStrategy(...)`. You then put that strategy in your `CrawlerRunConfig(..., extraction_strategy=...)`.
 
-1. **`provider`** (str): e.g., `"openai/gpt-4"`, `"ollama/llama2"`.  
-2. **`api_token`** (str): The API key or token for that model. May not be needed for local models.  
-3. **`schema`** (dict): A JSON schema describing the fields you want. Usually generated by `YourModel.model_json_schema()`.  
-4. **`extraction_type`** (str): `"schema"` or `"block"`.  
-5. **`instruction`** (str): Prompt text telling the LLM what you want extracted. E.g., “Extract these fields as a JSON array.”  
-6. **`chunk_token_threshold`** (int): Maximum tokens per chunk. If your content is huge, you can break it up for the LLM.  
-7. **`overlap_rate`** (float): Overlap ratio between adjacent chunks. E.g., `0.1` means 10% of each chunk is repeated to preserve context continuity.  
-8. **`apply_chunking`** (bool): Set `True` to chunk automatically. If you want a single pass, set `False`.  
-9. **`input_format`** (str): Determines **which** crawler result is passed to the LLM. Options include:  
-   - `"markdown"`: The raw markdown (default).  
-   - `"fit_markdown"`: The filtered “fit” markdown if you used a content filter.  
-   - `"html"`: The cleaned or raw HTML.  
-10. **`extra_args`** (dict): Additional LLM parameters like `temperature`, `max_tokens`, `top_p`, etc.  
-11. **`show_usage()`**: A method you can call to print out usage info (token usage per chunk, total cost if known).  
+1. **`provider`** (str): e.g., `"openai/gpt-4"`, `"ollama/llama2"`.
+2. **`api_token`** (str): The API key or token for that model. May not be needed for local models.
+3. **`schema`** (dict): A JSON schema describing the fields you want. Usually generated by `YourModel.model_json_schema()`.
+4. **`extraction_type`** (str): `"schema"` or `"block"`.
+5. **`instruction`** (str): Prompt text telling the LLM what you want extracted. E.g., “Extract these fields as a JSON array.”
+6. **`chunk_token_threshold`** (int): Maximum tokens per chunk. If your content is huge, you can break it up for the LLM.
+7. **`overlap_rate`** (float): Overlap ratio between adjacent chunks. E.g., `0.1` means 10% of each chunk is repeated to preserve context continuity.
+8. **`apply_chunking`** (bool): Set `True` to chunk automatically. If you want a single pass, set `False`.
+9. **`input_format`** (str): Determines **which** crawler result is passed to the LLM. Options include:
+   - `"markdown"`: The raw markdown (default).
+   - `"fit_markdown"`: The filtered “fit” markdown if you used a content filter.
+   - `"html"`: The cleaned or raw HTML.
+10. **`extra_args`** (dict): Additional LLM parameters like `temperature`, `max_tokens`, `top_p`, etc.
+11. **`show_usage()`**: A method you can call to print out usage info (token usage per chunk, total cost if known).
 
 **Example**:
 
@@ -8215,7 +8215,7 @@ async def main():
             # 5. The extracted content is presumably JSON
             data = json.loads(result.extracted_content)
             print("Extracted items:", data)
-            
+
             # 6. Show usage stats
             llm_strategy.show_usage()  # prints token usage
         else:
@@ -8247,8 +8247,8 @@ By chunking, you can potentially process multiple chunks in parallel (depending 
 
 By default, **LLMExtractionStrategy** uses `input_format="markdown"`, meaning the **crawler’s final markdown** is fed to the LLM. You can change to:
 
-- **`html`**: The cleaned HTML or raw HTML (depending on your crawler config) goes into the LLM.  
-- **`fit_markdown`**: If you used, for instance, `PruningContentFilter`, the “fit” version of the markdown is used. This can drastically reduce tokens if you trust the filter.  
+- **`html`**: The cleaned HTML or raw HTML (depending on your crawler config) goes into the LLM.
+- **`fit_markdown`**: If you used, for instance, `PruningContentFilter`, the “fit” version of the markdown is used. This can drastically reduce tokens if you trust the filter.
 - **`markdown`**: Standard markdown output from the crawler’s `markdown_generator`.
 
 This setting is crucial: if the LLM instructions rely on HTML tags, pick `"html"`. If you prefer a text-based approach, pick `"markdown"`.
@@ -8266,8 +8266,8 @@ LLMExtractionStrategy(
 
 To keep track of tokens and cost, each chunk is processed with an LLM call. We record usage in:
 
-- **`usages`** (list): token usage per chunk or call.  
-- **`total_usage`**: sum of all chunk calls.  
+- **`usages`** (list): token usage per chunk or call.
+- **`total_usage`**: sum of all chunk calls.
 - **`show_usage()`**: prints a usage report (if the provider returns usage data).
 
 ```python
@@ -8345,19 +8345,19 @@ if __name__ == "__main__":
 
 **Key Observations**:
 
-- **`extraction_type="schema"`** ensures we get JSON fitting our `KnowledgeGraph`.  
-- **`input_format="html"`** means we feed HTML to the model.  
-- **`instruction`** guides the model to output a structured knowledge graph.  
+- **`extraction_type="schema"`** ensures we get JSON fitting our `KnowledgeGraph`.
+- **`input_format="html"`** means we feed HTML to the model.
+- **`instruction`** guides the model to output a structured knowledge graph.
 
 ---
 
 ## 10. Best Practices & Caveats
 
-1. **Cost & Latency**: LLM calls can be slow or expensive. Consider chunking or smaller coverage if you only need partial data.  
-2. **Model Token Limits**: If your page + instruction exceed the context window, chunking is essential.  
-3. **Instruction Engineering**: Well-crafted instructions can drastically improve output reliability.  
-4. **Schema Strictness**: `"schema"` extraction tries to parse the model output as JSON. If the model returns invalid JSON, partial extraction might happen, or you might get an error.  
-5. **Parallel vs. Serial**: The library can process multiple chunks in parallel, but you must watch out for rate limits on certain providers.  
+1. **Cost & Latency**: LLM calls can be slow or expensive. Consider chunking or smaller coverage if you only need partial data.
+2. **Model Token Limits**: If your page + instruction exceed the context window, chunking is essential.
+3. **Instruction Engineering**: Well-crafted instructions can drastically improve output reliability.
+4. **Schema Strictness**: `"schema"` extraction tries to parse the model output as JSON. If the model returns invalid JSON, partial extraction might happen, or you might get an error.
+5. **Parallel vs. Serial**: The library can process multiple chunks in parallel, but you must watch out for rate limits on certain providers.
 6. **Check Output**: Sometimes, an LLM might omit fields or produce extraneous text. You may want to post-validate with Pydantic or do additional cleanup.
 
 ---
@@ -8366,29 +8366,29 @@ if __name__ == "__main__":
 
 **LLM-based extraction** in Crawl4AI is **provider-agnostic**, letting you choose from hundreds of models via LightLLM. It’s perfect for **semantically complex** tasks or generating advanced structures like knowledge graphs. However, it’s **slower** and potentially costlier than schema-based approaches. Keep these tips in mind:
 
-- Put your LLM strategy **in `CrawlerRunConfig`**.  
-- Use **`input_format`** to pick which form (markdown, HTML, fit_markdown) the LLM sees.  
-- Tweak **`chunk_token_threshold`**, **`overlap_rate`**, and **`apply_chunking`** to handle large content efficiently.  
+- Put your LLM strategy **in `CrawlerRunConfig`**.
+- Use **`input_format`** to pick which form (markdown, HTML, fit_markdown) the LLM sees.
+- Tweak **`chunk_token_threshold`**, **`overlap_rate`**, and **`apply_chunking`** to handle large content efficiently.
 - Monitor token usage with `show_usage()`.
 
 If your site’s data is consistent or repetitive, consider [`JsonCssExtractionStrategy`](./no-llm-strategies.md) first for speed and simplicity. But if you need an **AI-driven** approach, `LLMExtractionStrategy` offers a flexible, multi-provider solution for extracting structured JSON from any website.
 
 **Next Steps**:
 
-1. **Experiment with Different Providers**  
-   - Try switching the `provider` (e.g., `"ollama/llama2"`, `"openai/gpt-4o"`, etc.) to see differences in speed, accuracy, or cost.  
+1. **Experiment with Different Providers**
+   - Try switching the `provider` (e.g., `"ollama/llama2"`, `"openai/gpt-4o"`, etc.) to see differences in speed, accuracy, or cost.
    - Pass different `extra_args` like `temperature`, `top_p`, and `max_tokens` to fine-tune your results.
 
-2. **Performance Tuning**  
-   - If pages are large, tweak `chunk_token_threshold`, `overlap_rate`, or `apply_chunking` to optimize throughput.  
+2. **Performance Tuning**
+   - If pages are large, tweak `chunk_token_threshold`, `overlap_rate`, or `apply_chunking` to optimize throughput.
    - Check the usage logs with `show_usage()` to keep an eye on token consumption and identify potential bottlenecks.
 
-3. **Validate Outputs**  
-   - If using `extraction_type="schema"`, parse the LLM’s JSON with a Pydantic model for a final validation step.  
+3. **Validate Outputs**
+   - If using `extraction_type="schema"`, parse the LLM’s JSON with a Pydantic model for a final validation step.
    - Log or handle any parse errors gracefully, especially if the model occasionally returns malformed JSON.
 
-4. **Explore Hooks & Automation**  
-   - Integrate LLM extraction with [hooks](../advanced/hooks-auth.md) for complex pre/post-processing.  
+4. **Explore Hooks & Automation**
+   - Integrate LLM extraction with [hooks](../advanced/hooks-auth.md) for complex pre/post-processing.
    - Use a multi-step pipeline: crawl, filter, LLM-extract, then store or index results for further analysis.
 
 **Last Updated**: 2025-01-01
@@ -8408,9 +8408,9 @@ One of Crawl4AI’s **most powerful** features is extracting **structured JSON**
 
 **Why avoid LLM for basic extractions?**
 
-1. **Faster & Cheaper**: No API calls or GPU overhead.  
-2. **Lower Carbon Footprint**: LLM inference can be energy-intensive. A well-defined schema is practically carbon-free.  
-3. **Precise & Repeatable**: CSS/XPath selectors do exactly what you specify. LLM outputs can vary or hallucinate.  
+1. **Faster & Cheaper**: No API calls or GPU overhead.
+2. **Lower Carbon Footprint**: LLM inference can be energy-intensive. A well-defined schema is practically carbon-free.
+3. **Precise & Repeatable**: CSS/XPath selectors do exactly what you specify. LLM outputs can vary or hallucinate.
 4. **Scales Readily**: For thousands of pages, schema-based extraction runs quickly and in parallel.
 
 Below, we’ll explore how to craft these schemas and use them with **JsonCssExtractionStrategy** (or **JsonXPathExtractionStrategy** if you prefer XPath). We’ll also highlight advanced features like **nested fields** and **base element attributes**.
@@ -8421,9 +8421,9 @@ Below, we’ll explore how to craft these schemas and use them with **JsonCssExt
 
 A schema defines:
 
-1. A **base selector** that identifies each “container” element on the page (e.g., a product row, a blog post card).  
-2. **Fields** describing which CSS/XPath selectors to use for each piece of data you want to capture (text, attribute, HTML block, etc.).  
-3. **Nested** or **list** types for repeated or hierarchical structures.  
+1. A **base selector** that identifies each “container” element on the page (e.g., a product row, a blog post card).
+2. **Fields** describing which CSS/XPath selectors to use for each piece of data you want to capture (text, attribute, HTML block, etc.).
+3. **Nested** or **list** types for repeated or hierarchical structures.
 
 For example, if you have a list of products, each one might have a name, price, reviews, and “related products.” This approach is faster and more reliable than an LLM for consistent, structured pages.
 
@@ -8473,7 +8473,7 @@ async def extract_crypto_prices():
         # 4. Run the crawl and extraction
         result = await crawler.arun(
             url="https://example.com/crypto-prices",
-            
+
             config=config
         )
 
@@ -8491,8 +8491,8 @@ asyncio.run(extract_crypto_prices())
 
 **Highlights**:
 
-- **`baseSelector`**: Tells us where each “item” (crypto row) is.  
-- **`fields`**: Two fields (`coin_name`, `price`) using simple CSS selectors.  
+- **`baseSelector`**: Tells us where each “item” (crypto row) is.
+- **`fields`**: Two fields (`coin_name`, `price`) using simple CSS selectors.
 - Each field defines a **`type`** (e.g., `text`, `attribute`, `html`, `regex`, etc.).
 
 No LLM is needed, and the performance is **near-instant** for hundreds or thousands of items.
@@ -8572,10 +8572,10 @@ asyncio.run(extract_crypto_prices_xpath())
 
 **Key Points**:
 
-1. **`JsonXPathExtractionStrategy`** is used instead of `JsonCssExtractionStrategy`.  
-2. **`baseSelector`** and each field’s `"selector"` use **XPath** instead of CSS.  
-3. **`raw://`** lets us pass `dummy_html` with no real network request—handy for local testing.  
-4. Everything (including the extraction strategy) is in **`CrawlerRunConfig`**.  
+1. **`JsonXPathExtractionStrategy`** is used instead of `JsonCssExtractionStrategy`.
+2. **`baseSelector`** and each field’s `"selector"` use **XPath** instead of CSS.
+3. **`raw://`** lets us pass `dummy_html` with no real network request—handy for local testing.
+4. Everything (including the extraction strategy) is in **`CrawlerRunConfig`**.
 
 That’s how you keep the config self-contained, illustrate **XPath** usage, and demonstrate the **raw** scheme for direct HTML input—all while avoiding the old approach of passing `extraction_strategy` directly to `arun()`.
 
@@ -8597,10 +8597,10 @@ This snippet includes categories, products, features, reviews, and related items
 schema = {
     "name": "E-commerce Product Catalog",
     "baseSelector": "div.category",
-    # (1) We can define optional baseFields if we want to extract attributes 
+    # (1) We can define optional baseFields if we want to extract attributes
     # from the category container
     "baseFields": [
-        {"name": "data_cat_id", "type": "attribute", "attribute": "data-cat-id"}, 
+        {"name": "data_cat_id", "type": "attribute", "attribute": "data-cat-id"},
     ],
     "fields": [
         {
@@ -8645,7 +8645,7 @@ schema = {
                     "selector": "ul.product-features li",
                     "type": "list",
                     "fields": [
-                        {"name": "feature", "type": "text"} 
+                        {"name": "feature", "type": "text"}
                     ]
                 },
                 {
@@ -8654,18 +8654,18 @@ schema = {
                     "type": "nested_list",
                     "fields": [
                         {
-                            "name": "reviewer", 
-                            "selector": "span.reviewer", 
+                            "name": "reviewer",
+                            "selector": "span.reviewer",
                             "type": "text"
                         },
                         {
-                            "name": "rating", 
-                            "selector": "span.rating", 
+                            "name": "rating",
+                            "selector": "span.rating",
                             "type": "text"
                         },
                         {
-                            "name": "comment", 
-                            "selector": "p.review-text", 
+                            "name": "comment",
+                            "selector": "p.review-text",
                             "type": "text"
                         }
                     ]
@@ -8676,13 +8676,13 @@ schema = {
                     "type": "list",
                     "fields": [
                         {
-                            "name": "name", 
-                            "selector": "span.related-name", 
+                            "name": "name",
+                            "selector": "span.related-name",
                             "type": "text"
                         },
                         {
-                            "name": "price", 
-                            "selector": "span.related-price", 
+                            "name": "price",
+                            "selector": "span.related-price",
                             "type": "text"
                         }
                     ]
@@ -8695,11 +8695,11 @@ schema = {
 
 Key Takeaways:
 
-- **Nested vs. List**:  
-  - **`type: "nested"`** means a **single** sub-object (like `details`).  
-  - **`type: "list"`** means multiple items that are **simple** dictionaries or single text fields.  
+- **Nested vs. List**:
+  - **`type: "nested"`** means a **single** sub-object (like `details`).
+  - **`type: "list"`** means multiple items that are **simple** dictionaries or single text fields.
   - **`type: "nested_list"`** means repeated **complex** objects (like `products` or `reviews`).
-- **Base Fields**: We can extract **attributes** from the container element via `"baseFields"`. For instance, `"data_cat_id"` might be `data-cat-id="elect123"`.  
+- **Base Fields**: We can extract **attributes** from the container element via `"baseFields"`. For instance, `"data_cat_id"` might be `data-cat-id="elect123"`.
 - **Transforms**: We can also define a `transform` if we want to lower/upper case, strip whitespace, or even run a custom function.
 
 ### Running the Extraction
@@ -8716,9 +8716,9 @@ ecommerce_schema = {
 
 async def extract_ecommerce_data():
     strategy = JsonCssExtractionStrategy(ecommerce_schema, verbose=True)
-    
+
     config = CrawlerRunConfig()
-    
+
     async with AsyncWebCrawler(verbose=True) as crawler:
         result = await crawler.arun(
             url="https://raw.githubusercontent.com/unclecode/crawl4ai/main/docs/examples/sample_ecommerce.html",
@@ -8729,7 +8729,7 @@ async def extract_ecommerce_data():
         if not result.success:
             print("Crawl failed:", result.error_message)
             return
-        
+
         # Parse the JSON output
         data = json.loads(result.extracted_content)
         print(json.dumps(data, indent=2) if data else "No data found.")
@@ -8743,9 +8743,9 @@ If all goes well, you get a **structured** JSON array with each “category,” 
 
 ## 4. Why “No LLM” Is Often Better
 
-1. **Zero Hallucination**: Schema-based extraction doesn’t guess text. It either finds it or not.  
-2. **Guaranteed Structure**: The same schema yields consistent JSON across many pages, so your downstream pipeline can rely on stable keys.  
-3. **Speed**: LLM-based extraction can be 10–1000x slower for large-scale crawling.  
+1. **Zero Hallucination**: Schema-based extraction doesn’t guess text. It either finds it or not.
+2. **Guaranteed Structure**: The same schema yields consistent JSON across many pages, so your downstream pipeline can rely on stable keys.
+3. **Speed**: LLM-based extraction can be 10–1000x slower for large-scale crawling.
 4. **Scalable**: Adding or updating a field is a matter of adjusting the schema, not re-tuning a model.
 
 **When might you consider an LLM?** Possibly if the site is extremely unstructured or you want AI summarization. But always try a schema approach first for repeated or consistent data patterns.
@@ -8795,12 +8795,12 @@ Then run with `JsonCssExtractionStrategy(schema)` to get an array of blog post o
 
 ## 7. Tips & Best Practices
 
-1. **Inspect the DOM** in Chrome DevTools or Firefox’s Inspector to find stable selectors.  
-2. **Start Simple**: Verify you can extract a single field. Then add complexity like nested objects or lists.  
-3. **Test** your schema on partial HTML or a test page before a big crawl.  
-4. **Combine with JS Execution** if the site loads content dynamically. You can pass `js_code` or `wait_for` in `CrawlerRunConfig`.  
-5. **Look at Logs** when `verbose=True`: if your selectors are off or your schema is malformed, it’ll often show warnings.  
-6. **Use baseFields** if you need attributes from the container element (e.g., `href`, `data-id`), especially for the “parent” item.  
+1. **Inspect the DOM** in Chrome DevTools or Firefox’s Inspector to find stable selectors.
+2. **Start Simple**: Verify you can extract a single field. Then add complexity like nested objects or lists.
+3. **Test** your schema on partial HTML or a test page before a big crawl.
+4. **Combine with JS Execution** if the site loads content dynamically. You can pass `js_code` or `wait_for` in `CrawlerRunConfig`.
+5. **Look at Logs** when `verbose=True`: if your selectors are off or your schema is malformed, it’ll often show warnings.
+6. **Use baseFields** if you need attributes from the container element (e.g., `href`, `data-id`), especially for the “parent” item.
 7. **Performance**: For large pages, make sure your selectors are as narrow as possible.
 
 ---
@@ -8838,7 +8838,7 @@ html = """
 # Option 1: Using OpenAI (requires API token)
 css_schema = JsonCssExtractionStrategy.generate_schema(
     html,
-    schema_type="css", 
+    schema_type="css",
     llm_config = LLMConfig(provider="openai/gpt-4o",api_token="your-openai-token")
 )
 
@@ -8881,7 +8881,7 @@ strategy = JsonCssExtractionStrategy(css_schema)
 3. **Consider Both CSS and XPath**: Try both schema types and choose the one that works best for your specific case.
 4. **Cache Generated Schemas**: Since generation uses LLM, save successful schemas for reuse.
 5. **API Token Security**: Never hardcode API tokens. Use environment variables or secure configuration management.
-6. **Choose Provider Wisely**: 
+6. **Choose Provider Wisely**:
    - Use OpenAI for production-quality schemas
    - Use Ollama for development, testing, or when you need a self-hosted solution
 
@@ -8893,13 +8893,13 @@ That's it for **Extracting JSON (No LLM)**! You've seen how schema-based approac
 
 With **JsonCssExtractionStrategy** (or **JsonXPathExtractionStrategy**), you can build powerful, **LLM-free** pipelines that:
 
-- Scrape any consistent site for structured data.  
-- Support nested objects, repeating lists, or advanced transformations.  
+- Scrape any consistent site for structured data.
+- Support nested objects, repeating lists, or advanced transformations.
 - Scale to thousands of pages quickly and reliably.
 
 **Next Steps**:
 
-- Combine your extracted JSON with advanced filtering or summarization in a second pass if needed.  
+- Combine your extracted JSON with advanced filtering or summarization in a second pass if needed.
 - For dynamic pages, combine strategies with `js_code` or infinite scroll hooking to ensure all content is loaded.
 
 **Remember**: For repeated, structured data, you don’t need to pay for or wait on an LLM. A well-crafted schema plus CSS or XPath gets you the data faster, cleaner, and cheaper—**the real power** of Crawl4AI.
@@ -8910,4 +8910,3 @@ With **JsonCssExtractionStrategy** (or **JsonXPathExtractionStrategy**), you can
 
 That’s it for **Extracting JSON (No LLM)**! You’ve seen how schema-based approaches (either CSS or XPath) can handle everything from simple lists to deeply nested product catalogs—instantly, with minimal overhead. Enjoy building robust scrapers that produce consistent, structured JSON for your data pipelines!
 ```
-

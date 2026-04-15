@@ -1,5 +1,5 @@
 """
-This example demonstrates how to use JSON CSS extraction to scrape product information 
+This example demonstrates how to use JSON CSS extraction to scrape product information
 from Amazon search results. It shows how to extract structured data like product titles,
 prices, ratings, and other details using CSS selectors.
 """
@@ -23,10 +23,6 @@ async def extract_amazon_products():
             document.querySelector('#nav-search-submit-button').click();
         }
         await task();
-    """
-    js_code_to_search_sync = """
-            document.querySelector('#twotabsearchtextbox').value = 'Samsung Galaxy Tab';
-            document.querySelector('#nav-search-submit-button').click();
     """
     crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,

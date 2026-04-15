@@ -142,7 +142,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Flexible LLM Provider Configuration** (Docker): 
+- **Flexible LLM Provider Configuration** (Docker):
   - Support for `LLM_PROVIDER` environment variable to override default provider
   - Per-request provider override via optional `provider` parameter in API endpoints
   - Automatic provider validation with clear error messages
@@ -217,44 +217,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.6.0] ‑ 2025‑04‑22
 
 ### Added
-- Browser pooling with page pre‑warming and fine‑grained **geolocation, locale, and timezone** controls  
-- Crawler pool manager (SDK + Docker API) for smarter resource allocation  
-- Network & console log capture plus MHTML snapshot export  
-- **Table extractor**: turn HTML `<table>`s into DataFrames or CSV with one flag  
-- High‑volume stress‑test framework in `tests/memory` and API load scripts  
-- MCP protocol endpoints with socket & SSE support; playground UI scaffold  
-- Docs v2 revamp: TOC, GitHub badge, copy‑code buttons, Docker API demo  
-- “Ask AI” helper button *(work‑in‑progress, shipping soon)*  
-- New examples: geo‑location usage, network/console capture, Docker API, markdown source selection, crypto analysis  
-- Expanded automated test suites for browser, Docker, MCP and memory benchmarks  
+- Browser pooling with page pre‑warming and fine‑grained **geolocation, locale, and timezone** controls
+- Crawler pool manager (SDK + Docker API) for smarter resource allocation
+- Network & console log capture plus MHTML snapshot export
+- **Table extractor**: turn HTML `<table>`s into DataFrames or CSV with one flag
+- High‑volume stress‑test framework in `tests/memory` and API load scripts
+- MCP protocol endpoints with socket & SSE support; playground UI scaffold
+- Docs v2 revamp: TOC, GitHub badge, copy‑code buttons, Docker API demo
+- “Ask AI” helper button *(work‑in‑progress, shipping soon)*
+- New examples: geo‑location usage, network/console capture, Docker API, markdown source selection, crypto analysis
+- Expanded automated test suites for browser, Docker, MCP and memory benchmarks
 
 ### Changed
-- Consolidated and renamed browser strategies; legacy docker strategy modules removed  
-- `ProxyConfig` moved to `async_configs`  
-- Server migrated to pool‑based crawler management  
-- FastAPI validators replace custom query validation  
-- Docker build now uses Chromium base image  
-- Large‑scale repo tidy‑up (≈36 k insertions, ≈5 k deletions)  
+- Consolidated and renamed browser strategies; legacy docker strategy modules removed
+- `ProxyConfig` moved to `async_configs`
+- Server migrated to pool‑based crawler management
+- FastAPI validators replace custom query validation
+- Docker build now uses Chromium base image
+- Large‑scale repo tidy‑up (≈36 k insertions, ≈5 k deletions)
 
 ### Fixed
-- Async crawler session leak, duplicate‑visit handling, URL normalisation  
-- Target‑element regressions in scraping strategies  
-- Logged‑URL readability, encoded‑URL decoding, middle truncation for long URLs  
-- Closed issues: #701, #733, #756, #774, #804, #822, #839, #841, #842, #843, #867, #902, #911  
+- Async crawler session leak, duplicate‑visit handling, URL normalisation
+- Target‑element regressions in scraping strategies
+- Logged‑URL readability, encoded‑URL decoding, middle truncation for long URLs
+- Closed issues: #701, #733, #756, #774, #804, #822, #839, #841, #842, #843, #867, #902, #911
 
 ### Removed
-- Obsolete modules under `crawl4ai/browser/*` superseded by the new pooled browser layer  
+- Obsolete modules under `crawl4ai/browser/*` superseded by the new pooled browser layer
 
 ### Deprecated
-- Old markdown generator names now alias `DefaultMarkdownGenerator` and emit warnings  
+- Old markdown generator names now alias `DefaultMarkdownGenerator` and emit warnings
 
 ---
 
 #### Upgrade notes
-1. Update any direct imports from `crawl4ai/browser/*` to the new pooled browser modules  
-2. If you override `AsyncPlaywrightCrawlerStrategy.get_page`, adopt the new signature  
-3. Rebuild Docker images to pull the new Chromium layer  
-4. Switch to `DefaultMarkdownGenerator` (or silence the deprecation warning)  
+1. Update any direct imports from `crawl4ai/browser/*` to the new pooled browser modules
+2. If you override `AsyncPlaywrightCrawlerStrategy.get_page`, adopt the new signature
+3. Rebuild Docker images to pull the new Chromium layer
+4. Switch to `DefaultMarkdownGenerator` (or silence the deprecation warning)
 
 ---
 
@@ -295,7 +295,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Provides flexibility in how HTML content is processed before markdown conversion
   - Added examples and documentation for the new feature
   - Includes backward compatibility with default `cleaned_html` behavior
-  
+
 ## Version 0.5.0.post5 (2025-03-14)
 
 ### Added
@@ -469,7 +469,7 @@ This release introduces several powerful new features, including robots.txt comp
     -   Added robots.txt compliance support with efficient SQLite-based caching.
     -   New `check_robots_txt` parameter in `CrawlerRunConfig` to enable robots.txt checking before crawling a URL.
     -   Automated robots.txt checking is now integrated into `AsyncWebCrawler` with 403 status codes for blocked URLs.
-    
+
 -   **Proxy Configuration:**
     -   Added proxy configuration support to `CrawlerRunConfig`, allowing dynamic proxy settings per crawl request.
     -   Updated documentation with examples for using proxy configuration in crawl operations.
@@ -566,7 +566,7 @@ This release introduces several powerful new features, including robots.txt comp
 - **Version Bump**: Updated the version from `0.4.246` to `0.4.247`. ([#__version__.py](crawl4ai/__version__.py))
 - **Improved Scrolling Logic**: Enhanced scrolling methods in `AsyncPlaywrightCrawlerStrategy` by adding a `scroll_delay` parameter for better control. ([#async_crawler_strategy.py](crawl4ai/async_crawler_strategy.py))
 - **Markdown Generation Example**: Updated the `hello_world.py` example to reflect the latest API changes and better illustrate features. ([#examples/hello_world.py](docs/examples/hello_world.py))
-- **Documentation Update**: 
+- **Documentation Update**:
   - Added Windows-specific instructions for handling asyncio event loops. ([#async-webcrawler-basics.md](docs/md_v3/tutorials/async-webcrawler-basics.md))
 
 #### Removed
@@ -915,8 +915,8 @@ async def download_example():
     os.makedirs(downloads_path, exist_ok=True)
 
     async with AsyncWebCrawler(
-        accept_downloads=True, 
-        downloads_path=downloads_path, 
+        accept_downloads=True,
+        downloads_path=downloads_path,
         verbose=True
     ) as crawler:
         result = await crawler.arun(
@@ -984,7 +984,7 @@ async def main():
         )
         # Raw HTML
         await crawl_raw_html(crawler, "<h1>Raw Test</h1><p>This is raw HTML.</p>")
-        
+
 
 asyncio.run(main())
 ```
@@ -1055,7 +1055,7 @@ asyncio.run(browser_management_demo())
 
 ### 🐛 Bug Fixes
 
-- Resolved issue with browser context closing unexpectedly in Docker. This significantly improves stability, particularly within containerized environments. 
+- Resolved issue with browser context closing unexpectedly in Docker. This significantly improves stability, particularly within containerized environments.
 - Fixed memory leaks associated with incorrect asynchronous cleanup by removing the `__del__` method and ensuring the browser context is closed explicitly using context managers.
 - Improved error handling in `WebScrapingStrategy`. More detailed error messages and suggestions for debugging will minimize frustration when running into unexpected issues.
 - Fixed issue with incorrect text parsing in specific HTML structures.
@@ -1121,7 +1121,7 @@ result = await crawler.arun(url="https://example.com", cache_mode=CacheMode.BYPA
 - New `fit_markdown` flag for optional markdown generation
 
 ### Changed
-- Switched HTML parser from 'html.parser' to 'lxml' for ~4x performance improvement 
+- Switched HTML parser from 'html.parser' to 'lxml' for ~4x performance improvement
 - Optimized BeautifulSoup text conversion and element selection
 - Pre-compiled regular expressions for better performance
 - Improved metadata extraction efficiency
@@ -1130,7 +1130,7 @@ result = await crawler.arun(url="https://example.com", cache_mode=CacheMode.BYPA
 ### Removed
 - `__del__` method from AsyncPlaywrightCrawlerStrategy to prevent async cleanup issues
 
-### Fixed 
+### Fixed
 - Issue #256: Added support for crawling raw HTML content
 - Issue #253: Implemented file:// protocol handling
 - Missing response headers in cached results
@@ -1400,7 +1400,7 @@ These updates aim to provide more flexibility in text processing, improve perfor
 ## [v0.3.7] - 2024-10-17
 
 ### New Features
-1. **Enhanced Browser Stealth**: 
+1. **Enhanced Browser Stealth**:
    - Implemented `playwright_stealth` for improved bot detection avoidance.
    - Added `StealthConfig` for fine-tuned control over stealth parameters.
 
@@ -1417,7 +1417,7 @@ These updates aim to provide more flexibility in text processing, improve perfor
    - Support for choosing between Chromium, Firefox, and WebKit browsers.
 
 6. **Include Links in Markdown**:
-    - Added support for including links in Markdown content, by definin g a new flag `include_links_on_markdown` in `crawl` method.   
+    - Added support for including links in Markdown content, by definin g a new flag `include_links_on_markdown` in `crawl` method.
 
 ### Improvements
 1. **Better Error Handling**:
@@ -1444,7 +1444,7 @@ These updates aim to provide more flexibility in text processing, improve perfor
 - Refactored code for better maintainability and readability.
 - Updated browser launch arguments for improved compatibility and performance.
 
-## [v0.3.6] - 2024-10-12 
+## [v0.3.6] - 2024-10-12
 
 ### 1. Improved Crawling Control
 - **New Hook**: Added `before_retrieve_html` hook in `AsyncPlaywrightCrawlerStrategy`.

@@ -24,7 +24,7 @@ Today I'm releasing Crawl4AI v0.7.0—the Adaptive Intelligence Update. This rel
 
 The Adaptive Crawler maintains a persistent state for each domain, tracking:
 - Pattern success rates
-- Selector stability over time  
+- Selector stability over time
 - Content structure variations
 - Extraction confidence scores
 
@@ -33,7 +33,7 @@ from crawl4ai import AsyncWebCrawler, AdaptiveCrawler, AdaptiveConfig
 import asyncio
 
 async def main():
-    
+
     # Configure adaptive crawler
     config = AdaptiveConfig(
         strategy="statistical",  # or "embedding" for semantic understanding
@@ -42,21 +42,21 @@ async def main():
         top_k_links=3,  # Follow top 3 links per page
         min_gain_threshold=0.05  # Need 5% information gain to continue
     )
-    
+
     async with AsyncWebCrawler(verbose=False) as crawler:
         adaptive = AdaptiveCrawler(crawler, config)
-        
+
         print("Starting adaptive crawl about Python decorators...")
         result = await adaptive.digest(
             start_url="https://docs.python.org/3/glossary.html",
             query="python decorators functions wrapping"
         )
-        
+
         print(f"\n✅ Crawling Complete!")
         print(f"• Confidence Level: {adaptive.confidence:.0%}")
         print(f"• Pages Crawled: {len(result.crawled_urls)}")
         print(f"• Knowledge Base: {len(adaptive.state.knowledge_base)} documents")
-        
+
         # Get most relevant content
         relevant = adaptive.get_relevant_content(top_k=3)
         print(f"\nMost Relevant Pages:")
@@ -125,7 +125,7 @@ async with AsyncWebCrawler() as crawler:
             })
         )
     )
-    
+
     print(f"Captured {len(result.extracted_content['tweets'])} tweets")
 ```
 
@@ -138,7 +138,7 @@ async with AsyncWebCrawler() as crawler:
 
 **Expected Real-World Impact:**
 - **Social Media Analysis**: Capture entire Twitter threads with hundreds of replies, not just top 10
-- **E-commerce Scraping**: Extract 500+ products from infinite scroll catalogs vs. 20-50 with traditional methods  
+- **E-commerce Scraping**: Extract 500+ products from infinite scroll catalogs vs. 20-50 with traditional methods
 - **News Aggregation**: Get all articles from modern news sites, not just above-the-fold content
 - **Research Applications**: Complete data extraction from academic databases using virtual pagination
 
@@ -236,10 +236,10 @@ async def main():
             score_threshold=0.2,
             max_urls=10
         )
-        
+
         print("Discovering Python async tutorial URLs...")
         urls = await seeder.urls("https://www.geeksforgeeks.org/", config)
-        
+
         print(f"\n✅ Found {len(urls)} relevant URLs:")
         for i, url_info in enumerate(urls[:5], 1):
             print(f"\n{i}. {url_info['url']}")

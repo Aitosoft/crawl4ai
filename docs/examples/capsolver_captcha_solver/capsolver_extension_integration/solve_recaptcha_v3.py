@@ -20,12 +20,13 @@ browser_config = BrowserConfig(
     use_persistent_context=True,
 )
 
+
 async def main():
     async with AsyncWebCrawler(config=browser_config) as crawler:
-        result_initial = await crawler.arun(
+        await crawler.arun(
             url="https://recaptcha-demo.appspot.com/recaptcha-v3-request-scores.php",
             cache_mode=CacheMode.BYPASS,
-            session_id="session_captcha_test"
+            session_id="session_captcha_test",
         )
 
         # do something later

@@ -8,7 +8,7 @@ location: northeurope  # Choose your preferred location
 subscriptionId: # Will be auto-detected if not specified
 
 # Container configuration
-image: 
+image:
   registry: unclecode
   repository: crawl4ai
   tag: "0.6.0-r3"  # Update this when new versions are released
@@ -25,7 +25,7 @@ app:
   resources:
     cpu: 1.0
     memory: 2.0Gi
-  
+
   # Scaling configuration
   scale:
     minReplicas: 1
@@ -35,7 +35,7 @@ app:
         type: http
         httpMetadata:
           concurrentRequests: 50
-  
+
   # Port configuration
   ingress:
     external: true
@@ -43,7 +43,7 @@ app:
     traffic:
       - weight: 100
         latestRevision: true
-  
+
   # Environment variables
   env:
     - name: CRAWL4AI_API_TOKEN

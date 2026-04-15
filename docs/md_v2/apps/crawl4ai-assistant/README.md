@@ -64,7 +64,7 @@ EXTRACTION_QUERY = """..."""
 # 3. Functions to generate and test the schema
 async def generate_schema():
     # Generates the extraction schema using LLM
-    
+
 async def test_extraction():
     # Tests the schema on the actual website
 ```

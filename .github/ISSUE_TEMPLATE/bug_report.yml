@@ -47,11 +47,11 @@ body:
       label: Inputs Causing the Bug
       description: Provide details about the inputs causing the issue.
       placeholder: |
-        - URL(s): 
-        - Settings used: 
-        - Input data (if applicable): 
+        - URL(s):
+        - Settings used:
+        - Input data (if applicable):
       render: bash
-  
+
   - type: textarea
     id: steps_to_reproduce
     attributes:
@@ -62,7 +62,7 @@ body:
         2. Click on...
         3. Observe the issue...
       render: bash
-  
+
   - type: textarea
     id: code_snippets
     attributes:

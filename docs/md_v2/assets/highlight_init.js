@@ -3,4 +3,3 @@ document.addEventListener('DOMContentLoaded', (event) => {
       hljs.highlightBlock(block);
     });
   });
-  

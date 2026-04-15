@@ -65,7 +65,7 @@ class DatabaseMigration:
             async with aiosqlite.connect(self.db_path) as db:
                 # Get all rows
                 async with db.execute(
-                    """SELECT url, html, cleaned_html, markdown, 
+                    """SELECT url, html, cleaned_html, markdown,
                        extracted_content, screenshot FROM crawled_data"""
                 ) as cursor:
                     rows = await cursor.fetchall()
@@ -95,8 +95,8 @@ class DatabaseMigration:
                     # Update database with hashes
                     await db.execute(
                         """
-                        UPDATE crawled_data 
-                        SET html = ?, 
+                        UPDATE crawled_data
+                        SET html = ?,
                             cleaned_html = ?,
                             markdown = ?,
                             extracted_content = ?,

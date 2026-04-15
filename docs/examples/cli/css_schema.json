@@ -9,7 +9,7 @@
     },
     {
       "name": "link",
-      "selector": "h4.card__title a", 
+      "selector": "h4.card__title a",
       "type": "attribute",
       "attribute": "href"
     },

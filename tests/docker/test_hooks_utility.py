@@ -8,12 +8,16 @@ from crawl4ai import Crawl4aiDockerClient, hooks_to_string
 # Define hook functions as regular Python functions
 async def auth_hook(page, context, **kwargs):
     """Add authentication cookies."""
-    await context.add_cookies([{
-        'name': 'test_cookie',
-        'value': 'test_value',
-        'domain': '.httpbin.org',
-        'path': '/'
-    }])
+    await context.add_cookies(
+        [
+            {
+                "name": "test_cookie",
+                "value": "test_value",
+                "domain": ".httpbin.org",
+                "path": "/",
+            }
+        ]
+    )
     return page
 
 
@@ -39,7 +43,7 @@ async def test_hooks_utility():
     # Create hooks dictionary with function objects
     hooks_dict = {
         "on_page_context_created": auth_hook,
-        "before_retrieve_html": scroll_hook
+        "before_retrieve_html": scroll_hook,
     }
 
     # Convert to string format
@@ -67,15 +71,17 @@ async def test_docker_client_with_functions():
     # Note: This requires a running Crawl4AI Docker server
     # Uncomment the following to test with actual server:
 
-    async with Crawl4aiDockerClient(base_url="http://localhost:11234", verbose=True) as client:
+    async with Crawl4aiDockerClient(
+        base_url="http://localhost:11234", verbose=True
+    ) as client:
         # Pass function objects directly - they'll be converted automatically
         result = await client.crawl(
             ["https://httpbin.org/html"],
             hooks={
                 "on_page_context_created": auth_hook,
-                "before_retrieve_html": scroll_hook
+                "before_retrieve_html": scroll_hook,
             },
-            hooks_timeout=30
+            hooks_timeout=30,
         )
         print(f"\n✓ Crawl successful: {result.success}")
         print(f"✓ URL: {result.url}")
@@ -94,19 +100,19 @@ async def test_docker_client_with_strings():
     # Convert hooks to strings first
     hooks_dict = {
         "on_page_context_created": viewport_hook,
-        "before_retrieve_html": scroll_hook
+        "before_retrieve_html": scroll_hook,
     }
     hooks_string = hooks_to_string(hooks_dict)
 
     # Note: This requires a running Crawl4AI Docker server
     # Uncomment the following to test with actual server:
 
-    async with Crawl4aiDockerClient(base_url="http://localhost:11234", verbose=True) as client:
+    async with Crawl4aiDockerClient(
+        base_url="http://localhost:11234", verbose=True
+    ) as client:
         # Pass string hooks - they'll be used as-is
         result = await client.crawl(
-            ["https://httpbin.org/html"],
-            hooks=hooks_string,
-            hooks_timeout=30
+            ["https://httpbin.org/html"], hooks=hooks_string, hooks_timeout=30
         )
         print(f"\n✓ Crawl successful: {result.success}")
 
@@ -122,7 +128,8 @@ async def show_usage_patterns():
 
     print("\n1. Direct function usage (simplest):")
     print("-" * 60)
-    print("""
+    print(
+        """
     async def my_hook(page, context, **kwargs):
         await page.set_viewport_size({"width": 1920, "height": 1080})
         return page
@@ -131,11 +138,13 @@ async def show_usage_patterns():
         ["https://example.com"],
         hooks={"on_page_context_created": my_hook}
     )
-    """)
+    """
+    )
 
     print("\n2. Convert then use:")
     print("-" * 60)
-    print("""
+    print(
+        """
     hooks_dict = {"on_page_context_created": my_hook}
     hooks_string = hooks_to_string(hooks_dict)
 
@@ -143,11 +152,13 @@ async def show_usage_patterns():
         ["https://example.com"],
         hooks=hooks_string
     )
-    """)
+    """
+    )
 
     print("\n3. Manual string (backward compatible):")
     print("-" * 60)
-    print("""
+    print(
+        """
     hooks_string = {
         "on_page_context_created": '''
 async def hook(page, context, **kwargs):
@@ -160,7 +171,8 @@ async def hook(page, context, **kwargs):
         ["https://example.com"],
         hooks=hooks_string
     )
-    """)
+    """
+    )
 
 
 async def main():

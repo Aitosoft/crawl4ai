@@ -33,14 +33,14 @@ async def main():
                 screenshot=True
             )
         )
-        
+
         if result.success:
             # Save screenshot
             if result.screenshot:
                 from base64 import b64decode
                 with open(os.path.join(__location__, "screenshot.png"), "wb") as f:
                     f.write(b64decode(result.screenshot))
-            
+
             # Save PDF
             if result.pdf:
                 with open(os.path.join(__location__, "page.pdf"), "wb") as f:
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 - If `screenshot=True`, and a PDF is already available, it directly converts the first page of that PDF to an image for you—no repeated loading or scrolling.
 - Finally, you get your PDF and/or screenshot ready to use.
 
-**Controlling scroll speed for full-page screenshots:**  
+**Controlling scroll speed for full-page screenshots:**
 When a page is taller than `screenshot_height_threshold` (default ~20,000px) and no PDF is available, Crawl4AI scrolls through the page to capture a stitched full-page screenshot. Use `scroll_delay` to control the pause between scroll steps:
 
 ```python

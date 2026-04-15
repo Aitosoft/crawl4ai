@@ -33,7 +33,7 @@
         <h3>Generated C4A-Script:</h3>
         <pre id="code-output"></pre>
     </div>
-    
+
     <script src="https://unpkg.com/blockly/blockly.min.js"></script>
     <script src="assets/c4a-blocks.js"></script>
     <script>
@@ -59,7 +59,7 @@
                 }
             })
         });
-        
+
         workspace.addChangeListener((event) => {
             const code = Blockly.JavaScript.workspaceToCode(workspace);
             document.getElementById('code-output').textContent = code;

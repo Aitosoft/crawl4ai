@@ -2,7 +2,7 @@
 
 Crawl4AI empowers you to navigate and interact with the web using your **authentic digital identity**, ensuring you’re recognized as a human and not mistaken for a bot. This tutorial covers:
 
-1. **Managed Browsers** – The recommended approach for persistent profiles and identity-based crawling.  
+1. **Managed Browsers** – The recommended approach for persistent profiles and identity-based crawling.
 2. **Magic Mode** – A simplified fallback solution for quick automation without persistent identity.
 
 ---
@@ -13,8 +13,8 @@ Crawl4AI empowers you to navigate and interact with the web using your **authent
 
 ### Key Benefits
 
-- **Authentic Browsing Experience**: Retain session data and browser fingerprints as though you’re a normal user.  
-- **Effortless Configuration**: Once you log in or solve CAPTCHAs in your chosen data directory, you can re-run crawls without repeating those steps.  
+- **Authentic Browsing Experience**: Retain session data and browser fingerprints as though you’re a normal user.
+- **Effortless Configuration**: Once you log in or solve CAPTCHAs in your chosen data directory, you can re-run crawls without repeating those steps.
 - **Empowered Data Access**: If you can see the data in your own browser, you can automate its retrieval with your genuine identity.
 
 ---
@@ -28,7 +28,7 @@ Below is a **partial update** to your **Managed Browsers** tutorial, specificall
 If you installed Crawl4AI (which installs Playwright under the hood), you already have a Playwright-managed Chromium on your system. Follow these steps to launch that **Chromium** from your command line, specifying a **custom** data directory:
 
 1. **Find** the Playwright Chromium binary:
-   - On most systems, installed browsers go under a `~/.cache/ms-playwright/` folder or similar path.  
+   - On most systems, installed browsers go under a `~/.cache/ms-playwright/` folder or similar path.
    - To see an overview of installed browsers, run:
      ```bash
      python -m playwright install --dry-run
@@ -61,10 +61,10 @@ If you installed Crawl4AI (which installs Playwright under the hood), you alread
    "C:\Users\<you>\AppData\Local\ms-playwright\chromium-1234\chrome-win\chrome.exe" ^
        --user-data-dir="C:\Users\<you>\my_chrome_profile"
    ```
-   
-   **Replace** the path with the actual subfolder indicated in your `ms-playwright` cache structure.  
-   - This **opens** a fresh Chromium with your new or existing data folder.  
-   - **Log into** any sites or configure your browser the way you want.  
+
+   **Replace** the path with the actual subfolder indicated in your `ms-playwright` cache structure.
+   - This **opens** a fresh Chromium with your new or existing data folder.
+   - **Log into** any sites or configure your browser the way you want.
    - **Close** when done—your profile data is saved in that folder.
 
 3. **Use** that folder in **`BrowserConfig.user_data_dir`**:
@@ -154,9 +154,9 @@ if __name__ == "__main__":
 
 ### Workflow
 
-1. **Login** externally (via CLI or your normal Chrome with `--user-data-dir=...`).  
-2. **Close** that browser.  
-3. **Use** the same folder in `user_data_dir=` in Crawl4AI.  
+1. **Login** externally (via CLI or your normal Chrome with `--user-data-dir=...`).
+2. **Close** that browser.
+3. **Use** the same folder in `user_data_dir=` in Crawl4AI.
 4. **Crawl** – The site sees your identity as if you’re the same user who just logged in.
 
 ---
@@ -181,11 +181,11 @@ async with AsyncWebCrawler() as crawler:
 
 **Magic Mode**:
 
-- Simulates a user-like experience  
+- Simulates a user-like experience
 - Randomizes user agent & navigator
-- Randomizes interactions & timings  
-- Masks automation signals  
-- Attempts pop-up handling  
+- Randomizes interactions & timings
+- Masks automation signals
+- Attempts pop-up handling
 
 **But** it’s no substitute for **true** user-based sessions if you want a fully legitimate identity-based solution.
 
@@ -218,29 +218,29 @@ from crawl4ai import BrowserProfiler
 async def manage_profiles():
     # Create a profiler instance
     profiler = BrowserProfiler()
-    
+
     # Create a profile interactively - opens a browser window
     profile_path = await profiler.create_profile(
         profile_name="my-login-profile"  # Optional: name your profile
     )
-    
+
     print(f"Profile saved at: {profile_path}")
-    
+
     # List all available profiles
     profiles = profiler.list_profiles()
-    
+
     for profile in profiles:
         print(f"Profile: {profile['name']}")
         print(f"  Path: {profile['path']}")
         print(f"  Created: {profile['created']}")
         print(f"  Browser type: {profile['type']}")
-    
+
     # Get a specific profile path by name
     specific_profile = profiler.get_profile_path("my-login-profile")
-    
+
     # Delete a profile when no longer needed
     success = profiler.delete_profile("old-profile-name")
-    
+
 asyncio.run(manage_profiles())
 ```
 
@@ -266,7 +266,7 @@ async def crawl_with_profile(profile_path, url):
         use_managed_browser=True,
         user_data_dir=profile_path
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(url)
         return result
@@ -274,11 +274,11 @@ async def crawl_with_profile(profile_path, url):
 async def main():
     # Create a profiler instance
     profiler = BrowserProfiler()
-    
+
     # Launch the interactive profile manager
     # Passing the crawl function as a callback adds a "crawl with profile" option
     await profiler.interactive_manager(crawl_callback=crawl_with_profile)
-    
+
 asyncio.run(main())
 ```
 
@@ -316,10 +316,10 @@ async with AsyncWebCrawler() as crawler:
         config=CrawlerRunConfig(
             # Set browser locale (language and region formatting)
             locale="fr-FR",  # French (France)
-            
+
             # Set browser timezone
             timezone_id="Europe/Paris",
-            
+
             # Other normal options...
             magic=True,
             page_timeout=60000
@@ -349,7 +349,7 @@ async with AsyncWebCrawler() as crawler:
                 longitude=2.3522,
                 accuracy=100        # Accuracy in meters (optional)
             ),
-            
+
             # This site will see you as being in Paris
             page_timeout=60000
         )
@@ -368,7 +368,7 @@ These settings work perfectly with managed browsers for a complete identity solu
 
 ```python
 from crawl4ai import (
-    AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, 
+    AsyncWebCrawler, BrowserConfig, CrawlerRunConfig,
     GeolocationConfig
 )
 
@@ -397,7 +397,7 @@ Combining persistent profiles with precise geolocation and region settings gives
 ## 8. Summary
 
 - **Create** your user-data directory either:
-  - By launching Chrome/Chromium externally with `--user-data-dir=/some/path` 
+  - By launching Chrome/Chromium externally with `--user-data-dir=/some/path`
   - Or by using the built-in `BrowserProfiler.create_profile()` method
   - Or through the interactive interface with `profiler.interactive_manager()`
 - **Log in** or configure sites as needed, then close the browser

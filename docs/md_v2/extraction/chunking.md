@@ -131,7 +131,7 @@ class CosineSimilarityExtractor:
         return [(chunks[i], similarities[i]) for i in range(len(chunks))]
 
 # Example Workflow
-text = """This is a sample document. It has multiple sentences. 
+text = """This is a sample document. It has multiple sentences.
 We are testing chunking and similarity."""
 
 chunker = SlidingWindowChunking(window_size=5, step=3)

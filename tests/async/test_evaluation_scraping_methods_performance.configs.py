@@ -197,7 +197,7 @@ def generate_complicated_html():
       <head>
         <title>Complicated Test Page</title>
         <meta name="description" content="A very complicated page for testing.">
-        
+
         <style>
           .hidden { display: none; }
           .highlight { color: red; }
@@ -205,7 +205,7 @@ def generate_complicated_html():
       </head>
       <body>
         <!-- This is a comment that we may remove if remove_comments=True -->
-        
+
         <header>
           <h1>Main Title of the Page</h1>
           <nav>
@@ -214,51 +214,51 @@ def generate_complicated_html():
             <a href="javascript:void(0)">JS Void Link</a>
           </nav>
         </header>
-        
+
         <noscript>
           <p>JavaScript is disabled or not supported.</p>
         </noscript>
-        
+
         <form action="submit.php" method="post">
           <input type="text" name="username" />
           <button type="submit">Submit</button>
         </form>
-        
+
         <section>
           <article>
             <h2>Article Title</h2>
             <p>
-              This paragraph has a good amount of text to exceed word_count_threshold if it's 
+              This paragraph has a good amount of text to exceed word_count_threshold if it's
               set to something small. But it might not exceed a very high threshold.
             </p>
-            
+
             <img src="http://images.example.com/photo.jpg" alt="Descriptive alt text"
                  style="width:200px;height:150px;" data-lazy="true">
-            
+
             <img src="icon.png" alt="Icon" style="display:none;">
-            
+
             <p>Another short text. <a href="/local-link">Local Link</a></p>
           </article>
         </section>
-        
+
         <section id="promo-section">
           <p>Promo text <a href="http://ads.example.com/ad">Ad Link</a></p>
         </section>
-        
+
         <aside class="sidebar">
           <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA..." alt="Base64 Image">
           <div data-info="secret" class="social-widget">
             <p>Follow us on <a href="http://facebook.com/brand">Facebook</a></p>
           </div>
         </aside>
-        
+
         <!-- Another comment below this line -->
         <script>console.log("script that might be removed");</script>
-        
+
         <div style="display:none;">
           <p>This is hidden</p>
         </div>
-        
+
         <footer>
           <small>Footer Info &copy; 2025</small>
         </footer>

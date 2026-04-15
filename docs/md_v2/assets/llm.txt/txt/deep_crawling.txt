@@ -19,10 +19,10 @@ async def basic_deep_crawl():
         scraping_strategy=LXMLWebScrapingStrategy(),
         verbose=True
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         results = await crawler.arun("https://docs.crawl4ai.com", config=config)
-        
+
         # Group results by depth
         pages_by_depth = {}
         for result in results:
@@ -30,7 +30,7 @@ async def basic_deep_crawl():
             if depth not in pages_by_depth:
                 pages_by_depth[depth] = []
             pages_by_depth[depth].append(result.url)
-        
+
         print(f"Crawled {len(results)} pages total")
         for depth, urls in sorted(pages_by_depth.items()):
             print(f"Depth {depth}: {len(urls)} pages")
@@ -87,10 +87,10 @@ async def batch_deep_crawl():
         deep_crawl_strategy=BFSDeepCrawlStrategy(max_depth=1),
         stream=False  # Default - collect all results first
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         results = await crawler.arun("https://example.com", config=config)
-        
+
         # Process all results at once
         for result in results:
             print(f"Batch processed: {result.url}")
@@ -101,7 +101,7 @@ async def streaming_deep_crawl():
         deep_crawl_strategy=BFSDeepCrawlStrategy(max_depth=1),
         stream=True  # Process results immediately
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun("https://example.com", config=config):
             depth = result.metadata.get("depth", 0)
@@ -137,19 +137,19 @@ advanced_filter_chain = FilterChain([
         allowed_domains=["docs.example.com"],
         blocked_domains=["old.docs.example.com", "staging.example.com"]
     ),
-    
+
     # URL pattern matching
     URLPatternFilter(patterns=["*tutorial*", "*guide*", "*blog*"]),
-    
+
     # Content type filtering
     ContentTypeFilter(allowed_types=["text/html"]),
-    
+
     # SEO quality filter
     SEOFilter(
         threshold=0.5,
         keywords=["tutorial", "guide", "documentation"]
     ),
-    
+
     # Content relevance filter
     ContentRelevanceFilter(
         query="Web crawling and data extraction with Python",
@@ -176,7 +176,7 @@ async def scored_deep_crawl():
         keywords=["browser", "crawler", "web", "automation"],
         weight=1.0
     )
-    
+
     config = CrawlerRunConfig(
         deep_crawl_strategy=BestFirstCrawlingStrategy(
             max_depth=2,
@@ -186,7 +186,7 @@ async def scored_deep_crawl():
         stream=True,  # Recommended with BestFirst
         verbose=True
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun("https://docs.crawl4ai.com", config=config):
             score = result.metadata.get("score", 0)
@@ -207,7 +207,7 @@ async def limited_crawls():
             url_scorer=KeywordRelevanceScorer(keywords=["browser", "crawler"], weight=1.0)
         )
     )
-    
+
     # DFS with score threshold
     dfs_config = CrawlerRunConfig(
         deep_crawl_strategy=DFSDeepCrawlStrategy(
@@ -217,7 +217,7 @@ async def limited_crawls():
             url_scorer=KeywordRelevanceScorer(keywords=["web", "automation"], weight=1.0)
         )
     )
-    
+
     # Best-First with both constraints
     bf_config = CrawlerRunConfig(
         deep_crawl_strategy=BestFirstCrawlingStrategy(
@@ -227,7 +227,7 @@ async def limited_crawls():
         ),
         stream=True
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         # Use any of the configs
         async for result in await crawler.arun("https://docs.crawl4ai.com", config=bf_config):
@@ -249,13 +249,13 @@ async def comprehensive_deep_crawl():
         ContentTypeFilter(allowed_types=["text/html"]),
         SEOFilter(threshold=0.4, keywords=["crawl", "tutorial", "guide"])
     ])
-    
+
     # Multi-keyword scorer
     keyword_scorer = KeywordRelevanceScorer(
         keywords=["crawl", "example", "async", "configuration", "browser"],
         weight=0.8
     )
-    
+
     # Complete configuration
     config = CrawlerRunConfig(
         deep_crawl_strategy=BestFirstCrawlingStrategy(
@@ -270,31 +270,31 @@ async def comprehensive_deep_crawl():
         verbose=True,
         cache_mode=CacheMode.BYPASS
     )
-    
+
     # Execute and analyze
     results = []
     start_time = time.time()
-    
+
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun("https://docs.crawl4ai.com", config=config):
             results.append(result)
             score = result.metadata.get("score", 0)
             depth = result.metadata.get("depth", 0)
             print(f"→ Depth: {depth} | Score: {score:.2f} | {result.url}")
-    
+
     # Performance analysis
     duration = time.time() - start_time
     avg_score = sum(r.metadata.get('score', 0) for r in results) / len(results)
-    
+
     print(f"✅ Crawled {len(results)} pages in {duration:.2f}s")
     print(f"✅ Average relevance score: {avg_score:.2f}")
-    
+
     # Depth distribution
     depth_counts = {}
     for result in results:
         depth = result.metadata.get("depth", 0)
         depth_counts[depth] = depth_counts.get(depth, 0) + 1
-    
+
     for depth, count in sorted(depth_counts.items()):
         print(f"📊 Depth {depth}: {count} pages")
 ```
@@ -312,10 +312,10 @@ async def robust_deep_crawl():
         stream=True,
         page_timeout=30000  # 30 second timeout per page
     )
-    
+
     successful_pages = []
     failed_pages = []
-    
+
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun("https://docs.crawl4ai.com", config=config):
             if result.success:
@@ -330,16 +330,16 @@ async def robust_deep_crawl():
                     'depth': result.metadata.get("depth", 0)
                 })
                 print(f"❌ Failed: {result.url} - {result.error_message}")
-    
+
     print(f"📊 Results: {len(successful_pages)} successful, {len(failed_pages)} failed")
-    
+
     # Analyze failures by depth
     if failed_pages:
         failure_by_depth = {}
         for failure in failed_pages:
             depth = failure['depth']
             failure_by_depth[depth] = failure_by_depth.get(depth, 0) + 1
-        
+
         print("❌ Failures by depth:")
         for depth, count in sorted(failure_by_depth.items()):
             print(f"   Depth {depth}: {count} failures")

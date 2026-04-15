@@ -10,7 +10,7 @@
 
 You know that feeling when you're scrolling through Twitter, and suddenly realize you can't scroll back to that brilliant tweet from an hour ago? It's not your browser being quirky—it's virtual scrolling at work. And if this frustrates you as a user, imagine being a web scraper trying to capture all those tweets.
 
-Here's the dirty secret of modern web development: **most of the content you see doesn't actually exist**. 
+Here's the dirty secret of modern web development: **most of the content you see doesn't actually exist**.
 
 Let me explain. Open Twitter right now and scroll for a bit. Now inspect the DOM. You'll find maybe 20-30 tweet elements, yet you just scrolled past hundreds. Where did they go? They were never really there—just temporary ghosts passing through a revolving door of DOM elements.
 
@@ -29,7 +29,7 @@ Traditional Infinite Scroll:         Virtual Scroll:
 │ Item 10     │                     │ Item 14     │
 │ Item 11 NEW │                     │ Item 15     │
 │ Item 12 NEW │                     └─────────────┘
-└─────────────┘                     
+└─────────────┘
 DOM: 12 items & growing             DOM: Always ~5 items
 ```
 
@@ -138,7 +138,7 @@ async def capture_twitter_thread():
         scroll_by="container_height",
         wait_after_scroll=1.0  # Twitter needs time to load
     )
-    
+
     config = CrawlerRunConfig(
         virtual_scroll_config=virtual_config,
         # Also extract structured data
@@ -160,17 +160,17 @@ async def capture_twitter_thread():
             }
         )
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://twitter.com/elonmusk/status/...",
             config=config
         )
-        
+
         # Parse the extracted tweets
         import json
         tweets = json.loads(result.extracted_content)
-        
+
         print(f"Captured {len(tweets)} tweets from the thread")
         for tweet in tweets[:5]:
             print(f"@{tweet['author']}: {tweet['content'][:100]}...")
@@ -269,7 +269,7 @@ function createFingerprint(element) {
 function mergeChunks(chunks) {
     const seen = new Set();
     const unique = [];
-    
+
     for (const chunk of chunks) {
         const elements = parseHTML(chunk);
         for (const element of elements) {
@@ -280,7 +280,7 @@ function mergeChunks(chunks) {
             }
         }
     }
-    
+
     return unique;
 }
 ```
@@ -314,20 +314,20 @@ async def main():
         scroll_by="container_height",
         wait_after_scroll=0.5
     )
-    
+
     # Set up the crawler
     config = CrawlerRunConfig(
         virtual_scroll_config=virtual_config,
         verbose=True  # See what's happening
     )
-    
+
     # Crawl and capture everything
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://example.com/feed",  # Your target URL
             config=config
         )
-        
+
         print(f"Captured {len(result.html)} characters of content")
         print(f"Found {result.html.count('article')} articles")  # Adjust selector
 

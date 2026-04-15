@@ -3,13 +3,13 @@
     <defs>
       <pattern id="cyberdots" width="4" height="4" patternUnits="userSpaceOnUse">
         <circle cx="2" cy="2" r="1">
-          <animate attributeName="fill" 
-                   values="#FF2EC4;#8B5CF6;#0BC5EA;#FF2EC4" 
-                   dur="6s" 
+          <animate attributeName="fill"
+                   values="#FF2EC4;#8B5CF6;#0BC5EA;#FF2EC4"
+                   dur="6s"
                    repeatCount="indefinite"/>
-          <animate attributeName="opacity" 
-                   values="0.2;0.4;0.2" 
-                   dur="4s" 
+          <animate attributeName="opacity"
+                   values="0.2;0.4;0.2"
+                   dur="4s"
                    repeatCount="indefinite"/>
         </circle>
       </pattern>
@@ -28,11 +28,11 @@
         </feMerge>
       </filter>
     </defs>
-    
+
     <rect width="120" height="35" rx="5" fill="#0A0A0F"/>
     <rect x="2" y="2" width="116" height="31" rx="4" fill="#16161E"/>
     <rect x="2" y="2" width="116" height="31" rx="4" fill="url(#cyberdots)"/>
-    
+
     <!-- Logo with animated neon -->
     <path d="M30 17.5 a7.5 7.5 0 1 1 -15 0 a7.5 7.5 0 1 1 15 0" fill="none" stroke="#8B5CF6" stroke-width="2" filter="url(#neonGlow)">
       <animate attributeName="stroke"
@@ -47,12 +47,12 @@
                repeatCount="indefinite"/>
     </path>
     <circle cx="22.5" cy="17.5" r="2" fill="#0BC5EA">
-      <animate attributeName="fill" 
-               values="#0BC5EA;#FF2EC4;#8B5CF6;#0BC5EA" 
-               dur="8s" 
+      <animate attributeName="fill"
+               values="#0BC5EA;#FF2EC4;#8B5CF6;#0BC5EA"
+               dur="8s"
                repeatCount="indefinite"/>
     </circle>
-    
+
     <text x="40" y="23" font-family="Arial, sans-serif" font-weight="500" font-size="14" filter="url(#neonGlow)">
       <animate attributeName="fill"
                values="#FF2EC4;#8B5CF6;#0BC5EA;#FF2EC4"

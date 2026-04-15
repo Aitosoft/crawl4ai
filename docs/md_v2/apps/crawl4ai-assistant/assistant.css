@@ -525,20 +525,20 @@ code {
     flex-direction: column;
     gap: 1.5rem;
   }
-  
+
   .nav-links {
     gap: 1rem;
   }
-  
+
   .features-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .step {
     flex-direction: column;
     gap: 1rem;
   }
-  
+
   .coming-soon-section h2 {
     font-size: 1.5rem;
   }
@@ -877,17 +877,17 @@ code {
   .tools-container {
     grid-template-columns: 1fr;
   }
-  
+
   .tools-panel {
     flex-direction: row;
     overflow-x: auto;
     padding-bottom: 0.5rem;
   }
-  
+
   .tool-selector {
     min-width: 250px;
   }
-  
+
   .code-tabs {
     flex-wrap: wrap;
   }
@@ -1023,16 +1023,16 @@ code {
   .script-features-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .workflow-step {
     flex-direction: column;
     gap: 1rem;
   }
-  
+
   .action-types {
     grid-template-columns: 1fr;
   }
-  
+
   .coming-soon-section h2 {
     font-size: 1.5rem;
   }
@@ -1082,9 +1082,9 @@ code {
   left: 0;
   width: 200%;
   height: 100%;
-  background: linear-gradient(90deg, 
-    transparent 0%, 
-    rgba(15, 187, 170, 0.1) 25%, 
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(15, 187, 170, 0.1) 25%,
     transparent 50%,
     rgba(15, 187, 170, 0.1) 75%,
     transparent 100%
@@ -1153,15 +1153,15 @@ code {
     text-align: center;
     gap: 1rem;
   }
-  
+
   .cloud-banner-text {
     text-align: center;
   }
-  
+
   .cloud-banner-icon {
     font-size: 2rem;
   }
-  
+
   .cloud-banner-text h3 {
     font-size: 1.25rem;
   }
@@ -1539,12 +1539,12 @@ code {
   .cloud-announcement h2 {
     font-size: 2rem;
   }
-  
+
   .cloud-features-preview {
     flex-direction: column;
     gap: 1rem;
   }
-  
+
   .signup-content {
     padding: 2rem;
   }

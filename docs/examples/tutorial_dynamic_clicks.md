@@ -100,7 +100,7 @@ async with AsyncWebCrawler(headless=True, verbose=True) as crawler:
 
 ## Choosing the Right Approach
 
-- **Step-by-Step (Session-based)**: 
+- **Step-by-Step (Session-based)**:
   - Good when you need fine-grained control or must dynamically check conditions before clicking the next page.
   - Useful if the page requires multiple conditions checked at runtime.
 

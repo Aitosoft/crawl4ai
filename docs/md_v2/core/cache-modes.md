@@ -44,7 +44,7 @@ from crawl4ai.async_configs import CrawlerRunConfig
 
 async def use_proxy():
     # Use CacheMode in CrawlerRunConfig
-    config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)  
+    config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
     async with AsyncWebCrawler(verbose=True) as crawler:
         result = await crawler.arun(
             url="https://www.nbcnews.com/business",

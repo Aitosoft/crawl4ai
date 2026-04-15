@@ -11,7 +11,7 @@ class ContentAnalyzer {
       media: ['gallery', 'carousel', 'slideshow', 'video', 'media']
     };
   }
-  
+
   async analyze(elements) {
     const analysis = {
       structure: await this.analyzeStructure(elements),
@@ -23,10 +23,10 @@ class ContentAnalyzer {
       relationships: this.analyzeRelationships(elements),
       metadata: this.extractMetadata(elements)
     };
-    
+
     return analysis;
   }
-  
+
   analyzeStructure(elements) {
     const structure = {
       hasHeadings: false,
@@ -39,33 +39,33 @@ class ContentAnalyzer {
       depth: 0,
       elementTypes: new Map()
     };
-    
+
     // Analyze each element
     for (const element of elements) {
       this.analyzeElementStructure(element, structure);
     }
-    
+
     // Determine layout type
     structure.layout = this.determineLayout(elements);
-    
+
     // Calculate max depth
     structure.depth = this.calculateMaxDepth(elements);
-    
+
     return structure;
   }
-  
+
   analyzeElementStructure(element, structure, visited = new Set()) {
     if (visited.has(element)) return;
     visited.add(element);
-    
+
     const tagName = element.tagName;
-    
+
     // Update element type count
     structure.elementTypes.set(
-      tagName, 
+      tagName,
       (structure.elementTypes.get(tagName) || 0) + 1
     );
-    
+
     // Check for specific structures
     if (/^H[1-6]$/.test(tagName)) {
       structure.hasHeadings = true;
@@ -80,13 +80,13 @@ class ContentAnalyzer {
     } else if (tagName === 'A') {
       structure.hasLinks = true;
     }
-    
+
     // Analyze children
     for (const child of element.children) {
       this.analyzeElementStructure(child, structure, visited);
     }
   }
-  
+
   identifyContentType(elements) {
     const scores = {
       article: 0,
@@ -96,74 +96,74 @@ class ContentAnalyzer {
       media: 0,
       mixed: 0
     };
-    
+
     for (const element of elements) {
       // Score based on element types and classes
       const tagName = element.tagName;
       const className = element.className.toLowerCase();
       const id = element.id.toLowerCase();
-      
+
       // Check for article patterns
-      if (tagName === 'ARTICLE' || 
+      if (tagName === 'ARTICLE' ||
           this.matchesPattern(className + ' ' + id, this.patterns.article)) {
         scores.article += 10;
       }
-      
+
       // Check for list patterns
-      if (['UL', 'OL'].includes(tagName) || 
+      if (['UL', 'OL'].includes(tagName) ||
           this.matchesPattern(className, this.patterns.list)) {
         scores.list += 5;
       }
-      
+
       // Check for table
       if (tagName === 'TABLE') {
         scores.table += 10;
       }
-      
+
       // Check for form
       if (tagName === 'FORM' || element.querySelector('input, select, textarea')) {
         scores.form += 5;
       }
-      
+
       // Check for media gallery
       if (this.matchesPattern(className, this.patterns.media) ||
           element.querySelectorAll('img, video').length > 3) {
         scores.media += 5;
       }
     }
-    
+
     // Determine primary content type
     const maxScore = Math.max(...Object.values(scores));
     if (maxScore === 0) return 'unknown';
-    
+
     for (const [type, score] of Object.entries(scores)) {
       if (score === maxScore) {
         return type;
       }
     }
-    
+
     return 'mixed';
   }
-  
+
   buildHierarchy(elements) {
     const hierarchy = {
       root: null,
       levels: [],
       headingStructure: []
     };
-    
+
     // Find common ancestor
     if (elements.length > 0) {
       hierarchy.root = this.findCommonAncestor(elements);
     }
-    
+
     // Build heading hierarchy
     const headings = [];
     for (const element of elements) {
       const foundHeadings = element.querySelectorAll('h1, h2, h3, h4, h5, h6');
       headings.push(...Array.from(foundHeadings));
     }
-    
+
     // Sort headings by document position
     headings.sort((a, b) => {
       const position = a.compareDocumentPosition(b);
@@ -174,11 +174,11 @@ class ContentAnalyzer {
       }
       return 0;
     });
-    
+
     // Build heading structure
     let currentLevel = 0;
     const stack = [];
-    
+
     for (const heading of headings) {
       const level = parseInt(heading.tagName.substring(1));
       const item = {
@@ -187,24 +187,24 @@ class ContentAnalyzer {
         element: heading,
         children: []
       };
-      
+
       // Find parent in stack
       while (stack.length > 0 && stack[stack.length - 1].level >= level) {
         stack.pop();
       }
-      
+
       if (stack.length > 0) {
         stack[stack.length - 1].children.push(item);
       } else {
         hierarchy.headingStructure.push(item);
       }
-      
+
       stack.push(item);
     }
-    
+
     return hierarchy;
   }
-  
+
   collectMediaAssets(elements) {
     const media = {
       images: [],
@@ -212,7 +212,7 @@ class ContentAnalyzer {
       iframes: [],
       audio: []
     };
-    
+
     for (const element of elements) {
       // Collect images
       const images = element.querySelectorAll('img');
@@ -226,7 +226,7 @@ class ContentAnalyzer {
           element: img
         });
       }
-      
+
       // Collect videos
       const videos = element.querySelectorAll('video');
       for (const video of videos) {
@@ -238,7 +238,7 @@ class ContentAnalyzer {
           element: video
         });
       }
-      
+
       // Collect iframes
       const iframes = element.querySelectorAll('iframe');
       for (const iframe of iframes) {
@@ -250,7 +250,7 @@ class ContentAnalyzer {
           element: iframe
         });
       }
-      
+
       // Collect audio
       const audios = element.querySelectorAll('audio');
       for (const audio of audios) {
@@ -260,16 +260,16 @@ class ContentAnalyzer {
         });
       }
     }
-    
+
     return media;
   }
-  
+
   calculateTextDensity(elements) {
     let totalText = 0;
     let totalElements = 0;
     let linkText = 0;
     let codeText = 0;
-    
+
     for (const element of elements) {
       const stats = this.getTextStats(element);
       totalText += stats.textLength;
@@ -277,7 +277,7 @@ class ContentAnalyzer {
       linkText += stats.linkTextLength;
       codeText += stats.codeTextLength;
     }
-    
+
     return {
       textLength: totalText,
       elementCount: totalElements,
@@ -286,38 +286,38 @@ class ContentAnalyzer {
       codeDensity: totalText > 0 ? codeText / totalText : 0
     };
   }
-  
+
   getTextStats(element, visited = new Set()) {
     if (visited.has(element)) {
       return { textLength: 0, elementCount: 0, linkTextLength: 0, codeTextLength: 0 };
     }
     visited.add(element);
-    
+
     let stats = {
       textLength: 0,
       elementCount: 1,
       linkTextLength: 0,
       codeTextLength: 0
     };
-    
+
     // Get direct text content
     for (const node of element.childNodes) {
       if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent.trim();
         stats.textLength += text.length;
-        
+
         // Check if this text is within a link
         if (element.tagName === 'A') {
           stats.linkTextLength += text.length;
         }
-        
+
         // Check if this text is within code
         if (['CODE', 'PRE'].includes(element.tagName)) {
           stats.codeTextLength += text.length;
         }
       }
     }
-    
+
     // Process children
     for (const child of element.children) {
       const childStats = this.getTextStats(child, visited);
@@ -326,10 +326,10 @@ class ContentAnalyzer {
       stats.linkTextLength += childStats.linkTextLength;
       stats.codeTextLength += childStats.codeTextLength;
     }
-    
+
     return stats;
   }
-  
+
   identifySemanticRegions(elements) {
     const regions = {
       headers: [],
@@ -339,7 +339,7 @@ class ContentAnalyzer {
       footers: [],
       articles: []
     };
-    
+
     for (const element of elements) {
       // Check element and its ancestors for semantic regions
       let current = element;
@@ -347,7 +347,7 @@ class ContentAnalyzer {
         const tagName = current.tagName;
         const className = current.className.toLowerCase();
         const role = current.getAttribute('role');
-        
+
         // Check semantic HTML5 elements
         if (tagName === 'HEADER' || role === 'banner') {
           regions.headers.push(current);
@@ -362,7 +362,7 @@ class ContentAnalyzer {
         } else if (tagName === 'ARTICLE' || role === 'article') {
           regions.articles.push(current);
         }
-        
+
         // Check class patterns
         if (this.matchesPattern(className, this.patterns.header)) {
           regions.headers.push(current);
@@ -373,19 +373,19 @@ class ContentAnalyzer {
         } else if (this.matchesPattern(className, this.patterns.footer)) {
           regions.footers.push(current);
         }
-        
+
         current = current.parentElement;
       }
     }
-    
+
     // Deduplicate
     for (const key of Object.keys(regions)) {
       regions[key] = Array.from(new Set(regions[key]));
     }
-    
+
     return regions;
   }
-  
+
   analyzeRelationships(elements) {
     const relationships = {
       siblings: [],
@@ -394,7 +394,7 @@ class ContentAnalyzer {
       relatedByClass: new Map(),
       relatedByStructure: []
     };
-    
+
     // Find sibling relationships
     for (let i = 0; i < elements.length; i++) {
       for (let j = i + 1; j < elements.length; j++) {
@@ -403,7 +403,7 @@ class ContentAnalyzer {
         }
       }
     }
-    
+
     // Find parent-child relationships
     for (const element of elements) {
       for (const other of elements) {
@@ -416,7 +416,7 @@ class ContentAnalyzer {
         }
       }
     }
-    
+
     // Group by similar classes
     for (const element of elements) {
       const classes = Array.from(element.classList);
@@ -427,7 +427,7 @@ class ContentAnalyzer {
         relationships.relatedByClass.get(className).push(element);
       }
     }
-    
+
     // Find structurally similar elements
     for (let i = 0; i < elements.length; i++) {
       for (let j = i + 1; j < elements.length; j++) {
@@ -436,41 +436,41 @@ class ContentAnalyzer {
         }
       }
     }
-    
+
     return relationships;
   }
-  
+
   areStructurallySimilar(element1, element2) {
     // Same tag name
     if (element1.tagName !== element2.tagName) {
       return false;
     }
-    
+
     // Similar class structure
     const classes1 = Array.from(element1.classList).sort();
     const classes2 = Array.from(element2.classList).sort();
-    
+
     // At least 50% overlap in classes
     const intersection = classes1.filter(c => classes2.includes(c));
     const union = Array.from(new Set([...classes1, ...classes2]));
-    
+
     if (union.length > 0 && intersection.length / union.length >= 0.5) {
       return true;
     }
-    
+
     // Similar child structure
     if (element1.children.length === element2.children.length) {
       const childTags1 = Array.from(element1.children).map(c => c.tagName).sort();
       const childTags2 = Array.from(element2.children).map(c => c.tagName).sort();
-      
+
       if (JSON.stringify(childTags1) === JSON.stringify(childTags2)) {
         return true;
       }
     }
-    
+
     return false;
   }
-  
+
   extractMetadata(elements) {
     const metadata = {
       title: null,
@@ -480,22 +480,22 @@ class ContentAnalyzer {
       tags: [],
       microdata: []
     };
-    
+
     for (const element of elements) {
       // Look for title
       const h1 = element.querySelector('h1');
       if (h1 && !metadata.title) {
         metadata.title = h1.textContent.trim();
       }
-      
+
       // Look for meta information
       const metaElements = element.querySelectorAll('[itemprop], [property], [name]');
       for (const meta of metaElements) {
-        const prop = meta.getAttribute('itemprop') || 
-                    meta.getAttribute('property') || 
+        const prop = meta.getAttribute('itemprop') ||
+                    meta.getAttribute('property') ||
                     meta.getAttribute('name');
         const content = meta.getAttribute('content') || meta.textContent.trim();
-        
+
         if (prop && content) {
           if (prop.includes('author')) {
             metadata.author = content;
@@ -506,11 +506,11 @@ class ContentAnalyzer {
           } else if (prop.includes('tag') || prop.includes('keyword')) {
             metadata.tags.push(content);
           }
-          
+
           metadata.microdata.push({ property: prop, value: content });
         }
       }
-      
+
       // Look for time elements
       const timeElements = element.querySelectorAll('time');
       for (const time of timeElements) {
@@ -519,17 +519,17 @@ class ContentAnalyzer {
         }
       }
     }
-    
+
     return metadata;
   }
-  
+
   determineLayout(elements) {
     // Check if elements form a grid
     const positions = elements.map(el => {
       const rect = el.getBoundingClientRect();
       return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
     });
-    
+
     // Check for grid layout (multiple elements on same row)
     const rows = new Map();
     for (const pos of positions) {
@@ -539,84 +539,84 @@ class ContentAnalyzer {
       }
       rows.get(row).push(pos);
     }
-    
+
     // If multiple elements share rows, it's likely a grid
     const hasGrid = Array.from(rows.values()).some(row => row.length > 1);
-    
+
     if (hasGrid) {
       return 'grid';
     }
-    
+
     // Check for mixed layout (significant variation in widths)
     const widths = positions.map(p => p.width);
     const avgWidth = widths.reduce((a, b) => a + b, 0) / widths.length;
     const variance = widths.reduce((sum, w) => sum + Math.pow(w - avgWidth, 2), 0) / widths.length;
     const stdDev = Math.sqrt(variance);
-    
+
     if (stdDev / avgWidth > 0.3) {
       return 'mixed';
     }
-    
+
     return 'linear';
   }
-  
+
   calculateMaxDepth(elements) {
     let maxDepth = 0;
-    
+
     for (const element of elements) {
       const depth = this.getElementDepth(element);
       maxDepth = Math.max(maxDepth, depth);
     }
-    
+
     return maxDepth;
   }
-  
+
   getElementDepth(element, depth = 0) {
     if (element.children.length === 0) {
       return depth;
     }
-    
+
     let maxChildDepth = depth;
     for (const child of element.children) {
       const childDepth = this.getElementDepth(child, depth + 1);
       maxChildDepth = Math.max(maxChildDepth, childDepth);
     }
-    
+
     return maxChildDepth;
   }
-  
+
   findCommonAncestor(elements) {
     if (elements.length === 0) return null;
     if (elements.length === 1) return elements[0].parentElement;
-    
+
     // Start with the first element's ancestors
     let ancestor = elements[0];
     const ancestors = [];
-    
+
     while (ancestor) {
       ancestors.push(ancestor);
       ancestor = ancestor.parentElement;
     }
-    
+
     // Find the deepest common ancestor
     for (const ancestorCandidate of ancestors) {
       let isCommon = true;
-      
+
       for (const element of elements) {
         if (!ancestorCandidate.contains(element)) {
           isCommon = false;
           break;
         }
       }
-      
+
       if (isCommon) {
         return ancestorCandidate;
       }
     }
-    
+
     return document.body;
   }
-  
+
   matchesPattern(text, patterns) {
     return patterns.some(pattern => text.includes(pattern));
   }

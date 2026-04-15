@@ -136,7 +136,7 @@ response = requests.get("http://localhost:11235/metrics")
 
 ```python
 # HTML extraction (preprocessed for schema)
-response = requests.post("http://localhost:11235/html", 
+response = requests.post("http://localhost:11235/html",
     json={"url": "https://example.com"})
 
 # Screenshot capture
@@ -196,11 +196,11 @@ async def main():
             browser_config=BrowserConfig(headless=True),
             crawler_config=CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
         )
-        
+
         for result in results:
             print(f"URL: {result.url}, Success: {result.success}")
             print(f"Content length: {len(result.markdown)}")
-        
+
         # Streaming crawl
         stream_config = CrawlerRunConfig(stream=True, cache_mode=CacheMode.BYPASS)
         async for result in await client.crawl(
@@ -209,7 +209,7 @@ async def main():
             crawler_config=stream_config
         ):
             print(f"Streamed: {result.url} - {result.success}")
-        
+
         # Get API schema
         schema = await client.get_schema()
         print(f"Schema available: {bool(schema)}")
@@ -327,7 +327,7 @@ python tests/mcp/test_mcp_socket.py
 
 Available MCP tools:
 - `md` - Generate markdown from web content
-- `html` - Extract preprocessed HTML  
+- `html` - Extract preprocessed HTML
 - `screenshot` - Capture webpage screenshots
 - `pdf` - Generate PDF documents
 - `execute_js` - Run JavaScript on web pages
@@ -428,7 +428,7 @@ task_id = response.json()["task_id"]
 while True:
     result = requests.get(f"http://localhost:11235/crawl/job/{task_id}")
     status = result.json()
-    
+
     if status["status"] in ["COMPLETED", "FAILED"]:
         break
     time.sleep(1.5)
@@ -542,7 +542,7 @@ except Exception as e:
 
 # Test complex crawler config JSON
 test_crawler_json = {
-    "type": "CrawlerRunConfig", 
+    "type": "CrawlerRunConfig",
     "params": {
         "cache_mode": "bypass",
         "screenshot": True,
@@ -585,7 +585,7 @@ def validate_config_with_server(config_code: str) -> dict:
         "http://localhost:11235/config/dump",
         json={"code": config_code}
     )
-    
+
     if response.status_code == 200:
         print("✅ Valid configuration syntax")
         return response.json()
@@ -626,21 +626,21 @@ validate_config_with_server(invalid_config)
 ```python
 def build_and_validate_request(urls, browser_params=None, crawler_params=None):
     """Helper to build and validate complete request payload"""
-    
+
     # Create configurations
     browser_config = BrowserConfig(**(browser_params or {}))
     crawler_config = CrawlerRunConfig(**(crawler_params or {}))
-    
+
     # Build complete request payload
     payload = {
         "urls": urls if isinstance(urls, list) else [urls],
         "browser_config": browser_config.dump(),
         "crawler_config": crawler_config.dump()
     }
-    
+
     print("✅ Complete request payload:")
     print(json.dumps(payload, indent=2))
-    
+
     # Validate by attempting to reconstruct
     try:
         test_browser = from_serializable_dict(payload["browser_config"])
@@ -683,7 +683,7 @@ simple_config = {
 
 # Pattern 2: Nested objects
 nested_config = {
-    "type": "CrawlerRunConfig", 
+    "type": "CrawlerRunConfig",
     "params": {
         "extraction_strategy": {
             "type": "LLMExtractionStrategy",
@@ -706,7 +706,7 @@ dict_config = {
     "type": "CrawlerRunConfig",
     "params": {
         "extraction_strategy": {
-            "type": "JsonCssExtractionStrategy", 
+            "type": "JsonCssExtractionStrategy",
             "params": {
                 "schema": {
                     "type": "dict",  # Required wrapper
@@ -741,14 +741,14 @@ list_config = {
 ```python
 def diagnose_json_errors():
     """Common JSON structure errors and fixes"""
-    
+
     # ❌ WRONG: Missing type wrapper for objects
     wrong_config = {
         "browser_config": {
             "headless": True  # Missing type wrapper
         }
     }
-    
+
     # ✅ CORRECT: Proper type wrapper
     correct_config = {
         "browser_config": {
@@ -758,14 +758,14 @@ def diagnose_json_errors():
             }
         }
     }
-    
-    # ❌ WRONG: Dictionary without type: dict wrapper  
+
+    # ❌ WRONG: Dictionary without type: dict wrapper
     wrong_dict = {
         "schema": {
             "name": "Products"  # Raw dict, should be wrapped
         }
     }
-    
+
     # ✅ CORRECT: Dictionary with proper wrapper
     correct_dict = {
         "schema": {
@@ -775,29 +775,29 @@ def diagnose_json_errors():
             }
         }
     }
-    
+
     # ❌ WRONG: Invalid enum string
     wrong_enum = {
         "cache_mode": "DISABLED"  # Wrong case/value
     }
-    
-    # ✅ CORRECT: Valid enum string  
+
+    # ✅ CORRECT: Valid enum string
     correct_enum = {
         "cache_mode": "bypass"  # or "enabled", "disabled", etc.
     }
-    
+
     print("Common error patterns documented above")
 
 # Validate your JSON structure before sending
 def pre_flight_check(payload):
     """Run checks before sending to server"""
     required_keys = ["urls", "browser_config", "crawler_config"]
-    
+
     for key in required_keys:
         if key not in payload:
             print(f"❌ Missing required key: {key}")
             return False
-    
+
     # Check type wrappers
     for config_key in ["browser_config", "crawler_config"]:
         config = payload[config_key]
@@ -807,7 +807,7 @@ def pre_flight_check(payload):
         if "params" not in config:
             print(f"❌ {config_key} missing params")
             return False
-    
+
     print("✅ Pre-flight check passed")
     return True
 

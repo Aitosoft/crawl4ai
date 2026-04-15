@@ -649,18 +649,18 @@ body {
     .app-container {
         flex-direction: column;
     }
-    
+
     .editor-panel,
     .playground-panel {
         min-width: auto;
         width: 100%;
     }
-    
+
     .editor-panel {
         border-right: none;
         border-bottom: 1px solid var(--border-color);
     }
-    
+
     .output-section {
         height: 200px;
     }

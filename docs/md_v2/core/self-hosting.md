@@ -235,7 +235,7 @@ The `docker-compose.yml` file in the project root provides a simplified approach
     ```bash
     # Build with all features (includes torch and transformers)
     INSTALL_TYPE=all docker compose up --build -d
-    
+
     # Build with GPU support (for AMD64 platforms)
     ENABLE_GPU=true docker compose up --build -d
     ```
@@ -444,7 +444,7 @@ Executes JavaScript snippets on the specified URL and returns the full crawl res
 
 The Docker API supports user-provided hook functions, allowing you to customize the crawling behavior by injecting your own Python code at specific points in the crawling pipeline. This powerful feature enables authentication, performance optimization, and custom content extraction without modifying the server code.
 
-> ⚠️ **IMPORTANT SECURITY WARNING**: 
+> ⚠️ **IMPORTANT SECURITY WARNING**:
 > - **Never use hooks with untrusted code or on untrusted websites**
 > - **Be extremely careful when crawling sites that might be phishing or malicious**
 > - **Hook code has access to page context and can interact with the website**
@@ -540,7 +540,7 @@ async def hook(page, context, url, **kwargs):
     import base64
     # httpbin.org/basic-auth expects username="user" and password="passwd"
     credentials = base64.b64encode(b"user:passwd").decode('ascii')
-    
+
     await page.set_extra_http_headers({
         'Authorization': f'Basic {credentials}'
     })
@@ -565,14 +565,14 @@ async def hook(page, context, **kwargs):
     await context.route("**/*.{png,jpg,jpeg,gif,webp,svg,ico}", lambda route: route.abort())
     await context.route("**/*.{woff,woff2,ttf,otf,eot}", lambda route: route.abort())
     await context.route("**/*.{mp4,webm,ogg,mp3,wav,flac}", lambda route: route.abort())
-    
+
     # Block common tracking and ad domains
     await context.route("**/googletagmanager.com/*", lambda route: route.abort())
     await context.route("**/google-analytics.com/*", lambda route: route.abort())
     await context.route("**/doubleclick.net/*", lambda route: route.abort())
     await context.route("**/facebook.com/tr/*", lambda route: route.abort())
     await context.route("**/amazon-adsystem.com/*", lambda route: route.abort())
-    
+
     # Disable CSS animations for faster rendering
     await page.add_style_tag(content='''
         *, *::before, *::after {
@@ -580,7 +580,7 @@ async def hook(page, context, **kwargs):
             transition-duration: 0s !important;
         }
     ''')
-    
+
     return page
 """
 }
@@ -604,11 +604,11 @@ async def hook(page, context, **kwargs):
         current_height = await page.evaluate("document.body.scrollHeight")
         if current_height == previous_height:
             break  # No more content to load
-            
+
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         await page.wait_for_timeout(2000)  # Wait for content to load
         previous_height = current_height
-    
+
     return page
 """
 }
@@ -623,7 +623,7 @@ response = requests.post("http://localhost:11235/crawl", json={
 #### 5. E-commerce Login (Example Pattern)
 
 ```python
-# SECURITY WARNING: This is a pattern example. 
+# SECURITY WARNING: This is a pattern example.
 # Never use real credentials in code!
 # Always use environment variables or secure vaults.
 
@@ -632,29 +632,29 @@ hooks_code = {
 async def hook(page, context, **kwargs):
     # Example pattern for e-commerce sites
     # DO NOT use real credentials here!
-    
+
     # Navigate to login page first
     await page.goto("https://example-shop.com/login")
-    
+
     # Wait for login form to load
     await page.wait_for_selector("#email", timeout=5000)
-    
+
     # Fill login form (use environment variables in production!)
     await page.fill("#email", "test@example.com")  # Never use real email
     await page.fill("#password", "test_password")   # Never use real password
-    
+
     # Handle "Remember Me" checkbox if present
     try:
         await page.uncheck("#remember_me")  # Don't remember on shared systems
     except:
         pass
-    
+
     # Submit form
     await page.click("button[type='submit']")
-    
+
     # Wait for redirect after login
     await page.wait_for_url("**/account/**", timeout=10000)
-    
+
     return page
 """
 }
@@ -671,17 +671,17 @@ async def hook(page, context, url, response, **kwargs):
     await page.wait_for_selector("#content", timeout=5000)
     return page
 """,
-    
+
     "before_retrieve_html": """
 async def hook(page, context, **kwargs):
     # Extract structured data from Wikipedia infobox
     metadata = await page.evaluate('''() => {
         const infobox = document.querySelector('.infobox');
         if (!infobox) return null;
-        
+
         const data = {};
         const rows = infobox.querySelectorAll('tr');
-        
+
         rows.forEach(row => {
             const header = row.querySelector('th');
             const value = row.querySelector('td');
@@ -689,13 +689,13 @@ async def hook(page, context, **kwargs):
                 data[header.innerText.trim()] = value.innerText.trim();
             }
         });
-        
+
         return data;
     }''')
-    
+
     if metadata:
         print("Extracted metadata:", metadata)
-    
+
     return page
 """
 }
@@ -712,7 +712,7 @@ response = requests.post("http://localhost:11235/crawl", json={
 
 1. **Never Trust User Input**: If accepting hook code from users, always validate and sandbox it
 2. **Avoid Phishing Sites**: Never use hooks on suspicious or unverified websites
-3. **Protect Credentials**: 
+3. **Protect Credentials**:
    - Never hardcode passwords, tokens, or API keys in hook code
    - Use environment variables or secure secret management
    - Rotate credentials regularly
@@ -782,12 +782,12 @@ async def hook(page, context, **kwargs):
     await context.add_cookies([
         {"name": "test_cookie", "value": "test_value", "domain": ".httpbin.org", "path": "/"}
     ])
-    
+
     # Block unnecessary resources for httpbin
     await context.route("**/*.{png,jpg,jpeg}", lambda route: route.abort())
     return page
 """,
-    
+
     "before_goto": """
 async def hook(page, context, url, **kwargs):
     # Add custom headers for testing
@@ -798,7 +798,7 @@ async def hook(page, context, url, **kwargs):
     print(f"[HOOK] Navigating to: {url}")
     return page
 """,
-    
+
     "before_retrieve_html": """
 async def hook(page, context, **kwargs):
     # Simple scroll for any lazy-loaded content
@@ -826,12 +826,12 @@ response = requests.post("http://localhost:11235/crawl", json={
 # Check results
 if response.status_code == 200:
     data = response.json()
-    
+
     # Check hook execution
     if data['hooks']['status']['status'] == 'success':
         print(f"✅ All {len(data['hooks']['status']['attached_hooks'])} hooks executed successfully")
         print(f"Execution stats: {data['hooks']['summary']}")
-    
+
     # Process crawl results
     for result in data['results']:
         print(f"Crawled: {result['url']} - Success: {result['success']}")
@@ -1786,7 +1786,7 @@ response = requests.post(
 response = requests.post(
     "http://localhost:11235/md",
     json={
-        "url": "https://example.com", 
+        "url": "https://example.com",
         "f": "llm",
         "q": "Write a creative summary of this content",
         "temperature": 1.2  # More creative, varied responses
@@ -1820,7 +1820,7 @@ Switch between providers based on task requirements:
 ```python
 async def smart_extraction(url: str, content_type: str):
     """Select provider and temperature based on content type"""
-    
+
     configs = {
         "technical": {
             "provider": "openai/gpt-4",
@@ -1838,9 +1838,9 @@ async def smart_extraction(url: str, content_type: str):
             "query": "Quick summary in bullet points"
         }
     }
-    
+
     config = configs.get(content_type, configs["quick"])
-    
+
     response = await httpx.post(
         "http://localhost:11235/md",
         json={
@@ -1851,7 +1851,7 @@ async def smart_extraction(url: str, content_type: str):
             "temperature": config["temperature"]
         }
     )
-    
+
     return response.json()
 ```
 

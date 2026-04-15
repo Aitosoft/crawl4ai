@@ -40,7 +40,7 @@
     --progress-bar-fill: #09b5a5;
     --code-bg-color: #3f3f44;
     --block-background-color: #202020;
-    
+
     --header-height: 55px;
 }
 
@@ -336,7 +336,7 @@ body {
     .tutorial-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .playground-section {
         order: -1;
     }

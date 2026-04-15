@@ -19,7 +19,7 @@ Traditional Scroll:          Virtual Scroll:
 │ Item 10     │             │ Item 14     │
 │ Item 11 NEW │             │ Item 15     │
 │ Item 12 NEW │             └─────────────┘
-└─────────────┘             
+└─────────────┘
 DOM keeps growing           DOM size stays constant
 ```
 
@@ -30,7 +30,7 @@ Without proper handling, crawlers only capture the currently visible items, miss
 Crawl4AI's Virtual Scroll detects and handles three scenarios:
 
 1. **No Change** - Content doesn't update on scroll (static page or end reached)
-2. **Content Appended** - New items added to existing ones (traditional infinite scroll)  
+2. **Content Appended** - New items added to existing ones (traditional infinite scroll)
 3. **Content Replaced** - Items replaced with new ones (true virtual scroll)
 
 Only scenario 3 requires special handling, which Virtual Scroll automates.
@@ -90,18 +90,18 @@ async def crawl_twitter_timeline():
         scroll_by="container_height",
         wait_after_scroll=1.0  # Twitter needs time to load
     )
-    
+
     browser_config = BrowserConfig(headless=True)  # Set to False to watch it work
     config = CrawlerRunConfig(
         virtual_scroll_config=virtual_config
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
             url="https://twitter.com/search?q=AI",
             config=config
         )
-        
+
         # Extract tweet count
         import re
         tweets = re.findall(r'data-testid="tweet"', result.html)
@@ -119,18 +119,18 @@ async def crawl_instagram_grid():
         scroll_by=800,                 # Fixed pixel scrolling
         wait_after_scroll=0.8
     )
-    
+
     config = CrawlerRunConfig(
         virtual_scroll_config=virtual_config,
         screenshot=True  # Capture final state
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://www.instagram.com/explore/tags/photography/",
             config=config
         )
-        
+
         # Count posts
         posts = result.html.count('class="post"')
         print(f"Captured {posts} posts from virtualized grid")
@@ -149,21 +149,21 @@ async def crawl_mixed_feed():
         scroll_by="container_height",
         wait_after_scroll=0.5
     )
-    
+
     config = CrawlerRunConfig(
         virtual_scroll_config=virtual_config
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://news.example.com",
             config=config
         )
-        
+
         # Featured articles remain throughout
         featured = result.html.count('class="featured-article"')
         regular = result.html.count('class="regular-article"')
-        
+
         print(f"Featured (static): {featured}")
         print(f"Regular (virtualized): {regular}")
 ```
@@ -205,7 +205,7 @@ from crawl4ai import LLMExtractionStrategy, LLMConfig
 schema = {
     "type": "array",
     "items": {
-        "type": "object", 
+        "type": "object",
         "properties": {
             "author": {"type": "string"},
             "content": {"type": "string"},
@@ -228,7 +228,7 @@ config = CrawlerRunConfig(
 
 async with AsyncWebCrawler() as crawler:
     result = await crawler.arun(url="...", config=config)
-    
+
     # Extracted data from ALL scrolled content
     import json
     posts = json.loads(result.extracted_content)
@@ -252,7 +252,7 @@ async with AsyncWebCrawler() as crawler:
    ```python
    # Fast sites
    wait_after_scroll=0.2
-   
+
    # Slower sites or heavy content
    wait_after_scroll=1.5
    ```
@@ -295,7 +295,7 @@ If the container isn't found, crawling continues normally without virtual scroll
 
 See our [comprehensive example](/docs/examples/virtual_scroll_example.py) that demonstrates:
 - Twitter-like feeds
-- Instagram grids  
+- Instagram grids
 - Traditional infinite scroll
 - Mixed content scenarios
 - Performance comparisons

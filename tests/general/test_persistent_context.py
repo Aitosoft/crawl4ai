@@ -13,8 +13,11 @@ URLS = [
     "https://www.rust-lang.org/",
 ]
 
+
 async def main():
-    profile_dir = os.path.join(os.path.expanduser("~"), ".crawl4ai", "profiles", "test-persistent-profile")
+    profile_dir = os.path.join(
+        os.path.expanduser("~"), ".crawl4ai", "profiles", "test-persistent-profile"
+    )
     os.makedirs(profile_dir, exist_ok=True)
 
     browser_config = BrowserConfig(
@@ -38,6 +41,7 @@ async def main():
             print(r.url, r.success, len(r.markdown.raw_markdown) if r.markdown else 0)
         # r = await crawler.arun(url=URLS[0], config=run_cfg)
         # print(r.url, r.success, len(r.markdown.raw_markdown) if r.markdown else 0)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

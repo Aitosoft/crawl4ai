@@ -21,7 +21,7 @@ Adaptive Crawling solves both by using a three-layer scoring system that determi
 The AdaptiveCrawler uses three metrics to measure information sufficiency:
 
 - **Coverage**: How well your collected pages cover the query terms
-- **Consistency**: Whether the information is coherent across pages  
+- **Consistency**: Whether the information is coherent across pages
 - **Saturation**: Detecting when new pages aren't adding new information
 
 When these metrics indicate sufficient information has been gathered, crawling stops automatically.
@@ -37,16 +37,16 @@ async def main():
     async with AsyncWebCrawler() as crawler:
         # Create an adaptive crawler (config is optional)
         adaptive = AdaptiveCrawler(crawler)
-        
+
         # Start crawling with a query
         result = await adaptive.digest(
             start_url="https://docs.python.org/3/",
             query="async context managers"
         )
-        
+
         # View statistics
         adaptive.print_stats()
-        
+
         # Get the most relevant content
         relevant_pages = adaptive.get_relevant_content(top_k=5)
         for page in relevant_pages:
@@ -171,19 +171,19 @@ config = AdaptiveConfig(
 
     # Query expansion
     n_query_variations=10,  # Number of query variations to generate
-    
+
     # Coverage parameters
     embedding_coverage_radius=0.2,  # Distance threshold for coverage
     embedding_k_exp=3.0,  # Exponential decay factor (higher = stricter)
-    
+
     # Stopping criteria
     embedding_min_relative_improvement=0.1,  # Min improvement to continue
     embedding_validation_min_score=0.3,  # Min validation score
     embedding_min_confidence_threshold=0.1,  # Below this = irrelevant
-    
+
     # Link selection
     embedding_overlap_threshold=0.85,  # Similarity for deduplication
-    
+
     # Display confidence mapping
     embedding_quality_min_confidence=0.7,  # Min displayed confidence
     embedding_quality_max_confidence=0.95  # Max displayed confidence
@@ -324,7 +324,7 @@ for doc in adaptive.get_relevant_content(top_k=3):
 # Build a focused knowledge base about machine learning
 queries = [
     "supervised learning algorithms",
-    "neural network architectures", 
+    "neural network architectures",
     "model evaluation metrics"
 ]
 
@@ -333,7 +333,7 @@ for query in queries:
         start_url="https://scikit-learn.org/stable/",
         query=query
     )
-    
+
 # Export combined knowledge base
 adaptive.export_knowledge_base("ml_knowledge.jsonl")
 ```

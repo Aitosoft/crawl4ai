@@ -6,7 +6,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
       // Create a data URL for the Python code
       const dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(message.code);
-      
+
       // Download the file
       chrome.downloads.download({
         url: dataUrl,
@@ -25,10 +25,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.error('Error creating download:', error);
       sendResponse({ success: false, error: error.message });
     }
-    
+
     return true; // Keep the message channel open for async response
   }
-  
+
   return false;
 });
 

@@ -1,8 +1,7 @@
 """Integration tests for prefetch mode with the crawler."""
 
 import pytest
-import asyncio
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, BrowserConfig
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 
 # Use crawl4ai docs as test domain
 TEST_DOMAIN = "https://docs.crawl4ai.com"
@@ -30,8 +29,8 @@ class TestPrefetchModeIntegration:
 
             # Should NOT have processed content
             assert result.markdown is None or (
-                hasattr(result.markdown, 'raw_markdown') and
-                result.markdown.raw_markdown is None
+                hasattr(result.markdown, "raw_markdown")
+                and result.markdown.raw_markdown is None
             )
             assert result.cleaned_html is None
             assert result.extracted_content is None
@@ -60,19 +59,20 @@ class TestPrefetchModeIntegration:
         async with AsyncWebCrawler() as crawler:
             config = CrawlerRunConfig(
                 prefetch=True,
-                deep_crawl_strategy=BFSDeepCrawlStrategy(
-                    max_depth=1,
-                    max_pages=3
-                )
+                deep_crawl_strategy=BFSDeepCrawlStrategy(max_depth=1, max_pages=3),
             )
 
             result_container = await crawler.arun(TEST_DOMAIN, config=config)
 
             # Handle both list and iterator results
-            if hasattr(result_container, '__aiter__'):
+            if hasattr(result_container, "__aiter__"):
                 results = [r async for r in result_container]
             else:
-                results = list(result_container) if hasattr(result_container, '__iter__') else [result_container]
+                results = (
+                    list(result_container)
+                    if hasattr(result_container, "__iter__")
+                    else [result_container]
+                )
 
             # Each result should have HTML and links
             for result in results:
@@ -101,8 +101,7 @@ class TestPrefetchModeIntegration:
                 base_url=TEST_DOMAIN  # Provide base URL for link resolution
             )
             processed_result = await crawler.arun(
-                f"raw:{stored_html}",
-                config=process_config
+                f"raw:{stored_html}", config=process_config
             )
 
             # Should now have full processing
@@ -139,11 +138,11 @@ class TestPrefetchModeIntegration:
         config = CrawlerRunConfig(prefetch=True)
         cloned = config.clone()
 
-        assert cloned.prefetch == True
+        assert cloned.prefetch is True
 
         # Clone with override
         cloned_false = config.clone(prefetch=False)
-        assert cloned_false.prefetch == False
+        assert cloned_false.prefetch is False
 
     @pytest.mark.asyncio
     async def test_prefetch_to_dict(self):
@@ -152,13 +151,13 @@ class TestPrefetchModeIntegration:
         config_dict = config.to_dict()
 
         assert "prefetch" in config_dict
-        assert config_dict["prefetch"] == True
+        assert config_dict["prefetch"] is True
 
     @pytest.mark.asyncio
     async def test_prefetch_default_false(self):
         """Test that prefetch defaults to False."""
         config = CrawlerRunConfig()
-        assert config.prefetch == False
+        assert config.prefetch is False
 
     @pytest.mark.asyncio
     async def test_prefetch_explicit_false(self):
@@ -221,10 +220,7 @@ class TestPrefetchWithRawHTML:
         """
 
         async with AsyncWebCrawler() as crawler:
-            config = CrawlerRunConfig(
-                prefetch=True,
-                base_url="https://example.com"
-            )
+            config = CrawlerRunConfig(prefetch=True, base_url="https://example.com")
             result = await crawler.arun(f"raw:{sample_html}", config=config)
 
             assert result.success is True

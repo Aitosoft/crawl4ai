@@ -11,7 +11,7 @@ class Click2Crawl {
       click2CrawlInstance.stop();
     }
     click2CrawlInstance = this;
-    
+
     this.container = null;
     this.fields = [];
     this.overlay = null;
@@ -27,7 +27,7 @@ class Click2Crawl {
     this.previewElements = [];
     this.schema = null;
     this.parentLevels = 1; // Default parent levels for base container
-    
+
     this.handleMouseMove = this.handleMouseMove.bind(this);
     this.handleClick = this.handleClick.bind(this);
     this.handleKeyPress = this.handleKeyPress.bind(this);
@@ -57,19 +57,19 @@ class Click2Crawl {
     this.selectedElement = null;
     this.inspectingFields = false;
     this.parentLevels = 1;
-    
+
     // Clean up markdown preview modal
     if (this.markdownPreviewModal) {
       this.markdownPreviewModal.destroy();
       this.markdownPreviewModal = null;
     }
-    
+
     // Clear singleton reference
     if (click2CrawlInstance === this) {
       click2CrawlInstance = null;
     }
   }
-  
+
   // Alias for content script compatibility
   deactivate() {
     this.stop();
@@ -80,7 +80,7 @@ class Click2Crawl {
     this.highlightBox = document.createElement('div');
     this.highlightBox.className = 'c4ai-highlight-box';
     document.body.appendChild(this.highlightBox);
-    
+
     // Create selected box for permanent selection
     this.selectedBox = document.createElement('div');
     this.selectedBox.className = 'c4ai-selected-box';
@@ -94,7 +94,7 @@ class Click2Crawl {
     if (existingToolbar) {
       existingToolbar.remove();
     }
-    
+
     this.toolbar = document.createElement('div');
     this.toolbar.className = 'c4ai-toolbar';
     this.toolbar.innerHTML = `
@@ -132,14 +132,14 @@ class Click2Crawl {
             </div>
           </div>
         </div>
-        
+
         <div class="c4ai-schema-section" id="c4ai-schema-section" style="display: none;">
           <div class="c4ai-section-header">
             <span>SCHEMA FIELDS (<span id="c4ai-field-count">0</span>)</span>
           </div>
           <div class="c4ai-fields-list" id="c4ai-fields-list"></div>
         </div>
-        
+
         <div class="c4ai-actions-section" id="c4ai-actions-section" style="display: none;">
           <div class="c4ai-section-header">ACTIONS</div>
           <div class="c4ai-toolbar-actions">
@@ -163,7 +163,7 @@ class Click2Crawl {
             </button>
           </div>
         </div>
-        
+
         <div class="c4ai-stats-section" id="c4ai-stats-section" style="display: none;">
           <div class="c4ai-section-header">STATS</div>
           <div class="c4ai-stats">
@@ -177,11 +177,11 @@ class Click2Crawl {
             </div>
           </div>
         </div>
-        
+
         <div class="c4ai-toolbar-hint" id="c4ai-hint">
           Click on a container element (e.g., product card, article, etc.)
         </div>
-        
+
         <div class="c4ai-toolbar-footer" id="c4ai-footer-section" style="display: none;">
           <button id="c4ai-inspect-fields" class="c4ai-action-btn c4ai-primary-btn">
             <span>🏷️</span> Fields
@@ -190,10 +190,10 @@ class Click2Crawl {
       </div>
     `;
     document.body.appendChild(this.toolbar);
-    
+
     // Force toolbar to top of z-index stack
     this.toolbar.style.zIndex = '2147483647'; // Maximum z-index
-    
+
     // Add event listeners for toolbar buttons with error handling
     const addClickHandler = (id, handler) => {
       const element = document.getElementById(id);
@@ -205,7 +205,7 @@ class Click2Crawl {
         });
       }
     };
-    
+
     // Add all event listeners
       addClickHandler('c4ai-inspect-fields', () => this.toggleFieldInspection());
       addClickHandler('c4ai-preview', () => this.togglePreview());
@@ -215,16 +215,16 @@ class Click2Crawl {
       addClickHandler('c4ai-export-markdown', () => this.exportMarkdown());
       addClickHandler('c4ai-deploy-cloud', () => this.deployToCloud());
       addClickHandler('c4ai-close', () => this.stop());
-      
+
       // Navigation controls
       addClickHandler('c4ai-nav-up', () => this.navigateUp());
       addClickHandler('c4ai-nav-down', () => this.navigateDown());
       addClickHandler('c4ai-nav-close', () => this.deselectContainer());
-      
+
       // Parent level controls
       addClickHandler('c4ai-parent-minus', () => this.adjustParentLevels(-1));
       addClickHandler('c4ai-parent-plus', () => this.adjustParentLevels(1));
-    
+
     // Make toolbar draggable
     if (window.C4AI_Utils && window.C4AI_Utils.makeDraggable) {
       window.C4AI_Utils.makeDraggable(this.toolbar);
@@ -247,13 +247,13 @@ class Click2Crawl {
 
   handleMouseMove(e) {
     const element = document.elementFromPoint(e.clientX, e.clientY);
-    
+
     // Don't highlight if hovering over our UI elements
     if (this.isOurElement(element)) {
       this.highlightBox.style.display = 'none';
       return;
     }
-    
+
     // Only show highlight if:
     // 1. No container selected (selection mode)
     // 2. Or inspecting fields inside container
@@ -264,7 +264,7 @@ class Click2Crawl {
           this.highlightBox.style.display = 'none';
           return;
         }
-        
+
         this.currentElement = element;
         this.highlightElement(element);
       }
@@ -273,7 +273,7 @@ class Click2Crawl {
       this.highlightBox.style.display = 'none';
     }
   }
-  
+
   handleMouseLeave(e) {
     // Hide highlight when mouse leaves
     if (e.target === document) {
@@ -283,12 +283,12 @@ class Click2Crawl {
 
   handleClick(e) {
     const element = e.target;
-    
+
     // Check if clicking on our UI elements (including markdown preview modal)
     if (this.isOurElement(element)) {
       return; // Let toolbar clicks work normally
     }
-    
+
     // Additional check for markdown preview modal classes
     if (element.closest('.c4ai-c2c-preview') || element.closest('.c4ai-preview-options')) {
       return; // Don't interfere with markdown preview modal
@@ -318,15 +318,15 @@ class Click2Crawl {
   }
 
   isOurElement(element) {
-    return window.C4AI_Utils.isOurElement(element) || 
+    return window.C4AI_Utils.isOurElement(element) ||
            (this.selectedBox && element === this.selectedBox) ||
-           (this.markdownPreviewModal && this.markdownPreviewModal.modal && 
+           (this.markdownPreviewModal && this.markdownPreviewModal.modal &&
             (element === this.markdownPreviewModal.modal || this.markdownPreviewModal.modal.contains(element)));
   }
-  
+
   showSelectedBox(element) {
     if (!element) return;
-    
+
     const rect = element.getBoundingClientRect();
     this.selectedBox.style.cssText = `
       position: absolute;
@@ -336,71 +336,71 @@ class Click2Crawl {
       height: ${rect.height}px;
       display: block;
     `;
-    
+
     this.selectedBox.className = 'c4ai-selected-box c4ai-selected-container';
   }
-  
+
   updateNavButtonStates() {
     const upBtn = document.getElementById('c4ai-nav-up');
     const downBtn = document.getElementById('c4ai-nav-down');
-    
+
     if (this.selectedElement) {
       // Disable up button if no parent or parent is body
       upBtn.disabled = !this.selectedElement.parentElement || this.selectedElement.parentElement === document.body;
-      
+
       // Disable down button if no children
       downBtn.disabled = this.selectedElement.children.length === 0;
     }
   }
-  
+
   navigateUp() {
     if (!this.selectedElement || !this.selectedElement.parentElement) return;
-    
+
     const parent = this.selectedElement.parentElement;
     if (parent === document.body) return;
-    
+
     // Update selected element and container
     this.selectedElement = parent;
     this.container.element = parent;
     this.container.tagName = parent.tagName.toLowerCase();
     this.container.selector = this.generateContainerSelector(parent);
-    
+
     // Update visual selection
     this.showSelectedBox(parent);
     this.updateNavButtonStates();
     this.updateToolbar();
     this.updateStats();
   }
-  
+
   navigateDown() {
     if (!this.selectedElement || this.selectedElement.children.length === 0) return;
-    
+
     const firstChild = this.selectedElement.children[0];
-    
+
     // Update selected element and container
     this.selectedElement = firstChild;
     this.container.element = firstChild;
     this.container.tagName = firstChild.tagName.toLowerCase();
     this.container.selector = this.generateContainerSelector(firstChild);
-    
+
     // Update visual selection
     this.showSelectedBox(firstChild);
     this.updateNavButtonStates();
     this.updateToolbar();
     this.updateStats();
   }
-  
+
   deselectContainer() {
     if (this.container) {
       // Remove visual selection
       this.container.element.classList.remove('c4ai-selected-container');
       this.selectedBox.style.display = 'none';
-      
+
       // Clear container and related state
       this.container = null;
       this.selectedElement = null;
       this.inspectingFields = false;
-      
+
       // Clear all fields
       this.fields.forEach(field => {
         field.element.classList.remove('c4ai-selected-field');
@@ -408,16 +408,16 @@ class Click2Crawl {
       });
       this.fields = [];
       this.selectedElements.clear();
-      
+
       this.updateToolbar();
       this.updateStats();
     }
   }
-  
+
   toggleFieldInspection() {
     this.inspectingFields = !this.inspectingFields;
     const fieldsBtn = document.getElementById('c4ai-inspect-fields');
-    
+
     if (this.inspectingFields) {
       fieldsBtn.classList.add('c4ai-active');
       fieldsBtn.innerHTML = '<span>✓</span> Fields';
@@ -426,7 +426,7 @@ class Click2Crawl {
       fieldsBtn.innerHTML = '<span>🏷️</span> Fields';
       this.highlightBox.style.display = 'none';
     }
-    
+
     this.updateToolbar();
   }
 
@@ -471,10 +471,10 @@ class Click2Crawl {
     element.classList.add('c4ai-selected-container');
     this.selectedElement = element;
     this.showSelectedBox(element);
-    
+
     // Hide hover highlight after selection
     this.highlightBox.style.display = 'none';
-    
+
     // Update navigation button states
     this.updateNavButtonStates();
     this.updateToolbar();
@@ -504,13 +504,13 @@ class Click2Crawl {
   deselectField(element) {
     // Remove from fields array
     this.fields = this.fields.filter(f => f.element !== element);
-    
+
     // Remove from selected elements set
     this.selectedElements.delete(element);
-    
+
     // Remove visual selection
     element.classList.remove('c4ai-selected-field');
-    
+
     // Update UI
     this.updateToolbar();
     this.updateStats();
@@ -519,10 +519,10 @@ class Click2Crawl {
   showFieldDialog(element) {
     // Remove any existing field dialogs first
     document.querySelectorAll('.c4ai-field-dialog').forEach(d => d.remove());
-    
+
     const dialog = document.createElement('div');
     dialog.className = 'c4ai-field-dialog';
-    
+
     const rect = element.getBoundingClientRect();
     dialog.style.cssText = `
       left: ${rect.left + window.scrollX}px;
@@ -531,19 +531,19 @@ class Click2Crawl {
 
     // Get available attributes
     const attributes = this.getElementAttributes(element);
-    const attributeOptions = attributes.map(attr => 
+    const attributeOptions = attributes.map(attr =>
       `<option value="${attr.name}">${attr.name}: "${attr.value.substring(0, 30)}${attr.value.length > 30 ? '...' : ''}"</option>`
     ).join('');
 
     dialog.innerHTML = `
       <div class="c4ai-field-dialog-content">
         <h4>Configure Field</h4>
-        
+
         <div class="c4ai-field-input">
           <label>Field Name:</label>
           <input type="text" id="c4ai-field-name" placeholder="e.g., title, price, description" autofocus>
         </div>
-        
+
         <div class="c4ai-field-input">
           <label>Field Type:</label>
           <select id="c4ai-field-type">
@@ -555,24 +555,24 @@ class Click2Crawl {
             <option value="nested">Nested Object</option>
           </select>
         </div>
-        
+
         <div class="c4ai-field-input" id="c4ai-attribute-select" style="display: none;">
           <label>Select Attribute:</label>
           <select id="c4ai-field-attribute">
             ${attributeOptions}
           </select>
         </div>
-        
+
         <div class="c4ai-field-preview">
           <strong>Preview Value:</strong>
           <div id="c4ai-preview-value">${element.textContent.trim().substring(0, 100)}</div>
         </div>
-        
+
         <div class="c4ai-field-selector">
           <strong>Selector (auto-generated):</strong>
           <div id="c4ai-selector-preview">${this.generateSmartSelector(element, this.container.element)}</div>
         </div>
-        
+
         <div class="c4ai-field-actions">
           <button id="c4ai-field-save" class="c4ai-primary">✓ Save</button>
           <button id="c4ai-field-cancel">✗ Cancel</button>
@@ -594,7 +594,7 @@ class Click2Crawl {
     const updatePreview = () => {
       const type = typeSelect.value;
       let value = '';
-      
+
       switch(type) {
         case 'text':
           value = element.textContent.trim();
@@ -622,7 +622,7 @@ class Click2Crawl {
           attributeContainer.style.display = 'none';
           break;
       }
-      
+
       previewValue.textContent = value.substring(0, 100) + (value.length > 100 ? '...' : '');
     };
 
@@ -634,7 +634,7 @@ class Click2Crawl {
       if (fieldName) {
         const type = typeSelect.value;
         const selector = this.generateSmartSelector(element, this.container.element);
-        
+
         const field = {
           name: fieldName,
           type: type,
@@ -642,7 +642,7 @@ class Click2Crawl {
           element: element,
           value: previewValue.textContent
         };
-        
+
         // Add attribute if needed
         if (type === 'attribute') {
           field.attribute = attributeSelect.value;
@@ -653,7 +653,7 @@ class Click2Crawl {
           field.type = 'attribute';
           field.attribute = 'src';
         }
-        
+
         this.fields.push(field);
         element.classList.add('c4ai-selected-field');
         element.setAttribute('data-c4ai-field', fieldName);
@@ -681,55 +681,55 @@ class Click2Crawl {
 
   adjustParentLevels(delta) {
     if (!this.container) return;
-    
+
     const newLevel = this.parentLevels + delta;
     if (newLevel < 0 || newLevel > 5) return;
-    
+
     this.parentLevels = newLevel;
     document.getElementById('c4ai-parent-value').textContent = newLevel;
-    
+
     // Update container selector with new parent levels
     this.updateContainerSelector();
   }
-  
+
   updateContainerSelector() {
     if (!this.container || !this.selectedElement) return;
-    
+
     this.container.selector = this.generateContainerSelector(this.selectedElement);
     this.container.element = this.selectedElement;
-    
+
     // Update the schema
     this.generateSchema();
-    
+
     // Update display
     const containerDisplay = document.getElementById('c4ai-container');
     // containerDisplay.textContent = `${this.container.tagName} (${this.parentLevels} levels)`;
     containerDisplay.textContent = `${this.container.tagName}`;
-    
+
     // Update selector display
     const containerSelector = document.getElementById('c4ai-container-selector');
     if (containerSelector) {
       containerSelector.textContent = this.container.selector;
     }
   }
-  
+
   generateContainerSelector(element) {
     // For container, include parent levels
     let current = element;
     const parts = [];
-    
+
     // Start from the target element
     for (let i = 0; i <= this.parentLevels; i++) {
       if (!current || current === document.body) break;
-      
+
       const selector = this.generateSingleElementSelector(current);
       parts.unshift(selector);
-      
+
       if (i < this.parentLevels) {
         current = current.parentElement;
       }
     }
-    
+
     // If we have parent levels, show them clearly
     if (this.parentLevels > 0 && parts.length > 1) {
       // Make it clear which part is the container
@@ -737,10 +737,10 @@ class Click2Crawl {
       const parentParts = parts.slice(0, -1);
       return parentParts.join(' > ') + ' > ' + containerPart;
     }
-    
+
     return parts.join(' > ');
   }
-  
+
   generateSingleElementSelector(element) {
     // Generate selector for a single element
     if (element.id) {
@@ -762,17 +762,17 @@ class Click2Crawl {
     }
 
     const tagName = element.tagName.toLowerCase();
-    
+
     // Check for simple, non-utility classes
     const classes = Array.from(element.classList)
       .filter(c => !c.startsWith('c4ai-')) // Exclude our classes
       .filter(c => !c.includes('[') && !c.includes('(') && !c.includes(':')) // Exclude utility classes
       .filter(c => c.length < 30); // Exclude very long classes
-    
+
     if (classes.length > 0 && classes.length <= 2) {
       return tagName + classes.map(c => `.${CSS.escape(c)}`).join('');
     }
-    
+
     return tagName;
   }
 
@@ -811,7 +811,7 @@ class Click2Crawl {
       .filter(c => !c.startsWith('c4ai-')) // Exclude our classes
       .filter(c => !c.includes('[') && !c.includes('(') && !c.includes(':')) // Exclude utility classes
       .filter(c => c.length < 30); // Exclude very long classes
-    
+
     if (classes.length > 0 && classes.length <= 3) {
       const selector = classes.map(c => `.${CSS.escape(c)}`).join('');
       try {
@@ -846,24 +846,24 @@ class Click2Crawl {
     } else {
       document.getElementById('c4ai-mode').textContent = 'Container Selected';
     }
-    
+
     // Show/hide container info and controls
     const containerItem = document.getElementById('c4ai-container-item');
     const parentLevelControls = document.getElementById('c4ai-parent-levels');
     const footerSection = document.getElementById('c4ai-footer-section');
     const selectorDisplay = document.getElementById('c4ai-selector-display');
     const containerSelector = document.getElementById('c4ai-container-selector');
-    
+
     if (this.container) {
       containerItem.style.display = 'flex';
       parentLevelControls.style.display = 'flex';
       footerSection.style.display = 'flex';
       selectorDisplay.style.display = 'block';
-      
+
       // Update container display
-      document.getElementById('c4ai-container').textContent = 
+      document.getElementById('c4ai-container').textContent =
         `${this.container.tagName} (${this.parentLevels} levels)`;
-      
+
       // Update selector display
       containerSelector.textContent = this.container.selector;
     } else {
@@ -877,15 +877,15 @@ class Click2Crawl {
     const schemaSection = document.getElementById('c4ai-schema-section');
     const actionsSection = document.getElementById('c4ai-actions-section');
     const statsSection = document.getElementById('c4ai-stats-section');
-    
+
     if (this.fields.length > 0) {
       schemaSection.style.display = 'block';
       actionsSection.style.display = 'block';
       statsSection.style.display = 'block';
-      
+
       // Update field count
       document.getElementById('c4ai-field-count').textContent = this.fields.length;
-      
+
       // Update fields list with enhanced UI
       const fieldsList = document.getElementById('c4ai-fields-list');
       fieldsList.innerHTML = this.fields.map((field, index) => {
@@ -904,7 +904,7 @@ class Click2Crawl {
           </div>
         `;
       }).join('');
-      
+
       // Add event handlers
       fieldsList.querySelectorAll('.c4ai-field-delete').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -912,14 +912,14 @@ class Click2Crawl {
           this.removeField(index);
         });
       });
-      
+
       fieldsList.querySelectorAll('.c4ai-field-edit').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const index = parseInt(e.target.dataset.index);
           this.editField(index);
         });
       });
-      
+
       fieldsList.querySelectorAll('.c4ai-field-selector').forEach(selector => {
         selector.addEventListener('blur', (e) => {
           const index = parseInt(e.target.dataset.index);
@@ -929,7 +929,7 @@ class Click2Crawl {
             this.generateSchema();
           }
         });
-        
+
         selector.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
@@ -937,7 +937,7 @@ class Click2Crawl {
           }
         });
       });
-      
+
       // Enable action buttons
       document.getElementById('c4ai-preview').disabled = false;
       document.getElementById('c4ai-test').disabled = false;
@@ -979,32 +979,32 @@ class Click2Crawl {
 
   removeField(index) {
     const field = this.fields[index];
-    
+
     // Remove from arrays
     this.fields.splice(index, 1);
-    
+
     // Remove visual selection
     field.element.classList.remove('c4ai-selected-field');
     field.element.removeAttribute('data-c4ai-field');
     this.selectedElements.delete(field.element);
-    
+
     // Update UI
     this.updateToolbar();
     this.updateStats();
     this.generateSchema();
   }
-  
+
   editField(index) {
     const field = this.fields[index];
     if (!field) return;
-    
+
     // Remove any existing field dialogs first
     document.querySelectorAll('.c4ai-field-dialog').forEach(d => d.remove());
-    
+
     // Re-show the field dialog with existing values
     const dialog = document.createElement('div');
     dialog.className = 'c4ai-field-dialog';
-    
+
     const rect = field.element.getBoundingClientRect();
     dialog.style.cssText = `
       left: ${rect.left + window.scrollX}px;
@@ -1013,19 +1013,19 @@ class Click2Crawl {
 
     // Get available attributes
     const attributes = this.getElementAttributes(field.element);
-    const attributeOptions = attributes.map(attr => 
+    const attributeOptions = attributes.map(attr =>
       `<option value="${attr.name}" ${field.attribute === attr.name ? 'selected' : ''}>${attr.name}: "${attr.value.substring(0, 30)}${attr.value.length > 30 ? '...' : ''}"</option>`
     ).join('');
 
     dialog.innerHTML = `
       <div class="c4ai-field-dialog-content">
         <h4>Edit Field</h4>
-        
+
         <div class="c4ai-field-input">
           <label>Field Name:</label>
           <input type="text" id="c4ai-field-name" value="${field.name}" placeholder="e.g., title, price, description" autofocus>
         </div>
-        
+
         <div class="c4ai-field-input">
           <label>Field Type:</label>
           <select id="c4ai-field-type">
@@ -1037,24 +1037,24 @@ class Click2Crawl {
             <option value="nested" ${field.type === 'nested' ? 'selected' : ''}>Nested Object</option>
           </select>
         </div>
-        
+
         <div class="c4ai-field-input" id="c4ai-attribute-select" style="display: ${field.type === 'attribute' ? 'block' : 'none'};">
           <label>Select Attribute:</label>
           <select id="c4ai-field-attribute">
             ${attributeOptions}
           </select>
         </div>
-        
+
         <div class="c4ai-field-preview">
           <strong>Preview Value:</strong>
           <div id="c4ai-preview-value">${field.value}</div>
         </div>
-        
+
         <div class="c4ai-field-selector">
           <strong>Selector (auto-generated):</strong>
           <div id="c4ai-selector-preview">${field.selector}</div>
         </div>
-        
+
         <div class="c4ai-field-actions">
           <button id="c4ai-field-save" class="c4ai-primary">✓ Update</button>
           <button id="c4ai-field-cancel">✗ Cancel</button>
@@ -1076,7 +1076,7 @@ class Click2Crawl {
     const updatePreview = () => {
       const type = typeSelect.value;
       let value = '';
-      
+
       switch(type) {
         case 'text':
           value = field.element.textContent.trim();
@@ -1104,7 +1104,7 @@ class Click2Crawl {
           attributeContainer.style.display = 'none';
           break;
       }
-      
+
       previewValue.textContent = value.substring(0, 100) + (value.length > 100 ? '...' : '');
     };
 
@@ -1115,12 +1115,12 @@ class Click2Crawl {
       const fieldName = nameInput.value.trim();
       if (fieldName) {
         const type = typeSelect.value;
-        
+
         // Update field
         field.name = fieldName;
         field.type = type;
         field.value = previewValue.textContent;
-        
+
         // Update attribute if needed
         if (type === 'attribute') {
           field.attribute = attributeSelect.value;
@@ -1133,10 +1133,10 @@ class Click2Crawl {
         } else {
           delete field.attribute;
         }
-        
+
         // Update element attribute
         field.element.setAttribute('data-c4ai-field', fieldName);
-        
+
         this.updateToolbar();
         this.updateStats();
         this.generateSchema();
@@ -1195,29 +1195,29 @@ class Click2Crawl {
     const parts = [];
     let current = element;
     let depth = 0;
-    
+
     // Build path from element up to container (max 3 levels)
     while (current && current !== container && depth < 3) {
       let selector = current.tagName.toLowerCase();
-      
+
       // Add ID if available
       if (current.id && !current.id.includes(':') && !current.id.includes('[')) {
         selector = `#${CSS.escape(current.id)}`;
         parts.unshift(selector);
         break; // ID is unique enough
       }
-      
+
       // Add classes (filter out dynamic/utility classes)
       const classes = Array.from(current.classList)
         .filter(c => !c.startsWith('c4ai-'))
         .filter(c => !c.includes('[') && !c.includes('(') && !c.includes(':'))
         .filter(c => c.length < 30)
         .slice(0, 2); // Max 2 classes
-      
+
       if (classes.length > 0) {
         selector += classes.map(c => `.${CSS.escape(c)}`).join('');
       }
-      
+
       // Add data attributes for more specificity
       const dataAttrs = ['data-testid', 'data-id', 'data-test'];
       for (const attr of dataAttrs) {
@@ -1226,7 +1226,7 @@ class Click2Crawl {
           break;
         }
       }
-      
+
       // Add nth-child if needed for disambiguation
       if (current.parentElement && depth === 0) {
         const siblings = Array.from(current.parentElement.children);
@@ -1236,15 +1236,15 @@ class Click2Crawl {
           selector += `:nth-of-type(${index})`;
         }
       }
-      
+
       parts.unshift(selector);
       current = current.parentElement;
       depth++;
     }
-    
+
     // Create relative selector from container
     const fullSelector = parts.join(' > ');
-    
+
     // Test selector uniqueness within container
     try {
       const matches = container.querySelectorAll(fullSelector);
@@ -1254,7 +1254,7 @@ class Click2Crawl {
     } catch (e) {
       // Invalid selector, continue with fallback
     }
-    
+
     // Fallback to simple selector
     return parts[parts.length - 1] || element.tagName.toLowerCase();
   }
@@ -1263,7 +1263,7 @@ class Click2Crawl {
     if (!this.container || this.fields.length === 0) {
       return null;
     }
-    
+
     // Build schema object
     this.schema = {
       name: `${window.location.hostname} Schema`,
@@ -1274,22 +1274,22 @@ class Click2Crawl {
           selector: field.selector,
           type: field.type
         };
-        
+
         if (field.attribute) {
           schemaField.attribute = field.attribute;
         }
-        
+
         return schemaField;
       })
     };
-    
+
     return this.schema;
   }
 
   togglePreview() {
     this.previewMode = !this.previewMode;
     const previewBtn = document.getElementById('c4ai-preview');
-    
+
     if (this.previewMode) {
       previewBtn.innerHTML = '<span>🔄</span> Hide Preview';
       this.showPreview();
@@ -1303,13 +1303,13 @@ class Click2Crawl {
     if (!this.schema) {
       this.generateSchema();
     }
-    
+
     this.clearPreview();
-    
+
     // Find all matching containers
     const containers = document.querySelectorAll(this.schema.baseSelector);
     let successCount = 0;
-    
+
     containers.forEach((container, index) => {
       // Highlight container
       const containerBox = document.createElement('div');
@@ -1326,7 +1326,7 @@ class Click2Crawl {
       `;
       document.body.appendChild(containerBox);
       this.previewElements.push(containerBox);
-      
+
       // Check each field
       let fieldsFound = 0;
       this.schema.fields.forEach(field => {
@@ -1354,7 +1354,7 @@ class Click2Crawl {
           // Invalid selector
         }
       });
-      
+
       // Add count badge
       const badge = document.createElement('div');
       badge.className = 'c4ai-preview-badge';
@@ -1367,15 +1367,15 @@ class Click2Crawl {
       `;
       document.body.appendChild(badge);
       this.previewElements.push(badge);
-      
+
       if (fieldsFound === this.schema.fields.length) {
         successCount++;
       }
     });
-    
+
     // Update stats
     document.getElementById('c4ai-matches-count').textContent = `${containers.length} items`;
-    document.getElementById('c4ai-schema-valid').textContent = 
+    document.getElementById('c4ai-schema-valid').textContent =
       successCount === containers.length ? '✓ Yes' : `⚠️ Partial (${successCount}/${containers.length})`;
   }
 
@@ -1388,14 +1388,14 @@ class Click2Crawl {
     if (!this.schema) {
       this.generateSchema();
     }
-    
+
     // Extract data using schema
     const results = [];
     const containers = document.querySelectorAll(this.schema.baseSelector);
-    
+
     containers.forEach(container => {
       const item = {};
-      
+
       this.schema.fields.forEach(field => {
         try {
           const element = container.querySelector(field.selector);
@@ -1412,10 +1412,10 @@ class Click2Crawl {
           item[field.name] = null;
         }
       });
-      
+
       results.push(item);
     });
-    
+
     // Show results modal
     this.showResultsModal(results);
   }
@@ -1445,12 +1445,12 @@ class Click2Crawl {
         </div>
       </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // Event listeners
     document.getElementById('c4ai-close-results').addEventListener('click', () => modal.remove());
-    
+
     document.getElementById('c4ai-download-data').addEventListener('click', () => {
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -1460,7 +1460,7 @@ class Click2Crawl {
       a.click();
       URL.revokeObjectURL(url);
     });
-    
+
     document.getElementById('c4ai-copy-data').addEventListener('click', () => {
       navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
         const btn = document.getElementById('c4ai-copy-data');
@@ -1470,7 +1470,7 @@ class Click2Crawl {
         }, 2000);
       });
     });
-    
+
     document.getElementById('c4ai-download-python').addEventListener('click', () => {
       const pythonCode = this.generatePythonCode();
       const blob = new Blob([pythonCode], { type: 'text/plain' });
@@ -1487,7 +1487,7 @@ class Click2Crawl {
     if (!this.schema) {
       this.generateSchema();
     }
-    
+
     const blob = new Blob([JSON.stringify(this.schema, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1500,7 +1500,7 @@ class Click2Crawl {
   async exportData() {
     await this.testSchema();
   }
-  
+
   async exportMarkdown() {
     // Initialize markdown converter if not already done
     if (!this.markdownConverter) {
@@ -1509,43 +1509,43 @@ class Click2Crawl {
     if (!this.contentAnalyzer) {
       this.contentAnalyzer = new ContentAnalyzer();
     }
-    
+
     // Initialize markdown preview modal if not already done
     if (!this.markdownPreviewModal) {
       this.markdownPreviewModal = new MarkdownPreviewModal();
     }
-    
+
     // Get all matching containers
     const containers = document.querySelectorAll(this.container.selector);
     if (containers.length === 0) {
       this.showNotification('No matching containers found', 'error');
       return;
     }
-    
+
     // Show modal with callback to generate markdown
     this.markdownPreviewModal.show(async (options) => {
       return await this.generateMarkdownFromSchema(options);
     });
   }
-  
-  
-  
-  
-  
+
+
+
+
+
   async generateMarkdownFromSchema(options) {
     // Get all matching containers
     const containers = document.querySelectorAll(this.container.selector);
     const markdownParts = [];
-    
+
     for (let i = 0; i < containers.length; i++) {
       const container = containers[i];
-      
+
       // Add XPath header if enabled
       if (options.includeXPath) {
         const xpath = this.getXPath(container);
         markdownParts.push(`### Container ${i + 1} - XPath: \`${xpath}\`\n`);
       }
-      
+
       // Extract data based on schema fields
       const extractedData = {};
       this.fields.forEach(field => {
@@ -1562,7 +1562,7 @@ class Click2Crawl {
           // Skip invalid selectors
         }
       });
-      
+
       // Convert container to markdown based on options
       const analysis = await this.contentAnalyzer.analyze([container]);
       const containerMarkdown = await this.markdownConverter.convert([container], {
@@ -1570,68 +1570,68 @@ class Click2Crawl {
         analysis,
         extractedData // Pass extracted data for context
       });
-      
+
       // Trim the markdown before adding
       const trimmedMarkdown = containerMarkdown.trim();
       markdownParts.push(trimmedMarkdown);
-      
+
       // Add separator if enabled and not last element
       if (options.addSeparators && i < containers.length - 1) {
         markdownParts.push('\n---\n');
       }
     }
-    
+
     return markdownParts.join('\n');
   }
-  
+
   getXPath(element) {
     if (element.id) {
       return `//*[@id="${element.id}"]`;
     }
-    
+
     const parts = [];
     let current = element;
-    
+
     while (current && current.nodeType === Node.ELEMENT_NODE) {
       let index = 0;
       let sibling = current.previousSibling;
-      
+
       while (sibling) {
         if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === current.nodeName) {
           index++;
         }
         sibling = sibling.previousSibling;
       }
-      
+
       const tagName = current.nodeName.toLowerCase();
       const part = index > 0 ? `${tagName}[${index + 1}]` : tagName;
       parts.unshift(part);
-      
+
       current = current.parentNode;
     }
-    
+
     return '/' + parts.join('/');
   }
-  
-  
-  
+
+
+
   showNotification(message, type = 'success') {
     const notification = document.createElement('div');
     notification.className = `c4ai-notification c4ai-notification-${type}`;
     notification.textContent = message;
-    
+
     document.body.appendChild(notification);
-    
+
     // Animate in
     setTimeout(() => notification.classList.add('show'), 10);
-    
+
     // Remove after 3 seconds
     setTimeout(() => {
       notification.classList.remove('show');
       setTimeout(() => notification.remove(), 300);
     }, 3000);
   }
-  
+
   deployToCloud() {
     // Create cloud deployment modal
     const modal = document.createElement('div');
@@ -1664,16 +1664,16 @@ class Click2Crawl {
         <button class="c4ai-close-modal" id="c4ai-close-cloud-modal">✕</button>
       </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // Add event listeners
     document.getElementById('c4ai-close-cloud-modal').addEventListener('click', () => modal.remove());
     document.getElementById('c4ai-join-waitlist').addEventListener('click', () => {
       window.open('https://crawl4ai.com/join-waiting-list', '_blank');
       modal.remove();
     });
-    
+
     // Close on escape
     const escHandler = (e) => {
       if (e.key === 'Escape') {
@@ -1683,14 +1683,14 @@ class Click2Crawl {
     };
     document.addEventListener('keydown', escHandler);
   }
-  
+
   generatePythonCode() {
     if (!this.schema) {
       this.generateSchema();
     }
-    
+
     const schemaJson = JSON.stringify(this.schema, null, 2);
-    
+
     return `#!/usr/bin/env python3
 """
 Generated by Crawl4AI Chrome Extension
@@ -1708,16 +1708,16 @@ EXTRACTION_SCHEMA = ${schemaJson}
 
 async def extract_data(url: str = "${window.location.href}"):
     """Extract data using the generated schema"""
-    
+
     # Configure browser (optional)
     browser_config = BrowserConfig(
         headless=True,  # Set to False to see the browser
         verbose=False
     )
-    
+
     # Configure extraction strategy
     extraction_strategy = JsonCssExtractionStrategy(schema=EXTRACTION_SCHEMA)
-    
+
     # Configure crawler
     crawler_config = CrawlerRunConfig(
         extraction_strategy=extraction_strategy,
@@ -1725,28 +1725,28 @@ async def extract_data(url: str = "${window.location.href}"):
         # wait_for="css:.product",  # Wait for specific elements
         # js_code="window.scrollTo(0, document.body.scrollHeight);",  # Execute JS
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
             url=url,
             config=crawler_config
         )
-        
+
         if result.success and result.extracted_content:
             data = json.loads(result.extracted_content)
             print(f"\\n✅ Successfully extracted {len(data)} items!")
-            
+
             # Save results
             with open('extracted_data.json', 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
-            
+
             # Show sample results
             print("\\n📊 Sample results (first 2 items):")
             for i, item in enumerate(data[:2], 1):
                 print(f"\\nItem {i}:")
                 for key, value in item.items():
                     print(f"  {key}: {value}")
-                    
+
             return data
         else:
             print("❌ Extraction failed:", result.error_message)
@@ -1755,7 +1755,7 @@ async def extract_data(url: str = "${window.location.href}"):
 if __name__ == "__main__":
     # Run the extraction
     data = asyncio.run(extract_data())
-    
+
     print("\\n🎯 Next steps:")
     print("1. Install Crawl4AI: pip install crawl4ai")
     print("2. Modify the URL or add multiple URLs")
@@ -1767,7 +1767,7 @@ if __name__ == "__main__":
   // Legacy code generation - kept for reference but no longer used
   /*
   generateCode() {
-    const fieldDescriptions = this.fields.map(f => 
+    const fieldDescriptions = this.fields.map(f =>
       `- ${f.name} (example: "${f.value.substring(0, 50)}...")`
     ).join('\n');
 
@@ -1801,26 +1801,26 @@ Each item should be extracted as a separate object in the results array.
 async def generate_schema():
     """Generate extraction schema using LLM"""
     print("🔧 Generating extraction schema...")
-    
+
     try:
         # Generate the schema using Crawl4AI's built-in LLM integration
         schema = JsonCssExtractionStrategy.generate_schema(
             html=HTML_SNIPPET,
             query=EXTRACTION_QUERY,
         )
-        
+
         # Save the schema for reuse
         schema_path = Path('generated_schema.json')
         with open(schema_path, 'w') as f:
             json.dump(schema, f, indent=2)
-        
+
         print("✅ Schema generated successfully!")
         print(f"📄 Schema saved to: {schema_path}")
         print("\\nGenerated schema:")
         print(json.dumps(schema, indent=2))
-        
+
         return schema
-        
+
     except Exception as e:
         print(f"❌ Error generating schema: {e}")
         return None
@@ -1828,7 +1828,7 @@ async def generate_schema():
 async def test_extraction(url: str = "${window.location.href}"):
     """Test the generated schema on the actual webpage"""
     print("\\n🧪 Testing extraction on live webpage...")
-    
+
     # Load the generated schema
     try:
         with open('generated_schema.json', 'r') as f:
@@ -1836,32 +1836,32 @@ async def test_extraction(url: str = "${window.location.href}"):
     except FileNotFoundError:
         print("❌ Schema file not found. Run generate_schema() first.")
         return
-    
+
     # Configure browser
     browser_config = BrowserConfig(
         headless=True,
         verbose=False
     )
-    
+
     # Configure extraction
     crawler_config = CrawlerRunConfig(
         extraction_strategy=JsonCssExtractionStrategy(schema=schema)
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
             url=url,
             config=crawler_config
         )
-        
+
         if result.success and result.extracted_content:
             data = json.loads(result.extracted_content)
             print(f"\\n✅ Successfully extracted {len(data)} items!")
-            
+
             # Save results
             with open('extracted_data.json', 'w') as f:
                 json.dump(data, f, indent=2)
-            
+
             # Show sample results
             print("\\n📊 Sample results (first 2 items):")
             for i, item in enumerate(data[:2], 1):
@@ -1874,11 +1874,11 @@ async def test_extraction(url: str = "${window.location.href}"):
 if __name__ == "__main__":
     # Step 1: Generate the schema from HTML snippet
     asyncio.run(generate_schema())
-    
+
     # Step 2: Test extraction on the live webpage
     # Uncomment the line below to test extraction:
     # asyncio.run(test_extraction())
-    
+
     print("\\n🎯 Next steps:")
     print("1. Review the generated schema in 'generated_schema.json'")
     print("2. Uncomment the test_extraction() line to test on the live site")
@@ -1916,16 +1916,16 @@ if __name__ == "__main__":
         </div>
       </div>
     `;
-    
+
     document.body.appendChild(this.codeModal);
-    
+
     // Add event listeners
     document.getElementById('c4ai-close-modal').addEventListener('click', () => {
       this.codeModal.remove();
       this.codeModal = null;
       // Don't stop the capture session
     });
-    
+
     document.getElementById('c4ai-download-code').addEventListener('click', () => {
       chrome.runtime.sendMessage({
         action: 'downloadCode',
@@ -1945,7 +1945,7 @@ if __name__ == "__main__":
         }
       });
     });
-    
+
     document.getElementById('c4ai-copy-code').addEventListener('click', () => {
       navigator.clipboard.writeText(code).then(() => {
         const btn = document.getElementById('c4ai-copy-code');
@@ -1955,7 +1955,7 @@ if __name__ == "__main__":
         }, 2000);
       });
     });
-    
+
     // Apply syntax highlighting
     window.C4AI_Utils.applySyntaxHighlighting(this.codeModal.querySelector('.language-python'));
   }

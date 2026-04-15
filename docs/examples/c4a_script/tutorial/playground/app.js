@@ -8,7 +8,7 @@ class PlaygroundApp {
         this.tableRowsLoaded = 10;
         this.inspectorMode = false;
         this.tooltip = null;
-        
+
         this.init();
     }
 
@@ -82,18 +82,18 @@ class PlaygroundApp {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 const targetId = link.getAttribute('href').substring(1);
-                
+
                 // Update active states
                 navLinks.forEach(l => l.classList.remove('active'));
                 link.classList.add('active');
-                
+
                 // Show target section
                 sections.forEach(s => s.classList.remove('active'));
                 const targetSection = document.getElementById(targetId);
                 if (targetSection) {
                     targetSection.classList.add('active');
                     this.currentSection = targetId;
-                    
+
                     // Load content for specific sections
                     this.loadSectionContent(targetId);
                 }
@@ -138,7 +138,7 @@ class PlaygroundApp {
                 this.isLoggedIn = true;
                 messageEl.textContent = '✅ Login successful!';
                 messageEl.className = 'form-message success';
-                
+
                 setTimeout(() => {
                     loginModal.style.display = 'none';
                     document.getElementById('login-btn').style.display = 'none';
@@ -211,7 +211,7 @@ class PlaygroundApp {
     setupInfiniteScroll() {
         const container = document.querySelector('.products-container');
         const loadingIndicator = document.getElementById('loading-indicator');
-        
+
         container.addEventListener('scroll', () => {
             if (container.scrollTop + container.clientHeight >= container.scrollHeight - 100) {
                 if (this.productsLoaded < this.maxProducts) {
@@ -228,13 +228,13 @@ class PlaygroundApp {
     loadMoreProducts() {
         const grid = document.getElementById('product-grid');
         const batch = 10;
-        
+
         for (let i = 0; i < batch && this.productsLoaded < this.maxProducts; i++) {
             const product = this.createProductCard(this.productsLoaded + 1);
             grid.appendChild(product);
             this.productsLoaded++;
         }
-        
+
         console.log(`📦 Loaded ${batch} more products. Total: ${this.productsLoaded}`);
     }
 
@@ -247,13 +247,13 @@ class PlaygroundApp {
             <div class="product-price">$${(Math.random() * 100 + 10).toFixed(2)}</div>
             <button class="btn btn-sm">Quick View</button>
         `;
-        
+
         // Quick view functionality
         const quickViewBtn = card.querySelector('button');
         quickViewBtn.addEventListener('click', () => {
             alert(`Quick view for Product ${id}`);
         });
-        
+
         return card;
     }
 
@@ -326,11 +326,11 @@ class PlaygroundApp {
         tabBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const targetTab = btn.getAttribute('data-tab');
-                
+
                 // Update active states
                 tabBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                
+
                 // Show target pane
                 tabPanes.forEach(pane => {
                     pane.style.display = pane.id === targetTab ? 'block' : 'none';
@@ -341,7 +341,7 @@ class PlaygroundApp {
         // Show more functionality
         const showMoreBtn = document.querySelector('.show-more');
         const hiddenText = document.querySelector('.hidden-text');
-        
+
         if (showMoreBtn) {
             showMoreBtn.addEventListener('click', () => {
                 if (hiddenText.style.display === 'none') {
@@ -357,7 +357,7 @@ class PlaygroundApp {
         // Load comments
         const loadCommentsBtn = document.querySelector('.load-comments');
         const commentsSection = document.querySelector('.comments-section');
-        
+
         if (loadCommentsBtn) {
             loadCommentsBtn.addEventListener('click', () => {
                 commentsSection.style.display = 'block';
@@ -393,7 +393,7 @@ class PlaygroundApp {
         searchInput.addEventListener('input', (e) => {
             const searchTerm = e.target.value.toLowerCase();
             const rows = document.querySelectorAll('#table-body tr');
-            
+
             rows.forEach(row => {
                 const text = row.textContent.toLowerCase();
                 row.style.display = text.includes(searchTerm) ? '' : 'none';
@@ -417,7 +417,7 @@ class PlaygroundApp {
     loadMoreTableRows() {
         const tbody = document.getElementById('table-body');
         const batch = 10;
-        
+
         for (let i = 0; i < batch; i++) {
             const row = document.createElement('tr');
             const id = this.tableRowsLoaded + i + 1;
@@ -429,7 +429,7 @@ class PlaygroundApp {
             `;
             tbody.appendChild(row);
         }
-        
+
         this.tableRowsLoaded += batch;
         console.log(`📄 Loaded ${batch} more rows. Total: ${this.tableRowsLoaded}`);
     }
@@ -438,7 +438,7 @@ class PlaygroundApp {
     loadInitialData() {
         // Load initial products
         this.loadMoreProducts();
-        
+
         // Load initial table rows
         this.loadMoreTableRows();
     }
@@ -470,7 +470,7 @@ class PlaygroundApp {
     // Inspector Mode
     setupInspector() {
         const inspectorBtn = document.getElementById('inspector-btn');
-        
+
         // Create tooltip element
         this.tooltip = document.createElement('div');
         this.tooltip.className = 'inspector-tooltip';
@@ -501,7 +501,7 @@ class PlaygroundApp {
     toggleInspector() {
         this.inspectorMode = !this.inspectorMode;
         const inspectorBtn = document.getElementById('inspector-btn');
-        
+
         if (this.inspectorMode) {
             inspectorBtn.classList.add('active');
             inspectorBtn.style.background = '#0fbbaa';
@@ -517,27 +517,27 @@ class PlaygroundApp {
 
     handleMouseMove(e) {
         if (!this.inspectorMode) return;
-        
+
         const element = e.target;
         if (element === this.tooltip) return;
-        
+
         // Highlight element
         this.highlightElement(element);
-        
+
         // Show tooltip with element info
         const info = this.getElementInfo(element);
         this.tooltip.innerHTML = info;
         this.tooltip.style.display = 'block';
-        
+
         // Position tooltip
         const x = e.clientX + 15;
         const y = e.clientY + 15;
-        
+
         // Adjust position if tooltip would go off screen
         const rect = this.tooltip.getBoundingClientRect();
         const adjustedX = x + rect.width > window.innerWidth ? x - rect.width - 30 : x;
         const adjustedY = y + rect.height > window.innerHeight ? y - rect.height - 30 : y;
-        
+
         this.tooltip.style.left = adjustedX + 'px';
         this.tooltip.style.top = adjustedY + 'px';
     }
@@ -569,30 +569,30 @@ class PlaygroundApp {
     getElementInfo(element) {
         const tagName = element.tagName.toLowerCase();
         const id = element.id ? `#${element.id}` : '';
-        const classes = element.className ? 
+        const classes = element.className ?
             `.${element.className.split(' ').filter(c => c).join('.')}` : '';
-        
+
         let selector = tagName;
         if (id) {
             selector = id;
         } else if (classes) {
             selector = `${tagName}${classes}`;
         }
-        
+
         // Build info HTML
         let info = `<strong>${selector}</strong>`;
-        
+
         // Add additional attributes
         const attrs = [];
         if (element.name) attrs.push(`name="${element.name}"`);
         if (element.type) attrs.push(`type="${element.type}"`);
         if (element.href) attrs.push(`href="${element.href}"`);
         if (element.value && element.tagName === 'INPUT') attrs.push(`value="${element.value}"`);
-        
+
         if (attrs.length > 0) {
             info += `<br><span style="color: #888;">${attrs.join(' ')}</span>`;
         }
-        
+
         return info;
     }
 }

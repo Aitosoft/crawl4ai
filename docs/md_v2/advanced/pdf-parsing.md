@@ -45,7 +45,7 @@ async def main():
     async with AsyncWebCrawler(crawler_strategy=pdf_crawler_strategy) as crawler:
         # Example with a remote PDF URL
         pdf_url = "https://arxiv.org/pdf/2310.06825.pdf" # A public PDF from arXiv
-        
+
         print(f"Attempting to process PDF: {pdf_url}")
         result = await crawler.arun(url=pdf_url, config=run_config)
 
@@ -148,14 +148,14 @@ async def main():
     # Initialize the crawler with the PDF-specific crawler strategy
     async with AsyncWebCrawler(crawler_strategy=pdf_crawler_cfg) as crawler:
         pdf_url = "https://arxiv.org/pdf/2310.06825.pdf" # Example PDF
-        
+
         print(f"Starting PDF processing for: {pdf_url}")
         result = await crawler.arun(url=pdf_url, config=run_cfg)
 
         if result.success:
             print("\n--- PDF Processing Successful ---")
             print(f"Processed URL: {result.url}")
-            
+
             print("\n--- Metadata ---")
             for key, value in result.metadata.items():
                 print(f"  {key.replace('_', ' ').title()}: {value}")

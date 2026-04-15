@@ -52,14 +52,14 @@
       <img src="https://img.shields.io/badge/Join%20our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord" />
     </a>
   </p>
-  
+
 </div>
 
 ---
 #### 🚀 Crawl4AI Cloud API — Closed Beta (Launching Soon)
 Reliable, large-scale web extraction, now built to be _**drastically more cost-effective**_ than any of the existing solutions.
 
-👉 **Apply [here](https://forms.gle/E9MyPaNXACnAMaqG7) for early access**  
+👉 **Apply [here](https://forms.gle/E9MyPaNXACnAMaqG7) for early access**
 _We’ll be onboarding in phases and working closely with early users.
 Limited slots._
 
@@ -132,14 +132,14 @@ asyncio.run(main())
 
 Crawl4AI is a feature-rich crawler and scraper that aims to:
 
-1. **Generate Clean Markdown**: Perfect for RAG pipelines or direct ingestion into LLMs.  
-2. **Structured Extraction**: Parse repeated patterns with CSS, XPath, or LLM-based extraction.  
-3. **Advanced Browser Control**: Hooks, proxies, stealth modes, session re-use—fine-grained control.  
-4. **High Performance**: Parallel crawling, chunk-based extraction, real-time use cases.  
-5. **Open Source**: No forced API keys, no paywalls—everyone can access their data.  
+1. **Generate Clean Markdown**: Perfect for RAG pipelines or direct ingestion into LLMs.
+2. **Structured Extraction**: Parse repeated patterns with CSS, XPath, or LLM-based extraction.
+3. **Advanced Browser Control**: Hooks, proxies, stealth modes, session re-use—fine-grained control.
+4. **High Performance**: Parallel crawling, chunk-based extraction, real-time use cases.
+5. **Open Source**: No forced API keys, no paywalls—everyone can access their data.
 
 **Core Philosophies**:
-- **Democratize Data**: Free to use, transparent, and highly configurable.  
+- **Democratize Data**: Free to use, transparent, and highly configurable.
 - **LLM Friendly**: Minimally processed, well-structured text, images, and metadata, so AI models can easily consume it.
 
 ---
@@ -148,17 +148,17 @@ Crawl4AI is a feature-rich crawler and scraper that aims to:
 
 To help you get started, we’ve organized our docs into clear sections:
 
-- **Setup & Installation**  
-  Basic instructions to install Crawl4AI via pip or Docker.  
-- **Quick Start**  
-  A hands-on introduction showing how to do your first crawl, generate Markdown, and do a simple extraction.  
-- **Core**  
-  Deeper guides on single-page crawling, advanced browser/crawler parameters, content filtering, and caching.  
-- **Advanced**  
-  Explore link & media handling, lazy loading, hooking & authentication, proxies, session management, and more.  
-- **Extraction**  
-  Detailed references for no-LLM (CSS, XPath) vs. LLM-based strategies, chunking, and clustering approaches.  
-- **API Reference**  
+- **Setup & Installation**
+  Basic instructions to install Crawl4AI via pip or Docker.
+- **Quick Start**
+  A hands-on introduction showing how to do your first crawl, generate Markdown, and do a simple extraction.
+- **Core**
+  Deeper guides on single-page crawling, advanced browser/crawler parameters, content filtering, and caching.
+- **Advanced**
+  Explore link & media handling, lazy loading, hooking & authentication, proxies, session management, and more.
+- **Extraction**
+  Detailed references for no-LLM (CSS, XPath) vs. LLM-based strategies, chunking, and clustering approaches.
+- **API Reference**
   Find the technical specifics of each class and method, including `AsyncWebCrawler`, `arun()`, and `CrawlResult`.
 
 Throughout these sections, you’ll find code samples you can **copy-paste** into your environment. If something is missing or unclear, raise an issue or PR.
@@ -167,11 +167,11 @@ Throughout these sections, you’ll find code samples you can **copy-paste** int
 
 ## How You Can Support
 
-- **Star & Fork**: If you find Crawl4AI helpful, star the repo on GitHub or fork it to add your own features.  
-- **File Issues**: Encounter a bug or missing feature? Let us know by filing an issue, so we can improve.  
-- **Pull Requests**: Whether it’s a small fix, a big feature, or better docs—contributions are always welcome.  
-- **Join Discord**: Come chat about web scraping, crawling tips, or AI workflows with the community.  
-- **Spread the Word**: Mention Crawl4AI in your blog posts, talks, or on social media.  
+- **Star & Fork**: If you find Crawl4AI helpful, star the repo on GitHub or fork it to add your own features.
+- **File Issues**: Encounter a bug or missing feature? Let us know by filing an issue, so we can improve.
+- **Pull Requests**: Whether it’s a small fix, a big feature, or better docs—contributions are always welcome.
+- **Join Discord**: Come chat about web scraping, crawling tips, or AI workflows with the community.
+- **Spread the Word**: Mention Crawl4AI in your blog posts, talks, or on social media.
 
 **Our mission**: to empower everyone—students, researchers, entrepreneurs, data scientists—to access, parse, and shape the world’s data with speed, cost-efficiency, and creative freedom.
 
@@ -179,13 +179,13 @@ Throughout these sections, you’ll find code samples you can **copy-paste** int
 
 ## Quick Links
 
-- **[GitHub Repo](https://github.com/unclecode/crawl4ai)**  
-- **[Installation Guide](./core/installation.md)**  
-- **[Quick Start](./core/quickstart.md)**  
-- **[API Reference](./api/async-webcrawler.md)**  
-- **[Changelog](https://github.com/unclecode/crawl4ai/blob/main/CHANGELOG.md)**  
+- **[GitHub Repo](https://github.com/unclecode/crawl4ai)**
+- **[Installation Guide](./core/installation.md)**
+- **[Quick Start](./core/quickstart.md)**
+- **[API Reference](./api/async-webcrawler.md)**
+- **[Changelog](https://github.com/unclecode/crawl4ai/blob/main/CHANGELOG.md)**
 
 Thank you for joining me on this journey. Let’s keep building an **open, democratic** approach to data extraction and AI together.
 
-Happy Crawling!  
-— *Unclecode, Founder & Maintainer of Crawl4AI*  
+Happy Crawling!
+— *Unclecode, Founder & Maintainer of Crawl4AI*

@@ -9,7 +9,7 @@ WAIT `#survey-form` 2
 CLICK `#full-name`
 TYPE "John Doe"
 
-CLICK `#survey-email`  
+CLICK `#survey-email`
 TYPE "john.doe@example.com"
 
 # Go to next step

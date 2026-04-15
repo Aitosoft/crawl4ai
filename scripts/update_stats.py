@@ -11,10 +11,9 @@ Usage:
 
 import json
 import subprocess
-import sys
 import urllib.request
 import urllib.error
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
 
@@ -53,28 +52,28 @@ STAR_MILESTONES = [
 # First PyPI release: Sep 25, 2024 (v0.3.0).
 # Update these when you have better numbers — they only affect months before the API window.
 PYPI_MONTHLY_HISTORY = {
-    "2024-09":   28_000,    # v0.3.0 launched Sep 25 — partial month
-    "2024-10":  135_000,    # v0.3.5–0.3.8, project going viral
-    "2024-11":  210_000,    # v0.3.73–0.3.746, steady growth
-    "2024-12":  285_000,    # v0.4.0–0.4.24 launch
-    "2025-01":  350_000,    # v0.4.24x series
-    "2025-02":  380_000,    # pre-0.5 momentum
-    "2025-03":  430_000,    # v0.5.0 launch
-    "2025-04":  480_000,    # v0.6.0 launch
-    "2025-05":  520_000,    # v0.6.3 adoption
-    "2025-06":  560_000,    # growth
-    "2025-07":  620_000,    # v0.7.0–0.7.2 launch
-    "2025-08":  750_000,    # v0.7.3–0.7.4 (estimated from 24K/day rate)
+    "2024-09": 28_000,  # v0.3.0 launched Sep 25 — partial month
+    "2024-10": 135_000,  # v0.3.5–0.3.8, project going viral
+    "2024-11": 210_000,  # v0.3.73–0.3.746, steady growth
+    "2024-12": 285_000,  # v0.4.0–0.4.24 launch
+    "2025-01": 350_000,  # v0.4.24x series
+    "2025-02": 380_000,  # pre-0.5 momentum
+    "2025-03": 430_000,  # v0.5.0 launch
+    "2025-04": 480_000,  # v0.6.0 launch
+    "2025-05": 520_000,  # v0.6.3 adoption
+    "2025-06": 560_000,  # growth
+    "2025-07": 620_000,  # v0.7.0–0.7.2 launch
+    "2025-08": 750_000,  # v0.7.3–0.7.4 (estimated from 24K/day rate)
 }
 
 # --- Data Fetching ---
+
 
 def run_gh(args: list[str]) -> dict | list | None:
     """Run a gh CLI command and return parsed JSON."""
     try:
         result = subprocess.run(
-            ["gh", "api", *args],
-            capture_output=True, text=True, timeout=30
+            ["gh", "api", *args], capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
             print(f"  [warn] gh api {' '.join(args)}: {result.stderr.strip()}")
@@ -116,8 +115,7 @@ def fetch_contributors_count() -> int:
     page = 1
     total = 0
     while True:
-        data = run_gh([f"repos/{REPO}/contributors", "--paginate",
-                       "-q", "length"])
+        data = run_gh([f"repos/{REPO}/contributors", "--paginate", "-q", "length"])
         # Simpler approach: fetch first page with per_page=1, read Link header
         # Actually, let's just paginate through
         data = run_gh([f"repos/{REPO}/contributors?per_page=100&page={page}&anon=true"])
@@ -141,12 +139,16 @@ def fetch_github_traffic() -> dict:
         for v in views["views"]:
             date_str = v["timestamp"][:10]
             result["view_dates"].append(date_str)
-            result["views"].append({"date": date_str, "count": v["count"], "uniques": v["uniques"]})
+            result["views"].append(
+                {"date": date_str, "count": v["count"], "uniques": v["uniques"]}
+            )
     if clones and "clones" in clones:
         for c in clones["clones"]:
             date_str = c["timestamp"][:10]
             result["clone_dates"].append(date_str)
-            result["clones"].append({"date": date_str, "count": c["count"], "uniques": c["uniques"]})
+            result["clones"].append(
+                {"date": date_str, "count": c["count"], "uniques": c["uniques"]}
+            )
     return result
 
 
@@ -229,7 +231,7 @@ def merge_pypi_data(live: dict) -> dict:
 
     return {
         "monthly": merged_sorted,
-        "daily": live["daily"],       # daily chart only uses live data (recent ~180 days)
+        "daily": live["daily"],  # daily chart only uses live data (recent ~180 days)
         "total": total,
     }
 
@@ -246,6 +248,7 @@ def fetch_docker_pulls() -> int:
 
 # --- Formatting Helpers ---
 
+
 def fmt_number(n: int) -> str:
     """Format large numbers with commas."""
     return f"{n:,}"
@@ -261,6 +264,7 @@ def fmt_short(n: int) -> str:
 
 
 # --- Page Generator ---
+
 
 def generate_stats_md(
     github: dict,
@@ -861,7 +865,9 @@ def main():
     print(f"  Traffic data points: {len(traffic.get('views', []))} days")
 
     pypi_live = fetch_pypi_live()
-    print(f"  PyPI live: {len(pypi_live['monthly'])} months, {len(pypi_live['daily'])} daily points")
+    print(
+        f"  PyPI live: {len(pypi_live['monthly'])} months, {len(pypi_live['daily'])} daily points"
+    )
     pypi = merge_pypi_data(pypi_live)
     print(f"  PyPI merged: {len(pypi['monthly'])} months, total: {pypi['total']:,}")
 
@@ -869,7 +875,9 @@ def main():
     print(f"  Docker pulls: {docker_pulls}")
 
     # Generate the page
-    content = generate_stats_md(github, contributors, traffic, pypi, docker_pulls, STAR_MILESTONES)
+    content = generate_stats_md(
+        github, contributors, traffic, pypi, docker_pulls, STAR_MILESTONES
+    )
 
     # Write output
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)

@@ -47,7 +47,7 @@ CLICK `#start-tutorial`
 
 ### Core Features
 - **📝 Text Editor**: Write C4A-Script with syntax highlighting
-- **🧩 Visual Editor**: Build scripts using drag-and-drop Blockly interface  
+- **🧩 Visual Editor**: Build scripts using drag-and-drop Blockly interface
 - **🎬 Recording Mode**: Capture browser actions and auto-generate scripts
 - **⚡ Live Execution**: Run scripts in real-time with instant feedback
 - **📊 Timeline View**: Visualize and edit automation steps

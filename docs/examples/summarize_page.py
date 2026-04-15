@@ -9,6 +9,7 @@ from crawl4ai import CacheMode, LLMExtractionStrategy
 
 url = r"https://marketplace.visualstudio.com/items?itemName=Unclecode.groqopilot"
 
+
 class PageSummary(BaseModel):
     title: str = Field(..., description="Title of the page.")
     summary: str = Field(..., description="Summary of the page.")
@@ -36,7 +37,7 @@ async def main():
                     "2. Summary of the page, which is a detailed summary "
                     "3. Brief summary of the page, which is a paragraph text "
                     "4. Keywords assigned to the page, which is a list of keywords. "
-                    'The extracted JSON format should look like this: '
+                    "The extracted JSON format should look like this: "
                     '{ "title": "Page Title", "summary": "Detailed summary of the page.", "brief_summary": "Brief summary in a paragraph.", "keywords": ["keyword1", "keyword2", "keyword3"] }',
                 ),
             ),

@@ -4,7 +4,7 @@ let activeMode = null;
 document.addEventListener('DOMContentLoaded', () => {
   // Fetch GitHub stars
   fetchGitHubStars();
-  
+
   // Check current state
   chrome.storage.local.get(['captureMode', 'captureStats'], (data) => {
     if (data.captureMode) {
@@ -41,7 +41,7 @@ async function fetchGitHubStars() {
     const response = await fetch('https://api.github.com/repos/unclecode/crawl4ai');
     const data = await response.json();
     const stars = data.stargazers_count;
-    
+
     // Format the number (e.g., 1.2k)
     let formattedStars;
     if (stars >= 1000) {
@@ -49,7 +49,7 @@ async function fetchGitHubStars() {
     } else {
       formattedStars = stars.toString();
     }
-    
+
     document.getElementById('stars-count').textContent = `⭐ ${formattedStars}`;
   } catch (error) {
     console.error('Failed to fetch GitHub stars:', error);
@@ -99,17 +99,17 @@ function startClick2Crawl() {
 function showActiveSession(stats) {
   document.querySelector('.mode-selector').style.display = 'none';
   document.getElementById('active-session').classList.remove('hidden');
-  
+
   updateSessionStats(stats);
 }
 
 function updateSessionStats(stats) {
-  document.getElementById('container-status').textContent = 
+  document.getElementById('container-status').textContent =
     stats.container ? 'Selected ✓' : 'Not selected';
   document.getElementById('fields-count').textContent = stats.fields || 0;
-  
+
   // Enable generate button if we have container and fields
-  document.getElementById('generate-code').disabled = 
+  document.getElementById('generate-code').disabled =
     !stats.container || stats.fields === 0;
 }
 
@@ -130,7 +130,7 @@ function stopCapture() {
       document.querySelector('.mode-selector').style.display = 'flex';
       document.getElementById('active-session').classList.add('hidden');
       activeMode = null;
-      
+
       // Clear storage
       chrome.storage.local.remove(['captureMode', 'captureStats']);
     });

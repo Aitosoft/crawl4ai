@@ -22,7 +22,7 @@ class ScriptBuilder {
     this.createToolbar();
     this.showStartScreen();
   }
-  
+
   showStartScreen() {
     const toolbarContent = this.toolbar.querySelector('.c4ai-toolbar-content');
     toolbarContent.innerHTML = `
@@ -44,19 +44,19 @@ class ScriptBuilder {
         </button>
       </div>
     `;
-    
+
     // Add event listeners
     document.getElementById('c4ai-start-recording').addEventListener('click', () => this.startRecording());
     document.getElementById('c4ai-saved-flows').addEventListener('click', () => this.showSavedFlows());
   }
-  
+
   startRecording() {
     this.isRecording = true;
     this.startTime = Date.now();
     this.lastEventTime = this.startTime;
     this.createRecordingIndicator();
     this.injectEventCapture();
-    
+
     // Update toolbar to show recording controls
     const toolbarContent = this.toolbar.querySelector('.c4ai-toolbar-content');
     toolbarContent.innerHTML = `
@@ -91,7 +91,7 @@ class ScriptBuilder {
         </button>
       </div>
     `;
-    
+
     // Re-add event listeners
     document.getElementById('c4ai-pause-recording').addEventListener('click', () => this.togglePause());
     document.getElementById('c4ai-stop-generate').addEventListener('click', () => this.stopAndGenerate());
@@ -100,7 +100,7 @@ class ScriptBuilder {
     document.getElementById('c4ai-output-format').addEventListener('change', (e) => {
       this.outputFormat = e.target.value;
     });
-    
+
     this.updateToolbar();
   }
 
@@ -169,7 +169,7 @@ class ScriptBuilder {
         </div>
       </div>
     `;
-    
+
     // Add event listeners
     document.getElementById('c4ai-start-recording').addEventListener('click', () => this.startRecording());
     document.getElementById('c4ai-saved-flows').addEventListener('click', () => this.showSavedFlows());
@@ -209,7 +209,7 @@ class ScriptBuilder {
         </button>
       </div>
     `;
-    
+
     // Re-add event listeners
     document.getElementById('c4ai-pause-recording').addEventListener('click', () => this.togglePause());
     document.getElementById('c4ai-stop-generate').addEventListener('click', () => this.stopAndGenerate());
@@ -225,7 +225,7 @@ class ScriptBuilder {
     this.isPaused = !this.isPaused;
     const pauseBtn = document.getElementById('c4ai-pause-recording');
     const recordingIndicator = document.querySelector('.c4ai-recording-indicator');
-    
+
     if (this.isPaused) {
       pauseBtn.innerHTML = '<span class="c4ai-play-icon">▶</span> Resume';
       pauseBtn.classList.add('c4ai-paused');
@@ -274,7 +274,7 @@ class ScriptBuilder {
       radio.addEventListener('change', (e) => {
         const timeInput = document.getElementById('c4ai-wait-time-input');
         const selectorInput = document.getElementById('c4ai-wait-selector-input');
-        
+
         if (e.target.value === 'time') {
           timeInput.classList.remove('c4ai-hidden');
           selectorInput.classList.add('c4ai-hidden');
@@ -293,7 +293,7 @@ class ScriptBuilder {
 
     document.getElementById('c4ai-wait-add').addEventListener('click', () => {
       const waitType = dialog.querySelector('input[name="wait-type"]:checked').value;
-      
+
       if (waitType === 'time') {
         const seconds = parseFloat(document.getElementById('c4ai-wait-seconds').value) || 2;
         this.addWaitCommand('time', seconds);
@@ -304,7 +304,7 @@ class ScriptBuilder {
 
   waitForElementSelection(dialog) {
     this.isPaused = true; // Pause recording during element selection
-    
+
     const highlightBox = document.createElement('div');
     highlightBox.className = 'c4ai-highlight-box c4ai-wait-mode';
     document.body.appendChild(highlightBox);
@@ -354,7 +354,7 @@ class ScriptBuilder {
     if (!highlightBox) {
       highlightBox = document.querySelector('.c4ai-highlight-box');
     }
-    
+
     const rect = element.getBoundingClientRect();
     highlightBox.style.display = 'block';
     highlightBox.style.top = `${rect.top + window.scrollY}px`;
@@ -375,10 +375,10 @@ class ScriptBuilder {
     // Use content script context instead of injecting inline script
     if (window.__c4aiScriptRecordingActive) return;
     window.__c4aiScriptRecordingActive = true;
-    
+
     const captureEvent = (type, event) => {
       // Skip events from our own UI
-      if (event.target.classList && 
+      if (event.target.classList &&
           (event.target.classList.contains('c4ai-script-toolbar') ||
            event.target.closest('.c4ai-script-toolbar') ||
            event.target.classList.contains('c4ai-wait-dialog') ||
@@ -387,7 +387,7 @@ class ScriptBuilder {
            event.target.closest('.c4ai-timeline-modal'))) {
         return;
       }
-      
+
       const data = {
         type: type,
         timestamp: Date.now(),
@@ -397,7 +397,7 @@ class ScriptBuilder {
         targetSelector: this.getElementSelector(event.target),
         targetType: event.target.type
       };
-      
+
       switch(type) {
         case 'click':
         case 'dblclick':
@@ -417,7 +417,7 @@ class ScriptBuilder {
         case 'input':
         case 'change':
           // Check if it's a contenteditable element
-          if (event.target.contentEditable === 'true' || 
+          if (event.target.contentEditable === 'true' ||
               event.target.getAttribute('contenteditable') === 'true') {
             data.value = event.target.textContent || event.target.innerText;
             data.isContentEditable = true;
@@ -454,11 +454,11 @@ class ScriptBuilder {
             const hasScrollableContent = el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth;
             const overflowY = window.getComputedStyle(el).overflowY;
             const overflowX = window.getComputedStyle(el).overflowX;
-            const canScroll = (overflowY !== 'visible' && overflowY !== 'hidden') || 
+            const canScroll = (overflowY !== 'visible' && overflowY !== 'hidden') ||
                               (overflowX !== 'visible' && overflowX !== 'hidden');
             return hasScrollableContent && canScroll;
           };
-          
+
           // Find the actual scrollable element
           let scrollTarget = event.target;
           while (scrollTarget && scrollTarget !== document.body) {
@@ -467,7 +467,7 @@ class ScriptBuilder {
             }
             scrollTarget = scrollTarget.parentElement;
           }
-          
+
           if (scrollTarget && scrollTarget !== document.body && isScrollable(scrollTarget)) {
             data.isWindowScroll = false;
             data.scrollTop = scrollTarget.scrollTop;
@@ -480,13 +480,13 @@ class ScriptBuilder {
           }
           break;
       }
-      
+
       // Handle the event directly instead of using postMessage
       if (this.isRecording && !this.isPaused) {
         this.handleRecordedEvent(data);
       }
     };
-    
+
     // Store bound event handlers for later removal
     this.eventHandlers = {
       click: (e) => captureEvent('click', e),
@@ -497,12 +497,12 @@ class ScriptBuilder {
       change: (e) => captureEvent('change', e),
       scroll: (e) => captureEvent('scroll', e)
     };
-    
+
     // Add event listeners
     Object.entries(this.eventHandlers).forEach(([eventType, handler]) => {
       document.addEventListener(eventType, handler, true);
     });
-    
+
     // Cleanup on page unload
     window.addEventListener('beforeunload', () => {
       this.removeEventCapture();
@@ -511,7 +511,7 @@ class ScriptBuilder {
 
   removeEventCapture() {
     window.__c4aiScriptRecordingActive = false;
-    
+
     // Remove event listeners if they exist
     if (this.eventHandlers) {
       Object.entries(this.eventHandlers).forEach(([eventType, handler]) => {
@@ -527,7 +527,7 @@ class ScriptBuilder {
 
     // Add time since start
     event.timeSinceStart = (event.timestamp - this.startTime) / 1000;
-    
+
     // Store raw event
     this.rawEvents.push(event);
 
@@ -539,7 +539,7 @@ class ScriptBuilder {
         if (this.keyBuffer.length > 0) {
           this.flushKeyBuffer();
         }
-        
+
         // Create keyboard shortcut command
         const command = this.eventToCommand(event);
         if (command) {
@@ -549,11 +549,11 @@ class ScriptBuilder {
       } else if (this.shouldGroupKeystrokes(event)) {
         // Regular typing
         this.keyBuffer.push(event);
-        
+
         if (this.keyBufferTimeout) {
           clearTimeout(this.keyBufferTimeout);
         }
-        
+
         this.keyBufferTimeout = setTimeout(() => {
           this.flushKeyBuffer();
           this.updateToolbar();
@@ -563,7 +563,7 @@ class ScriptBuilder {
         if (this.keyBuffer.length > 0) {
           this.flushKeyBuffer();
         }
-        
+
         const command = this.eventToCommand(event);
         if (command) {
           this.groupedEvents.push(command);
@@ -577,7 +577,7 @@ class ScriptBuilder {
       if (this.keyBuffer.length > 0) {
         this.flushKeyBuffer();
       }
-      
+
       const command = this.eventToCommand(event);
       if (command) {
         this.groupedEvents.push(command);
@@ -586,7 +586,7 @@ class ScriptBuilder {
     } else if (event.type === 'change') {
       // Handle select, checkbox, radio changes
       const tagName = event.targetTag?.toLowerCase();
-      if (tagName === 'select' || 
+      if (tagName === 'select' ||
           (tagName === 'input' && (event.targetType === 'checkbox' || event.targetType === 'radio'))) {
         const command = this.eventToCommand(event);
         if (command) {
@@ -602,7 +602,7 @@ class ScriptBuilder {
     if (event.metaKey || event.ctrlKey || event.altKey) {
       return false;
     }
-    
+
     return event.key && (
       event.key.length === 1 ||
       event.key === ' ' ||
@@ -615,7 +615,7 @@ class ScriptBuilder {
 
   flushKeyBuffer() {
     if (this.keyBuffer.length === 0) return;
-    
+
     const text = this.keyBuffer.map(e => {
       switch(e.key) {
         case ' ': return ' ';
@@ -626,42 +626,42 @@ class ScriptBuilder {
         default: return e.key;
       }
     }).join('');
-    
+
     if (text.length === 0) {
       this.keyBuffer = [];
       return;
     }
-    
+
     const firstEvent = this.keyBuffer[0];
     const lastEvent = this.keyBuffer[this.keyBuffer.length - 1];
-    
+
     // Check if this is a SET command pattern
     const firstKeystrokeIndex = this.rawEvents.indexOf(firstEvent);
     let commandType = 'TYPE';
-    
+
     if (firstKeystrokeIndex > 0) {
       const prevEvent = this.rawEvents[firstKeystrokeIndex - 1];
-      
+
       // Check for click before typing
-      if (prevEvent && prevEvent.type === 'click' && 
+      if (prevEvent && prevEvent.type === 'click' &&
           prevEvent.targetSelector === firstEvent.targetSelector) {
         commandType = 'SET';
       }
-      
+
       // Check for Cmd+A or Ctrl+A (select all) before typing
-      if (prevEvent && prevEvent.type === 'keydown' && 
+      if (prevEvent && prevEvent.type === 'keydown' &&
           prevEvent.key === 'a' && (prevEvent.metaKey || prevEvent.ctrlKey) &&
           prevEvent.targetSelector === firstEvent.targetSelector) {
         commandType = 'SET';
       }
     }
-    
+
     // Also check within the last few events for select-all pattern
     if (commandType === 'TYPE' && firstKeystrokeIndex > 1) {
       // Look back up to 3 events for select-all
       for (let i = Math.max(0, firstKeystrokeIndex - 3); i < firstKeystrokeIndex; i++) {
         const event = this.rawEvents[i];
-        if (event && event.type === 'keydown' && 
+        if (event && event.type === 'keydown' &&
             event.key === 'a' && (event.metaKey || event.ctrlKey) &&
             event.targetSelector === firstEvent.targetSelector) {
           commandType = 'SET';
@@ -669,29 +669,29 @@ class ScriptBuilder {
         }
       }
     }
-    
+
     this.groupedEvents.push({
       type: commandType,
       selector: firstEvent.targetSelector,
       value: text,
       time: firstEvent.timeSinceStart
     });
-    
+
     this.keyBuffer = [];
   }
 
   handleScrollEvent(event) {
     const direction = event.deltaY > 0 ? 'DOWN' : 'UP';
     const amount = Math.abs(event.deltaY);
-    
+
     // Remove previous scroll in same direction within 0.5s for the same element
-    this.groupedEvents = this.groupedEvents.filter(e => 
-      !(e.type === 'SCROLL' && 
-        e.direction === direction && 
+    this.groupedEvents = this.groupedEvents.filter(e =>
+      !(e.type === 'SCROLL' &&
+        e.direction === direction &&
         e.selector === (event.targetSelector || 'window') &&
         parseFloat(e.time) > parseFloat(event.timeSinceStart) - 0.5)
     );
-    
+
     this.groupedEvents.push({
       type: 'SCROLL',
       direction: direction,
@@ -700,7 +700,7 @@ class ScriptBuilder {
       isWindowScroll: event.isWindowScroll !== false,
       time: event.timeSinceStart
     });
-    
+
     this.updateToolbar();
   }
 
@@ -788,7 +788,7 @@ class ScriptBuilder {
   showRecordingSummary() {
     // Update toolbar to show summary
     const toolbarContent = this.toolbar.querySelector('.c4ai-toolbar-content');
-    
+
     toolbarContent.innerHTML = `
       <div class="c4ai-toolbar-status">
         <div class="c4ai-status-item">
@@ -923,7 +923,7 @@ class ScriptBuilder {
   generateAndDownload() {
     const format = document.getElementById('c4ai-final-format').value;
     const selectedEvents = [];
-    
+
     document.querySelectorAll('.c4ai-event-checkbox').forEach((cb, index) => {
       if (cb.checked && this.groupedEvents[index]) {
         selectedEvents.push(this.groupedEvents[index]);
@@ -936,7 +936,7 @@ class ScriptBuilder {
     }
 
     const code = this.generateCode(selectedEvents, format);
-    
+
     chrome.runtime.sendMessage({
       action: 'downloadScript',
       code: code,
@@ -954,7 +954,7 @@ class ScriptBuilder {
 
   generateCode(events, format) {
     let scriptCode;
-    
+
     if (format === 'js') {
       scriptCode = this.generateJavaScript(events);
     } else {
@@ -1013,7 +1013,7 @@ if (scrollEl) {
 
   generateTypeCode(event, mode) {
     const value = event.value.replace(/'/g, "\\'").replace(/\n/g, '\\n');
-    
+
     return `// ${mode === 'set' ? 'Set' : 'Type'} text
 const el = document.querySelector('${event.selector}');
 el.focus();
@@ -1029,7 +1029,7 @@ if (el.contentEditable === 'true' || el.getAttribute('contenteditable') === 'tru
   range.collapse(${mode === 'set' ? 'true' : 'false'});
   selection.removeAllRanges();
   selection.addRange(range);
-  
+
   // Type each character
   '${value}'.split('').forEach(char => {
     document.execCommand('insertText', false, char);
@@ -1111,12 +1111,12 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       </div>
     `;
     document.body.appendChild(this.replayIndicator);
-    
+
     // Create highlight overlay for showing where actions happen
     this.replayHighlight = document.createElement('div');
     this.replayHighlight.className = 'c4ai-replay-highlight';
     document.body.appendChild(this.replayHighlight);
-    
+
     // Add stop button listener
     document.getElementById('c4ai-replay-stop').addEventListener('click', () => {
       this.stopReplay();
@@ -1126,22 +1126,22 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
   async executeReplaySequence() {
     const events = this.groupedEvents;
     const totalEvents = events.length;
-    
+
     for (let i = 0; i < totalEvents; i++) {
       if (!this.isReplaying) break;
-      
+
       this.replayIndex = i;
       const event = events[i];
       const progress = ((i + 1) / totalEvents) * 100;
-      
+
       // Update progress
       document.getElementById('c4ai-replay-progress').style.width = `${progress}%`;
-      document.getElementById('c4ai-replay-status').textContent = 
+      document.getElementById('c4ai-replay-status').textContent =
         `Action ${i + 1}/${totalEvents}: ${this.getReplayActionDescription(event)}`;
-      
+
       // Execute the action with visual feedback
       await this.executeReplayAction(event);
-      
+
       // Wait between actions (except for the last one)
       if (i < totalEvents - 1) {
         const nextEvent = events[i + 1];
@@ -1149,7 +1149,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         await this.wait(waitTime);
       }
     }
-    
+
     // Replay complete
     this.stopReplay(true);
   }
@@ -1185,10 +1185,10 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     if (element) {
       // Highlight the element
       this.highlightReplayElement(element);
-      
+
       // Show click animation
       this.showClickAnimation(element);
-      
+
       // Wait a bit for visual effect
       await this.wait(300);
     } else {
@@ -1201,15 +1201,15 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     if (element) {
       // Highlight the input field
       this.highlightReplayElement(element);
-      
+
       // Show typing animation
       const originalValue = element.value || '';
-      
+
       if (event.type === 'SET') {
         // Clear and set new value with animation
         element.value = '';
         await this.wait(200);
-        
+
         // Type character by character
         for (let i = 0; i < event.value.length; i++) {
           element.value = event.value.substring(0, i + 1);
@@ -1228,37 +1228,37 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
 
   async replayScrollAction(event) {
     const scrollAmount = event.direction === 'DOWN' ? event.amount : -event.amount;
-    
+
     // Animate scroll
     const startY = window.scrollY;
     const targetY = startY + scrollAmount;
     const duration = 500; // ms
     const startTime = Date.now();
-    
+
     const animateScroll = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const easeProgress = this.easeInOut(progress);
-      
+
       window.scrollTo(0, startY + (targetY - startY) * easeProgress);
-      
+
       if (progress < 1 && this.isReplaying) {
         requestAnimationFrame(animateScroll);
       }
     };
-    
+
     animateScroll();
     await this.wait(duration);
   }
 
   async replayWaitAction(event) {
     if (event.waitType === 'time') {
-      document.getElementById('c4ai-replay-status').textContent = 
+      document.getElementById('c4ai-replay-status').textContent =
         `Waiting ${event.value} seconds...`;
       await this.wait(event.value * 1000);
     } else {
       // Wait for element
-      document.getElementById('c4ai-replay-status').textContent = 
+      document.getElementById('c4ai-replay-status').textContent =
         `Waiting for element: ${event.value}`;
       await this.waitForElement(event.value, 5000); // 5 second timeout
     }
@@ -1271,7 +1271,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     if (event.altKey) keys.push('Alt');
     if (event.shiftKey) keys.push('Shift');
     keys.push(event.key.toUpperCase());
-    
+
     // Show keyboard shortcut overlay
     this.showKeyboardOverlay(keys.join('+'));
     await this.wait(1000);
@@ -1289,7 +1289,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     this.replayHighlight.style.left = `${rect.left + window.scrollX}px`;
     this.replayHighlight.style.width = `${rect.width}px`;
     this.replayHighlight.style.height = `${rect.height}px`;
-    
+
     // Fade out after a moment
     setTimeout(() => {
       this.replayHighlight.style.display = 'none';
@@ -1300,13 +1300,13 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     const rect = element.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
-    
+
     const clickIndicator = document.createElement('div');
     clickIndicator.className = 'c4ai-click-indicator';
     clickIndicator.style.left = `${centerX}px`;
     clickIndicator.style.top = `${centerY}px`;
     document.body.appendChild(clickIndicator);
-    
+
     // Remove after animation
     setTimeout(() => clickIndicator.remove(), 600);
   }
@@ -1316,10 +1316,10 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     overlay.className = 'c4ai-keyboard-overlay';
     overlay.textContent = keys;
     document.body.appendChild(overlay);
-    
+
     // Fade in
     setTimeout(() => overlay.classList.add('visible'), 10);
-    
+
     // Fade out and remove
     setTimeout(() => {
       overlay.classList.remove('visible');
@@ -1334,13 +1334,13 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       case 'RIGHT_CLICK': return `Right-click on ${event.selector}`;
       case 'TYPE': return `Type "${event.value.substring(0, 20)}..."`;
       case 'SET': return `Set value in ${event.selector}`;
-      case 'SCROLL': 
+      case 'SCROLL':
         if (event.isWindowScroll || event.selector === 'window') {
           return `Scroll ${event.direction} ${event.amount}px`;
         } else {
           return `Scroll ${event.selector} ${event.direction} ${event.amount}px`;
         }
-      case 'WAIT': return event.waitType === 'time' ? 
+      case 'WAIT': return event.waitType === 'time' ?
         `Wait ${event.value}s` : `Wait for ${event.value}`;
       case 'KEYBOARD_SHORTCUT': return `Press ${this.getEventDetail(event)}`;
       case 'KEY_PRESS': return `Press ${event.key}`;
@@ -1378,18 +1378,18 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
 
   stopReplay(completed = false) {
     this.isReplaying = false;
-    
+
     // Remove replay UI
     this.replayIndicator?.remove();
     this.replayHighlight?.remove();
-    
+
     // Update toolbar
     if (completed) {
       document.getElementById('c4ai-script-hint').textContent = '✅ Replay completed!';
     } else {
       document.getElementById('c4ai-script-hint').textContent = '⏹️ Replay stopped';
     }
-    
+
     // Re-enable replay button
     const replayBtn = document.getElementById('c4ai-replay');
     if (replayBtn) {
@@ -1402,12 +1402,12 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     // Create debugger modal
     this.debuggerModal = document.createElement('div');
     this.debuggerModal.className = 'c4ai-debugger-modal';
-    
+
     // Set initial position for dragging
     this.debuggerModal.style.position = 'fixed';
     this.debuggerModal.style.top = '50px';
     this.debuggerModal.style.right = '20px';
-    
+
     this.debuggerModal.innerHTML = `
       <div class="c4ai-debugger-content">
         <div class="c4ai-debugger-header">
@@ -1442,9 +1442,9 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         </div>
       </div>
     `;
-    
+
     document.body.appendChild(this.debuggerModal);
-    
+
     // Initialize debugger state
     this.debuggerState = {
       currentIndex: 0,
@@ -1453,15 +1453,15 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       breakpoints: new Set(),
       editedEvents: [...this.groupedEvents] // Copy for editing
     };
-    
+
     // Create replay highlight element
     this.replayHighlight = document.createElement('div');
     this.replayHighlight.className = 'c4ai-replay-highlight';
     document.body.appendChild(this.replayHighlight);
-    
+
     // Add event listeners
     this.attachDebuggerListeners();
-    
+
     // Make debugger draggable by the header
     makeDraggableByHeader(this.debuggerModal);
   }
@@ -1501,7 +1501,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     document.getElementById('c4ai-debug-stop').addEventListener('click', () => this.debugStop());
     document.getElementById('c4ai-debug-restart').addEventListener('click', () => this.debugRestart());
     document.getElementById('c4ai-close-debugger').addEventListener('click', () => this.closeDebugger());
-    
+
     // Breakpoint checkboxes
     document.querySelectorAll('.c4ai-breakpoint-checkbox').forEach(cb => {
       cb.addEventListener('change', (e) => {
@@ -1514,7 +1514,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         this.updateBreakpointVisual(index, e.target.checked);
       });
     });
-    
+
     // Play buttons
     document.querySelectorAll('.c4ai-action-play').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1522,7 +1522,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         this.executeActionOnPage(this.debuggerState.editedEvents[index], index);
       });
     });
-    
+
     // Delete buttons
     document.querySelectorAll('.c4ai-action-delete').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1530,7 +1530,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         this.deleteDebugAction(index);
       });
     });
-    
+
     // Edit buttons
     document.querySelectorAll('.c4ai-action-edit').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1538,7 +1538,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         this.editDebugAction(index);
       });
     });
-    
+
     // Inline editing
     document.querySelectorAll('.c4ai-action-detail[contenteditable]').forEach(elem => {
       elem.addEventListener('blur', (e) => {
@@ -1553,19 +1553,19 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     this.debuggerState.isPaused = false;
     this.updateDebugControls();
     this.updateDebugStatus('Running...');
-    
+
     const startIndex = this.debuggerState.currentIndex;
     const events = this.debuggerState.editedEvents;
-    
+
     for (let i = startIndex; i < events.length; i++) {
       if (!this.debuggerState.isRunning || this.debuggerState.isPaused) break;
-      
+
       // Update current action
       this.setCurrentAction(i);
-      
+
       // Execute the action
       await this.executeDebugAction(events[i], i);
-      
+
       // Check for breakpoint on next action
       if (i < events.length - 1 && this.debuggerState.breakpoints.has(i + 1)) {
         this.debuggerState.currentIndex = i + 1;
@@ -1573,10 +1573,10 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         this.updateDebugStatus(`Stopped at breakpoint ${i + 2}`);
         break;
       }
-      
+
       this.debuggerState.currentIndex = i + 1;
     }
-    
+
     if (this.debuggerState.currentIndex >= events.length) {
       this.debugStop(true);
     }
@@ -1587,17 +1587,17 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       this.updateDebugStatus('End of actions');
       return;
     }
-    
+
     this.updateDebugStatus('Stepping...');
     this.setCurrentAction(this.debuggerState.currentIndex);
-    
+
     await this.executeDebugAction(
       this.debuggerState.editedEvents[this.debuggerState.currentIndex],
       this.debuggerState.currentIndex
     );
-    
+
     this.debuggerState.currentIndex++;
-    
+
     if (this.debuggerState.currentIndex >= this.debuggerState.editedEvents.length) {
       this.updateDebugStatus('Completed');
     } else {
@@ -1616,7 +1616,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     this.debuggerState.isRunning = false;
     this.debuggerState.isPaused = false;
     this.updateDebugControls();
-    
+
     if (completed) {
       this.updateDebugStatus('Completed');
     } else {
@@ -1644,18 +1644,18 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     document.querySelectorAll('.c4ai-debug-action').forEach(elem => {
       elem.classList.remove('c4ai-current');
     });
-    
+
     // Add current marker
     const currentElem = document.querySelector(`.c4ai-debug-action[data-index="${index}"]`);
     if (currentElem) {
       currentElem.classList.add('c4ai-current');
-      
+
       // Better scrolling into view
       const scrollContainer = document.querySelector('.c4ai-debugger-actions');
       if (scrollContainer) {
         const containerRect = scrollContainer.getBoundingClientRect();
         const elemRect = currentElem.getBoundingClientRect();
-        
+
         // Check if element is out of view
         if (elemRect.top < containerRect.top || elemRect.bottom > containerRect.bottom) {
           // Scroll to center the element
@@ -1667,7 +1667,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         }
       }
     }
-    
+
     this.debuggerState.currentIndex = index;
   }
 
@@ -1675,7 +1675,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     const runBtn = document.getElementById('c4ai-debug-run');
     const stepBtn = document.getElementById('c4ai-debug-step');
     const pauseBtn = document.getElementById('c4ai-debug-pause');
-    
+
     if (this.debuggerState.isRunning) {
       runBtn.disabled = true;
       stepBtn.disabled = true;
@@ -1710,11 +1710,11 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
           .filter(bp => bp !== index)
           .map(bp => bp > index ? bp - 1 : bp)
       );
-      
+
       // Re-render actions
       document.getElementById('c4ai-debugger-actions').innerHTML = this.renderDebuggerActions();
       this.attachDebuggerListeners();
-      
+
       // Adjust current index if needed
       if (this.debuggerState.currentIndex > index) {
         this.debuggerState.currentIndex--;
@@ -1750,13 +1750,13 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         </div>
       </div>
     `;
-    
+
     document.body.appendChild(dialog);
-    
+
     document.getElementById('c4ai-edit-save').addEventListener('click', () => {
       const newType = document.getElementById('c4ai-edit-type').value;
       const newValue = document.getElementById('c4ai-edit-value').value;
-      
+
       // Update event based on type
       this.debuggerState.editedEvents[index] = {
         ...event,
@@ -1764,13 +1764,13 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         selector: ['CLICK', 'TYPE', 'SET'].includes(newType) ? newValue : event.selector,
         value: ['TYPE', 'SET', 'WAIT'].includes(newType) ? newValue : event.value
       };
-      
+
       // Re-render
       document.getElementById('c4ai-debugger-actions').innerHTML = this.renderDebuggerActions();
       this.attachDebuggerListeners();
       dialog.remove();
     });
-    
+
     document.getElementById('c4ai-edit-cancel').addEventListener('click', () => {
       dialog.remove();
     });
@@ -1778,10 +1778,10 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
 
   async executeDebugAction(event, index) {
     this.updateDebugStatus(`Executing: ${this.getEventDetail(event)}`);
-    
+
     // Execute the action on the page
     await this.executeActionOnPage(event, index);
-    
+
     // Add small delay between actions for visibility
     await this.wait(300);
   }
@@ -1790,7 +1790,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     try {
       // Set current action for visual feedback
       this.setCurrentAction(index);
-      
+
       switch (event.type) {
         case 'CLICK':
         case 'DOUBLE_CLICK':
@@ -1814,7 +1814,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
           await this.executeKeyPress(event);
           break;
       }
-      
+
       this.updateDebugStatus(`Executed: ${this.getEventDetail(event)}`);
     } catch (error) {
       console.error('Error executing action:', error);
@@ -1827,26 +1827,26 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     if (!element) {
       throw new Error(`Element not found: ${event.selector}`);
     }
-    
+
     // Highlight element briefly
     this.highlightReplayElement(element);
-    
+
     // Create and dispatch the appropriate mouse event
     const eventType = {
       'CLICK': 'click',
       'DOUBLE_CLICK': 'dblclick',
       'RIGHT_CLICK': 'contextmenu'
     }[event.type];
-    
+
     const mouseEvent = new MouseEvent(eventType, {
       view: window,
       bubbles: true,
       cancelable: true,
       buttons: event.type === 'RIGHT_CLICK' ? 2 : 1
     });
-    
+
     element.dispatchEvent(mouseEvent);
-    
+
     // Also try clicking for better compatibility
     if (event.type === 'CLICK' && typeof element.click === 'function') {
       element.click();
@@ -1858,23 +1858,23 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     if (!element) {
       throw new Error(`Element not found: ${event.selector}`);
     }
-    
+
     // Highlight element
     this.highlightReplayElement(element);
-    
+
     // Make sure element is visible and focused
     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await this.wait(100);
-    
+
     // Focus the element
     element.focus();
     element.click(); // Some inputs need a click to properly focus
-    
+
     // Check if it's a contenteditable element
-    const isContentEditable = element.contentEditable === 'true' || 
+    const isContentEditable = element.contentEditable === 'true' ||
                              element.getAttribute('contenteditable') === 'true' ||
                              element.closest('[contenteditable="true"]');
-    
+
     if (isContentEditable) {
       // Handle contenteditable elements
       await this.typeInContentEditable(element, event);
@@ -1891,24 +1891,24 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     if (event.type === 'SET') {
       // Clear and set value
       element.value = '';
-      
+
       // Dispatch events
       element.dispatchEvent(new Event('focus', { bubbles: true }));
       element.dispatchEvent(new Event('input', { bubbles: true }));
-      
+
       // Type character by character for realism
       for (let i = 0; i < event.value.length; i++) {
         element.value = event.value.substring(0, i + 1);
-        
+
         // Dispatch multiple events for better compatibility
         element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new InputEvent('input', { 
+        element.dispatchEvent(new InputEvent('input', {
           bubbles: true,
           cancelable: true,
           inputType: 'insertText',
           data: event.value[i]
         }));
-        
+
         await this.wait(30);
       }
     } else {
@@ -1916,20 +1916,20 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       const startValue = element.value || '';
       for (let i = 0; i < event.value.length; i++) {
         element.value = startValue + event.value.substring(0, i + 1);
-        
+
         // Dispatch multiple events
         element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new InputEvent('input', { 
+        element.dispatchEvent(new InputEvent('input', {
           bubbles: true,
           cancelable: true,
           inputType: 'insertText',
           data: event.value[i]
         }));
-        
+
         await this.wait(30);
       }
     }
-    
+
     // Dispatch change and blur events
     element.dispatchEvent(new Event('change', { bubbles: true }));
     element.dispatchEvent(new Event('blur', { bubbles: true }));
@@ -1938,15 +1938,15 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
   async typeInContentEditable(element, event) {
     // Focus and prepare the element
     element.focus();
-    
+
     // Create a range and selection
     const selection = window.getSelection();
     const range = document.createRange();
-    
+
     if (event.type === 'SET') {
       // Clear existing content
       element.textContent = '';
-      
+
       // Set cursor at the beginning
       range.selectNodeContents(element);
       range.collapse(true);
@@ -1959,11 +1959,11 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       selection.removeAllRanges();
       selection.addRange(range);
     }
-    
+
     // Type each character using keyboard events
     for (let i = 0; i < event.value.length; i++) {
       const char = event.value[i];
-      
+
       // Dispatch keydown
       const keydownEvent = new KeyboardEvent('keydown', {
         key: char,
@@ -1974,12 +1974,12 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         cancelable: true
       });
       element.dispatchEvent(keydownEvent);
-      
+
       // Insert the character
       if (!keydownEvent.defaultPrevented) {
         document.execCommand('insertText', false, char);
       }
-      
+
       // Dispatch keyup
       const keyupEvent = new KeyboardEvent('keyup', {
         key: char,
@@ -1990,7 +1990,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         cancelable: true
       });
       element.dispatchEvent(keyupEvent);
-      
+
       // Dispatch input event
       element.dispatchEvent(new InputEvent('input', {
         bubbles: true,
@@ -1998,10 +1998,10 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         inputType: 'insertText',
         data: char
       }));
-      
+
       await this.wait(30);
     }
-    
+
     // Dispatch blur event
     element.dispatchEvent(new Event('blur', { bubbles: true }));
   }
@@ -2010,24 +2010,24 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     const scrollAmount = event.direction === 'DOWN' ? event.amount : -event.amount;
     const duration = 300;
     const startTime = Date.now();
-    
+
     if (event.isWindowScroll || event.selector === 'window') {
       // Window scroll
       const startY = window.scrollY;
       const targetY = startY + scrollAmount;
-      
+
       const animateScroll = () => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const easeProgress = this.easeInOut(progress);
-        
+
         window.scrollTo(0, startY + (targetY - startY) * easeProgress);
-        
+
         if (progress < 1) {
           requestAnimationFrame(animateScroll);
         }
       };
-      
+
       animateScroll();
     } else {
       // Element scroll
@@ -2035,28 +2035,28 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       if (!element) {
         throw new Error(`Scrollable element not found: ${event.selector}`);
       }
-      
+
       // Highlight the scrollable element
       this.highlightReplayElement(element);
-      
+
       const startY = element.scrollTop;
       const targetY = startY + scrollAmount;
-      
+
       const animateScroll = () => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const easeProgress = this.easeInOut(progress);
-        
+
         element.scrollTop = startY + (targetY - startY) * easeProgress;
-        
+
         if (progress < 1) {
           requestAnimationFrame(animateScroll);
         }
       };
-      
+
       animateScroll();
     }
-    
+
     await this.wait(duration);
   }
 
@@ -2067,7 +2067,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       // Wait for element to appear
       const timeout = 5000;
       const startTime = Date.now();
-      
+
       while (Date.now() - startTime < timeout) {
         const element = document.querySelector(event.value);
         if (element) {
@@ -2076,7 +2076,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         }
         await this.wait(100);
       }
-      
+
       throw new Error(`Element not found after ${timeout}ms: ${event.value}`);
     }
   }
@@ -2084,7 +2084,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
   async executeKeyboardShortcut(event) {
     // Show keyboard overlay
     this.showKeyboardOverlay(this.getEventDetail(event));
-    
+
     // Create and dispatch keyboard event
     const keyEvent = new KeyboardEvent('keydown', {
       key: event.key,
@@ -2096,9 +2096,9 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       bubbles: true,
       cancelable: true
     });
-    
+
     document.activeElement.dispatchEvent(keyEvent);
-    
+
     // Some shortcuts need keyup as well
     const keyUpEvent = new KeyboardEvent('keyup', {
       key: event.key,
@@ -2110,23 +2110,23 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
       bubbles: true,
       cancelable: true
     });
-    
+
     document.activeElement.dispatchEvent(keyUpEvent);
-    
+
     await this.wait(500);
   }
 
   async executeKeyPress(event) {
     this.showKeyboardOverlay(event.key);
-    
+
     const activeElement = document.activeElement;
-    
+
     if (event.key === 'Delete' || event.key === 'Backspace') {
       // Handle delete/backspace on input elements
       if (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') {
         const start = activeElement.selectionStart;
         const end = activeElement.selectionEnd;
-        
+
         if (start !== end) {
           // Delete selection
           activeElement.value = activeElement.value.substring(0, start) + activeElement.value.substring(end);
@@ -2139,7 +2139,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
           // Delete character after cursor
           activeElement.value = activeElement.value.substring(0, start) + activeElement.value.substring(start + 1);
         }
-        
+
         activeElement.dispatchEvent(new Event('input', { bubbles: true }));
       }
     } else {
@@ -2149,10 +2149,10 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         bubbles: true,
         cancelable: true
       });
-      
+
       activeElement.dispatchEvent(keyEvent);
     }
-    
+
     await this.wait(300);
   }
 
@@ -2165,7 +2165,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
 
     // Get current domain
     const domain = window.location.hostname;
-    
+
     // Create flow object
     const flow = {
       id: Date.now().toString(),
@@ -2182,7 +2182,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     chrome.storage.local.get(storageKey, (result) => {
       const flows = result[storageKey] || [];
       flows.push(flow);
-      
+
       // Save updated flows
       chrome.storage.local.set({ [storageKey]: flows }, () => {
         if (chrome.runtime.lastError) {
@@ -2199,10 +2199,10 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
   showSavedFlows() {
     const domain = window.location.hostname;
     const storageKey = `c4ai_flows_${domain}`;
-    
+
     chrome.storage.local.get(storageKey, (result) => {
       const flows = result[storageKey] || [];
-      
+
       // Create modal
       const modal = document.createElement('div');
       modal.className = 'c4ai-saved-flows-modal';
@@ -2213,7 +2213,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
             <button class="c4ai-close-modal" id="c4ai-close-flows">✕</button>
           </div>
           <div class="c4ai-saved-flows-body">
-            ${flows.length === 0 ? 
+            ${flows.length === 0 ?
               '<p class="c4ai-no-flows">No saved flows for this domain yet. Record and save your first flow!</p>' :
               `<div class="c4ai-flows-list">
                 ${flows.map(flow => `
@@ -2241,14 +2241,14 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
           </div>
         </div>
       `;
-      
+
       document.body.appendChild(modal);
-      
+
       // Add event listeners
       document.getElementById('c4ai-close-flows').addEventListener('click', () => {
         modal.remove();
       });
-      
+
       // Load flow buttons
       modal.querySelectorAll('.c4ai-load-flow-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -2260,7 +2260,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
           }
         });
       });
-      
+
       // Delete flow buttons
       modal.querySelectorAll('.c4ai-delete-flow-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -2279,14 +2279,14 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     // Stop any current recording
     this.isRecording = false;
     this.removeEventCapture();
-    
+
     // Load the flow's events
     this.groupedEvents = [...flow.events];
     this.outputFormat = flow.outputFormat || 'js';
-    
+
     // Show the recording summary UI
     this.showRecordingSummary();
-    
+
     // Update hint
     document.getElementById('c4ai-script-hint').textContent = `Loaded flow: "${flow.name}"`;
   }
@@ -2294,11 +2294,11 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
   deleteFlow(flowId) {
     const domain = window.location.hostname;
     const storageKey = `c4ai_flows_${domain}`;
-    
+
     chrome.storage.local.get(storageKey, (result) => {
       const flows = result[storageKey] || [];
       const updatedFlows = flows.filter(f => f.id !== flowId);
-      
+
       chrome.storage.local.set({ [storageKey]: updatedFlows }, () => {
         if (chrome.runtime.lastError) {
           alert('Failed to delete flow: ' + chrome.runtime.lastError.message);
@@ -2312,18 +2312,18 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     if (!confirm('Are you sure you want to start a new recording? This will clear the current recording.')) {
       return;
     }
-    
+
     // Clear current recording and start fresh
     this.groupedEvents = [];
     this.rawEvents = [];
     this.processedEventIndices.clear();
     this.keyBuffer = [];
-    
+
     // Don't create a new toolbar, just update the existing one
     this.isRecording = true;
     this.startTime = Date.now();
     this.lastEventTime = this.startTime;
-    
+
     // Reset toolbar content to recording state
     const toolbarContent = this.toolbar.querySelector('.c4ai-toolbar-content');
     toolbarContent.innerHTML = `
@@ -2358,7 +2358,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
         </button>
       </div>
     `;
-    
+
     // Re-add event listeners
     document.getElementById('c4ai-pause-recording').addEventListener('click', () => this.togglePause());
     document.getElementById('c4ai-stop-generate').addEventListener('click', () => this.stopAndGenerate());
@@ -2367,7 +2367,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
     document.getElementById('c4ai-output-format').addEventListener('change', (e) => {
       this.outputFormat = e.target.value;
     });
-    
+
     this.createRecordingIndicator();
     this.updateToolbar();
   }
@@ -2375,7 +2375,7 @@ el.dispatchEvent(new Event('blur', {bubbles: true}));`;
   generatePythonTemplate(scriptCode, format) {
     const currentUrl = window.location.href;
     const timestamp = new Date().toISOString();
-    
+
     if (format === 'js') {
       return `#!/usr/bin/env python3
 """
@@ -2394,26 +2394,26 @@ ${scriptCode}
 
 async def run_automation():
     """Run the recorded automation script"""
-    
+
     # Configure browser
     browser_config = BrowserConfig(
         headless=False,  # Set to True for headless mode
         verbose=True
     )
-    
+
     # Configure crawler with JavaScript execution
     crawler_config = CrawlerRunConfig(
         js_code=JS_SCRIPT,
         wait_for="js:() => document.readyState === 'complete'",
         page_timeout=30000  # 30 seconds timeout
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
             url="${currentUrl}",
             config=crawler_config
         )
-        
+
         if result.success:
             print("✅ Automation completed successfully!")
             print(f"Final URL: {result.url}")
@@ -2458,7 +2458,7 @@ print(C4A_SCRIPT)
 # from crawl4ai.script import C4ACompiler
 # compiler = C4ACompiler()
 # js_code = compiler.compile(C4A_SCRIPT)
-# 
+#
 # Then use js_code in CrawlerRunConfig as shown in the JavaScript example above
 
 print("\\n💡 To execute this C4A script, compile it to JavaScript first!")
@@ -2489,7 +2489,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       scriptBuilder.start();
       sendResponse({ success: true });
       break;
-      
+
     case 'stopCapture':
       if (schemaBuilder) {
         schemaBuilder.stop();
@@ -2501,7 +2501,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       sendResponse({ success: true });
       break;
-      
+
     case 'generateCode':
       if (schemaBuilder) {
         const code = schemaBuilder.generateCode();
@@ -2510,6 +2510,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
       break;
   }
-  
+
   return true;
 });

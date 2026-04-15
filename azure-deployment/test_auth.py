@@ -3,18 +3,17 @@
 Test script to verify authentication is working correctly
 """
 import requests
-import json
 import os
-import time
+
 
 def test_authentication(base_url="http://localhost:11235", api_token=None):
     """Test the authentication system"""
-    
+
     print("🔐 Testing Authentication System")
     print(f"🌐 Base URL: {base_url}")
     print(f"🔑 API Token: {'***' + api_token[-8:] if api_token else 'None'}")
-    print("="*50)
-    
+    print("=" * 50)
+
     # Test 1: Health check (should work without auth)
     print("\n📋 Test 1: Health Check (No Auth Required)")
     try:
@@ -27,14 +26,14 @@ def test_authentication(base_url="http://localhost:11235", api_token=None):
             print(f"❌ Health check failed: {response.text}")
     except Exception as e:
         print(f"❌ Health check error: {str(e)}")
-    
+
     # Test 2: Crawl without authentication (should fail)
     print("\n📋 Test 2: Crawl Without Authentication (Should Fail)")
     try:
         payload = {
             "urls": ["https://example.com"],
             "browser_config": {"headless": True},
-            "crawler_config": {}
+            "crawler_config": {},
         }
         response = requests.post(f"{base_url}/crawl", json=payload, timeout=30)
         print(f"Status: {response.status_code}")
@@ -45,7 +44,7 @@ def test_authentication(base_url="http://localhost:11235", api_token=None):
             print(f"Response: {response.text}")
     except Exception as e:
         print(f"❌ Request error: {str(e)}")
-    
+
     # Test 3: Crawl with authentication (should work)
     if api_token:
         print("\n📋 Test 3: Crawl With Authentication (Should Work)")
@@ -63,15 +62,17 @@ def test_authentication(base_url="http://localhost:11235", api_token=None):
                                 "params": {
                                     "threshold": 0.6,
                                     "threshold_type": "fixed",
-                                    "min_word_threshold": 0
-                                }
+                                    "min_word_threshold": 0,
+                                },
                             },
-                            "options": {"ignore_links": False}
-                        }
+                            "options": {"ignore_links": False},
+                        },
                     }
-                }
+                },
             }
-            response = requests.post(f"{base_url}/crawl", json=payload, headers=headers, timeout=30)
+            response = requests.post(
+                f"{base_url}/crawl", json=payload, headers=headers, timeout=30
+            )
             print(f"Status: {response.status_code}")
             if response.status_code == 200:
                 data = response.json()
@@ -79,10 +80,18 @@ def test_authentication(base_url="http://localhost:11235", api_token=None):
                     result = data["results"][0]
                     print("✅ Authenticated crawl successful")
                     print(f"🔗 URL: {result.get('url')}")
-                    print(f"📝 Title: {result.get('metadata', {}).get('title', 'No title')}")
-                    print(f"📄 Markdown Length: {len(result.get('markdown', {}).get('raw_markdown', ''))}")
-                    print(f"✂️  Fit Markdown Length: {len(result.get('markdown', {}).get('fit_markdown', ''))}")
-                    print(f"🔗 Links: {len(result.get('links', {}).get('external', []))} external")
+                    print(
+                        f"📝 Title: {result.get('metadata', {}).get('title', 'No title')}"
+                    )
+                    print(
+                        f"📄 Markdown Length: {len(result.get('markdown', {}).get('raw_markdown', ''))}"
+                    )
+                    print(
+                        f"✂️  Fit Markdown Length: {len(result.get('markdown', {}).get('fit_markdown', ''))}"
+                    )
+                    print(
+                        f"🔗 Links: {len(result.get('links', {}).get('external', []))} external"
+                    )
                 else:
                     print(f"❌ Crawl failed: {data}")
             else:
@@ -92,7 +101,7 @@ def test_authentication(base_url="http://localhost:11235", api_token=None):
             print(f"❌ Authenticated request error: {str(e)}")
     else:
         print("\n📋 Test 3: Skipped (No API Token Provided)")
-    
+
     # Test 4: Test token endpoint if available
     if api_token:
         print("\n📋 Test 4: Token Endpoint Test")
@@ -104,33 +113,42 @@ def test_authentication(base_url="http://localhost:11235", api_token=None):
                 print("✅ Token endpoint working")
                 print(f"Response: {response.json()}")
             else:
-                print(f"ℹ️  Token endpoint not available or different response: {response.status_code}")
+                print(
+                    f"ℹ️  Token endpoint not available or different response: {response.status_code}"
+                )
         except Exception as e:
             print(f"ℹ️  Token endpoint test: {str(e)}")
+
 
 def generate_test_token():
     """Generate a test token for local testing"""
     import secrets
+
     return f"crawl4ai-test-{secrets.token_hex(16)}"
+
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Test Crawl4AI authentication")
-    parser.add_argument("--url", default="http://localhost:11235", help="Base URL of the API")
+    parser.add_argument(
+        "--url", default="http://localhost:11235", help="Base URL of the API"
+    )
     parser.add_argument("--token", help="API token to test with")
-    parser.add_argument("--generate-token", action="store_true", help="Generate a test token")
-    
+    parser.add_argument(
+        "--generate-token", action="store_true", help="Generate a test token"
+    )
+
     args = parser.parse_args()
-    
+
     if args.generate_token:
         token = generate_test_token()
         print(f"Generated test token: {token}")
         print(f"Set environment variable: export CRAWL4AI_API_TOKEN={token}")
         exit(0)
-    
+
     api_token = args.token or os.environ.get("CRAWL4AI_API_TOKEN")
-    
+
     test_authentication(args.url, api_token)
-    
+
     print("\n🎉 Authentication tests completed!")

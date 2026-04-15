@@ -89,7 +89,7 @@ async def main():
         BrowserConfig(headless=True),
     )
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("All regression tests complete.")
 
 

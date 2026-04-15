@@ -27,11 +27,11 @@ async def deep_crawl_example():
         ),
         verbose=True
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         # Start crawling and follow links dynamically
         results = await crawler.arun("https://example.com", config=config)
-        
+
         print(f"Discovered and crawled {len(results)} pages")
         for result in results[:3]:
             print(f"Found: {result.url} at depth {result.metadata.get('depth', 0)}")
@@ -99,7 +99,7 @@ from crawl4ai import AsyncUrlSeeder, AsyncWebCrawler, SeedingConfig, CrawlerRunC
 async def smart_blog_crawler():
     # Step 1: Create our URL discoverer
     seeder = AsyncUrlSeeder()
-    
+
     # Step 2: Configure discovery - let's find all blog posts
     config = SeedingConfig(
         source="sitemap+cc",      # Use the website's sitemap+cc
@@ -107,28 +107,28 @@ async def smart_blog_crawler():
         extract_head=True,          # Get page metadata
         max_urls=100               # Limit for this example
     )
-    
+
     # Step 3: Discover URLs from the Python blog
     print("🔍 Discovering course posts...")
     urls = await seeder.urls("realpython.com", config)
     print(f"✅ Found {len(urls)} course posts")
-    
+
     # Step 4: Filter for Python tutorials (using metadata!)
     tutorials = [
-        url for url in urls 
-        if url["status"] == "valid" and 
-        any(keyword in str(url["head_data"]).lower() 
+        url for url in urls
+        if url["status"] == "valid" and
+        any(keyword in str(url["head_data"]).lower()
             for keyword in ["tutorial", "guide", "how to"])
     ]
     print(f"📚 Filtered to {len(tutorials)} tutorials")
-    
+
     # Step 5: Show what we found
     print("\n🎯 Found these tutorials:")
     for tutorial in tutorials[:5]:  # First 5
         title = tutorial["head_data"].get("title", "No title")
         print(f"  - {title}")
         print(f"    {tutorial['url']}")
-    
+
     # Step 6: Now crawl ONLY these relevant pages
     print("\n🚀 Crawling tutorials...")
     async with AsyncWebCrawler() as crawler:
@@ -137,17 +137,17 @@ async def smart_blog_crawler():
             word_count_threshold=300,  # Only substantial articles
             stream=True
         )
-        
+
         # Extract URLs and crawl them
         tutorial_urls = [t["url"] for t in tutorials[:10]]
         results = await crawler.arun_many(tutorial_urls, config=config)
-        
+
         successful = 0
         async for result in results:
             if result.success:
                 successful += 1
                 print(f"✓ Crawled: {result.url[:60]}...")
-        
+
         print(f"\n✨ Successfully crawled {successful} tutorials!")
 
 # Run it!
@@ -321,11 +321,11 @@ async with AsyncUrlSeeder() as seeder:
 for url in urls[:3]:
     print(f"\nURL: {url['url']}")
     print(f"Title: {url['head_data'].get('title')}")
-    
+
     meta = url['head_data'].get('meta', {})
     print(f"Description: {meta.get('description')}")
     print(f"Keywords: {meta.get('keywords')}")
-    
+
     # Even Open Graph data!
     print(f"OG Image: {meta.get('og:image')}")
 ```
@@ -345,17 +345,17 @@ The head extraction gives you a treasure trove of information:
         "keywords": "python, programming, tutorial",
         "author": "Jane Developer",
         "viewport": "width=device-width, initial-scale=1",
-        
+
         # Open Graph tags
         "og:title": "10 Python Tips for Beginners",
         "og:description": "Essential Python tips for new programmers",
         "og:image": "https://example.com/python-tips.jpg",
         "og:type": "article",
-        
+
         # Twitter Card tags
         "twitter:card": "summary_large_image",
         "twitter:title": "10 Python Tips",
-        
+
         # Dublin Core metadata
         "dc.creator": "Jane Developer",
         "dc.date": "2024-01-15"
@@ -440,16 +440,16 @@ for url in urls[:5]:
     print(f"\n{'='*60}")
     print(f"URL: {url['url']}")
     print(f"Status: {url['status']}")
-    
+
     if url['head_data']:
         data = url['head_data']
         print(f"Title: {data.get('title', 'No title')}")
-        
+
         # Check content type
         meta = data.get('meta', {})
         content_type = meta.get('og:type', 'unknown')
         print(f"Content Type: {content_type}")
-        
+
         # Publication date
         pub_date = None
         for jsonld in data.get('jsonld', []):
@@ -457,10 +457,10 @@ for url in urls[:5]:
                 pub_date = jsonld.get('datePublished')
                 if pub_date:
                     break
-        
+
         if pub_date:
             print(f"Published: {pub_date}")
-        
+
         # Word count (if available)
         word_count = meta.get('word_count')
         if word_count:
@@ -537,7 +537,7 @@ async with AsyncUrlSeeder() as seeder:
 
 # Filter further by price (from metadata)
 affordable = [
-    u for u in urls 
+    u for u in urls
     if float(u['head_data'].get('meta', {}).get('product:price', '0')) < 200
 ]
 ```
@@ -648,7 +648,7 @@ for domain, urls in results.items():
 # Analyze content strategies across competitors
 competitors = [
     "competitor1.com",
-    "competitor2.com", 
+    "competitor2.com",
     "competitor3.com"
 ]
 
@@ -664,12 +664,12 @@ async with AsyncUrlSeeder() as seeder:
 # Analyze content types
 for domain, urls in results.items():
     content_types = {}
-    
+
     for url in urls:
         # Extract content type from metadata
         og_type = url['head_data'].get('meta', {}).get('og:type', 'unknown')
         content_types[og_type] = content_types.get(og_type, 0) + 1
-    
+
     print(f"\n{domain} content distribution:")
     for ctype, count in sorted(content_types.items(), key=lambda x: x[1], reverse=True):
         print(f"  {ctype}: {count}")
@@ -769,21 +769,21 @@ from crawl4ai import AsyncUrlSeeder, AsyncWebCrawler, SeedingConfig, CrawlerRunC
 class ResearchAssistant:
     def __init__(self):
         self.seeder = None
-    
+
     async def __aenter__(self):
         self.seeder = AsyncUrlSeeder()
         await self.seeder.__aenter__()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.seeder:
             await self.seeder.__aexit__(exc_type, exc_val, exc_tb)
-        
+
     async def research_topic(self, topic, domains, max_articles=20):
         """Research a topic across multiple domains."""
-        
+
         print(f"🔬 Researching '{topic}' across {len(domains)} domains...")
-        
+
         # Step 1: Discover relevant URLs
         config = SeedingConfig(
             source="sitemap+cc",     # Maximum coverage
@@ -795,26 +795,26 @@ class ResearchAssistant:
             concurrency=20,          # Fast discovery
             verbose=True
         )
-        
+
         # Discover across all domains
         discoveries = await self.seeder.many_urls(domains, config)
-        
+
         # Step 2: Collect and rank all articles
         all_articles = []
         for domain, urls in discoveries.items():
             for url in urls:
                 url['domain'] = domain
                 all_articles.append(url)
-        
+
         # Sort by relevance
         all_articles.sort(key=lambda x: x['relevance_score'], reverse=True)
-        
+
         # Take top articles
         top_articles = all_articles[:max_articles]
-        
+
         print(f"\n📊 Found {len(all_articles)} relevant articles")
         print(f"📌 Selected top {len(top_articles)} for deep analysis")
-        
+
         # Step 3: Show what we're about to crawl
         print("\n🎯 Articles to analyze:")
         for i, article in enumerate(top_articles[:5], 1):
@@ -822,17 +822,17 @@ class ResearchAssistant:
             print(f"   Score: {article['relevance_score']:.2f}")
             print(f"   Source: {article['domain']}")
             print(f"   URL: {article['url'][:60]}...")
-        
+
         # Step 4: Crawl the selected articles
         print(f"\n🚀 Deep crawling {len(top_articles)} articles...")
-        
+
         async with AsyncWebCrawler() as crawler:
             config = CrawlerRunConfig(
                 only_text=True,
                 word_count_threshold=200,  # Substantial content only
                 stream=True
             )
-            
+
             # Extract URLs and crawl all articles
             article_urls = [article['url'] for article in top_articles]
             results = []
@@ -847,35 +847,35 @@ class ResearchAssistant:
                         'score': next(a['relevance_score'] for a in top_articles if a['url'] == result.url)
                     })
                     print(f"✓ Crawled: {result.url[:60]}...")
-            
+
         # Step 5: Analyze and summarize
         print(f"\n📝 Analysis complete! Crawled {len(results)} articles")
-        
+
         return self.create_research_summary(topic, results)
-    
+
     def create_research_summary(self, topic, articles):
         """Create a research summary from crawled articles."""
-        
+
         summary = {
             'topic': topic,
             'timestamp': datetime.now().isoformat(),
             'total_articles': len(articles),
             'sources': {}
         }
-        
+
         # Group by domain
         for article in articles:
             domain = article['domain']
             if domain not in summary['sources']:
                 summary['sources'][domain] = []
-            
+
             summary['sources'][domain].append({
                 'title': article['title'],
                 'url': article['url'],
                 'score': article['score'],
                 'excerpt': article['content'][:500] + '...' if len(article['content']) > 500 else article['content']
             })
-        
+
         return summary
 
 # Use the research assistant
@@ -889,9 +889,9 @@ async def main():
             "stackoverflow.com",
             "medium.com"
         ]
-        
+
         summary = await assistant.research_topic(topic, domains, max_articles=15)
-    
+
     # Display results
     print("\n" + "="*60)
     print("RESEARCH SUMMARY")
@@ -899,7 +899,7 @@ async def main():
     print(f"Topic: {summary['topic']}")
     print(f"Date: {summary['timestamp']}")
     print(f"Total Articles Analyzed: {summary['total_articles']}")
-    
+
     print("\nKey Findings by Source:")
     for domain, articles in summary['sources'].items():
         print(f"\n📚 {domain} ({len(articles)} articles)")
@@ -939,7 +939,7 @@ config = SeedingConfig(concurrency=10, hits_per_sec=5)
 async with AsyncWebCrawler() as crawler:
     # Assuming urls is a list of URL strings
     crawl_results = await crawler.arun_many(urls, config=config)
-    
+
     # Process as they arrive
     async for result in crawl_results:
         process_immediately(result)  # Don't wait for all
@@ -1110,7 +1110,7 @@ config = SeedingConfig(
 Typical performance on a standard connection:
 
 - **Sitemap discovery**: 100-1,000 URLs/second
-- **Common Crawl discovery**: 50-500 URLs/second  
+- **Common Crawl discovery**: 50-500 URLs/second
 - **HEAD checking**: 10-50 URLs/second
 - **Head extraction**: 5-20 URLs/second
 - **BM25 scoring**: 10,000+ URLs/second

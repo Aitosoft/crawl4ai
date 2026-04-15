@@ -491,9 +491,7 @@ class BM25ContentFilter(RelevantContentFilter):
                 self.stemmer.stemWord(word) for word in query.lower().split()
             ]
         else:
-            tokenized_corpus = [
-                chunk.lower().split() for _, chunk, _, _ in candidates
-            ]
+            tokenized_corpus = [chunk.lower().split() for _, chunk, _, _ in candidates]
             tokenized_query = query.lower().split()
 
         # tokenized_corpus = [[self.stemmer.stemWord(word) for word in tokenize_text(chunk.lower())]
@@ -805,11 +803,12 @@ class LLMContentFilter(RelevantContentFilter):
         verbose (bool): Enable verbose logging (default: False).
         logger (AsyncLogger): Custom logger for LLM operations (optional).
     """
+
     _UNWANTED_PROPS = {
-        'provider' : 'Instead, use llm_config=LLMConfig(provider="...")',
-        'api_token' : 'Instead, use llm_config=LlMConfig(api_token="...")',
-        'base_url' : 'Instead, use llm_config=LLMConfig(base_url="...")',
-        'api_base' : 'Instead, use llm_config=LLMConfig(base_url="...")',
+        "provider": 'Instead, use llm_config=LLMConfig(provider="...")',
+        "api_token": 'Instead, use llm_config=LlMConfig(api_token="...")',
+        "base_url": 'Instead, use llm_config=LLMConfig(base_url="...")',
+        "api_base": 'Instead, use llm_config=LLMConfig(base_url="...")',
     }
 
     def __init__(
@@ -862,7 +861,7 @@ class LLMContentFilter(RelevantContentFilter):
                 },
                 colors={
                     **AsyncLogger.DEFAULT_COLORS,
-                    LogLevel.INFO: LogColor.DIM_MAGENTA  # Dimmed purple for LLM ops
+                    LogLevel.INFO: LogColor.DIM_MAGENTA,  # Dimmed purple for LLM ops
                 },
             )
         else:
@@ -870,7 +869,7 @@ class LLMContentFilter(RelevantContentFilter):
 
         self.usages = []
         self.total_usage = TokenUsage()
-    
+
     def __setattr__(self, name, value):
         """Handle attribute setting."""
         # TODO: Planning to set properties dynamically based on the __init__ signature
@@ -878,10 +877,12 @@ class LLMContentFilter(RelevantContentFilter):
         all_params = sig.parameters  # Dictionary of parameter names and their details
 
         if name in self._UNWANTED_PROPS and value is not all_params[name].default:
-            raise AttributeError(f"Setting '{name}' is deprecated. {self._UNWANTED_PROPS[name]}")
-        
-        super().__setattr__(name, value)  
-        
+            raise AttributeError(
+                f"Setting '{name}' is deprecated. {self._UNWANTED_PROPS[name]}"
+            )
+
+        super().__setattr__(name, value)
+
     def _get_cache_key(self, html: str, instruction: str) -> str:
         """Generate a unique cache key based on HTML and instruction"""
         content = f"{html}{instruction}"

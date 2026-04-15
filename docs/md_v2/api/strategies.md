@@ -17,18 +17,18 @@ LLMExtractionStrategy(
     # Required Parameters
     provider: str = DEFAULT_PROVIDER,     # LLM provider (e.g., "ollama/llama2")
     api_token: Optional[str] = None,      # API token
-    
+
     # Extraction Configuration
     instruction: str = None,              # Custom extraction instruction
     schema: Dict = None,                  # Pydantic model schema for structured data
     extraction_type: str = "block",       # "block" or "schema"
-    
+
     # Chunking Parameters
     chunk_token_threshold: int = 4000,    # Maximum tokens per chunk
     overlap_rate: float = 0.1,           # Overlap between chunks
     word_token_rate: float = 0.75,       # Word to token conversion rate
     apply_chunking: bool = True,         # Enable/disable chunking
-    
+
     # API Configuration
     base_url: str = None,                # Base URL for API
     extra_args: Dict = {},               # Additional provider arguments
@@ -45,14 +45,14 @@ RegexExtractionStrategy(
     # Pattern Configuration
     pattern: IntFlag = RegexExtractionStrategy.Nothing,  # Bit flags of built-in patterns to use
     custom: Optional[Dict[str, str]] = None,           # Custom pattern dictionary {label: regex}
-    
+
     # Input Format
     input_format: str = "fit_html",                    # "html", "markdown", "text" or "fit_html"
 )
 
 # Built-in Patterns as Bit Flags
 RegexExtractionStrategy.Email           # Email addresses
-RegexExtractionStrategy.PhoneIntl       # International phone numbers 
+RegexExtractionStrategy.PhoneIntl       # International phone numbers
 RegexExtractionStrategy.PhoneUS         # US-format phone numbers
 RegexExtractionStrategy.Url             # HTTP/HTTPS URLs
 RegexExtractionStrategy.IPv4            # IPv4 addresses
@@ -85,15 +85,15 @@ CosineStrategy(
     semantic_filter: str = None,        # Topic/keyword filter
     word_count_threshold: int = 10,     # Minimum words per cluster
     sim_threshold: float = 0.3,         # Similarity threshold
-    
+
     # Clustering Parameters
     max_dist: float = 0.2,             # Maximum cluster distance
     linkage_method: str = 'ward',       # Clustering method
     top_k: int = 3,                    # Top clusters to return
-    
+
     # Model Configuration
     model_name: str = 'sentence-transformers/all-MiniLM-L6-v2',  # Embedding model
-    
+
     verbose: bool = False              # Enable verbose logging
 )
 ```
@@ -218,7 +218,7 @@ async with AsyncWebCrawler() as crawler:
     # Get sample HTML first
     sample_result = await crawler.arun("https://example.com/products")
     html = sample_result.markdown.fit_html
-    
+
     # Generate regex pattern once
     pattern = RegexExtractionStrategy.generate_pattern(
         label="price",
@@ -226,19 +226,19 @@ async with AsyncWebCrawler() as crawler:
         query="Product prices in USD format",
         llm_config=LLMConfig(provider="openai/gpt-4o-mini")
     )
-    
+
     # Save pattern for reuse
     import json
     with open("price_pattern.json", "w") as f:
         json.dump(pattern, f)
-    
+
     # Use pattern for extraction (no LLM calls)
     strategy = RegexExtractionStrategy(custom=pattern)
     result = await crawler.arun(
         url="https://example.com/products",
         config=CrawlerRunConfig(extraction_strategy=strategy)
     )
-    
+
     # Process results
     data = json.loads(result.extracted_content)
     for item in data:
@@ -317,15 +317,15 @@ result = await crawler.arun(
 
 2. **Strategy Selection Guide**
    ```
-   Is the target data a common type (email/phone/date/URL)? 
+   Is the target data a common type (email/phone/date/URL)?
    → RegexExtractionStrategy
-   
+
    Does the page have consistent HTML structure?
    → JsonCssExtractionStrategy or JsonXPathExtractionStrategy
-   
+
    Is the data semantically complex or unstructured?
    → LLMExtractionStrategy
-   
+
    Need to find content similar to a specific topic?
    → CosineStrategy
    ```
@@ -345,14 +345,14 @@ result = await crawler.arun(
    css_strategy = JsonCssExtractionStrategy(product_schema)
    css_result = await crawler.arun(url, config=CrawlerRunConfig(extraction_strategy=css_strategy))
    product_data = json.loads(css_result.extracted_content)
-   
+
    # Second pass: Extract specific fields with regex
    descriptions = [product["description"] for product in product_data]
    regex_strategy = RegexExtractionStrategy(
        pattern=RegexExtractionStrategy.Email | RegexExtractionStrategy.PhoneUS,
        custom={"dimension": r"\d+x\d+x\d+ (?:cm|in)"}
    )
-   
+
    # Process descriptions with regex
    for text in descriptions:
        matches = regex_strategy.extract("", text)  # Direct extraction
@@ -385,11 +385,11 @@ result = await crawler.arun(
    # For RegexExtractionStrategy pattern generation
    import json
    from pathlib import Path
-   
+
    cache_dir = Path("./pattern_cache")
    cache_dir.mkdir(exist_ok=True)
    pattern_file = cache_dir / "product_pattern.json"
-   
+
    if pattern_file.exists():
        with open(pattern_file) as f:
            pattern = json.load(f)

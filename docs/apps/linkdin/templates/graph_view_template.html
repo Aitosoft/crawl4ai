@@ -15,7 +15,7 @@
     <style>
         .vis-network canvas {
             background-color: #1f1f1f !important;
-            background-image: 
+            background-image:
               linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
               linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
             background-size: 30px 30px;
@@ -135,7 +135,7 @@
 <body class="h-screen flex flex-col bg-neutral-900 text-neutral-100  overflow-hidden">
     <!-- Toast notification -->
     <div id="toast"></div>
-    
+
     <!-- API Settings Modal -->
     <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
         <div class="bg-neutral-800 rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
@@ -327,12 +327,12 @@
             if (confirm('Are you sure you want to clear the loaded data? This will revert to the default dataset.')) {
                 // Clear the localStorage data
                 localStorage.removeItem('companyGraphData');
-                
+
                 // Force clear the current data from memory
                 window.companyGraphData = null;
-                
+
                 showToast('Custom data cleared! Loading default dataset...', 1500);
-                
+
                 // Completely reload the page to ensure fresh start
                 setTimeout(() => {
                     window.location.href = window.location.href.split('?')[0] + '?nocache=' + new Date().getTime();
@@ -721,7 +721,7 @@
                 box.innerHTML = `
                     <div class="bg-neutral-800 rounded-lg p-4">
                       <div class="flex items-start space-x-3">
-                        <img src="${p.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(p.name)}" 
+                        <img src="${p.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(p.name)}"
                              class="h-16 w-16 rounded-full object-cover border-2 border-neutral-700"/>
                         <div class="flex-1">
                           <div class="flex justify-between items-start">
@@ -729,12 +729,12 @@
                               <div class="font-semibold text-lg">${p.name}</div>
                               <div class="text-neutral-300 text-sm">${p.title || 'Employee'}</div>
                             </div>
-                            <span class="px-2 py-1 rounded-full text-sm font-medium" 
+                            <span class="px-2 py-1 rounded-full text-sm font-medium"
                                   style="background-color:${scoreColor}">
                               ${scorePercentage}% influence
                             </span>
                           </div>
-                          
+
                           <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-neutral-300">
                             <div class="flex items-center">
                               <i class="fas fa-sitemap w-5 text-neutral-500"></i>
@@ -753,9 +753,9 @@
                               <span class="ml-1">${p.connection_count || '?'} connections</span>
                             </div>
                           </div>
-                          
+
                           <div class="mt-3 flex justify-end">
-                            <a href="${p.id}" target="_blank" 
+                            <a href="${p.id}" target="_blank"
                                class="bg-emerald-800 hover:bg-emerald-700 text-emerald-100 px-3 py-1 rounded text-xs flex items-center transition-colors">
                               <i class="fab fa-linkedin mr-1"></i> View on LinkedIn
                             </a>
@@ -864,8 +864,8 @@
                     style.textContent = `
           .chat-message a { color: #34D399; text-decoration: underline; }
           .chat-message p { margin-bottom: 0.5rem; }
-          .chat-message h1, .chat-message h2, .chat-message h3 { 
-            font-weight: bold; 
+          .chat-message h1, .chat-message h2, .chat-message h3 {
+            font-weight: bold;
             margin-top: 1rem;
             margin-bottom: 0.5rem;
           }
@@ -909,7 +909,7 @@
             const closeSettingsModal = document.getElementById('closeSettingsModal');
             const apiKeyInput = document.getElementById('apiKeyInput');
             const saveApiKey = document.getElementById('saveApiKey');
-            
+
             // Check for saved API key in localStorage
             const savedApiKey = localStorage.getItem('openai_api_key');
             if (savedApiKey) {
@@ -921,24 +921,24 @@
                     settingsModal.classList.remove('hidden');
                 }, 500);
             }
-            
+
             // Open settings modal when settings button is clicked
             settingsBtn.addEventListener('click', () => {
                 settingsModal.classList.remove('hidden');
             });
-            
+
             // Close settings modal
             closeSettingsModal.addEventListener('click', () => {
                 settingsModal.classList.add('hidden');
             });
-            
+
             // Close modal when clicking outside of it
             settingsModal.addEventListener('click', (e) => {
                 if (e.target === settingsModal) {
                     settingsModal.classList.add('hidden');
                 }
             });
-            
+
             // Save API key
             saveApiKey.addEventListener('click', () => {
                 const apiKey = apiKeyInput.value.trim();
@@ -951,7 +951,7 @@
                     showToast('Please enter a valid API key', 2000);
                 }
             });
-            
+
             // Allow Enter key to submit API key
             apiKeyInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {

@@ -72,13 +72,13 @@ async def analyze_sentiment():
         extraction_strategy=sentiment_strategy,
         cache_mode=CacheMode.BYPASS
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://example.com/customer-reviews",
             config=config
         )
-        
+
         if result.success:
             analysis = json.loads(result.extracted_content)
             print(f"Sentiment: {analysis['overall_sentiment']}")
@@ -98,7 +98,7 @@ class Entity(BaseModel):
 
 class Relationship(BaseModel):
     source: str = Field(description="Source entity")
-    target: str = Field(description="Target entity") 
+    target: str = Field(description="Target entity")
     relationship: str = Field(description="Type of relationship")
     confidence: float = Field(description="Confidence score 0-1")
 
@@ -202,7 +202,7 @@ providers_guide = {
     },
     "openai/gpt-4o": {
         "best_for": "Complex reasoning, high accuracy needs",
-        "cost": "High", 
+        "cost": "High",
         "speed": "Medium",
         "accuracy": "Excellent"
     },
@@ -267,13 +267,13 @@ async def extract_content_blocks():
         word_count_threshold=50,  # Filter short content
         excluded_tags=['nav', 'footer', 'aside', 'advertisement']
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://example.com/article",
             config=config
         )
-        
+
         if result.success:
             blocks = json.loads(result.extracted_content)
             for block in blocks:
@@ -292,7 +292,7 @@ large_content_strategy = LLMExtractionStrategy(
     schema=YourModel.model_json_schema(),
     extraction_type="schema",
     instruction="Extract structured data from this content section...",
-    
+
     # Optimize chunking for large content
     apply_chunking=True,
     chunk_token_threshold=2000,  # Larger chunks for efficiency
@@ -307,15 +307,15 @@ large_content_strategy = LLMExtractionStrategy(
 # Use multiple models for critical extractions
 async def multi_model_extraction():
     """Use multiple LLMs for validation of critical data"""
-    
+
     models = [
         LLMConfig(provider="openai/gpt-4o-mini", api_token="env:OPENAI_API_KEY"),
         LLMConfig(provider="anthropic/claude-3-5-sonnet", api_token="env:ANTHROPIC_API_KEY"),
         LLMConfig(provider="ollama/llama3.3", api_token=None)
     ]
-    
+
     results = []
-    
+
     for i, llm_config in enumerate(models):
         strategy = LLMExtractionStrategy(
             llm_config=llm_config,
@@ -323,16 +323,16 @@ async def multi_model_extraction():
             extraction_type="schema",
             instruction="Extract data consistently..."
         )
-        
+
         config = CrawlerRunConfig(extraction_strategy=strategy)
-        
+
         async with AsyncWebCrawler() as crawler:
             result = await crawler.arun(url="https://example.com", config=config)
             if result.success:
                 data = json.loads(result.extracted_content)
                 results.append(data)
                 print(f"Model {i+1} extracted {len(data)} items")
-    
+
     # Compare results for consistency
     if len(set(str(r) for r in results)) == 1:
         print("✅ All models agree")
@@ -357,7 +357,7 @@ async def hybrid_extraction():
     1. Use fast non-LLM strategies for basic extraction
     2. Use LLM only for complex analysis of filtered content
     """
-    
+
     # Step 1: Fast extraction of structured data
     basic_schema = {
         "name": "Articles",
@@ -368,10 +368,10 @@ async def hybrid_extraction():
             {"name": "author", "selector": ".author", "type": "text"}
         ]
     }
-    
+
     basic_strategy = JsonCssExtractionStrategy(basic_schema)
     basic_config = CrawlerRunConfig(extraction_strategy=basic_strategy)
-    
+
     # Step 2: LLM analysis only on filtered content
     analysis_strategy = LLMExtractionStrategy(
         llm_config=cheap_config,
@@ -386,32 +386,32 @@ async def hybrid_extraction():
         extraction_type="schema",
         instruction="Analyze sentiment and extract key topics from this article"
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         # Fast extraction first
         basic_result = await crawler.arun(
             url="https://example.com/articles",
             config=basic_config
         )
-        
+
         articles = json.loads(basic_result.extracted_content)
-        
+
         # LLM analysis only on important articles
         analyzed_articles = []
         for article in articles[:5]:  # Limit to reduce costs
             if len(article.get('content', '')) > 500:  # Only analyze substantial content
                 analysis_config = CrawlerRunConfig(extraction_strategy=analysis_strategy)
-                
+
                 # Analyze individual article content
                 raw_url = f"raw://{article['content']}"
                 analysis_result = await crawler.arun(url=raw_url, config=analysis_config)
-                
+
                 if analysis_result.success:
                     analysis = json.loads(analysis_result.extracted_content)
                     article.update(analysis)
-                
+
                 analyzed_articles.append(article)
-        
+
         return analyzed_articles
 
 # Hybrid approach: fast + smart
@@ -427,39 +427,39 @@ async def smart_fallback_extraction():
     2. Use generated schema for fast extraction
     3. Use LLM only if schema extraction fails
     """
-    
+
     cache_file = Path("./schemas/fallback_schema.json")
-    
+
     # Try cached schema first
     if cache_file.exists():
         schema = json.load(cache_file.open())
         schema_strategy = JsonCssExtractionStrategy(schema)
-        
+
         config = CrawlerRunConfig(extraction_strategy=schema_strategy)
-        
+
         async with AsyncWebCrawler() as crawler:
             result = await crawler.arun(url="https://example.com", config=config)
-            
+
             if result.success and result.extracted_content:
                 data = json.loads(result.extracted_content)
                 if data:  # Schema worked
                     print("✅ Schema extraction successful (fast & cheap)")
                     return data
-    
+
     # Fallback to LLM if schema failed
     print("⚠️ Schema failed, falling back to LLM (slow & expensive)")
-    
+
     llm_strategy = LLMExtractionStrategy(
         llm_config=cheap_config,
         extraction_type="block",
         instruction="Extract all meaningful data from this page"
     )
-    
+
     llm_config = CrawlerRunConfig(extraction_strategy=llm_strategy)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url="https://example.com", config=llm_config)
-        
+
         if result.success:
             print("✅ LLM extraction successful")
             return json.loads(result.extracted_content)
@@ -480,12 +480,12 @@ class ExtractionCostTracker:
         self.total_cost = 0.0
         self.total_tokens = 0
         self.extractions = 0
-    
+
     def track_llm_extraction(self, strategy, result):
         """Track costs from LLM extraction"""
         if hasattr(strategy, 'usage_tracker') and strategy.usage_tracker:
             usage = strategy.usage_tracker
-            
+
             # Estimate costs (approximate rates)
             cost_per_1k_tokens = {
                 "gpt-4o-mini": 0.0015,
@@ -493,20 +493,20 @@ class ExtractionCostTracker:
                 "claude-3-5-sonnet": 0.015,
                 "ollama": 0.0  # Self-hosted
             }
-            
+
             provider = strategy.llm_config.provider.split('/')[1]
             rate = cost_per_1k_tokens.get(provider, 0.01)
-            
+
             tokens = usage.total_tokens
             cost = (tokens / 1000) * rate
-            
+
             self.total_cost += cost
             self.total_tokens += tokens
             self.extractions += 1
-            
+
             print(f"💰 Extraction cost: ${cost:.4f} ({tokens} tokens)")
             print(f"📊 Total cost: ${self.total_cost:.4f} ({self.extractions} extractions)")
-    
+
     def get_summary(self):
         avg_cost = self.total_cost / max(self.extractions, 1)
         return {
@@ -527,15 +527,15 @@ async def cost_aware_extraction():
         instruction="Extract data...",
         verbose=True  # Enable usage tracking
     )
-    
+
     config = CrawlerRunConfig(extraction_strategy=strategy)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url="https://example.com", config=config)
-        
+
         # Track costs
         tracker.track_llm_extraction(strategy, result)
-        
+
         return result
 
 # Monitor costs across multiple extractions
@@ -553,19 +553,19 @@ class BudgetController:
         self.daily_budget = daily_budget
         self.current_spend = 0.0
         self.extraction_count = 0
-    
+
     def can_extract(self, estimated_cost=0.01):
         """Check if extraction is within budget"""
         if self.current_spend + estimated_cost > self.daily_budget:
             print(f"❌ Budget exceeded: ${self.current_spend:.2f} + ${estimated_cost:.2f} > ${self.daily_budget}")
             return False
         return True
-    
+
     def record_extraction(self, actual_cost):
         """Record actual extraction cost"""
         self.current_spend += actual_cost
         self.extraction_count += 1
-        
+
         remaining = self.daily_budget - self.current_spend
         print(f"💰 Budget remaining: ${remaining:.2f}")
 
@@ -575,15 +575,15 @@ async def budget_controlled_extraction(url):
     if not budget.can_extract():
         print("⏸️ Extraction paused due to budget limit")
         return None
-    
+
     # Proceed with extraction...
     strategy = LLMExtractionStrategy(llm_config=cheap_config, ...)
     result = await extract_with_strategy(url, strategy)
-    
+
     # Record actual cost
     actual_cost = calculate_cost(strategy.usage_tracker)
     budget.record_extraction(actual_cost)
-    
+
     return result
 
 # Safe extraction with budget controls
@@ -603,11 +603,11 @@ for url in urls:
 ```python
 async def batch_llm_extraction():
     """Process multiple pages efficiently"""
-    
+
     # Collect content first (fast)
     urls = ["https://example.com/page1", "https://example.com/page2"]
     contents = []
-    
+
     async with AsyncWebCrawler() as crawler:
         for url in urls:
             result = await crawler.arun(url=url)
@@ -616,12 +616,12 @@ async def batch_llm_extraction():
                     "url": url,
                     "content": result.markdown.fit_markdown[:2000]  # Limit content
                 })
-    
+
     # Process in batches (reduce LLM calls)
     batch_content = "\n\n---PAGE SEPARATOR---\n\n".join([
         f"URL: {c['url']}\n{c['content']}" for c in contents
     ])
-    
+
     strategy = LLMExtractionStrategy(
         llm_config=cheap_config,
         extraction_type="block",
@@ -631,11 +631,11 @@ async def batch_llm_extraction():
         """,
         apply_chunking=True
     )
-    
+
     # Single LLM call for multiple pages
     raw_url = f"raw://{batch_content}"
     result = await crawler.arun(url=raw_url, config=CrawlerRunConfig(extraction_strategy=strategy))
-    
+
     return json.loads(result.extracted_content)
 
 # Batch processing reduces LLM calls
@@ -652,19 +652,19 @@ class LLMResultCache:
     def __init__(self, cache_dir="./llm_cache"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
-    
+
     def get_cache_key(self, url, instruction, schema):
         """Generate cache key from extraction parameters"""
         content = f"{url}:{instruction}:{str(schema)}"
         return hashlib.md5(content.encode()).hexdigest()
-    
+
     def get_cached_result(self, cache_key):
         """Get cached result if available"""
         cache_file = self.cache_dir / f"{cache_key}.json"
         if cache_file.exists():
             return json.load(cache_file.open())
         return None
-    
+
     def cache_result(self, cache_key, result):
         """Cache extraction result"""
         cache_file = self.cache_dir / f"{cache_key}.json"
@@ -675,24 +675,24 @@ cache = LLMResultCache()
 async def cached_llm_extraction(url, strategy):
     """Extract with caching to avoid repeated LLM calls"""
     cache_key = cache.get_cache_key(
-        url, 
+        url,
         strategy.instruction,
         str(strategy.schema)
     )
-    
+
     # Check cache first
     cached_result = cache.get_cached_result(cache_key)
     if cached_result:
         print("✅ Using cached result (FREE)")
         return cached_result
-    
+
     # Extract if not cached
     print("🔄 Extracting with LLM (PAID)")
     config = CrawlerRunConfig(extraction_strategy=strategy)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url=url, config=config)
-        
+
         if result.success:
             data = json.loads(result.extracted_content)
             cache.cache_result(cache_key, data)
@@ -711,7 +711,7 @@ result = await cached_llm_extraction(url, strategy)
 ```python
 async def robust_llm_extraction():
     """Implement validation and retry for LLM extraction"""
-    
+
     max_retries = 3
     strategies = [
         # Try cheap model first
@@ -729,18 +729,18 @@ async def robust_llm_extraction():
             instruction="Extract data with high accuracy..."
         )
     ]
-    
+
     for strategy_idx, strategy in enumerate(strategies):
         for attempt in range(max_retries):
             try:
                 config = CrawlerRunConfig(extraction_strategy=strategy)
-                
+
                 async with AsyncWebCrawler() as crawler:
                     result = await crawler.arun(url="https://example.com", config=config)
-                    
+
                     if result.success and result.extracted_content:
                         data = json.loads(result.extracted_content)
-                        
+
                         # Validate result quality
                         if validate_extraction_quality(data):
                             print(f"✅ Success with strategy {strategy_idx+1}, attempt {attempt+1}")
@@ -748,12 +748,12 @@ async def robust_llm_extraction():
                         else:
                             print(f"⚠️ Poor quality result, retrying...")
                             continue
-                    
+
             except Exception as e:
                 print(f"❌ Attempt {attempt+1} failed: {e}")
                 if attempt == max_retries - 1:
                     print(f"❌ Strategy {strategy_idx+1} failed completely")
-    
+
     print("❌ All strategies and retries failed")
     return None
 
@@ -761,17 +761,17 @@ def validate_extraction_quality(data):
     """Validate that LLM extraction meets quality standards"""
     if not data or not isinstance(data, (list, dict)):
         return False
-    
+
     # Check for common LLM extraction issues
     if isinstance(data, list):
         if len(data) == 0:
             return False
-        
+
         # Check if all items have required fields
         for item in data:
             if not isinstance(item, dict) or len(item) < 2:
                 return False
-    
+
     return True
 
 # Robust extraction with validation
@@ -790,41 +790,41 @@ async def analyze_llm_results_for_schema():
     Analyze LLM extraction results to create non-LLM schemas
     Use this to transition from expensive LLM to cheap schema extraction
     """
-    
+
     # Step 1: Use LLM on sample pages to understand structure
     llm_strategy = LLMExtractionStrategy(
         llm_config=cheap_config,
         extraction_type="block",
         instruction="Extract all structured data from this page"
     )
-    
+
     sample_urls = ["https://example.com/page1", "https://example.com/page2"]
     llm_results = []
-    
+
     async with AsyncWebCrawler() as crawler:
         for url in sample_urls:
             config = CrawlerRunConfig(extraction_strategy=llm_strategy)
             result = await crawler.arun(url=url, config=config)
-            
+
             if result.success:
                 llm_results.append({
                     "url": url,
                     "html": result.cleaned_html,
                     "extracted": json.loads(result.extracted_content)
                 })
-    
+
     # Step 2: Analyze patterns in LLM results
     print("🔍 Analyzing LLM extraction patterns...")
-    
+
     # Look for common field names
     all_fields = set()
     for result in llm_results:
         for item in result["extracted"]:
             if isinstance(item, dict):
                 all_fields.update(item.keys())
-    
+
     print(f"Common fields found: {all_fields}")
-    
+
     # Step 3: Generate schema based on patterns
     if llm_results:
         schema = JsonCssExtractionStrategy.generate_schema(
@@ -832,11 +832,11 @@ async def analyze_llm_results_for_schema():
             target_json_example=json.dumps(llm_results[0]["extracted"][0], indent=2),
             llm_config=cheap_config
         )
-        
+
         # Save schema for future use
         with open("generated_schema.json", "w") as f:
             json.dump(schema, f, indent=2)
-        
+
         print("✅ Schema generated from LLM analysis")
         return schema
 
@@ -876,7 +876,7 @@ def should_use_llm(extraction_task):
         "Do I need semantic understanding?",       # Yes → Maybe LLM
         "Have I tried generate_schema()?"          # No → Try that first
     ]
-    
+
     # Only use LLM if:
     return (
         task_requires_semantic_reasoning(extraction_task) and

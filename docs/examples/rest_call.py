@@ -48,7 +48,7 @@ data = {
     "extraction_strategy_args": {
         "provider": "groq/llama3-8b-8192",
         "api_token": os.environ.get("GROQ_API_KEY"),
-        "instruction": """I am interested in only financial news, 
+        "instruction": """I am interested in only financial news,
         and translate them in French.""",
     },
 }

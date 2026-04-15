@@ -104,7 +104,7 @@ crwl profiles  # Create github-profile
 crwl https://github.com/settings/profile -p github-profile
 
 # Twitter/X authenticated access
-crwl profiles  # Create twitter-profile  
+crwl profiles  # Create twitter-profile
 crwl https://twitter.com/home -p twitter-profile -o markdown
 ```
 
@@ -147,7 +147,7 @@ viewport_height: 720
 simulate_user: true
 override_navigator: true
 
-# crawler_auth.yml  
+# crawler_auth.yml
 magic: true
 remove_overlay_elements: true
 simulate_user: true
@@ -199,25 +199,25 @@ from crawl4ai import BrowserProfiler
 
 async def create_auth_profile():
     profiler = BrowserProfiler()
-    
+
     # Create profile interactively (opens browser)
     profile_path = await profiler.create_profile("linkedin-auth")
     print(f"Profile created at: {profile_path}")
-    
+
     # List all profiles
     profiles = profiler.list_profiles()
     for profile in profiles:
         print(f"Profile: {profile['name']} at {profile['path']}")
-    
+
     # Use profile for crawling
     from crawl4ai import AsyncWebCrawler, BrowserConfig
-    
+
     browser_config = BrowserConfig(
         headless=True,
         use_managed_browser=True,
         user_data_dir=profile_path
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun("https://linkedin.com/feed")
         return result
@@ -230,7 +230,7 @@ async def create_auth_profile():
 ```bash
 # 1. Create specific profiles for different sites
 crwl profiles  # Create "linkedin-work"
-crwl profiles  # Create "github-personal" 
+crwl profiles  # Create "github-personal"
 crwl profiles  # Create "company-intranet"
 
 # 2. Use descriptive profile names

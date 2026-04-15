@@ -14,7 +14,7 @@ async def crawl_web():
     config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
-            url="https://en.wikipedia.org/wiki/apple", 
+            url="https://en.wikipedia.org/wiki/apple",
             config=config
         )
         if result.success:
@@ -38,7 +38,7 @@ async def crawl_local_file():
     local_file_path = "/path/to/apple.html"  # Replace with your file path
     file_url = f"file://{local_file_path}"
     config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url=file_url, config=config)
         if result.success:
@@ -63,7 +63,7 @@ async def crawl_raw_html():
     raw_html = "<html><body><h1>Hello, World!</h1></body></html>"
     raw_html_url = f"raw:{raw_html}"
     config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url=raw_html_url, config=config)
         if result.success:

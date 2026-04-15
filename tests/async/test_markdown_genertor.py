@@ -135,7 +135,7 @@ def test_performance_large_document():
 
     for i in range(iterations):
         start_time = time.perf_counter()
-        result = generator.generate_markdown(
+        generator.generate_markdown(
             cleaned_html=markdown, base_url="https://en.wikipedia.org"
         )
         end_time = time.perf_counter()

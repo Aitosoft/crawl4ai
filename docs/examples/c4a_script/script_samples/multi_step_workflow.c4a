@@ -31,7 +31,7 @@ PROC fill_customer_info
   TYPE $email
   CLICK `#billing-phone`
   TYPE $phone
-  
+
   # Address
   CLICK `#billing-address`
   TYPE $address
@@ -92,7 +92,7 @@ EVAL `
   console.log('=== Order Summary ===');
   console.log('Items:', itemCount);
   console.log('Total:', orderTotal);
-  
+
   // Get all items
   const items = Array.from(document.querySelectorAll('.order-item')).map(item => ({
     name: item.querySelector('.item-name')?.textContent,

@@ -4,12 +4,12 @@ One of Crawl4AI’s core features is generating **clean, structured markdown** f
 
 In this tutorial, you’ll learn:
 
-1. How to configure the **Default Markdown Generator**  
-2. How **content filters** (BM25 or Pruning) help you refine markdown and discard junk  
-3. The difference between raw markdown (`result.markdown`) and filtered markdown (`fit_markdown`)  
+1. How to configure the **Default Markdown Generator**
+2. How **content filters** (BM25 or Pruning) help you refine markdown and discard junk
+3. The difference between raw markdown (`result.markdown`) and filtered markdown (`fit_markdown`)
 
-> **Prerequisites**  
-> - You’ve completed or read [AsyncWebCrawler Basics](../core/simple-crawling.md) to understand how to run a simple crawl.  
+> **Prerequisites**
+> - You’ve completed or read [AsyncWebCrawler Basics](../core/simple-crawling.md) to understand how to run a simple crawl.
 > - You know how to configure `CrawlerRunConfig`.
 
 ---
@@ -29,7 +29,7 @@ async def main():
     )
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun("https://example.com", config=config)
-        
+
         if result.success:
             print("Raw Markdown Output:\n")
             print(result.markdown)  # The unfiltered markdown from the page
@@ -40,8 +40,8 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**What’s happening?**  
-- `CrawlerRunConfig( markdown_generator = DefaultMarkdownGenerator() )` instructs Crawl4AI to convert the final HTML into markdown at the end of each crawl.  
+**What’s happening?**
+- `CrawlerRunConfig( markdown_generator = DefaultMarkdownGenerator() )` instructs Crawl4AI to convert the final HTML into markdown at the end of each crawl.
 - The resulting markdown is accessible via `result.markdown`.
 
 ---
@@ -52,8 +52,8 @@ if __name__ == "__main__":
 
 Under the hood, **DefaultMarkdownGenerator** uses a specialized HTML-to-text approach that:
 
-- Preserves headings, code blocks, bullet points, etc.  
-- Removes extraneous tags (scripts, styles) that don’t add meaningful content.  
+- Preserves headings, code blocks, bullet points, etc.
+- Removes extraneous tags (scripts, styles) that don’t add meaningful content.
 - Can optionally generate references for links or skip them altogether.
 
 A set of **options** (passed as a dict) allows you to customize precisely how HTML converts to markdown. These map to standard html2text-like configuration plus your own enhancements (e.g., ignoring internal links, preserving certain tags verbatim, or adjusting line widths).
@@ -104,11 +104,11 @@ if __name__ == "__main__":
 
 Some commonly used `options`:
 
-- **`ignore_links`** (bool): Whether to remove all hyperlinks in the final markdown.  
-- **`ignore_images`** (bool): Remove all `![image]()` references.  
-- **`escape_html`** (bool): Turn HTML entities into text (default is often `True`).  
-- **`body_width`** (int): Wrap text at N characters. `0` or `None` means no wrapping.  
-- **`skip_internal_links`** (bool): If `True`, omit `#localAnchors` or internal links referencing the same page.  
+- **`ignore_links`** (bool): Whether to remove all hyperlinks in the final markdown.
+- **`ignore_images`** (bool): Remove all `![image]()` references.
+- **`escape_html`** (bool): Turn HTML entities into text (default is often `True`).
+- **`body_width`** (int): Wrap text at N characters. `0` or `None` means no wrapping.
+- **`skip_internal_links`** (bool): If `True`, omit `#localAnchors` or internal links referencing the same page.
 - **`include_sup_sub`** (bool): Attempt to handle `<sup>` / `<sub>` in a more readable way.
 
 ## 4. Selecting the HTML Source for Markdown Generation
@@ -125,24 +125,24 @@ async def main():
         content_source="raw_html",
         options={"ignore_links": True}
     )
-    
+
     # Option 2: Use the cleaned HTML (after scraping strategy processing - default)
     cleaned_md_generator = DefaultMarkdownGenerator(
         content_source="cleaned_html",  # This is the default
         options={"ignore_links": True}
     )
-    
+
     # Option 3: Use preprocessed HTML optimized for schema extraction
     fit_md_generator = DefaultMarkdownGenerator(
         content_source="fit_html",
         options={"ignore_links": True}
     )
-    
+
     # Use one of the generators in your crawler config
     config = CrawlerRunConfig(
         markdown_generator=raw_md_generator  # Try each of the generators
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun("https://example.com", config=config)
         if result.success:
@@ -198,8 +198,8 @@ md_generator = DefaultMarkdownGenerator(
 config = CrawlerRunConfig(markdown_generator=md_generator)
 ```
 
-- **`user_query`**: The term you want to focus on. BM25 tries to keep only content blocks relevant to that query.  
-- **`bm25_threshold`**: Raise it to keep fewer blocks; lower it to keep more.  
+- **`user_query`**: The term you want to focus on. BM25 tries to keep only content blocks relevant to that query.
+- **`bm25_threshold`**: Raise it to keep fewer blocks; lower it to keep more.
 - **`use_stemming`** *(default `True`)*: Whether to apply stemming to the query and content.
 - **`language (str)`**: Language for stemming (default: 'english').
 
@@ -219,14 +219,14 @@ prune_filter = PruningContentFilter(
 )
 ```
 
-- **`threshold`**: Score boundary. Blocks below this score get removed.  
-- **`threshold_type`**:  
-    - `"fixed"`: Straight comparison (`score >= threshold` keeps the block).  
-    - `"dynamic"`: The filter adjusts threshold in a data-driven manner.  
+- **`threshold`**: Score boundary. Blocks below this score get removed.
+- **`threshold_type`**:
+    - `"fixed"`: Straight comparison (`score >= threshold` keeps the block).
+    - `"dynamic"`: The filter adjusts threshold in a data-driven manner.
 - **`min_word_threshold`**: Discard blocks under N words as likely too short or unhelpful.
 
-**When to Use PruningContentFilter**  
-- You want a broad cleanup without a user query.  
+**When to Use PruningContentFilter**
+- You want a broad cleanup without a user query.
 - The page has lots of repeated sidebars, footers, or disclaimers that hamper text extraction.
 
 ### 5.3 LLMContentFilter
@@ -313,7 +313,7 @@ filter = LLMContentFilter(
 
 When a content filter is active, the library produces two forms of markdown inside `result.markdown`:
 
-1. **`raw_markdown`**: The full unfiltered markdown.  
+1. **`raw_markdown`**: The full unfiltered markdown.
 2. **`fit_markdown`**: A “fit” version where the filter has removed or trimmed noisy segments.
 
 ```python
@@ -333,7 +333,7 @@ async def main():
         result = await crawler.arun("https://news.example.com/tech", config=config)
         if result.success:
             print("Raw markdown:\n", result.markdown)
-            
+
             # If a filter is used, we also have .fit_markdown:
             md_object = result.markdown  # or your equivalent
             print("Filtered markdown:\n", md_object.fit_markdown)
@@ -350,10 +350,10 @@ if __name__ == "__main__":
 
 If your library stores detailed markdown output in an object like `MarkdownGenerationResult`, you’ll see fields such as:
 
-- **`raw_markdown`**: The direct HTML-to-markdown transformation (no filtering).  
-- **`markdown_with_citations`**: A version that moves links to reference-style footnotes.  
-- **`references_markdown`**: A separate string or section containing the gathered references.  
-- **`fit_markdown`**: The filtered markdown if you used a content filter.  
+- **`raw_markdown`**: The direct HTML-to-markdown transformation (no filtering).
+- **`markdown_with_citations`**: A version that moves links to reference-style footnotes.
+- **`references_markdown`**: A separate string or section containing the gathered references.
+- **`fit_markdown`**: The filtered markdown if you used a content filter.
 - **`fit_html`**: The corresponding HTML snippet used to generate `fit_markdown` (helpful for debugging or advanced usage).
 
 **Example**:
@@ -366,9 +366,9 @@ print("REFERENCES:\n", md_obj.references_markdown)
 print("FIT:\n", md_obj.fit_markdown)
 ```
 
-**Why Does This Matter?**  
-- You can supply `raw_markdown` to an LLM if you want the entire text.  
-- Or feed `fit_markdown` into a vector database to reduce token usage.  
+**Why Does This Matter?**
+- You can supply `raw_markdown` to an LLM if you want the entire text.
+- Or feed `fit_markdown` into a vector database to reduce token usage.
 - `references_markdown` can help you keep track of link provenance.
 
 ---
@@ -381,7 +381,7 @@ Below is a **revised section** under “Combining Filters (BM25 + Pruning)” th
 
 You might want to **prune out** noisy boilerplate first (with `PruningContentFilter`), and then **rank what’s left** against a user query (with `BM25ContentFilter`). You don’t have to crawl the page twice. Instead:
 
-1. **First pass**: Apply `PruningContentFilter` directly to the raw HTML from `result.html` (the crawler’s downloaded HTML).  
+1. **First pass**: Apply `PruningContentFilter` directly to the raw HTML from `result.html` (the crawler’s downloaded HTML).
 2. **Second pass**: Take the pruned HTML (or text) from step 1, and feed it into `BM25ContentFilter`, focusing on a user query.
 
 ### Two-Pass Example
@@ -398,44 +398,44 @@ async def main():
         # If you only want raw HTML, you can skip passing a markdown_generator
         # or provide one but focus on .html in this example
     )
-    
+
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun("https://example.com/tech-article", config=config)
 
         if not result.success or not result.html:
             print("Crawl failed or no HTML content.")
             return
-        
+
         raw_html = result.html
-        
+
         # 2. First pass: PruningContentFilter on raw HTML
         pruning_filter = PruningContentFilter(threshold=0.5, min_word_threshold=50)
-        
+
         # filter_content returns a list of "text chunks" or cleaned HTML sections
         pruned_chunks = pruning_filter.filter_content(raw_html)
         # This list is basically pruned content blocks, presumably in HTML or text form
-        
+
         # For demonstration, let's combine these chunks back into a single HTML-like string
         # or you could do further processing. It's up to your pipeline design.
         pruned_html = "\n".join(pruned_chunks)
-        
+
         # 3. Second pass: BM25ContentFilter with a user query
         bm25_filter = BM25ContentFilter(
             user_query="machine learning",
             bm25_threshold=1.2,
             language="english"
         )
-        
+
         # returns a list of text chunks
-        bm25_chunks = bm25_filter.filter_content(pruned_html)  
-        
+        bm25_chunks = bm25_filter.filter_content(pruned_html)
+
         if not bm25_chunks:
             print("Nothing matched the BM25 query after pruning.")
             return
-        
+
         # 4. Combine or display final results
         final_text = "\n---\n".join(bm25_chunks)
-        
+
         print("==== PRUNED OUTPUT (first pass) ====")
         print(pruned_html[:500], "... (truncated)")  # preview
 
@@ -448,17 +448,17 @@ if __name__ == "__main__":
 
 ### What’s Happening?
 
-1. **Raw HTML**: We crawl once and store the raw HTML in `result.html`.  
-2. **PruningContentFilter**: Takes HTML + optional parameters. It extracts blocks of text or partial HTML, removing headings/sections deemed “noise.” It returns a **list of text chunks**.  
-3. **Combine or Transform**: We join these pruned chunks back into a single HTML-like string. (Alternatively, you could store them in a list for further logic—whatever suits your pipeline.)  
+1. **Raw HTML**: We crawl once and store the raw HTML in `result.html`.
+2. **PruningContentFilter**: Takes HTML + optional parameters. It extracts blocks of text or partial HTML, removing headings/sections deemed “noise.” It returns a **list of text chunks**.
+3. **Combine or Transform**: We join these pruned chunks back into a single HTML-like string. (Alternatively, you could store them in a list for further logic—whatever suits your pipeline.)
 4. **BM25ContentFilter**: We feed the pruned string into `BM25ContentFilter` with a user query. This second pass further narrows the content to chunks relevant to “machine learning.”
 
 **No Re-Crawling**: We used `raw_html` from the first pass, so there’s no need to run `arun()` again—**no second network request**.
 
 ### Tips & Variations
 
-- **Plain Text vs. HTML**: If your pruned output is mostly text, BM25 can still handle it; just keep in mind it expects a valid string input. If you supply partial HTML (like `"<p>some text</p>"`), it will parse it as HTML.  
-- **Chaining in a Single Pipeline**: If your code supports it, you can chain multiple filters automatically. Otherwise, manual two-pass filtering (as shown) is straightforward.  
+- **Plain Text vs. HTML**: If your pruned output is mostly text, BM25 can still handle it; just keep in mind it expects a valid string input. If you supply partial HTML (like `"<p>some text</p>"`), it will parse it as HTML.
+- **Chaining in a Single Pipeline**: If your code supports it, you can chain multiple filters automatically. Otherwise, manual two-pass filtering (as shown) is straightforward.
 - **Adjust Thresholds**: If you see too much or too little text in step one, tweak `threshold=0.5` or `min_word_threshold=50`. Similarly, `bm25_threshold=1.2` can be raised/lowered for more or fewer chunks in step two.
 
 ### One-Pass Combination?
@@ -471,20 +471,20 @@ If your codebase or pipeline design allows applying multiple filters in one pass
 
 ## 9. Common Pitfalls & Tips
 
-1. **No Markdown Output?**  
-   - Make sure the crawler actually retrieved HTML. If the site is heavily JS-based, you may need to enable dynamic rendering or wait for elements.  
+1. **No Markdown Output?**
+   - Make sure the crawler actually retrieved HTML. If the site is heavily JS-based, you may need to enable dynamic rendering or wait for elements.
    - Check if your content filter is too aggressive. Lower thresholds or disable the filter to see if content reappears.
 
-2. **Performance Considerations**  
-   - Very large pages with multiple filters can be slower. Consider `cache_mode` to avoid re-downloading.  
+2. **Performance Considerations**
+   - Very large pages with multiple filters can be slower. Consider `cache_mode` to avoid re-downloading.
    - If your final use case is LLM ingestion, consider summarizing further or chunking big texts.
 
-3. **Take Advantage of `fit_markdown`**  
-   - Great for RAG pipelines, semantic search, or any scenario where extraneous boilerplate is unwanted.  
+3. **Take Advantage of `fit_markdown`**
+   - Great for RAG pipelines, semantic search, or any scenario where extraneous boilerplate is unwanted.
    - Still verify the textual quality—some sites have crucial data in footers or sidebars.
 
-4. **Adjusting `html2text` Options**  
-   - If you see lots of raw HTML slipping into the text, turn on `escape_html`.  
+4. **Adjusting `html2text` Options**
+   - If you see lots of raw HTML slipping into the text, turn on `escape_html`.
    - If code blocks look messy, experiment with `mark_code` or `handle_code_in_pre`.
 
 ---
@@ -493,10 +493,10 @@ If your codebase or pipeline design allows applying multiple filters in one pass
 
 In this **Markdown Generation Basics** tutorial, you learned to:
 
-- Configure the **DefaultMarkdownGenerator** with HTML-to-text options.  
-- Select different HTML sources using the `content_source` parameter.  
-- Use **BM25ContentFilter** for query-specific extraction or **PruningContentFilter** for general noise removal.  
-- Distinguish between raw and filtered markdown (`fit_markdown`).  
+- Configure the **DefaultMarkdownGenerator** with HTML-to-text options.
+- Select different HTML sources using the `content_source` parameter.
+- Use **BM25ContentFilter** for query-specific extraction or **PruningContentFilter** for general noise removal.
+- Distinguish between raw and filtered markdown (`fit_markdown`).
 - Leverage the `MarkdownGenerationResult` object to handle different forms of output (citations, references, etc.).
 
 Now you can produce high-quality Markdown from any website, focusing on exactly the content you need—an essential step for powering AI models, summarization pipelines, or knowledge-base queries.
