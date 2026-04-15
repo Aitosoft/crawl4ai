@@ -11,9 +11,8 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.8.6 + upstream/develop security fixes + wrapper + leak fixes (2026-04-14) + static-mode fallback (2026-04-15)
-- **Production**: v0.8.6 + max_pages fix + leak fixes (deployed 2026-04-14); static-mode deploy pending
-- **Docker Image (current)**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-leak-fix`
-- **Docker Image (next, static-mode)**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode` (build after local verification)
+- **Production**: v0.8.6 + max_pages fix + leak fixes + static-mode fallback (deployed 2026-04-15 17:14 UTC)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode` (revision `crawl4ai-service--0000011`)
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
@@ -107,21 +106,28 @@ When `render_mode: "static"` (default `"full"`):
 | `test-aitosoft/test_site.py` | New `--render-mode {full,static}` CLI flag |
 | `AITOSOFT_CHANGES.md` | This entry |
 
-### Verification
+### Verification (2026-04-15, against live service)
 
-Local:
-- Pending: Tier 1 regression (`test_regression.py --tier 1 --version
-  static-mode`) against local uvicorn — must remain 4/4 PASS on the
-  default (full) path.
-- Pending: static-mode smoke against `https://www.roadscanners.com/contact/offices/`
-  — acceptance strings listed in
-  `tasks/done/static-html-fallback-mode-*.md`.
+- Tier 1 regression (`test_regression.py --tier 1 --version static-mode`):
+  **4/4 PASS** — caverna.fi, accountor.com/fi/finland, solwers.com/...,
+  jpond.fi. Default `full` path intact.
+- Live roadscanners `/contact/offices/` with `render_mode:static`: top-level
+  200, inner success=true, all four acceptance strings present
+  (`annele.matintupa@roadscanners.com`, `virpi.halttu@roadscanners.com`,
+  `+358 40 1544 011`, `+358 50 353 4268`), no `@null` decoy, md 9654B
+  returned in 0.16s.
+- Timeout path via columbia-road.com: HTTP 200 + inner `success:false` +
+  `error_message:"static-fetch: timeout after 15s"`. Contract honoured.
+- Second success-path SPA (caverna.fi/yhteystiedot/): 200/200, render_mode
+  static, 758B markdown in 0.19s.
 
-Deploy:
-- Image: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode` (pending).
-- Procedure: `az acr build ...` → `az containerapp update --image ...` (see
-  DEPLOYMENT_INFO.md "Update to New Version"). Do **not** use
-  `deploy-aitosoft-prod.sh --update-only` — it regenerates the API token.
+### Deploy
+
+- **Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode`
+  (digest `sha256:7cf6e3419c581b967185c1c3279c92375cc67a4f45abcab223b1767c1bb9bc68`).
+- **Revision**: `crawl4ai-service--0000011`, 3 replicas healthy, 100% traffic.
+- **Command used**: `az acr build ...` → `az containerapp update ...` (MAS bearer
+  token preserved — NOT via `deploy-aitosoft-prod.sh --update-only`).
 
 ---
 

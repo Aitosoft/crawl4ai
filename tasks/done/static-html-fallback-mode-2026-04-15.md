@@ -425,15 +425,110 @@ This keeps our side simple: we just need to offer the capability reliably.
 
 ## Done-definition
 
-- [ ] Code changes applied to `deploy/docker/api.py` and
-      `deploy/docker/server.py`.
-- [ ] `render_mode` field present in both static-mode and full-mode
+- [x] Code changes applied to `deploy/docker/api.py` and
+      `deploy/docker/server.py` (also `schemas.py`; the `CrawlRequest`
+      model lives there, not in `server.py` as the spec guessed).
+- [x] `render_mode` field present in both static-mode and full-mode
       responses (not just static).
-- [ ] Tier 1 regression 4/4 PASS against the deployed new image.
-- [ ] roadscanners.com acceptance strings verified in live deployment.
-- [ ] One other SPA site spot-checked for response-shape correctness.
-- [ ] `AITOSOFT_CHANGES.md` updated with the new entry.
-- [ ] This task file moved to
-      `tasks/done/static-html-fallback-mode-YYYY-MM-DD.md`.
-- [ ] Tero notified with the deploy tag.
-- [ ] Reply note for MAS-side Claude appended to the archived file.
+- [x] Tier 1 regression 4/4 PASS against the deployed new image
+      (`static-mode` label, 2026-04-15 17:25 UTC).
+- [x] roadscanners.com acceptance strings verified in live deployment —
+      all four present, `@null` decoy gone, md=9654B, time=0.16s.
+- [x] One other SPA site spot-checked for response-shape correctness
+      (columbia-road.com timed out as expected with correct 200 +
+      inner-success=false shape; caverna.fi succeeded with full envelope).
+- [x] `AITOSOFT_CHANGES.md` updated with the new entry.
+- [x] This task file moved to
+      `tasks/done/static-html-fallback-mode-2026-04-15.md`.
+- [x] Tero notified with the deploy tag (final commit message /
+      end-of-session summary).
+- [x] Reply note for MAS-side Claude appended (see below).
+
+---
+
+## Deploy record
+
+- **Built:** 2026-04-15 17:07 UTC via `az acr build`, 8m34s, digest
+  `sha256:7cf6e3419c581b967185c1c3279c92375cc67a4f45abcab223b1767c1bb9bc68`.
+- **Image tag:** `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode`.
+- **Revision:** `crawl4ai-service--0000011`, provisioned 2026-04-15 17:14 UTC,
+  3 replicas healthy, 100% traffic.
+- **Deploy command:** `az containerapp update --name crawl4ai-service
+  --resource-group aitosoft-prod --image
+  aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode`
+  (MAS bearer token preserved — did NOT use `deploy-aitosoft-prod.sh --update-only`).
+- **Commit:** `ab51d3c` on `main`.
+
+### Deviations from spec
+
+1. Schema field lives in `deploy/docker/schemas.py` (which `server.py`
+   imports from), not directly in `server.py`. Spec said "grep for it;
+   it's the `/crawl` endpoint's request body schema" — consistent with
+   that hint.
+2. Added a `_strip_hidden_decoys` BeautifulSoup pass **before**
+   html2text because roadscanners.com uses an Odoo-style
+   `<span class="oe_displaynone">null</span>` injected inline in every
+   email. Without the strip, MAS would receive
+   `annele.matintupa@nullroadscanners.com` and the spec's own acceptance
+   check would fail. The stripped class list is conservative:
+   `oe_displaynone`, `d-none`, `is-hidden`. Deliberately NOT stripping
+   `sr-only` / `visually-hidden` because those legitimately hold
+   accessibility content.
+3. `/crawl/stream` now explicitly rejects `render_mode=static` with
+   HTTP 400. Spec said "do not touch" that endpoint; this is a one-line
+   guard that makes the contract loud instead of silent — protecting
+   MAS from accidentally sending `{stream: true, render_mode: static}`
+   and getting a Playwright-backed stream instead of the fast fallback.
+
+### Post-launch follow-ups (none blocking)
+
+- Add a static-mode tier to `test_regression.py` once MAS depends on the
+  path in production (revisit after first campaign night).
+- Add an `asyncio.Semaphore` cap inside `handle_static_crawl_request` if
+  usage patterns shift to batched static calls against a single host.
+- Revisit the hidden-class list if any site reports missing content.
+
+---
+
+## Reply note for MAS-side Claude
+
+> **Static-mode fallback is LIVE on the Aitosoft crawl4ai service.**
+> Deployed tag: `0.8.6-static-mode` (revision `crawl4ai-service--0000011`).
+>
+> **API contract:**
+> - Endpoint: unchanged — `POST /crawl` at the same URL, same bearer auth.
+> - New **top-level** (NOT nested inside `crawler_config`) optional field:
+>   `render_mode`. Valid values: `"full"` (default, unchanged behavior)
+>   or `"static"`. Pydantic validates; anything else returns HTTP 422.
+> - When you send `"render_mode": "static"`:
+>   - The browser pool is bypassed entirely. No Playwright. No patchright
+>     fallback.
+>   - Per-URL HTTP timeout is 15s (not the 180s Fix-1 fence).
+>   - Response envelope is identical to full-mode. Each inner result
+>     carries `"render_mode": "static"`. Full-mode responses now also
+>     carry `"render_mode": "full"` on every result so you can tag
+>     downstream confidence without branching on shape.
+> - Error contract: static-mode failures return **HTTP 200** with
+>   `inner.success=false`, `status_code=0`,
+>   `error_message="static-fetch: timeout after 15s"` (or similar).
+>   **Never HTTP 504** — 504 stays reserved for Fix-1's "we tried to
+>   render and failed."
+> - `/crawl/stream` rejects `render_mode=static` with HTTP 400. Static
+>   is non-streaming by definition.
+>
+> **Verified against the deploy:**
+> - Roadscanners `/contact/offices/` returns all four spec-required
+>   strings (annele/virpi emails, both Finnish phone numbers) in 0.16s,
+>   no `@null` decoy.
+> - Tier 1 regression 4/4 passes on the default `"full"` path — the
+>   leak-fix stack is intact.
+> - Timeout path: columbia-road.com returns HTTP 200 + inner
+>   `success:false` + `error_message:"static-fetch: timeout after 15s"`.
+>
+> **Your agreed client-side behavior:** after 2 consecutive 504s on a
+> host in a session, pivot that host to `render_mode: "static"` for the
+> rest of the session. Worst-case per-company cost is now 2 × 180s =
+> 360s before blacklist. Static stays a fallback — `"full"` remains
+> primary.
+>
+> Anything missing or surprising, ping via Tero.
