@@ -224,6 +224,7 @@ def test_site(
     config_type: str = "fast",
     version: str = "manual",
     save_artifacts: bool = True,
+    render_mode: str = "full",
 ):
     """
     Test a single site with specified configuration.
@@ -234,6 +235,9 @@ def test_site(
         config_type: One of 'fast', 'heavy', 'minimal', 'magic_only', 'scan_only'
         version: Test version label (e.g., 'v11')
         save_artifacts: Whether to save JSON and markdown artifacts
+        render_mode: 'full' (Playwright, default) or 'static' (httpx + html2text).
+            When 'static', the browser pool is bypassed entirely — useful for
+            SPA hosts where Playwright hangs (roadscanners.com pattern).
 
     Returns:
         dict: Crawl result data
@@ -248,6 +252,7 @@ def test_site(
     print(f"\n{'=' * 80}")
     print(f"Testing: {url}")
     print(f"Config: {config_type}")
+    print(f"Render mode: {render_mode}")
     print(f"{'=' * 80}\n")
 
     # Get config
@@ -258,12 +263,16 @@ def test_site(
 
     crawler_config = CONFIGS[config_type]
 
+    payload = {"urls": [url], "crawler_config": crawler_config}
+    if render_mode != "full":
+        payload["render_mode"] = render_mode
+
     # Crawl
     try:
         response = requests.post(
             f"{CRAWL4AI_URL}/crawl",
             headers={"Authorization": f"Bearer {CRAWL4AI_TOKEN}"},
-            json={"urls": [url], "crawler_config": crawler_config},
+            json=payload,
             timeout=120,
         )
         response.raise_for_status()
@@ -411,6 +420,16 @@ Configs:
         action="store_true",
         help="Don't save artifacts (JSON/markdown files)",
     )
+    parser.add_argument(
+        "--render-mode",
+        choices=["full", "static"],
+        default="full",
+        help=(
+            "Rendering strategy. 'full' (default) uses Playwright; 'static' "
+            "uses httpx + html2text with no browser — cheap fallback for "
+            "hosts where Playwright hangs."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -420,6 +439,7 @@ Configs:
         config_type=args.config,
         version=args.version,
         save_artifacts=not args.no_save,
+        render_mode=args.render_mode,
     )
 
     if result is None:

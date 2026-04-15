@@ -25,6 +25,7 @@ from api import (
     handle_stream_crawl_request,
     handle_crawl_request,
     stream_results,
+    close_static_http_client,
 )
 from schemas import (
     CrawlRequestWithHooks,
@@ -168,6 +169,12 @@ async def lifespan(_: FastAPI):
         await get_monitor().cleanup()
     except Exception as e:
         logger.error(f"Monitor cleanup failed: {e}")
+
+    # Aitosoft: close the static-mode httpx client if it was used.
+    try:
+        await close_static_http_client()
+    except Exception as e:
+        logger.error(f"Static http client cleanup failed: {e}")
 
     await close_all()
 
@@ -824,6 +831,22 @@ async def crawl(
         raise HTTPException(
             403, "Hooks are disabled. Set CRAWL4AI_HOOKS_ENABLED=true to enable."
         )
+
+    # Aitosoft: static-mode is non-streaming by definition and returns
+    # HTTP 200 even when the inner result is a failure — so short-circuit
+    # before the stream check and before the all-failures → 500 rewrite.
+    if crawl_request.render_mode == "static":
+        results = await handle_crawl_request(
+            urls=crawl_request.urls,
+            browser_config=crawl_request.browser_config,
+            crawler_config=crawl_request.crawler_config,
+            config=config,
+            hooks_config=None,
+            crawler_configs=crawl_request.crawler_configs,
+            render_mode="static",
+        )
+        return JSONResponse(results)
+
     # Check whether it is a redirection for a streaming request
     crawler_config = CrawlerRunConfig.load(crawl_request.crawler_config)
     if crawler_config.stream:
@@ -844,6 +867,7 @@ async def crawl(
         config=config,
         hooks_config=hooks_config,
         crawler_configs=crawl_request.crawler_configs,
+        render_mode="full",
     )
     # check if all of the results are not successful
     if all(not result["success"] for result in results["results"]):
@@ -865,6 +889,14 @@ async def crawl_stream(
     if crawl_request.hooks and not HOOKS_ENABLED:
         raise HTTPException(
             403, "Hooks are disabled. Set CRAWL4AI_HOOKS_ENABLED=true to enable."
+        )
+    # Aitosoft: static mode is non-streaming by definition. Reject explicitly
+    # rather than silently falling through to the Playwright-backed stream —
+    # a client that asked for static and got full would get the hang behavior
+    # they were trying to avoid in the first place.
+    if crawl_request.render_mode == "static":
+        raise HTTPException(
+            400, "render_mode='static' is not supported on /crawl/stream; use /crawl."
         )
 
     return await stream_process(crawl_request=crawl_request)

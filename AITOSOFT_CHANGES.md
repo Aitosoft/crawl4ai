@@ -7,12 +7,13 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-04-14
+**Last Updated**: 2026-04-15
 
 ### Version
-- **Local**: v0.8.6 + upstream/develop security fixes + wrapper + leak fixes (2026-04-14)
-- **Production**: v0.8.6 + max_pages fix + leak fixes (deployed 2026-04-14)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-leak-fix`
+- **Local**: v0.8.6 + upstream/develop security fixes + wrapper + leak fixes (2026-04-14) + static-mode fallback (2026-04-15)
+- **Production**: v0.8.6 + max_pages fix + leak fixes (deployed 2026-04-14); static-mode deploy pending
+- **Docker Image (current)**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-leak-fix`
+- **Docker Image (next, static-mode)**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode` (build after local verification)
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
@@ -29,6 +30,98 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Tests
 - 3/3 test-aitosoft/ tests passing
+
+---
+
+## Static-Mode Fallback (`render_mode: "static"`) — 2026-04-15
+
+### Why
+
+During the 2026-04-15 WAA batch, `https://www.roadscanners.com/*` caused
+Playwright to hang at the C-level DevTools protocol: every request produced
+a pool `Using hot pool browser` log, then nothing for 180s until the Fix-1
+`asyncio.wait_for` fired. Zero `[FETCH]` / `[SCRAPE]` / `[ANTIBOT]` banners
+— the hang happened before our Python instrumentation could log. This is a
+Playwright capability gap, not a crawl4ai bug: the site's HTML is
+reachable over plain HTTP (MAS's Gemini-grounded search proved it).
+
+Rather than deepen surgery on Playwright's internal wait-state machinery,
+we added an **opt-in alternate rendering path** that bypasses the browser
+entirely. MAS auto-pivots to static mode on its side after 2 consecutive
+504s per host per session, capping the worst-case per-company cost at
+2 × 180s = 360s before the host is blacklisted for the session.
+
+### What
+
+New optional top-level field on `POST /crawl`:
+
+```json
+{
+  "urls": ["https://www.roadscanners.com/contact/offices/"],
+  "render_mode": "static"
+}
+```
+
+When `render_mode: "static"` (default `"full"`):
+
+- Browser pool / Playwright / patchright retry are **not touched**.
+- Each URL is fetched via a module-scope `httpx.AsyncClient`
+  (`STATIC_FETCH_TIMEOUT_S = 15s` per URL, `verify=False`, follows
+  redirects, UA mirrored from `config.yml`).
+- The response body is converted to markdown via the vendored
+  `crawl4ai.html2text.HTML2Text` (`body_width=0`, `ignore_images=True`).
+- Response envelope matches full-mode exactly; each inner result has
+  `render_mode: "static"` so MAS can weight confidence downstream.
+- Full-mode responses now also carry `render_mode: "full"` on every result
+  for symmetry.
+
+### Error semantics
+
+- httpx timeout / connection error → HTTP **200** with inner
+  `success: false`, `status_code: 0`,
+  `error_message: "static-fetch: timeout after 15s"`. **Not** HTTP 504 —
+  504 stays reserved for Fix-1's "we tried to render and failed".
+- 4xx/5xx from the target site → HTTP 200, inner `success: false`,
+  upstream `status_code` preserved, (usually error-page) body wrapped as
+  markdown.
+- `html2text` parser failure → raw HTML returned as `raw_markdown`
+  (never fails the request). MAS can strip tags on its end.
+
+### Out of scope (intentional)
+
+- No hookability, extraction strategy, or content-filtering for static
+  mode — it's deliberately minimal.
+- `/crawl/stream` is unchanged; static is non-streaming by definition.
+- `/crawl/job` is unchanged; `render_mode` defaults to `"full"` when not
+  threaded through.
+- No `links.internal` / `links.external` extraction — MAS has its own
+  link extractor and doesn't need it here.
+
+### Files touched
+
+| File | Change |
+|------|--------|
+| `deploy/docker/schemas.py` | `CrawlRequest` gets `render_mode: Literal["full", "static"] = "full"` |
+| `deploy/docker/api.py` | New `handle_static_crawl_request` + module-scope `_static_http_client`; `handle_crawl_request` short-circuits when `render_mode == "static"` and tags full-mode results with `render_mode: "full"` |
+| `deploy/docker/server.py` | `/crawl` endpoint branches on `render_mode == "static"` before the stream check and before the all-failures → 500 rewrite; lifespan shutdown calls `close_static_http_client` |
+| `test-aitosoft/test_site.py` | New `--render-mode {full,static}` CLI flag |
+| `AITOSOFT_CHANGES.md` | This entry |
+
+### Verification
+
+Local:
+- Pending: Tier 1 regression (`test_regression.py --tier 1 --version
+  static-mode`) against local uvicorn — must remain 4/4 PASS on the
+  default (full) path.
+- Pending: static-mode smoke against `https://www.roadscanners.com/contact/offices/`
+  — acceptance strings listed in
+  `tasks/done/static-html-fallback-mode-*.md`.
+
+Deploy:
+- Image: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode` (pending).
+- Procedure: `az acr build ...` → `az containerapp update --image ...` (see
+  DEPLOYMENT_INFO.md "Update to New Version"). Do **not** use
+  `deploy-aitosoft-prod.sh --update-only` — it regenerates the API token.
 
 ---
 

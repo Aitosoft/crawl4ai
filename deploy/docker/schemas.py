@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict
+from typing import List, Literal, Optional, Dict
 from pydantic import BaseModel, Field, HttpUrl
 from utils import FilterType
 
@@ -13,6 +13,20 @@ class CrawlRequest(BaseModel):
             "List of per-URL CrawlerRunConfig dicts for arun_many(). "
             "When provided, each config can include a 'url_matcher' pattern "
             "to match against specific URLs. Takes precedence over crawler_config."
+        ),
+    )
+    # Aitosoft: static-mode fallback. "full" (default) uses Playwright via the
+    # browser pool; "static" fetches each URL with httpx and converts the HTML
+    # to markdown with html2text, bypassing the browser entirely. Added for
+    # hosts where Playwright hangs at the C-level DevTools protocol
+    # (e.g. roadscanners.com) and the Fix-1 180s wait_for is the only thing
+    # that unblocks the pool. See tasks/done/static-html-fallback-mode-*.md.
+    render_mode: Literal["full", "static"] = Field(
+        default="full",
+        description=(
+            "Rendering strategy. 'full' (default) uses Playwright; 'static' "
+            "uses httpx + html2text with no browser. Static is a minimal "
+            "fast-fallback for SPA hosts where Playwright hangs."
         ),
     )
 
