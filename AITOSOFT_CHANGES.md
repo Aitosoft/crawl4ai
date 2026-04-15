@@ -10,9 +10,9 @@ Keeping this log helps when syncing with upstream updates.
 **Last Updated**: 2026-04-14
 
 ### Version
-- **Local**: v0.8.6 + upstream/develop security fixes (merged 2026-04-14) + wrapper architecture
-- **Production**: v0.8.6 + max_pages fix (deployed 2026-04-14)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-maxpages-fix`
+- **Local**: v0.8.6 + upstream/develop security fixes + wrapper + leak fixes (2026-04-14)
+- **Production**: v0.8.6 + max_pages fix + leak fixes (deployed 2026-04-14)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-leak-fix`
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
@@ -29,6 +29,84 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Tests
 - 3/3 test-aitosoft/ tests passing
+
+---
+
+## Request-Timeout + Stuck-Slot Leak Fixes (2026-04-14, late)
+
+### Incident
+
+Second WAA batch after the max_pages fix ran healthy for 25 companies then
+degraded over 90 min on 2 bot-protected sites (ahlmanedu.fi, diabetes.fi).
+Memory climbed 68 → 82% on the surviving replica, all subsequent requests
+504'd at Azure's 240s ingress timeout. User killed batch at 14:24 UTC.
+
+### Root Cause
+
+`asyncio.wait_for` wasn't wrapping `crawler.arun` in `api.py`, so when a
+bot-protected URL triggered the full retry chain (antibot × 2 + patchright)
+beyond 240s:
+1. Azure ingress 504'd to MAS, but **FastAPI did NOT cancel the backend
+   coroutine** on client disconnect
+2. `await crawler.arun(url)` kept running indefinitely
+3. `release_crawler` in the finally block never fired
+4. `active_requests` counter leaked → pool slot wedged
+5. Janitor skipped the stuck browser (`active_requests > 0` check)
+6. Pool spawned overflow browsers for new requests → memory climbed
+
+Same mechanism as the max_pages incident but slower-onset because overflow
+browsers distributed the leak across multiple Chromium processes.
+
+### Fixes
+
+**Fix 1 — Request timeout** (`deploy/docker/api.py`)
+- Wrap `arun + patchright_retry` in `asyncio.wait_for(..., timeout=180s)`
+- On TimeoutError: return HTTP 504 with same error-shape as 500 path so WAA
+  retry logic matches
+- Added `except HTTPException: raise` before generic handler so 504 isn't
+  rewrapped as 500
+- 180s < 240s Azure ingress timeout with margin for cleanup + JSON encode
+
+**Fix 2 — Janitor force-close** (`deploy/docker/crawler_pool.py`)
+- Added `BUSY_SINCE[id(crawler)]` tracking: stamped on 0→1 transition in
+  `_incr_active()`, cleared on release when counter reaches 0
+- Added `STUCK_BUSY_TIMEOUT_S=600s` (configurable via
+  `crawler.pool.stuck_busy_timeout_sec` in config.yml)
+- New `_force_close_stuck()` pass in `janitor()` closes any browser busy
+  for > 600s, logs WARNING so ops notice if Fix 1 ever regresses
+- Covers permanent + hot + cold pools
+
+**Fix 3 — Batch-scale runbook** (`azure-deployment/batch-scale.sh`)
+- `./batch-scale.sh up [N]` sets `minReplicas=N` before a WAA batch
+- `./batch-scale.sh down` returns to `minReplicas=0` after
+- Prevents KEDA http-scaler from scaling 2→1 mid-batch (seen at 12:51 UTC
+  in the 2026-04-14 incident)
+
+**Fix 4 — Patchright singleton bounds** (`deploy/docker/aitosoft_patchright_fallback.py`)
+- `asyncio.Semaphore(5)` caps concurrent `arun` calls on the shared
+  undetected crawler
+- Recycle singleton every 100 uses to bound long-run Chromium memory growth
+- Defense-in-depth for the same leak class, important for 10+ parallel agents
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `deploy/docker/api.py` | `CRAWL_REQUEST_TIMEOUT_S=180`, `asyncio.wait_for` wrapper, `except HTTPException: raise` |
+| `deploy/docker/crawler_pool.py` | `BUSY_SINCE` dict, `_incr_active()` helper, `_force_close_stuck()`, updated `release_crawler`/`close_all` |
+| `deploy/docker/aitosoft_patchright_fallback.py` | `_UNDETECTED_SEM` semaphore, `_UNDETECTED_USES` counter, `_recycle_undetected()` |
+
+### Files Added
+
+| File | Purpose |
+|------|---------|
+| `azure-deployment/batch-scale.sh` | Toggle minReplicas around WAA batch |
+| `azure-deployment/setup-memory-alert.sh` | Azure alert: memory > 85% for 5 min |
+| `test-aitosoft/test_soak.py` | 30-min / 3h soak test with mixed healthy+hard URLs |
+| `tasks/scale-audit-2026-04-14.md` | Scale concerns audit for 10+ parallel agents |
+
+### Deployed As
+`aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-leak-fix`
 
 ---
 

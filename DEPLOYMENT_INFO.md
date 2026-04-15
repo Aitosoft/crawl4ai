@@ -138,6 +138,30 @@ az containerapp update \
   --memory 4.0Gi
 ```
 
+### Batch Runbook — WAA Warm-Up / Cool-Down (2026-04-14)
+
+KEDA's http-scaler can scale 2→1 replicas mid-batch if traffic looks light to
+its polling (seen in the 2026-04-14 outage at 12:51 UTC — replica SIGTERM'd
+during an active crawl). Before any WAA batch larger than a handful of
+companies, hold `min-replicas` up so you always have warm capacity and
+failover.
+
+```bash
+# BEFORE starting a WAA batch run:
+./azure-deployment/batch-scale.sh up        # 1 warm replica (sequential)
+./azure-deployment/batch-scale.sh up 3      # 3 warm replicas (3-6 parallel agents)
+./azure-deployment/batch-scale.sh up 5      # 5 warm (10+ parallel agents)
+
+# AFTER batch completes:
+./azure-deployment/batch-scale.sh down      # Back to scale-to-zero
+
+# Check current state:
+./azure-deployment/batch-scale.sh status
+```
+
+Cost impact of `up 1` for an 8-hour batch: ~€0.80 extra (1 replica × €0.10/h).
+Worth it for reliability.
+
 ---
 
 ## Cost Optimization

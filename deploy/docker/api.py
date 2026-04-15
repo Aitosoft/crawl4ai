@@ -52,6 +52,15 @@ import psutil, time
 
 logger = logging.getLogger(__name__)
 
+# Aitosoft: hard per-request timeout to bound arun+patchright.
+# Azure Container Apps ingress times out at 240s by default; if the backend
+# keeps running past that, FastAPI does NOT cancel the coroutine on client
+# disconnect, and `release_crawler` in the finally block never fires — so
+# `active_requests` leaks in crawler_pool and the pool saturates over time.
+# 180s leaves ~60s under the ingress ceiling for request setup, logging,
+# cleanup, and JSON serialization of the 504 response.
+CRAWL_REQUEST_TIMEOUT_S = 180
+
 
 # --- Helper to get memory ---
 def _get_memory_mb():
@@ -665,27 +674,66 @@ async def handle_crawl_request(
             config=effective_config,
             dispatcher=dispatcher,
         )
-        results = await partial_func()
 
-        # Ensure results is always a list
-        if not isinstance(results, list):
-            results = [results]
+        async def _crawl_with_patchright():
+            r = await partial_func()
+            if not isinstance(r, list):
+                r = [r]
+            # Aitosoft: second-tier retry via patchright for any results that the
+            # antibot_detector marked as blocked. Replaces blocked entries with
+            # patchright results when the retry succeeds, otherwise preserves the
+            # first-tier diagnostic. See aitosoft_patchright_fallback.py.
+            try:
+                from aitosoft_patchright_fallback import maybe_retry_blocked
 
-        # Aitosoft: second-tier retry via patchright for any results that the
-        # antibot_detector marked as blocked. Replaces blocked entries with
-        # patchright results when the retry succeeds, otherwise preserves the
-        # first-tier diagnostic. See aitosoft_patchright_fallback.py.
+                r = await maybe_retry_blocked(
+                    results=r,
+                    urls=urls,
+                    crawler_config=crawler_config,
+                    base_browser_config=browser_config,
+                )
+            except Exception as _e:
+                logger.warning(f"[patchright] retry pass raised (non-fatal): {_e}")
+            return r
+
+        # Aitosoft: bounded timeout. On TimeoutError the wait_for cancels the
+        # inner task, which unwinds back to our finally block that calls
+        # release_crawler — no more leaked active_requests counters.
         try:
-            from aitosoft_patchright_fallback import maybe_retry_blocked
-
-            results = await maybe_retry_blocked(
-                results=results,
-                urls=urls,
-                crawler_config=crawler_config,
-                base_browser_config=browser_config,
+            results = await asyncio.wait_for(
+                _crawl_with_patchright(), timeout=CRAWL_REQUEST_TIMEOUT_S
             )
-        except Exception as _e:
-            logger.warning(f"[patchright] retry pass raised (non-fatal): {_e}")
+        except asyncio.TimeoutError:
+            logger.error(
+                f"[aitosoft] Crawl exceeded {CRAWL_REQUEST_TIMEOUT_S}s timeout "
+                f"(urls={urls[:2]}{'...' if len(urls) > 2 else ''}). "
+                f"Releasing pool slot via finally."
+            )
+            end_mem_mb_to = _get_memory_mb()
+            if start_mem_mb is not None and end_mem_mb_to is not None:
+                mem_delta_mb = end_mem_mb_to - start_mem_mb
+            try:
+                from monitor import get_monitor
+
+                await get_monitor().track_request_end(
+                    request_id, success=False, error="timeout", status_code=504
+                )
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail=json.dumps(
+                    {
+                        "error": (
+                            f"Crawl exceeded {CRAWL_REQUEST_TIMEOUT_S}s server timeout"
+                        ),
+                        "server_memory_delta_mb": mem_delta_mb,
+                        "server_peak_memory_mb": max(
+                            peak_mem_mb if peak_mem_mb else 0, end_mem_mb_to or 0
+                        ),
+                    }
+                ),
+            )
 
         end_mem_mb = _get_memory_mb()  # <--- Get memory after
         end_time = time.time()
@@ -785,6 +833,10 @@ async def handle_crawl_request(
 
         return response
 
+    except HTTPException:
+        # Already-structured responses (e.g. our 504 timeout) must propagate
+        # unchanged. Do NOT rewrap as 500 in the generic handler below.
+        raise
     except Exception as e:
         logger.error(f"Crawl error: {str(e)}", exc_info=True)
 

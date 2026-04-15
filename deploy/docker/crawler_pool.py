@@ -24,6 +24,21 @@ BASE_IDLE_TTL = CONFIG.get("crawler", {}).get("pool", {}).get("idle_ttl_sec", 30
 MAX_PAGES = CONFIG.get("crawler", {}).get("pool", {}).get("max_pages", 5)
 DEFAULT_CONFIG_SIG = None  # Cached sig for default config
 
+# Aitosoft: force-close browsers that have been stuck busy for too long.
+# If active_requests has stayed > 0 for longer than this, the in-flight pages
+# are almost certainly leaked (e.g. upstream timed out at Azure ingress but
+# the backend coroutine is still hanging) and the slot will never be released.
+# Fix 1 (asyncio.wait_for in api.py) is the primary defense; this is the
+# safety net for code paths Fix 1 doesn't cover or future regressions.
+STUCK_BUSY_TIMEOUT_S = (
+    CONFIG.get("crawler", {}).get("pool", {}).get("stuck_busy_timeout_sec", 600)
+)
+
+# Tracks when each crawler FIRST went from active_requests=0 → 1. Cleared when
+# active_requests returns to 0 via release_crawler. Keyed by id(crawler) because
+# release_crawler only has the object reference, not the pool key.
+BUSY_SINCE: Dict[int, float] = {}
+
 
 def get_pool_snapshot() -> dict:
     """Return a point-in-time snapshot of pool state for monitoring.
@@ -60,6 +75,21 @@ def _active(crawler: AsyncWebCrawler) -> int:
     return getattr(crawler, "active_requests", 0)
 
 
+def _incr_active(crawler: AsyncWebCrawler) -> int:
+    """Atomically increment active_requests.
+
+    Records `BUSY_SINCE[id(crawler)]` on the 0→1 transition so the janitor can
+    detect stuck slots (see force-close logic). Callers MUST already hold
+    the pool LOCK.
+    """
+    if not hasattr(crawler, "active_requests"):
+        crawler.active_requests = 0
+    crawler.active_requests += 1
+    if crawler.active_requests == 1:
+        BUSY_SINCE[id(crawler)] = time.time()
+    return crawler.active_requests
+
+
 async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
     """Get crawler from pool with tiered strategy.
 
@@ -78,9 +108,7 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
             else:
                 LAST_USED[sig] = time.time()
                 USAGE_COUNT[sig] = USAGE_COUNT.get(sig, 0) + 1
-                if not hasattr(PERMANENT, "active_requests"):
-                    PERMANENT.active_requests = 0
-                PERMANENT.active_requests += 1
+                _incr_active(PERMANENT)
                 logger.info("🔥 Using permanent browser")
                 return PERMANENT
 
@@ -96,9 +124,7 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
             else:
                 LAST_USED[sig] = time.time()
                 USAGE_COUNT[sig] = USAGE_COUNT.get(sig, 0) + 1
-                if not hasattr(crawler, "active_requests"):
-                    crawler.active_requests = 0
-                crawler.active_requests += 1
+                _incr_active(crawler)
                 logger.info(
                     f"♨️  Using hot pool browser "
                     f"(sig={sig[:8]}, "
@@ -118,9 +144,7 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
             else:
                 LAST_USED[sig] = time.time()
                 USAGE_COUNT[sig] = USAGE_COUNT.get(sig, 0) + 1
-                if not hasattr(crawler, "active_requests"):
-                    crawler.active_requests = 0
-                crawler.active_requests += 1
+                _incr_active(crawler)
 
                 if USAGE_COUNT[sig] >= 3:
                     logger.info(
@@ -151,7 +175,7 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
                 if key.startswith(sig + "_ovf_") and _active(crawler) < MAX_PAGES:
                     LAST_USED[key] = time.time()
                     USAGE_COUNT[key] = USAGE_COUNT.get(key, 0) + 1
-                    crawler.active_requests = _active(crawler) + 1
+                    _incr_active(crawler)
                     pool_name = "hot" if pool is HOT_POOL else "cold"
                     logger.info(
                         f"♻️  Using overflow {pool_name} "
@@ -182,7 +206,8 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
         )
         crawler = AsyncWebCrawler(config=cfg, thread_safe=False)
         await crawler.start()
-        crawler.active_requests = 1
+        crawler.active_requests = 0
+        _incr_active(crawler)  # becomes 1, records BUSY_SINCE
         COLD_POOL[pool_key] = crawler
         LAST_USED[pool_key] = time.time()
         USAGE_COUNT[pool_key] = 1
@@ -199,6 +224,11 @@ async def release_crawler(crawler: AsyncWebCrawler):
     async with LOCK:
         if hasattr(crawler, "active_requests"):
             crawler.active_requests = max(0, crawler.active_requests - 1)
+            if crawler.active_requests == 0:
+                # Slot freed — clear the stuck-detection timestamp so the
+                # janitor doesn't flag this crawler as stuck after legitimate
+                # idle reuse.
+                BUSY_SINCE.pop(id(crawler), None)
 
 
 async def init_permanent(cfg: BrowserConfig):
@@ -228,6 +258,87 @@ async def close_all():
         COLD_POOL.clear()
         LAST_USED.clear()
         USAGE_COUNT.clear()
+        BUSY_SINCE.clear()
+
+
+async def _force_close_stuck(now: float) -> None:
+    """Force-close pool browsers whose active_requests has been > 0 too long.
+
+    Caller MUST hold LOCK. Scans permanent + hot + cold. Any crawler whose
+    id() has been in BUSY_SINCE for > STUCK_BUSY_TIMEOUT_S is treated as
+    having leaked slots and is closed + removed. Logs a prominent WARNING
+    with diagnostic context so ops can see when this fires in production.
+    """
+    global PERMANENT
+
+    def _check(crawler: "AsyncWebCrawler") -> Optional[float]:
+        """Return busy_seconds if stuck past threshold, else None."""
+        if crawler is None:
+            return None
+        active = getattr(crawler, "active_requests", 0)
+        if active <= 0:
+            return None
+        busy_start = BUSY_SINCE.get(id(crawler))
+        if busy_start is None:
+            # Recover: stamp now so next tick can evaluate. Handles the case
+            # where a crawler was somehow incremented without going through
+            # _incr_active.
+            BUSY_SINCE[id(crawler)] = now
+            return None
+        busy_for = now - busy_start
+        if busy_for <= STUCK_BUSY_TIMEOUT_S:
+            return None
+        return busy_for
+
+    async def _log_and_close(
+        pool_name: str, key: str, crawler: "AsyncWebCrawler", busy_for: float
+    ) -> None:
+        active = getattr(crawler, "active_requests", 0)
+        logger.warning(
+            f"🚨 FORCE-CLOSING stuck browser "
+            f"(pool={pool_name}, key={key[:16]}, "
+            f"active={active}, busy_for={busy_for:.0f}s, "
+            f"limit={STUCK_BUSY_TIMEOUT_S}s). "
+            f"This indicates a leaked request slot — investigate logs "
+            f"around busy-start time for matching request_id."
+        )
+        with suppress(Exception):
+            await crawler.close()
+        BUSY_SINCE.pop(id(crawler), None)
+        try:
+            from monitor import get_monitor
+
+            await get_monitor().track_janitor_event(
+                f"force_close_{pool_name}",
+                key,
+                {"active_requests": active, "busy_seconds": int(busy_for)},
+            )
+        except Exception:
+            pass
+
+    # Permanent browser
+    if PERMANENT is not None:
+        busy_for = _check(PERMANENT)
+        if busy_for is not None:
+            await _log_and_close(
+                "permanent", DEFAULT_CONFIG_SIG or "permanent", PERMANENT, busy_for
+            )
+            PERMANENT = None
+            if DEFAULT_CONFIG_SIG:
+                LAST_USED.pop(DEFAULT_CONFIG_SIG, None)
+                USAGE_COUNT.pop(DEFAULT_CONFIG_SIG, None)
+
+    # Hot + cold pools
+    for pool_name, pool in (("hot", HOT_POOL), ("cold", COLD_POOL)):
+        for key in list(pool.keys()):
+            crawler = pool.get(key)
+            busy_for = _check(crawler)
+            if busy_for is None:
+                continue
+            await _log_and_close(pool_name, key, crawler, busy_for)
+            pool.pop(key, None)
+            LAST_USED.pop(key, None)
+            USAGE_COUNT.pop(key, None)
 
 
 async def janitor():
@@ -302,6 +413,14 @@ async def janitor():
                         )
                     except:
                         pass
+
+            # Aitosoft: force-close browsers whose active_requests has been > 0
+            # for longer than STUCK_BUSY_TIMEOUT_S. This catches leaked slots
+            # that escape Fix 1 (asyncio.wait_for in api.py) — e.g. future code
+            # paths that bypass the timeout wrapper, or bugs in release_crawler.
+            # Without this safety net, a stuck slot wedges the pool forever
+            # because regular idle cleanup skips anything with active > 0.
+            await _force_close_stuck(now)
 
             # Log pool stats
             if mem_pct > 60:

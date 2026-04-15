@@ -46,6 +46,25 @@ logger = logging.getLogger(__name__)
 _UNDETECTED_CRAWLER: Optional[AsyncWebCrawler] = None
 _UNDETECTED_LOCK = asyncio.Lock()
 
+# Aitosoft: bound concurrent arun() calls on the patchright singleton.
+# Without this, 10+ parallel agents all hitting a blocked site can pile
+# 10+ Playwright pages onto the same Chromium process, leaking memory
+# on timeout (Playwright pages don't always GC cleanly when their
+# outer coroutine is cancelled). MAX matches crawler_pool's MAX_PAGES
+# for symmetry; each of the 5 slots maps to one live page on the
+# singleton at peak.
+_UNDETECTED_CONCURRENCY = 5
+_UNDETECTED_SEM = asyncio.Semaphore(_UNDETECTED_CONCURRENCY)
+
+# Aitosoft: recycle the singleton periodically to bound long-run memory
+# growth. Even if every arun frees its page cleanly, long-running Chromium
+# processes accumulate cruft (cookies, caches, in-progress fetches from
+# cancelled requests). We close + recreate after N successful + failed
+# calls. Guarded by _UNDETECTED_LOCK on the swap so no in-flight call
+# sees a half-closed crawler.
+_UNDETECTED_RECYCLE_USES = 100
+_UNDETECTED_USES = 0
+
 _BLOCK_MARKER = "Blocked by anti-bot protection:"
 
 
@@ -137,12 +156,20 @@ async def maybe_retry_blocked(
         logger.warning(f"[patchright] crawler startup failed: {e}")
         return results
 
+    global _UNDETECTED_USES
+
     for i in blocked_indices:
         url = urls[i] if i < len(urls) else None
         if not url:
             continue
         try:
-            raw: Any = await undetected.arun(url=url, config=crawler_config)
+            # Aitosoft: concurrency cap prevents runaway page count on the
+            # shared singleton under parallel-agent load. Waiters queue here;
+            # each retry is short (~5-10s normally, bounded by api.py's
+            # asyncio.wait_for(180s)).
+            async with _UNDETECTED_SEM:
+                raw: Any = await undetected.arun(url=url, config=crawler_config)
+            _UNDETECTED_USES += 1
             new_result: Any
             if isinstance(raw, list):
                 new_result = raw[0] if raw else None
@@ -171,7 +198,50 @@ async def maybe_retry_blocked(
             logger.warning(f"[patchright] {url}: retry raised {type(e).__name__}: {e}")
             continue
 
+    # Aitosoft: periodic recycle. When usage hits the threshold and no
+    # calls are in flight (semaphore fully released), swap the singleton.
+    # Triggered opportunistically from the same coroutine that just hit
+    # the threshold; under parallel load the swap may be deferred until a
+    # quiet moment, which is fine — the point is eventual bounded growth.
+    if _UNDETECTED_USES >= _UNDETECTED_RECYCLE_USES:
+        try:
+            await _recycle_undetected()
+        except Exception as e:
+            logger.warning(f"[patchright] recycle failed (non-fatal): {e}")
+
     return results
+
+
+async def _recycle_undetected() -> None:
+    """Close + clear the singleton so the next call builds a fresh one.
+
+    Only runs if we can grab _UNDETECTED_LOCK AND the concurrency semaphore
+    shows zero in-flight callers. Avoids closing a crawler that another
+    coroutine is mid-arun on. Under sustained parallel load this may wait
+    for a gap before recycling, which is acceptable — we want bounded
+    long-term growth, not strict periodicity.
+    """
+    global _UNDETECTED_CRAWLER, _UNDETECTED_USES
+    # Cheap check before acquiring the lock — if fully busy, skip this round.
+    if _UNDETECTED_SEM._value < _UNDETECTED_CONCURRENCY:
+        return
+    async with _UNDETECTED_LOCK:
+        if _UNDETECTED_CRAWLER is None:
+            _UNDETECTED_USES = 0
+            return
+        if _UNDETECTED_SEM._value < _UNDETECTED_CONCURRENCY:
+            return
+        logger.info(f"[patchright] Recycling singleton after {_UNDETECTED_USES} uses")
+        old = _UNDETECTED_CRAWLER
+        _UNDETECTED_CRAWLER = None
+        _UNDETECTED_USES = 0
+    # Close outside the lock so a concurrent _get_undetected_crawler caller
+    # can immediately start building the replacement without waiting on
+    # Chromium shutdown (~1-2s).
+    try:
+        await old.close()
+    except Exception as e:
+        logger.warning(f"[patchright] close during recycle failed: {e}")
 
 
 async def close_patchright_crawler() -> None:
