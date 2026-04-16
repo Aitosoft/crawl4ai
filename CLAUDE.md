@@ -196,6 +196,7 @@ gunicorn → aitosoft_entry:app
 | `DEPLOYMENT_INFO.md` | Endpoint, credentials, Azure resource details |
 | `TESTING.md` | Full testing framework, quality gates |
 | `TEST_SITES_REGISTRY.md` | Test site metadata, expected contacts, patterns |
+| `OVERNIGHT_PLAYBOOK.md` | Tero says "monitor overnight" — read this, then loop via `ScheduleWakeup` |
 
 ---
 
