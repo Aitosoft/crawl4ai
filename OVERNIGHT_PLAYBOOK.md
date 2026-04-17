@@ -31,9 +31,27 @@ az monitor log-analytics query -w be17d63b-1807-49da-9846-82091ac8971d --analyti
 ```
 
 Kusto signal summary (20-min window), categorize by `case()`:
-`FORCE-CLOSE`, `JANITOR`, `OOM`/`MemoryError`, `FIX1-504` (contains
-"Crawl exceeded"), `ACTIVE-REQ`, `PW-NAV-TIMEOUT` (Page.goto 90000),
-`OTHER`.
+`FORCE-CLOSE` (contains "Janitor reaped" or "force_close" or "FORCE-CLOSE"),
+`OOM`/`MemoryError` (contains "refusing new browser"),
+`FIX1-504` (contains "Crawl exceeded"), `ACTIVE-REQ`,
+`PW-NAV-TIMEOUT` (Page.goto 90000), `FETCH` (contains "[FETCH]"),
+`COMPLETE` (contains "[COMPLETE]"), `OTHER`.
+
+**Do NOT use `contains "reap"`** for JANITOR — matches supervisord's
+benign `reaped unknown pid … exit status 0` chatter and floods with
+thousands of false positives (2026-04-17 lesson).
+
+Add pool-mem% percentile view — it surfaces near-OS-OOM single-replica
+peaks the `refusing new browser` count alone doesn't explain:
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(20m)
+| where ContainerAppName_s == "crawl4ai-service"
+| where Log_s contains "Pool:" and Log_s contains "mem="
+| extend mem_pct = toreal(extract(@"mem=([\d.]+)%", 1, Log_s))
+| summarize p50=percentile(mem_pct, 50), p90=percentile(mem_pct, 90),
+            p99=percentile(mem_pct, 99), max=max(mem_pct) by bin(TimeGenerated, 5m)
+```
 
 ## Cadence
 
@@ -50,9 +68,9 @@ Kusto signal summary (20-min window), categorize by `case()`:
 | PW-NAV-TIMEOUT ("Page.goto: Timeout 90000ms exceeded") | Playwright's own 90s nav timeout | **None.** Normal for slow/SPA sites. MAS pivots to static after 2 consecutive 504s per host. |
 | OOM / MemoryError "refusing new browser" | **Our pool guard**, not OS-OOM. Replica hit ~85%+ and refused a new browser spawn. | Peek pool mem% timeline (`Pool: hot=… mem=…` log lines). If it drops back within ~5 min, no action — the guard worked. If it sticks >85% for 10+ min, restart the revision. |
 | OTHER | Usually garbage. Log lines whose ms timestamp contains "504" (e.g. `02:17:04,504`) hit the regex. | Peek once per night to confirm, then ignore. |
-| FORCE-CLOSE | Fix-2 Janitor killed a stuck slot | Investigate. If recurring, stuck-slot pattern from 2026-04-14 — restart or rollback. |
-| JANITOR (reap messages) | Fix-2 firing | Same as FORCE-CLOSE. |
+| FORCE-CLOSE / "Janitor reaped" | Fix-2 Janitor killed a stuck slot | Investigate. If recurring, stuck-slot pattern from 2026-04-14 — restart or rollback. |
 | ACTIVE-REQ counter not decreasing over multiple ticks | Stuck-slot pattern | **Rollback** to previous known-good image. |
+| Pool mem% P99 > 95% sustained across 2+ 5min bins | Cluster approaching OS-OOM, guard overwhelmed | Restart revision. Single-bin spikes to 99% that recover next window are normal and self-healing. |
 
 ## Intervention thresholds
 
