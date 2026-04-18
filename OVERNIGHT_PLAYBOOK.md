@@ -70,7 +70,7 @@ ContainerAppConsoleLogs_CL
 | OTHER | Usually garbage. Log lines whose ms timestamp contains "504" (e.g. `02:17:04,504`) hit the regex. | Peek once per night to confirm, then ignore. |
 | FORCE-CLOSE / "Janitor reaped" | Fix-2 Janitor killed a stuck slot | Investigate. If recurring, stuck-slot pattern from 2026-04-14 — restart or rollback. |
 | ACTIVE-REQ counter not decreasing over multiple ticks | Stuck-slot pattern | **Rollback** to previous known-good image. |
-| Pool mem% P99 > 95% sustained across 2+ 5min bins | Cluster approaching OS-OOM, guard overwhelmed | Restart revision. Single-bin spikes to 99% that recover next window are normal and self-healing. |
+| Pool mem% P99 > 95% sustained across 2+ 5min bins | Cluster approaching OS-OOM, guard overwhelmed | Restart revision. Single-bin spikes to 99% that recover next window are normal and self-healing. **Only count bins with `n >= 150` samples** — low-n P99 is outlier-sensitive and can misread late-arriving log data as a plateau (2026-04-17-evening lesson). Re-query on the next tick before acting. |
 
 ## Intervention thresholds
 
