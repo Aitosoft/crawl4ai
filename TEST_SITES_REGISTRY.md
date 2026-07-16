@@ -2,28 +2,33 @@
 
 **Purpose:** Shared registry of Finnish SME websites for testing crawl4ai capabilities. Used by both `crawl4ai-aitosoft` and `aitosoft-platform` (MAS) repos.
 
-**Last Updated:** 2026-01-21
+**Last Updated:** 2026-07-16
+
+**CRITICAL SAFETY RULE:** never hit a site more than 1-2 times per session.
+Over-scraping got us permanently Cloudflare-blocked on talgraf.fi. Rotate sites.
 
 ---
 
 ## Test Site Categories
 
-### Tier 1: Core Test Sites (Always Test)
+### Tier 1: Core Test Sites (source of truth: `test-aitosoft/test_regression.py`)
 
-These sites represent diverse patterns we MUST handle correctly:
+Current since 2026-04-11:
 
 | Site | Type | Key Characteristics | Contact Page | Decision Maker |
 |------|------|---------------------|--------------|----------------|
-| **talgraf.fi** | Software (20 employees) | Cookie consent, 20+ contacts, LinkedIn links | `/yhteystiedot` | Toni Kemppinen (CEO) |
-| **tilitoimistovahtivuori.fi** | Accounting (small) | Obfuscated emails `(at)`, WordPress | `?page_id=77` | Jaana Toppinen, Kirsi Haltia |
-| **accountor.com/fi** | Enterprise (large) | Heavy cookie wall, multi-country | `/finland/suuryritykselle` | Kari Putkonen, Jani Järvensivu |
-| **monidor.fi** | IoT/Hardware | Clean site, minimal tracking | `/fi/fi-yritys/yritys/` | Mikko Savola (CEO) |
+| **caverna.fi** | Restaurant | Clean baseline, multiple phone formats | Homepage | none expected |
+| **accountor.com/fi/finland** | Enterprise (large) | Cookie wall (Cookiebot) — solved by `remove_consent_popups: true` | `/suuryritykselle` | Jani Järvensivu |
+| **solwers.com** | Public company | Names in ALL CAPS, investor relations | `/sijoittajat/hallinnointi/#johtoryhma` | Johan Ehrnrooth |
+| **jpond.fi** | Software consulting | Email obfuscation `(at)` | `/yhteystiedot/` | Janne Lampi |
 
-**Why these 4:**
-- Talgraf: Cookie consent + structured contact data (cards)
-- Vahtivuori: Email obfuscation + split-line formatting
-- Accountor: Cookie wall edge case (requires `magic: true`)
-- Monidor: Clean baseline (should always work fast)
+### Retired sites (do NOT test against)
+
+| Site | Retired | Why |
+|------|---------|-----|
+| **talgraf.fi** | 2026-04-11 | Permanent Cloudflare block (caused by our own over-scraping — the cautionary tale) |
+| **tilitoimistovahtivuori.fi** | 2026-04-11 | Contact page 404s (site restructured) |
+| **monidor.fi** | 2026-03-26 | Site restructured, old paths 404 |
 
 ### Tier 2: Extended Test Sites (Regression Testing)
 
@@ -43,8 +48,7 @@ Test these when working on specific features:
 
 | Site | Purpose | What It Tests |
 |------|---------|---------------|
-| **talgraf.fi** (homepage) | Timeout handling | Homepage times out, contact page works |
-| **accountor.com/fi/finland** | Cookie wall bypass | Requires `magic: true` + `scan_full_page: true` |
+| **accountor.com/fi/finland** | Cookie wall bypass | `remove_consent_popups: true` (NOT magic — magic removes content and is rejected by the v0.9.x server) |
 | **solwers.com** press releases | Press contact extraction | Phone in +358 format, press contact info |
 | **neuroliitto.fi** | Deep navigation | Contacts 3+ levels deep in site structure |
 
