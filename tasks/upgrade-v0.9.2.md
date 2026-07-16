@@ -71,8 +71,21 @@ Aitosoft-only files (no upstream counterpart): `deploy/docker/aitosoft_entry.py`
 - 2026-07-16: Local verification PASSED: server boots, auth 401/401/200,
   MAS-shaped full crawl OK (headers + 90s timeout accepted), static mode OK,
   Tier 1 regression 4/4 (reports/v0.9.2-local2-regression-tier1.md).
-- Remaining: docs done; commit; az acr build; deploy with
-  GUNICORN_BIND=0.0.0.0:11235; prod smoke; MAS compat questions to Tero.
+- 2026-07-16: Boundary made tolerant (falsy forbidden fields dropped;
+  magic/simulate_user/override_navigator allowed for trusted client).
+- 2026-07-16: Doc cleanup completed alongside (TESTING.md rewritten,
+  registry fixed, 5 obsolete docs deleted).
+- 2026-07-16 ~12:23 UTC: **DEPLOYED** — image `crawl4ai-service:0.9.2`,
+  revision `crawl4ai-service--0000025`, deployed during a scaled-to-zero
+  window. Prod smoke: health 0.9.2 / auth 401 / MAS-shaped crawl / static
+  mode / js_code-400 / caverna.fi spot check — all PASS.
+
+## Remaining
+
+- [ ] Tero relays the compat notice + questions to MAS Claude (drafted in
+  the 2026-07-16 session final report); confirm what fields MAS sends.
+- [ ] Watch the first real WAA batch on 0.9.2 (OVERNIGHT_PLAYBOOK applies).
+- [ ] Move this task to done/ once MAS confirms a clean batch.
 
 ## Learnings
 

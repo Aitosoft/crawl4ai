@@ -11,8 +11,9 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see v0.9.2 upgrade entry below)
-- **Production**: v0.8.6 + max_pages fix + leak fixes + static-mode fallback (deployed 2026-04-15 17:14 UTC) — v0.9.2 deploy pending
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode` (revision `crawl4ai-service--0000011`)
+- **Production**: v0.9.2 (deployed 2026-07-16 ~12:23 UTC)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2` (revision `crawl4ai-service--0000025`, digest `sha256:cfde8b42...`)
+- **Prod smoke 2026-07-16**: health 0.9.2 ✅, auth 401 ✅, MAS-shaped crawl (headers + magic:false + 90s timeout) ✅, static mode ✅, js_code rejected 400 ✅, caverna.fi spot check ✅
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
