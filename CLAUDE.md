@@ -132,8 +132,31 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 
 - Tokens go in `.env` (gitignored) or Azure Key Vault, never in code/docs
 - Always use `os.getenv("CRAWL4AI_API_TOKEN")` in code
-- Before every commit: `grep -r "crawl4ai-[a-z0-9]" --exclude-dir=.git --exclude=".env" .` must return empty
 - If a token is leaked: rotate immediately via `az containerapp update --set-env-vars`, update `.env`, notify MAS team
+
+**Before every commit, this must return exit 1 (no output):**
+
+```bash
+git grep -InE '(crawl4ai-(test-)?|jwt-secret-)[0-9a-f]{32,}' -- .
+```
+
+Exit 0 = a real secret is staged. Stop, remove it, rotate the token.
+
+Why this exact form (don't "simplify" it back):
+- **`git grep`, not `grep -r`** — `grep` here is ugrep, which honors ignore-files and
+  silently skips gitignored paths. A plain `grep -r` cannot distinguish "clean" from
+  "never looked", so it gives false confidence. `git grep` scans tracked files, which
+  is exactly the public-exposure surface — only tracked files reach GitHub.
+- **`[0-9a-f]{32,}`, not `[a-z0-9]`** — real tokens are `crawl4ai-` + `openssl rand -hex`
+  (`deploy-aitosoft-prod.sh` uses hex 24 = 48 chars; `deploy.sh` hex 16 = 32). The loose
+  pattern matched 10 harmless strings (`crawl4ai-download-models`, `crawl4ai-standalone`,
+  the `crawl4ai-service:<tag>` image names), so "must return empty" could never hold and
+  trained us to wave it through. A check that always cries wolf is worse than no check.
+- **`jwt-secret-` included** — `deploy.sh` also mints `jwt-secret-$(openssl rand -hex 32)`.
+  The old pattern ignored it entirely.
+
+Token shapes this catches: `crawl4ai-<32-or-48 hex>`, `crawl4ai-test-<32 hex>`
+(`test_auth.py`), `jwt-secret-<64 hex>`.
 
 ---
 
