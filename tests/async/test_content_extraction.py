@@ -91,7 +91,6 @@ async def test_css_selector_extraction():
         assert result.markdown
         assert all(heading in result.markdown for heading in ["#", "##", "###"])
 
-
 @pytest.mark.asyncio
 async def test_base_tag_link_extraction():
     async with AsyncWebCrawler(verbose=True) as crawler:
@@ -103,7 +102,6 @@ async def test_base_tag_link_extraction():
         assert "internal" in result.links
         assert "external" in result.links
         assert any("github.com" in x["href"] for x in result.links["external"])
-
 
 # Entry point for debugging
 if __name__ == "__main__":

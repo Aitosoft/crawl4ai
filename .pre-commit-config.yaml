@@ -1,3 +1,32 @@
+# Aitosoft pre-commit config.
+#
+# CRITICAL RULE: hooks run ONLY on Aitosoft-owned files. Upstream files must
+# stay byte-identical to unclecode/crawl4ai or every future merge drowns in
+# formatter noise (the 2026-04 "normalize whitespace" commit reformatted ~90
+# upstream files and turned our real ~10-file delta into an 11.5k-line
+# phantom diff). The top-level `files:` pattern below is the enforcement —
+# extend it when adding new Aitosoft files outside these paths, never by
+# widening it to upstream code.
+files: >
+  (?x)^(
+    deploy/docker/aitosoft_.*\.py|
+    test-aitosoft/.*|
+    tasks/.*|
+    azure-deployment/.*|
+    \.devcontainer/.*|
+    \.pre-commit-config\.yaml|
+    CLAUDE\.md|
+    AITOSOFT_.*\.md|
+    DEPLOYMENT_INFO\.md|
+    TESTING\.md|
+    TEST_SITES_REGISTRY\.md|
+    OVERNIGHT_PLAYBOOK\.md
+  )$
+
+# Captured artifacts (fingerprint HTML dumps, crawl results, reports) are
+# historical records — never rewrite them.
+exclude: ^test-aitosoft/(stealth-[^/]+|artifacts|results|reports|archive)/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
@@ -5,7 +34,6 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        exclude: ^\.github/workflows/.*\.yml$  # GitHub Actions YAML has special syntax
       - id: check-added-large-files
       - id: check-json
       - id: check-toml
@@ -22,10 +50,6 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        # Aitosoft: upstream files have pre-existing lint issues (bare
-        # excepts, long lines, multi-import lines) that predate our work.
-        # Fixing them is out of scope for this fork.
-        exclude: ^(crawl4ai/|deploy/docker/(api|server|crawler_pool)\.py$)
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.5.1
@@ -33,8 +57,3 @@ repos:
       - id: mypy
         additional_dependencies: [types-requests]
         args: [--ignore-missing-imports]
-        # Aitosoft: exclude upstream files with pre-existing type issues.
-        # Our edits to these files are minimal and targeted (stealth fixes);
-        # fixing the latent upstream type errors is out of scope for this
-        # fork. Re-enable once upstream cleans them up.
-        exclude: ^(crawl4ai/|deploy/docker/(api|server|crawler_pool)\.py$)

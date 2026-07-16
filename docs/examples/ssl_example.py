@@ -36,10 +36,14 @@ async def main():
             print("\nCertificate exported to:")
             print(f"- JSON: {os.path.join(tmp_dir, 'certificate.json')}")
 
-            cert.to_pem(os.path.join(tmp_dir, "certificate.pem"))  # For web servers
+            pem_data = cert.to_pem(
+                os.path.join(tmp_dir, "certificate.pem")
+            )  # For web servers
             print(f"- PEM: {os.path.join(tmp_dir, 'certificate.pem')}")
 
-            cert.to_der(os.path.join(tmp_dir, "certificate.der"))  # For Java apps
+            der_data = cert.to_der(
+                os.path.join(tmp_dir, "certificate.der")
+            )  # For Java apps
             print(f"- DER: {os.path.join(tmp_dir, 'certificate.der')}")
 
 

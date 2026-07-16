@@ -7,11 +7,11 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-04-15
+**Last Updated**: 2026-07-16
 
 ### Version
-- **Local**: v0.8.6 + upstream/develop security fixes + wrapper + leak fixes (2026-04-14) + static-mode fallback (2026-04-15)
-- **Production**: v0.8.6 + max_pages fix + leak fixes + static-mode fallback (deployed 2026-04-15 17:14 UTC)
+- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see v0.9.2 upgrade entry below)
+- **Production**: v0.8.6 + max_pages fix + leak fixes + static-mode fallback (deployed 2026-04-15 17:14 UTC) — v0.9.2 deploy pending
 - **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-static-mode` (revision `crawl4ai-service--0000011`)
 
 ### Production Deployment
@@ -29,6 +29,113 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Tests
 - 3/3 test-aitosoft/ tests passing
+
+---
+
+## Upstream v0.9.2 Upgrade (2026-07-16)
+
+### What
+
+Merged 117 upstream commits (v0.8.6 → v0.9.2, releases 0.8.7/0.8.8/0.8.9/0.9.0/0.9.1/0.9.2).
+Branch `upgrade/v0.9.2`. The dominant upstream theme is a **secure-by-default
+Docker server** (0.9.0): fail-closed auth, untrusted-config trust boundary,
+SSRF egress pinning, declarative-only hooks, resource governance.
+
+### Merge strategy (important for future syncs)
+
+The 2026-04 "normalize whitespace" commit (`055d4ce`) had reformatted ~90
+upstream files, creating an 11.5k-line phantom diff. This merge **took
+upstream's tree wholesale** (`merge -s ours` + `checkout upstream/develop -- .`)
+and re-applied only our real patches, so upstream files are now byte-identical
+to upstream again. `.pre-commit-config.yaml` now scopes ALL hooks to
+Aitosoft-owned files (top-level `files:` pattern) so drift cannot recur.
+Future syncs: `git fetch upstream && git merge upstream/develop` should be
+near-clean; our entire delta is listed below.
+
+### Patches DROPPED (upstream superseded them)
+
+| Old patch | Upstream replacement |
+|-----------|---------------------|
+| `crawl4ai/browser_adapter.py` playwright-stealth 2.x port | Fixed upstream (PR #1960, 0.8.7) — functionally identical |
+| `deploy/docker/api.py` 180s `asyncio.wait_for` + 504 | Upstream `limits.wall_clock_s` mechanism (governor.py); we set `wall_clock_s: 180` in config.yml |
+| `deploy/docker/simple_token_auth.py` + middleware in wrapper (DELETED) | Upstream `AuthGateMiddleware`: same `Authorization: Bearer $CRAWL4AI_API_TOKEN` contract, constant-time compare, fail-closed startup, covers all routes/mounts/WebSockets. `/health` stays public. |
+
+### Patches RE-APPLIED (adapted to 0.9.2)
+
+| File | Change |
+|------|--------|
+| `crawl4ai/browser_manager.py` | `_build_browser_args` GPU flags gated on `enable_stealth` (still hardcoded upstream; keeps WebGL alive in stealth mode — PR-worthy) |
+| `deploy/docker/crawler_pool.py` | Unchanged upstream since 0.8.6 → our MAX_PAGES enforcement + BUSY_SINCE stuck-slot janitor re-applied verbatim |
+| `deploy/docker/api.py` | render_mode param + static short-circuit (after SSRF validation); patchright retry wrapped INSIDE upstream's wall-clock deadline; `render_mode: "full"` tagging |
+| `deploy/docker/server.py` | static branch in `/crawl` (before stream check + all-failures→500 rewrite); lifespan closes static httpx client + patchright singleton |
+| `deploy/docker/schemas.py` | `CrawlRequest.render_mode: Literal["full","static"]` |
+| `deploy/docker/supervisord.conf` | gunicorn target `aitosoft_entry:app` (upstream line now uses `%(ENV_GUNICORN_BIND)s` — kept) |
+| `Dockerfile` | `RUN playwright install chrome` + copy `chrome-*` cache to appuser |
+| `deploy/docker/config.yml` | stealth kwargs; `wall_clock_s: 180`; `pool.max_pages: 5` + `stuck_busy_timeout_sec: 600`; `memory_threshold_percent: 85`; UA bumped Chrome/133 → Chrome/138 |
+
+### New Aitosoft file
+
+- `deploy/docker/aitosoft_static_mode.py` — static-mode implementation moved
+  out of api.py into its own module (api.py now carries only a ~25-line hook).
+
+### Trusted-client boundary relaxations (aitosoft_entry.py)
+
+Upstream 0.9.0 rejects/clamps "power fields" on network request bodies. Two
+defaults broke MAS's existing contract; we relax exactly those at import time:
+1. `browser_config.headers` allowed again (MAS persona headers; forbidden
+   upstream). Everything else stays forbidden (js_code, proxies, extra_args…).
+2. `page_timeout` clamp raised 60s → 180s (MAS sends 90s; capped by the
+   wall-clock deadline anyway).
+
+**Behavior changes MAS must know about** (see cross-repo message 2026-07-16):
+- `magic`, `simulate_user`, `override_navigator`, `js_code`, proxy fields,
+  `session_id`, `shared_data` etc. in `crawler_config` now → HTTP 400
+  **on presence, even with a falsy value** (`"magic": false` is rejected!).
+- Unknown/unlisted fields are silently dropped (forward-compatible).
+- Unresolvable/dead domains now → HTTP 400 `URL blocked (SSRF protection)`
+  from seed validation (both full and static mode) instead of the old
+  500/inner-failure shapes.
+- `/docs`, `/metrics`, `/playground` now require the bearer token (only
+  `/health` is public).
+- The 504 wall-clock timeout body is now plain `"Crawl exceeded the time
+  limit"` (upstream shape), not our old JSON with memory stats.
+
+### Not affected
+
+- `BrowserConfig.set_defaults()` mechanism intact — wrapper approach unchanged.
+- `antibot_detector.py` unchanged → patchright fallback trigger identical.
+- MAS-sent fields verified allowed: `user_agent`, `viewport_*`, `locale`,
+  `timezone_id`, `geolocation`, `remove_consent_popups`, `wait_until`,
+  `max_retries`, `delay_before_return_html`, `scan_full_page`.
+- `ignore_https_errors` defaults true at the Playwright-context level, so
+  broken-cert sites still crawl despite upstream removing
+  `--ignore-certificate-errors` from Chromium args.
+
+### Upstream infra changes that affect deployment
+
+- Image `CMD` is now `bash entrypoint.sh` → resolves `REDIS_PASSWORD`
+  (generates ephemeral if unset), `GUNICORN_BIND` (defaults `[::]:11235` when
+  a token is set). **Set `GUNICORN_BIND=0.0.0.0:11235` in the Container App
+  env** to avoid IPv6-bind surprises.
+- `/app` is root-owned read-only at runtime; new artifact store at
+  `/var/lib/crawl4ai/outputs` (override locally: `CRAWL4AI_ARTIFACT_DIR`).
+- Redis is loopback + password-protected inside the container.
+- New per-replica global page semaphore: upstream `server.py` caps concurrent
+  `arun` at `pool.max_pages` (5) per replica — complements our pool patches.
+
+### Verification (2026-07-16, local arm64 devcontainer)
+
+- Server boots via `aitosoft_entry:app`; `/health` → 0.9.2.
+- Auth: no token → 401, bad token → 401, good token → 200.
+- Full-mode crawl with MAS-shaped body (persona headers, page_timeout 90000,
+  locale/timezone) → success (validates boundary relaxations).
+- Static mode → success, `render_mode: "static"`, 0.07s.
+- **Tier 1 regression 4/4 PASS** (caverna, accountor, solwers, jpond) against
+  local server (`reports/v0.9.2-local2-regression-tier1.md`).
+- Local-only quirks (not prod-relevant): arm64 has no real Chrome, so
+  `channel: chrome` was temporarily stripped for the local run; stale `jwt`
+  1.4.0 package shadowed PyJWT locally (fixed by uninstall; image installs
+  fresh from requirements.txt which pins PyJWT only).
 
 ---
 

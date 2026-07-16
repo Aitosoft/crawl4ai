@@ -1,9 +1,6 @@
 # Scripts folder (private tools)
 .scripts/
 
-# Test artifacts (regeneratable diagnostic output)
-test-aitosoft/stealth-*/
-
 # Database files
 *.db
 
@@ -136,10 +133,6 @@ celerybeat.pid
 
 # Environments
 .env
-.env.*
-*.env
-!.env.example
-!.env.txt
 .venv
 env/
 venv/
@@ -193,9 +186,6 @@ requirements0.txt
 a.txt
 
 *.sh
-!.devcontainer/setup.sh
-!azure-deployment/batch-scale.sh
-!azure-deployment/setup-memory-alert.sh
 .idea
 docs/examples/.chainlit/
 docs/examples/.chainlit/*
@@ -215,11 +205,7 @@ update_changelog.sh
 docs/.DS_Store
 tmp/
 test_env/
-
-# Private agent guidance (do not publish)
-AGENTS.md
-CLAUDE.md
-notes-to-claude.md
+**/.DS_Store
 **/.DS_Store
 
 todo.md
@@ -295,12 +281,6 @@ test_scripts/
 docs/**/data
 .codecat/
 
-# Production credentials - keep secure
-azure-deployment/PRODUCTION_CREDENTIALS*.md
-azure-deployment/*credentials*
-azure-deployment/secrets/
-azure-deployment/.env
-azure-deployment/local-config.sh
 docs/apps/linkdin/debug*/
 docs/apps/linkdin/samples/insights/*
 
@@ -309,7 +289,7 @@ scripts/
 !scripts/update_stats.py
 
 
-# Database files
+# Databse files
 *.sqlite3
 *.sqlite3-journal
 *.db-journal
@@ -322,3 +302,12 @@ MEMORY.md
 
 # Handoff files
 HANDOFF-*.md
+
+# Security advisory payloads - kept private, published via GitHub Security Advisories only
+.security/
+
+# Local pipeline/run output
+out/
+
+# entrypoint.sh is a required deployment artifact (Dockerfile COPYs it)
+!deploy/docker/entrypoint.sh

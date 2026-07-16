@@ -1,8 +1,21 @@
 # File Upstream PRs for 4 crawl4ai Bugs
 
-**Status:** Open
-**Priority:** Medium — good citizenship, keeps our patches mergeable
-**Blocked by:** merge-upstream-develop (do the merge first so PRs are clean)
+**Status:** Open — REDUCED SCOPE after v0.9.2 upgrade (2026-07-16)
+**Priority:** Low-Medium — only PR 2 (GPU flag gating) remains relevant
+**Blocked by:** Nothing
+
+## 2026-07-16 status update
+
+- PR 1 (stealth 2.x port): **OBSOLETE** — upstream fixed it themselves in
+  0.8.7 (PR #1960). Our patch was dropped in the v0.9.2 upgrade.
+- PR 2 (GPU flag gating in `_build_browser_args`): **STILL VALID** — upstream
+  0.9.2 still hardcodes the GPU flags in `_build_browser_args` while gating
+  them in `build_browser_flags`. We re-applied our patch; file this PR.
+- PR 3 (navigator.webdriver init_script): was never implemented in our fork
+  (stealth handles it adequately since the UA/platform fixes). Skip.
+- PR 4 (config.yml merge into requests): **MOOT** — `set_defaults()` solves
+  it wrapper-side, and upstream 0.9.0's untrusted boundary makes server-side
+  merging of privileged fields undesirable anyway.
 
 ## Goal
 

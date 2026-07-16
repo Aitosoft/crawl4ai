@@ -52,28 +52,28 @@
             font-family: 'Fira Code', monospace;
             font-size: 0.9rem;
         }
-
+        
         .CodeMirror-gutters {
             background-color: #1E1E1E !important;
             border-right: 1px solid #3F3F44 !important;
         }
-
+        
         .CodeMirror-linenumber {
             color: #3F3F44 !important;
         }
-
+        
         .cm-s-darcula .cm-keyword {
             color: #4EFFFF !important;
         }
-
+        
         .cm-s-darcula .cm-string {
             color: #F380F5 !important;
         }
-
+        
         .cm-s-darcula .cm-number {
             color: #D5CEBF !important;
         }
-
+        
         /* Add to your <style> section or Tailwind config */
         .hljs {
             background: #1E1E1E !important;
@@ -172,6 +172,14 @@
         </h1>
 
         <div class="ml-auto flex items-center space-x-4">
+            <!-- Token bar -->
+            <div id="token-bar" class="flex items-center space-x-2">
+                <input id="token-input" type="password" placeholder="API token"
+                       class="bg-dark border border-border rounded px-2 py-1 text-xs w-48">
+                <button id="token-save" class="px-2 py-1 bg-primary text-dark rounded text-xs hover:bg-primarydim">Set</button>
+                <button onclick="clearToken()" class="px-2 py-1 border border-border rounded text-xs hover:bg-surface">Clear</button>
+                <span id="token-status" class="text-xs"></span>
+            </div>
             <a href="/dashboard" class="text-xs text-secondary hover:text-primary underline">Monitor</a>
             <div class="flex space-x-2">
                 <button id="play-tab"
@@ -215,7 +223,7 @@
                         </div>
                         <div>
                             <label for="md-query" class="block text-xs text-secondary mb-1">Query (for BM25/LLM filters)</label>
-                            <input id="md-query" type="text" placeholder="Enter search terms or instructions"
+                            <input id="md-query" type="text" placeholder="Enter search terms or instructions" 
                                 class="bg-dark border border-border rounded px-2 py-1 text-sm w-full">
                         </div>
                         <div>
@@ -234,7 +242,7 @@
                     <div class="mt-2 space-y-3 p-2 border border-border rounded">
                         <div>
                             <label for="llm-question" class="block text-xs text-secondary mb-1">Question</label>
-                            <input id="llm-question" type="text" value="What is this page about?"
+                            <input id="llm-question" type="text" value="What is this page about?" 
                                 class="bg-dark border border-border rounded px-2 py-1 text-sm w-full">
                         </div>
                     </div>
@@ -402,6 +410,44 @@
     </div>
 
     <script>
+        // ================ AUTH ================
+        const _savedToken = sessionStorage.getItem('crawl4ai_token');
+        const _tokenBar = document.getElementById('token-bar');
+        const _tokenInput = document.getElementById('token-input');
+        const _tokenSave = document.getElementById('token-save');
+        const _tokenStatus = document.getElementById('token-status');
+
+        function getToken() { return sessionStorage.getItem('crawl4ai_token') || ''; }
+
+        function authFetch(url, opts = {}) {
+            const token = getToken();
+            if (token) {
+                opts.headers = { ...opts.headers, 'Authorization': 'Bearer ' + token };
+            }
+            return fetch(url, opts);
+        }
+
+        function applyToken() {
+            const val = _tokenInput.value.trim();
+            if (!val) return;
+            sessionStorage.setItem('crawl4ai_token', val);
+            _tokenStatus.textContent = 'Token saved';
+            _tokenStatus.className = 'text-xs text-green-400';
+            setTimeout(() => { _tokenStatus.textContent = ''; }, 2000);
+        }
+
+        function clearToken() {
+            sessionStorage.removeItem('crawl4ai_token');
+            _tokenInput.value = '';
+            _tokenStatus.textContent = 'Token cleared';
+            _tokenStatus.className = 'text-xs text-yellow-400';
+            setTimeout(() => { _tokenStatus.textContent = ''; }, 2000);
+        }
+
+        if (_savedToken) _tokenInput.value = _savedToken;
+        _tokenSave.addEventListener('click', applyToken);
+        _tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') applyToken(); });
+
         // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -485,19 +531,19 @@
             cm.setValue(TEMPLATES[e.target.value]);
             document.getElementById('cfg-status').textContent = '';
         });
-
+        
         // Handle endpoint selection change to show appropriate options
         document.getElementById('endpoint').addEventListener('change', function(e) {
             const endpoint = e.target.value;
             const mdOptions = document.getElementById('md-options');
             const llmOptions = document.getElementById('llm-options');
             const advConfig = document.getElementById('adv-config');
-
+            
             // Hide all option sections first
             mdOptions.classList.add('hidden');
             llmOptions.classList.add('hidden');
             advConfig.classList.add('hidden');
-
+            
             // Show the appropriate section based on endpoint
             if (endpoint === 'md') {
                 mdOptions.classList.remove('hidden');
@@ -517,10 +563,13 @@
             const code = cm.getValue().trim();
             if (!code) return {};
 
-            const res = await fetch('/config/dump', {
+            // Server requires `type` alongside `code` (CrawlerRunConfig | BrowserConfig).
+            // The UI already tracks this in #cfg-type; omitting it always 400s Advanced Config.
+            const cfgType = document.getElementById('cfg-type').value;
+            const res = await authFetch('/config/dump', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code }),
+                body: JSON.stringify({ type: cfgType, code }),
             });
 
             const statusEl = document.getElementById('cfg-status');
@@ -573,7 +622,7 @@
             // Python snippet
             const pyCodeEl = document.querySelector('#python-content code');
             let pySnippet;
-
+            
             if (method === 'GET') {
                 // GET request (for /llm endpoint)
                 pySnippet = `import httpx\n\nasync def crawl():\n    async with httpx.AsyncClient() as client:\n        response = await client.get(\n            "${window.location.origin}${api}"\n        )\n        return response.json()`;
@@ -589,7 +638,7 @@
             // cURL snippet
             const curlCodeEl = document.querySelector('#curl-content code');
             let curlSnippet;
-
+            
             if (method === 'GET') {
                 // GET request (for /llm endpoint)
                 curlSnippet = `curl -X GET "${window.location.origin}${api}"`;
@@ -606,9 +655,12 @@
         // Detect if stream is requested inside payload
         function shouldUseStream(payload) {
             const toBool = (v) => v === true || (typeof v === 'string' && v.toLowerCase() === 'true');
-            const fromCrawler = payload && payload.crawler_config && payload.crawler_config.params && payload.crawler_config.params.stream;
+            // Successful /config/dump returns { type, params: { stream, ... } }
+            const fromCrawlerParams = payload && payload.crawler_config && payload.crawler_config.params && payload.crawler_config.params.stream;
+            // Fallback / minimal shapes may set stream at the crawler_config top level
+            const fromCrawlerTop = payload && payload.crawler_config && payload.crawler_config.stream;
             const direct = payload && payload.stream;
-            return toBool(fromCrawler) || toBool(direct);
+            return toBool(fromCrawlerParams) || toBool(fromCrawlerTop) || toBool(direct);
         }
 
         // Main run function
@@ -630,8 +682,8 @@
                 const streamFlag = /stream\s*=\s*True/i.test(codeText);
                 const isCrawlEndpoint = document.getElementById('endpoint').value === 'crawl';
                 if (isCrawlEndpoint && streamFlag) {
-                    // Fallback: proceed with minimal config only for stream
-                    advConfig = { crawler_config: { stream: true } };
+                    // Fallback: minimal dump-shaped config so shouldUseStream + server load agree
+                    advConfig = { crawler_config: { type: 'CrawlerRunConfig', params: { stream: true } } };
                 } else {
                     updateStatus('error');
                     document.querySelector('#response-content code').textContent =
@@ -650,14 +702,14 @@
 
             const api = endpointMap[endpoint];
             let payload;
-
+            
             // Create appropriate payload based on endpoint type
             if (endpoint === 'md') {
                 // Get values from the /md specific inputs
                 const filterType = document.getElementById('md-filter').value;
                 const query = document.getElementById('md-query').value.trim();
                 const cache = document.getElementById('md-cache').value;
-
+                
                 // MD endpoint expects: { url, f, q, c }
                 payload = {
                     url: urls[0], // Take first URL
@@ -690,8 +742,8 @@
                     const encodedUrl = encodeURIComponent(url);
                     // Get the question from the LLM-specific input
                     const question = document.getElementById('llm-question').value.trim() || "What is this page about?";
-
-                    response = await fetch(`${api}/${encodedUrl}?q=${encodeURIComponent(question)}`, {
+                    
+                    response = await authFetch(`${api}/${encodedUrl}?q=${encodeURIComponent(question)}`, {
                         method: 'GET',
                         headers: { 'Accept': 'application/json' }
                     });
@@ -707,7 +759,7 @@
                     forceHighlightElement(document.querySelector('#response-content code'));
                 } else if (endpoint === 'crawl_stream' || useStreamOverride) {
                     // Stream processing - now handled directly by /crawl endpoint
-                    response = await fetch(api, {
+                    response = await authFetch(api, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
@@ -746,7 +798,7 @@
                     forceHighlightElement(document.querySelector('#response-content code'));
                 } else {
                     // Regular request (handles /crawl and /md)
-                    response = await fetch(api, {
+                    response = await authFetch(api, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
@@ -773,7 +825,7 @@
                 }
 
                 forceHighlightElement(document.querySelector('#response-content code'));
-
+                
                 // For generateSnippets, handle the LLM case specially
                 if (endpoint === 'llm') {
                     const url = urls[0];
@@ -835,7 +887,7 @@
 
                 try {
                     if (useStream) {
-                        const response = await fetch(api, {
+                        const response = await authFetch(api, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload)
@@ -859,7 +911,7 @@
 
                         memory = maxMem;
                     } else {
-                        const response = await fetch(api, {
+                        const response = await authFetch(api, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload)
@@ -965,14 +1017,14 @@
                 });
             });
         }
-
+        
         // Function to initialize UI based on selected endpoint
         function initUI() {
             // Trigger the endpoint change handler to set initial UI state
             const endpointSelect = document.getElementById('endpoint');
             const event = new Event('change');
             endpointSelect.dispatchEvent(event);
-
+            
             // Initialize copy buttons
             initCopyButtons();
         }

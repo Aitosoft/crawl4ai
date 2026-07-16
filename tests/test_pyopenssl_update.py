@@ -25,7 +25,6 @@ def check_versions():
 
     try:
         import OpenSSL
-
         pyopenssl_version = OpenSSL.__version__
         print(f"✓ pyOpenSSL version: {pyopenssl_version}")
 
@@ -42,19 +41,14 @@ def check_versions():
 
     try:
         import cryptography
-
         crypto_version = cryptography.__version__
         print(f"✓ cryptography version: {crypto_version}")
 
         # Check cryptography >= 45.0.7 (above vulnerable range)
         if version.parse(crypto_version) >= version.parse("45.0.7"):
-            print(
-                f"  ✓ Security check passed: {crypto_version} >= 45.0.7 (not vulnerable)"
-            )
+            print(f"  ✓ Security check passed: {crypto_version} >= 45.0.7 (not vulnerable)")
         else:
-            print(
-                f"  ✗ Security check FAILED: {crypto_version} < 45.0.7 (potentially vulnerable)"
-            )
+            print(f"  ✗ Security check FAILED: {crypto_version} < 45.0.7 (potentially vulnerable)")
             return False
 
     except ImportError as e:
@@ -78,14 +72,15 @@ async def test_basic_crawl():
             # Test with a simple HTTPS site (requires SSL/TLS)
             print("Crawling example.com (HTTPS)...")
             result = await crawler.arun(
-                url="https://www.example.com", bypass_cache=True
+                url="https://www.example.com",
+                bypass_cache=True
             )
 
             if result.success:
-                print("✓ Crawl successful!")
+                print(f"✓ Crawl successful!")
                 print(f"  - Status code: {result.status_code}")
                 print(f"  - Content length: {len(result.html)} bytes")
-                print("  - SSL/TLS connection: ✓ Working")
+                print(f"  - SSL/TLS connection: ✓ Working")
                 return True
             else:
                 print(f"✗ Crawl failed: {result.error_message}")
@@ -94,7 +89,6 @@ async def test_basic_crawl():
     except Exception as e:
         print(f"✗ Test failed with error: {e}")
         import traceback
-
         traceback.print_exc()
         return False
 
@@ -109,17 +103,21 @@ async def test_stealth_mode():
         from crawl4ai import AsyncWebCrawler, BrowserConfig
 
         # Create browser config with stealth mode
-        browser_config = BrowserConfig(headless=True, verbose=False)
+        browser_config = BrowserConfig(
+            headless=True,
+            verbose=False
+        )
 
         async with AsyncWebCrawler(config=browser_config, verbose=True) as crawler:
             print("Crawling with stealth mode enabled...")
             result = await crawler.arun(
-                url="https://www.example.com", bypass_cache=True
+                url="https://www.example.com",
+                bypass_cache=True
             )
 
             if result.success:
-                print("✓ Stealth crawl successful!")
-                print("  - Stealth mode: ✓ Working")
+                print(f"✓ Stealth crawl successful!")
+                print(f"  - Stealth mode: ✓ Working")
                 return True
             else:
                 print(f"✗ Stealth crawl failed: {result.error_message}")
@@ -128,7 +126,6 @@ async def test_stealth_mode():
     except Exception as e:
         print(f"✗ Stealth test failed with error: {e}")
         import traceback
-
         traceback.print_exc()
         return False
 
@@ -183,6 +180,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n✗ Unexpected error: {e}")
         import traceback
-
         traceback.print_exc()
         sys.exit(1)

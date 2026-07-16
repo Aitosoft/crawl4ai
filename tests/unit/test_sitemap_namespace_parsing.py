@@ -3,7 +3,6 @@ from types import SimpleNamespace
 
 import pytest
 
-
 # Provide a lightweight stub for rank_bm25 before importing the seeder to avoid
 # optional dependency issues (e.g., incompatible wheels in CI).
 class _FakeBM25:
@@ -56,9 +55,7 @@ async def test_iter_sitemap_handles_namespace_less_sitemaps():
         <url><loc>https://example.com/b</loc></url>
     </urlset>
     """
-    seeder = AsyncUrlSeeder(
-        client=DummyAsyncClient({"https://example.com/sitemap.xml": xml})
-    )
+    seeder = AsyncUrlSeeder(client=DummyAsyncClient({"https://example.com/sitemap.xml": xml}))
 
     urls = []
     async for u in seeder._iter_sitemap("https://example.com/sitemap.xml"):
@@ -74,9 +71,7 @@ async def test_iter_sitemap_handles_custom_namespace():
         <url><loc>https://example.com/ns</loc></url>
     </urlset>
     """
-    seeder = AsyncUrlSeeder(
-        client=DummyAsyncClient({"https://example.com/ns-sitemap.xml": xml})
-    )
+    seeder = AsyncUrlSeeder(client=DummyAsyncClient({"https://example.com/ns-sitemap.xml": xml}))
 
     urls = []
     async for u in seeder._iter_sitemap("https://example.com/ns-sitemap.xml"):
@@ -127,9 +122,7 @@ async def test_iter_sitemap_normalizes_relative_locations():
         <url><loc>https://example.com/absolute</loc></url>
     </urlset>
     """
-    seeder = AsyncUrlSeeder(
-        client=DummyAsyncClient({"https://example.com/sitemap.xml": xml})
-    )
+    seeder = AsyncUrlSeeder(client=DummyAsyncClient({"https://example.com/sitemap.xml": xml}))
 
     urls = []
     async for u in seeder._iter_sitemap("https://example.com/sitemap.xml"):

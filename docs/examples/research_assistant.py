@@ -138,7 +138,7 @@ async def on_audio_chunk(chunk: cl.AudioChunk):
 
 @cl.step(type="tool")
 async def speech_to_text(audio_file):
-    Groq()
+    cli = Groq()
 
     response = await client.audio.transcriptions.create(
         model="whisper-large-v3", file=audio_file

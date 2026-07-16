@@ -59,10 +59,10 @@ Pull and run images directly from Docker Hub without building locally.
 
 #### 1. Pull the Image
 
-Our latest stable release is `0.8.6`. Images are built with multi-arch manifests, so Docker automatically pulls the correct version for your system.
+Our latest stable release is `0.9.2`. Images are built with multi-arch manifests, so Docker automatically pulls the correct version for your system.
 
 ```bash
-# Pull the latest stable version (0.8.6)
+# Pull the latest stable version (0.9.2)
 docker pull unclecode/crawl4ai:0.8.6
 
 # Or use the latest tag
@@ -198,7 +198,7 @@ The `docker-compose.yml` file in the project root provides a simplified approach
     ```bash
     # Build with all features (includes torch and transformers)
     INSTALL_TYPE=all docker compose up --build -d
-
+    
     # Build with GPU support (for AMD64 platforms)
     ENABLE_GPU=true docker compose up --build -d
     ```

@@ -23,10 +23,10 @@ PROVIDER_MODELS = {
     "anthropic/claude-3-sonnet-20240229": os.getenv("ANTHROPIC_API_KEY"),
     "anthropic/claude-3-5-sonnet-20240620": os.getenv("ANTHROPIC_API_KEY"),
     "gemini/gemini-pro": os.getenv("GEMINI_API_KEY"),
-    "gemini/gemini-1.5-pro": os.getenv("GEMINI_API_KEY"),
-    "gemini/gemini-2.0-flash": os.getenv("GEMINI_API_KEY"),
-    "gemini/gemini-2.0-flash-exp": os.getenv("GEMINI_API_KEY"),
-    "gemini/gemini-2.0-flash-lite-preview-02-05": os.getenv("GEMINI_API_KEY"),
+    'gemini/gemini-1.5-pro': os.getenv("GEMINI_API_KEY"),
+    'gemini/gemini-2.0-flash': os.getenv("GEMINI_API_KEY"),
+    'gemini/gemini-2.0-flash-exp': os.getenv("GEMINI_API_KEY"),
+    'gemini/gemini-2.0-flash-lite-preview-02-05': os.getenv("GEMINI_API_KEY"),
     "deepseek/deepseek-chat": os.getenv("DEEPSEEK_API_KEY"),
 }
 PROVIDER_MODELS_PREFIXES = {
@@ -36,6 +36,7 @@ PROVIDER_MODELS_PREFIXES = {
     "anthropic": os.getenv("ANTHROPIC_API_KEY"),
     "gemini": os.getenv("GEMINI_API_KEY"),
     "deepseek": os.getenv("DEEPSEEK_API_KEY"),
+    "bedrock": None,  # Bedrock uses AWS credential chain (SigV4) or explicit api_token for bearer auth
 }
 
 # Chunk token threshold
@@ -47,7 +48,7 @@ WORD_TOKEN_RATE = 1.3
 MIN_WORD_THRESHOLD = 1
 IMAGE_DESCRIPTION_MIN_WORD_THRESHOLD = 1
 
-IMPORTANT_ATTRS = ["src", "href", "alt", "title", "width", "height", "class", "id"]
+IMPORTANT_ATTRS = ["src", "href", "alt", "title", "width", "height", "class", "id", "rowspan", "colspan"]
 ONLY_TEXT_ELIGIBLE_TAGS = [
     "b",
     "i",
@@ -110,45 +111,45 @@ USER_SETTINGS = {
     "DEFAULT_LLM_PROVIDER": {
         "default": "openai/gpt-4o",
         "description": "Default LLM provider in 'company/model' format (e.g., 'openai/gpt-4o', 'anthropic/claude-3-sonnet')",
-        "type": "string",
+        "type": "string"
     },
     "DEFAULT_LLM_PROVIDER_TOKEN": {
         "default": "",
         "description": "API token for the default LLM provider",
         "type": "string",
-        "secret": True,
+        "secret": True
     },
     "VERBOSE": {
         "default": False,
         "description": "Enable verbose output for all commands",
-        "type": "boolean",
+        "type": "boolean"
     },
     "BROWSER_HEADLESS": {
         "default": True,
         "description": "Run browser in headless mode by default",
-        "type": "boolean",
+        "type": "boolean"
     },
     "BROWSER_TYPE": {
         "default": "chromium",
         "description": "Default browser type (chromium or firefox)",
         "type": "string",
-        "options": ["chromium", "firefox"],
+        "options": ["chromium", "firefox"]
     },
     "CACHE_MODE": {
         "default": "bypass",
         "description": "Default cache mode (bypass, use, or refresh)",
         "type": "string",
-        "options": ["bypass", "use", "refresh"],
+        "options": ["bypass", "use", "refresh"]
     },
     "USER_AGENT_MODE": {
         "default": "default",
         "description": "Default user agent mode (default, random, or mobile)",
         "type": "string",
-        "options": ["default", "random", "mobile"],
+        "options": ["default", "random", "mobile"]
     },
     "JSON_ENSURE_ASCII": {
         "default": True,
         "description": "Whether to escape non-ASCII characters in JSON output (False preserves Unicode like 'š', True escapes as '\\u0161')",
-        "type": "boolean",
-    },
+        "type": "boolean"
+    }
 }

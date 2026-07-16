@@ -15,7 +15,7 @@ import pytest
 
 from crawl4ai import AsyncWebCrawler
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
-from crawl4ai.browser_manager import _CDPConnectionCache
+from crawl4ai.browser_manager import _CDPConnectionCache, BrowserManager
 
 CDP_URL = "http://localhost:9222"
 TEST_URL = "https://example.com"
@@ -24,7 +24,6 @@ TEST_URL = "https://example.com"
 # ---------------------------------------------------------------------------
 #  Helpers
 # ---------------------------------------------------------------------------
-
 
 async def _quick_crawl(browser_cfg: BrowserConfig, url: str = TEST_URL) -> bool:
     """Run a single crawl, return True if the page loaded successfully."""
@@ -41,7 +40,6 @@ async def _quick_crawl(browser_cfg: BrowserConfig, url: str = TEST_URL) -> bool:
 # ===========================================================================
 #  SUITE 1 — REGRESSION (default behaviour, no new flags)
 # ===========================================================================
-
 
 class TestRegression:
     """Verify nothing is broken when the new parameters keep their defaults."""
@@ -94,15 +92,12 @@ class TestRegression:
             await crawler.arun(url=TEST_URL, config=run_cfg)
         elapsed = time.monotonic() - t0
         # The 1s sleep must be present (at least ~0.9s of close overhead)
-        assert (
-            elapsed >= 0.9
-        ), f"Close was too fast ({elapsed:.2f}s), sleep may be missing"
+        assert elapsed >= 0.9, f"Close was too fast ({elapsed:.2f}s), sleep may be missing"
 
 
 # ===========================================================================
 #  SUITE 2 — STRESS (cache, parallelism, race conditions, locking)
 # ===========================================================================
-
 
 class TestStress:
     """Hammer the CDP cache and configurable delay under pressure."""
@@ -178,9 +173,7 @@ class TestStress:
         async with AsyncWebCrawler(config=cfg) as crawler:
             r1 = await crawler.arun(
                 url=TEST_URL,
-                config=CrawlerRunConfig(
-                    wait_until="domcontentloaded", page_timeout=15000, verbose=False
-                ),
+                config=CrawlerRunConfig(wait_until="domcontentloaded", page_timeout=15000, verbose=False),
             )
         assert r1.success
 
@@ -191,9 +184,7 @@ class TestStress:
         async with AsyncWebCrawler(config=cfg) as crawler:
             r2 = await crawler.arun(
                 url=TEST_URL,
-                config=CrawlerRunConfig(
-                    wait_until="domcontentloaded", page_timeout=15000, verbose=False
-                ),
+                config=CrawlerRunConfig(wait_until="domcontentloaded", page_timeout=15000, verbose=False),
             )
         assert r2.success
 
@@ -307,9 +298,9 @@ class TestStress:
         await _CDPConnectionCache.close_all()
 
         # Cached should be faster (the uncached has 2x 0.5s delay alone)
-        assert (
-            cached_time < uncached_time
-        ), f"Cached ({cached_time:.2f}s) was not faster than uncached ({uncached_time:.2f}s)"
+        assert cached_time < uncached_time, (
+            f"Cached ({cached_time:.2f}s) was not faster than uncached ({uncached_time:.2f}s)"
+        )
 
     # -- parallel stress -----------------------------------------------------
 
@@ -355,10 +346,8 @@ class TestStress:
 
         async def crawl_cached():
             cfg = BrowserConfig(
-                cdp_url=CDP_URL,
-                headless=True,
-                cache_cdp_connection=True,
-                create_isolated_context=True,
+                cdp_url=CDP_URL, headless=True,
+                cache_cdp_connection=True, create_isolated_context=True,
             )
             async with AsyncWebCrawler(config=cfg) as crawler:
                 r = await crawler.arun(url=TEST_URL, config=run_cfg)
@@ -366,8 +355,7 @@ class TestStress:
 
         async def crawl_uncached():
             cfg = BrowserConfig(
-                cdp_url=CDP_URL,
-                headless=True,
+                cdp_url=CDP_URL, headless=True,
                 create_isolated_context=True,
             )
             async with AsyncWebCrawler(config=cfg) as crawler:
@@ -413,9 +401,7 @@ class TestStress:
         async with AsyncWebCrawler(config=cfg) as crawler:
             r = await crawler.arun(
                 url=TEST_URL,
-                config=CrawlerRunConfig(
-                    wait_until="domcontentloaded", page_timeout=15000, verbose=False
-                ),
+                config=CrawlerRunConfig(wait_until="domcontentloaded", page_timeout=15000, verbose=False),
             )
             assert r.success
 
@@ -513,9 +499,7 @@ class TestStress:
         async with AsyncWebCrawler(config=cfg) as crawler:
             r = await crawler.arun(
                 url=TEST_URL,
-                config=CrawlerRunConfig(
-                    wait_until="domcontentloaded", page_timeout=15000, verbose=False
-                ),
+                config=CrawlerRunConfig(wait_until="domcontentloaded", page_timeout=15000, verbose=False),
             )
             assert r.success
 

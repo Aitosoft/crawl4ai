@@ -1,0 +1,42 @@
+{
+  "webdriver": null,
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+  "platform": "Win32",
+  "vendor": "Google Inc.",
+  "languages": [
+    "en-US",
+    "en"
+  ],
+  "language": "en-US",
+  "pluginsLen": 5,
+  "mimeTypesLen": 2,
+  "hardwareConcurrency": 4,
+  "deviceMemory": 16,
+  "maxTouchPoints": 0,
+  "timezone": "UTC",
+  "locale": "en-US",
+  "screen": {
+    "width": 1920,
+    "height": 1080,
+    "availWidth": 1920,
+    "availHeight": 1080,
+    "colorDepth": 24,
+    "pixelDepth": 24
+  },
+  "window": {
+    "innerWidth": 1920,
+    "innerHeight": 1080,
+    "outerWidth": 1920,
+    "outerHeight": 1080,
+    "devicePixelRatio": 1
+  },
+  "chromeRuntime": false,
+  "chromeLoadTimes": true,
+  "permissionsQuery": true,
+  "notificationPermission": "default",
+  "webglVendor": "Intel Inc.",
+  "webglRenderer": "Intel Iris OpenGL Engine",
+  "canvasFp": "JEbgnFjZQOAnAAAA//9KwcP7AAAABklEQVQDAMayGdA+TYsGAAAAAElFTkSuQmCC",
+  "audioContext": true,
+  "iframeContentWindow": true
+}

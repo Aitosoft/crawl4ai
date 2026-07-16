@@ -5,6 +5,7 @@ Covers extract_xml_data, URL normalization, CacheContext/CacheMode,
 sanitize_input_encode, content hashing, and image scoring.
 """
 
+import pytest
 
 from crawl4ai.utils import (
     extract_xml_data,
@@ -21,7 +22,6 @@ from crawl4ai.cache_context import CacheContext, CacheMode
 # ===================================================================
 # extract_xml_data
 # ===================================================================
-
 
 class TestExtractXmlData:
     """Verify extract_xml_data correctly parses tag content from strings."""
@@ -116,7 +116,6 @@ class TestExtractXmlDataLegacy:
 # ===================================================================
 # URL normalization
 # ===================================================================
-
 
 class TestNormalizeUrl:
     """Verify normalize_url handles various URL edge cases."""
@@ -294,14 +293,15 @@ class TestEfficientNormalizeUrlForDeepCrawl:
 
     def test_relative_url_resolution(self):
         """Relative URLs should be resolved correctly."""
-        result = efficient_normalize_url_for_deep_crawl("child", "http://x.com/parent/")
+        result = efficient_normalize_url_for_deep_crawl(
+            "child", "http://x.com/parent/"
+        )
         assert result == "http://x.com/parent/child"
 
 
 # ===================================================================
 # CacheContext / CacheMode
 # ===================================================================
-
 
 class TestCacheMode:
     """Verify CacheContext behavior for each CacheMode."""
@@ -386,7 +386,6 @@ class TestCacheMode:
 # sanitize_input_encode
 # ===================================================================
 
-
 class TestSanitizeInputEncode:
     """Verify sanitize_input_encode handles encoding edge cases."""
 
@@ -425,7 +424,6 @@ class TestSanitizeInputEncode:
 # ===================================================================
 # Content hashing
 # ===================================================================
-
 
 class TestGenerateContentHash:
     """Verify generate_content_hash produces consistent results."""
@@ -483,7 +481,6 @@ class TestGenerateContentHash:
 # Image scoring (import-guarded)
 # ===================================================================
 
-
 class TestImageScoring:
     """Test image scoring logic if available.
 
@@ -495,11 +492,9 @@ class TestImageScoring:
     def test_image_score_threshold_exists(self):
         """IMAGE_SCORE_THRESHOLD config constant should exist."""
         from crawl4ai.config import IMAGE_SCORE_THRESHOLD
-
         assert isinstance(IMAGE_SCORE_THRESHOLD, (int, float))
 
     def test_image_description_threshold_exists(self):
         """IMAGE_DESCRIPTION_MIN_WORD_THRESHOLD should exist."""
         from crawl4ai.config import IMAGE_DESCRIPTION_MIN_WORD_THRESHOLD
-
         assert isinstance(IMAGE_DESCRIPTION_MIN_WORD_THRESHOLD, (int, float))

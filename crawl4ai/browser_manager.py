@@ -5,7 +5,7 @@ import os
 import sys
 import shutil
 import tempfile
-import psutil
+import psutil  
 import signal
 import subprocess
 import shlex
@@ -65,7 +65,7 @@ class ManagedBrowser:
             _cleanup(): Terminates the browser process and removes the temporary directory.
             create_profile(): Static method to create a user profile by launching a browser for user interaction.
     """
-
+    
     @staticmethod
     def build_browser_flags(config: BrowserConfig) -> List[str]:
         """Common CLI flags for launching Chromium"""
@@ -93,33 +93,27 @@ class ManagedBrowser:
         # GPU flags disable WebGL which anti-bot sensors detect as headless.
         # Keep WebGL working (via SwiftShader) when stealth mode is active.
         if not config.enable_stealth:
-            flags.extend(
-                [
-                    "--disable-gpu",
-                    "--disable-gpu-compositing",
-                    "--disable-software-rasterizer",
-                ]
-            )
+            flags.extend([
+                "--disable-gpu",
+                "--disable-gpu-compositing",
+                "--disable-software-rasterizer",
+            ])
         if config.memory_saving_mode:
-            flags.extend(
-                [
-                    "--aggressive-cache-discard",
-                    "--js-flags=--max-old-space-size=512",
-                ]
-            )
+            flags.extend([
+                "--aggressive-cache-discard",
+                '--js-flags=--max-old-space-size=512',
+            ])
         if config.light_mode:
             flags.extend(BROWSER_DISABLE_OPTIONS)
         if config.text_mode:
-            flags.extend(
-                [
-                    "--blink-settings=imagesEnabled=false",
-                    "--disable-remote-fonts",
-                    "--disable-images",
-                    "--disable-javascript",
-                    "--disable-software-rasterizer",
-                    "--disable-dev-shm-usage",
-                ]
-            )
+            flags.extend([
+                "--blink-settings=imagesEnabled=false",
+                "--disable-remote-fonts",
+                "--disable-images",
+                "--disable-javascript",
+                "--disable-software-rasterizer",
+                "--disable-dev-shm-usage",
+            ])
         # proxy support — only pass server URL, never credentials.
         # Chromium's --proxy-server flag silently ignores inline user:pass@.
         # Auth credentials are handled at the Playwright context level instead.
@@ -146,7 +140,7 @@ class ManagedBrowser:
         logger=None,
         host: str = "localhost",
         debugging_port: int = 9222,
-        cdp_url: Optional[str] = None,
+        cdp_url: Optional[str] = None, 
         browser_config: Optional[BrowserConfig] = None,
     ):
         """
@@ -182,7 +176,7 @@ class ManagedBrowser:
         Starts the browser process or returns CDP endpoint URL.
         If cdp_url is provided, returns it directly.
         If user_data_dir is not provided for local browser, creates a temporary directory.
-
+        
         Returns:
             str: CDP endpoint URL
         """
@@ -198,9 +192,10 @@ class ManagedBrowser:
         # Get browser path and args based on OS and browser type
         # browser_path = self._get_browser_path()
         args = await self._get_browser_args()
-
+        
         if self.browser_config.extra_args:
             args.extend(self.browser_config.extra_args)
+            
 
         # ── make sure no old Chromium instance is owning the same port/profile ──
         try:
@@ -243,7 +238,8 @@ class ManagedBrowser:
                         os.remove(fp)
         except Exception as _e:
             # non-fatal — we'll try to start anyway, but log what happened
-            self.logger.warning(f"pre-launch cleanup failed: {_e}", tag="BROWSER")
+            self.logger.warning(f"pre-launch cleanup failed: {_e}", tag="BROWSER")            
+            
 
         # Start browser process
         try:
@@ -251,26 +247,26 @@ class ManagedBrowser:
             # On Unix, we'll use preexec_fn=os.setpgrp to start the process in a new process group
             if sys.platform == "win32":
                 self.browser_process = subprocess.Popen(
-                    args,
-                    stdout=subprocess.PIPE,
+                    args, 
+                    stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE,
-                    creationflags=subprocess.DETACHED_PROCESS
-                    | subprocess.CREATE_NEW_PROCESS_GROUP,
+                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
                 )
             else:
                 self.browser_process = subprocess.Popen(
-                    args,
-                    stdout=subprocess.PIPE,
+                    args, 
+                    stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE,
-                    preexec_fn=os.setpgrp,  # Start in a new process group
+                    preexec_fn=os.setpgrp  # Start in a new process group
                 )
-
+                
             # If verbose is True print args used to run the process
             if self.logger and self.browser_config.verbose:
                 self.logger.debug(
-                    f"Starting browser with args: {' '.join(args)}", tag="BROWSER"
-                )
-
+                    f"Starting browser with args: {' '.join(args)}",
+                    tag="BROWSER"
+                )    
+                
             # We'll monitor for a short time to make sure it starts properly, but won't keep monitoring
             await asyncio.sleep(0.5)  # Give browser time to start
             await self._initial_startup_check()
@@ -287,7 +283,7 @@ class ManagedBrowser:
         """
         if not self.browser_process:
             return
-
+            
         # Check that process started without immediate termination
         await asyncio.sleep(0.5)
         if self.browser_process.poll() is not None:
@@ -297,7 +293,7 @@ class ManagedBrowser:
                 stdout, stderr = self.browser_process.communicate(timeout=0.5)
             except subprocess.TimeoutExpired:
                 pass
-
+                
             self.logger.error(
                 message="Browser process terminated during startup | Code: {code} | STDOUT: {stdout} | STDERR: {stderr}",
                 tag="ERROR",
@@ -307,7 +303,7 @@ class ManagedBrowser:
                     "stderr": stderr.decode() if stderr else "",
                 },
             )
-
+    
     async def _monitor_browser_process(self):
         """
         Monitor the browser process for unexpected termination.
@@ -393,13 +389,8 @@ class ManagedBrowser:
             if self.headless:
                 flags.append("--headless=new")
             # Add viewport flag if specified in config
-            if (
-                self.browser_config.viewport_height
-                and self.browser_config.viewport_width
-            ):
-                flags.append(
-                    f"--window-size={self.browser_config.viewport_width},{self.browser_config.viewport_height}"
-                )
+            if self.browser_config.viewport_height and self.browser_config.viewport_width:
+                flags.append(f"--window-size={self.browser_config.viewport_width},{self.browser_config.viewport_height}")
             # merge common launch flags
             flags.extend(self.build_browser_flags(self.browser_config))
         elif self.browser_type == "firefox":
@@ -438,23 +429,13 @@ class ManagedBrowser:
                         if sys.platform == "win32":
                             # On Windows, use taskkill /T to kill the entire process tree
                             try:
-                                subprocess.run(
-                                    [
-                                        "taskkill",
-                                        "/F",
-                                        "/T",
-                                        "/PID",
-                                        str(self.browser_process.pid),
-                                    ]
-                                )
+                                subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.browser_process.pid)])
                             except Exception:
                                 self.browser_process.kill()
                         else:
                             # On Unix, kill entire process group to reap child processes
                             try:
-                                os.killpg(
-                                    os.getpgid(self.browser_process.pid), signal.SIGKILL
-                                )
+                                os.killpg(os.getpgid(self.browser_process.pid), signal.SIGKILL)
                             except (ProcessLookupError, OSError):
                                 pass
                         await asyncio.sleep(0.1)  # Brief wait for kill to take effect
@@ -462,7 +443,7 @@ class ManagedBrowser:
             except Exception as e:
                 self.logger.error(
                     message="Error terminating browser: {error}",
-                    tag="ERROR",
+                    tag="ERROR", 
                     params={"error": str(e)},
                 )
 
@@ -475,77 +456,75 @@ class ManagedBrowser:
                     tag="ERROR",
                     params={"error": str(e)},
                 )
-
+                
     # These methods have been moved to BrowserProfiler class
     @staticmethod
     async def create_profile(browser_config=None, profile_name=None, logger=None):
         """
         This method has been moved to the BrowserProfiler class.
-
+        
         Creates a browser profile by launching a browser for interactive user setup
         and waits until the user closes it. The profile is stored in a directory that
         can be used later with BrowserConfig.user_data_dir.
-
+        
         Please use BrowserProfiler.create_profile() instead.
-
+        
         Example:
             ```python
             from crawl4ai.browser_profiler import BrowserProfiler
-
+            
             profiler = BrowserProfiler()
             profile_path = await profiler.create_profile(profile_name="my-login-profile")
             ```
         """
         from .browser_profiler import BrowserProfiler
-
+        
         # Create a BrowserProfiler instance and delegate to it
         profiler = BrowserProfiler(logger=logger)
-        return await profiler.create_profile(
-            profile_name=profile_name, browser_config=browser_config
-        )
-
+        return await profiler.create_profile(profile_name=profile_name, browser_config=browser_config)
+    
     @staticmethod
     def list_profiles():
         """
         This method has been moved to the BrowserProfiler class.
-
+        
         Lists all available browser profiles in the Crawl4AI profiles directory.
-
+        
         Please use BrowserProfiler.list_profiles() instead.
-
+        
         Example:
             ```python
             from crawl4ai.browser_profiler import BrowserProfiler
-
+            
             profiler = BrowserProfiler()
             profiles = profiler.list_profiles()
             ```
         """
         from .browser_profiler import BrowserProfiler
-
+        
         # Create a BrowserProfiler instance and delegate to it
         profiler = BrowserProfiler()
         return profiler.list_profiles()
-
+        
     @staticmethod
     def delete_profile(profile_name_or_path):
         """
         This method has been moved to the BrowserProfiler class.
-
+        
         Delete a browser profile by name or path.
-
+        
         Please use BrowserProfiler.delete_profile() instead.
-
+        
         Example:
             ```python
             from crawl4ai.browser_profiler import BrowserProfiler
-
+            
             profiler = BrowserProfiler()
             success = profiler.delete_profile("my-profile")
             ```
         """
         from .browser_profiler import BrowserProfiler
-
+        
         # Create a BrowserProfiler instance and delegate to it
         profiler = BrowserProfiler()
         return profiler.delete_profile(profile_name_or_path)
@@ -598,8 +577,9 @@ async def clone_runtime_state(
                 "accuracy": crawlerRunConfig.geolocation.accuracy,
             }
         )
-
+        
     return dst
+
 
 
 class _CDPConnectionCache:
@@ -724,11 +704,9 @@ class BrowserManager:
         else:
             from playwright.async_api import async_playwright
         cls._playwright_instance = await async_playwright().start()
-        return cls._playwright_instance
+        return cls._playwright_instance    
 
-    def __init__(
-        self, browser_config: BrowserConfig, logger=None, use_undetected: bool = False
-    ):
+    def __init__(self, browser_config: BrowserConfig, logger=None, use_undetected: bool = False):
         """
         Initialize the BrowserManager with a browser configuration.
 
@@ -758,10 +736,10 @@ class BrowserManager:
         self._contexts_lock = asyncio.Lock()
 
         # Context lifecycle tracking for LRU eviction
-        self._context_refcounts = {}  # sig -> int  (active crawls using this context)
-        self._context_last_used = {}  # sig -> float (monotonic timestamp for LRU)
-        self._page_to_sig = {}  # page -> sig  (for decrement lookup on release)
-        self._max_contexts = 20  # LRU eviction threshold
+        self._context_refcounts = {}    # sig -> int  (active crawls using this context)
+        self._context_last_used = {}    # sig -> float (monotonic timestamp for LRU)
+        self._page_to_sig = {}          # page -> sig  (for decrement lookup on release)
+        self._max_contexts = 20         # LRU eviction threshold
 
         # Serialize context.new_page() across concurrent tasks to avoid races
         # when using a shared persistent context (context.pages may be empty
@@ -774,9 +752,7 @@ class BrowserManager:
         # Browser recycling state (version-based approach)
         self._pages_served = 0
         self._browser_version = 1  # included in signature, bump to create new browser
-        self._pending_cleanup = (
-            {}
-        )  # old_sig -> {"browser": browser, "contexts": [...], "done": Event}
+        self._pending_cleanup = {}  # old_sig -> {"browser": browser, "contexts": [...], "done": Event}
         self._pending_cleanup_lock = asyncio.Lock()
         self._max_pending_browsers = 3  # safety cap — block if too many draining
         self._cleanup_slot_available = asyncio.Event()
@@ -786,7 +762,6 @@ class BrowserManager:
         self._stealth_adapter = None
         if self.config.enable_stealth and not self.use_undetected:
             from .browser_adapter import StealthAdapter
-
             self._stealth_adapter = StealthAdapter()
 
         # Initialize ManagedBrowser if needed
@@ -907,17 +882,11 @@ class BrowserManager:
             self.config.use_managed_browser = True
 
             if not self._using_cached_cdp:
-                cdp_url = (
-                    await self.managed_browser.start()
-                    if not self.config.cdp_url
-                    else self.config.cdp_url
-                )
+                cdp_url = await self.managed_browser.start() if not self.config.cdp_url else self.config.cdp_url
 
                 # Add CDP endpoint verification before connecting
                 if not await self._verify_cdp_ready(cdp_url):
-                    raise Exception(
-                        f"CDP endpoint at {cdp_url} is not ready after startup"
-                    )
+                    raise Exception(f"CDP endpoint at {cdp_url} is not ready after startup")
 
                 self.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
 
@@ -928,7 +897,7 @@ class BrowserManager:
                 if self.logger:
                     self.logger.debug(
                         f"Using pre-existing browser context: {self.config.browser_context_id}",
-                        tag="BROWSER",
+                        tag="BROWSER"
                     )
                 # When connecting to a pre-created context, it should be in contexts
                 if contexts:
@@ -936,7 +905,7 @@ class BrowserManager:
                     if self.logger:
                         self.logger.debug(
                             f"Found {len(contexts)} existing context(s), using first one",
-                            tag="BROWSER",
+                            tag="BROWSER"
                         )
                 else:
                     # Context was created but not yet visible - wait a bit
@@ -949,7 +918,7 @@ class BrowserManager:
                         if self.logger:
                             self.logger.warning(
                                 "Pre-created context not found, creating new one",
-                                tag="BROWSER",
+                                tag="BROWSER"
                             )
                         self.default_context = await self.create_browser_context()
             elif contexts:
@@ -994,8 +963,8 @@ class BrowserManager:
         # For managed browsers, use the CDP URL/port that was assigned
         if self.managed_browser:
             # Use debugging port as the key since it uniquely identifies the browser
-            port = getattr(self.managed_browser, "debugging_port", None)
-            host = getattr(self.managed_browser, "host", "localhost")
+            port = getattr(self.managed_browser, 'debugging_port', None)
+            host = getattr(self.managed_browser, 'host', 'localhost')
             if port:
                 return f"cdp:http://{host}:{port}"
 
@@ -1017,17 +986,14 @@ class BrowserManager:
         from urllib.parse import urlparse
 
         parsed = urlparse(cdp_url)
-        host = parsed.hostname or "localhost"
+        host = parsed.hostname or 'localhost'
         port = parsed.port or 9222
 
         return f"cdp:http://{host}:{port}"
 
     def _get_pages_in_use(self) -> set:
         """Get the set of pages currently in use for this browser."""
-        if (
-            self._browser_endpoint_key
-            and self._browser_endpoint_key in BrowserManager._global_pages_in_use
-        ):
+        if self._browser_endpoint_key and self._browser_endpoint_key in BrowserManager._global_pages_in_use:
             return BrowserManager._global_pages_in_use[self._browser_endpoint_key]
         # Fallback: shouldn't happen, but return empty set
         return set()
@@ -1041,13 +1007,8 @@ class BrowserManager:
 
     def _release_page_from_use(self, page) -> None:
         """Release a page from the in-use tracking."""
-        if (
-            self._browser_endpoint_key
-            and self._browser_endpoint_key in BrowserManager._global_pages_in_use
-        ):
-            BrowserManager._global_pages_in_use[self._browser_endpoint_key].discard(
-                page
-            )
+        if self._browser_endpoint_key and self._browser_endpoint_key in BrowserManager._global_pages_in_use:
+            BrowserManager._global_pages_in_use[self._browser_endpoint_key].discard(page)
 
     async def _verify_cdp_ready(self, cdp_url: str) -> bool:
         """Verify CDP endpoint is ready with exponential backoff.
@@ -1061,63 +1022,40 @@ class BrowserManager:
         from urllib.parse import urlparse, urlunparse
 
         # If WebSocket URL, Playwright handles connection directly - skip HTTP verification
-        if cdp_url.startswith(("ws://", "wss://")):
-            self.logger.debug(
-                "WebSocket CDP URL provided, skipping HTTP verification", tag="BROWSER"
-            )
+        if cdp_url.startswith(('ws://', 'wss://')):
+            self.logger.debug(f"WebSocket CDP URL provided, skipping HTTP verification", tag="BROWSER")
             return True
 
         # Parse HTTP URL and properly construct /json/version endpoint
         parsed = urlparse(cdp_url)
         # Build URL with /json/version path, preserving query params
-        verify_url = urlunparse(
-            (
-                parsed.scheme,
-                parsed.netloc,
-                "/json/version",  # Always use this path for verification
-                "",  # params
-                parsed.query,  # preserve query string
-                "",  # fragment
-            )
-        )
+        verify_url = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            '/json/version',  # Always use this path for verification
+            '',  # params
+            parsed.query,  # preserve query string
+            ''   # fragment
+        ))
 
         self.logger.debug(f"Starting CDP verification for {verify_url}", tag="BROWSER")
         for attempt in range(5):
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        verify_url, timeout=aiohttp.ClientTimeout(total=2)
-                    ) as response:
+                    async with session.get(verify_url, timeout=aiohttp.ClientTimeout(total=2)) as response:
                         if response.status == 200:
-                            self.logger.debug(
-                                f"CDP endpoint ready after {attempt + 1} attempts",
-                                tag="BROWSER",
-                            )
+                            self.logger.debug(f"CDP endpoint ready after {attempt + 1} attempts", tag="BROWSER")
                             return True
             except Exception as e:
-                self.logger.debug(
-                    f"CDP check attempt {attempt + 1} failed: {e}", tag="BROWSER"
-                )
-            delay = 0.5 * (1.4**attempt)
-            self.logger.debug(
-                f"Waiting {delay:.2f}s before next CDP check...", tag="BROWSER"
-            )
+                self.logger.debug(f"CDP check attempt {attempt + 1} failed: {e}", tag="BROWSER")
+            delay = 0.5 * (1.4 ** attempt)
+            self.logger.debug(f"Waiting {delay:.2f}s before next CDP check...", tag="BROWSER")
             await asyncio.sleep(delay)
-        self.logger.debug("CDP verification failed after 5 attempts", tag="BROWSER")
+        self.logger.debug(f"CDP verification failed after 5 attempts", tag="BROWSER")
         return False
 
     def _build_browser_args(self) -> dict:
-        """Build browser launch arguments from config.
-
-        Aitosoft 2026-04-11: `--disable-gpu` / `--disable-gpu-compositing` /
-        `--disable-software-rasterizer` moved out of the hardcoded list into a
-        conditional `if not enable_stealth` block. The sibling `build_browser_flags`
-        method (static, line ~69) already gates these flags the same way; this
-        method had drifted out of sync. Keeping them on unconditionally kills
-        WebGL in headless mode, which is one of the loudest anti-bot signals
-        Cloudflare scores against. When stealth is enabled we want WebGL via
-        SwiftShader so the fingerprint looks real.
-        """
+        """Build browser launch arguments from config."""
         args = [
             "--no-sandbox",
             "--disable-dev-shm-usage",
@@ -1142,24 +1080,22 @@ class BrowserManager:
             f"--window-size={self.config.viewport_width},{self.config.viewport_height}",
         ]
 
-        # GPU flags kill WebGL which anti-bot sensors detect as headless.
-        # Keep WebGL working (via SwiftShader) when stealth mode is active.
+        # Aitosoft (pending upstream PR): keep WebGL alive in stealth mode.
+        # Same gating as build_browser_flags() above — GPU flags disable WebGL,
+        # which anti-bot sensors score as a headless signal. SwiftShader keeps
+        # rendering on CPU when stealth is active.
         if not self.config.enable_stealth:
-            args.extend(
-                [
-                    "--disable-gpu",
-                    "--disable-gpu-compositing",
-                    "--disable-software-rasterizer",
-                ]
-            )
+            args.extend([
+                "--disable-gpu",
+                "--disable-gpu-compositing",
+                "--disable-software-rasterizer",
+            ])
 
         if self.config.memory_saving_mode:
-            args.extend(
-                [
-                    "--aggressive-cache-discard",
-                    "--js-flags=--max-old-space-size=512",
-                ]
-            )
+            args.extend([
+                "--aggressive-cache-discard",
+                '--js-flags=--max-old-space-size=512',
+            ])
 
         if self.config.light_mode:
             args.extend(BROWSER_DISABLE_OPTIONS)
@@ -1181,10 +1117,14 @@ class BrowserManager:
 
         # Deduplicate args
         args = list(dict.fromkeys(args))
-
+        
         browser_args = {"headless": self.config.headless, "args": args}
 
-        if self.config.chrome_channel:
+        # On Windows, passing channel='chromium' (the default) causes Playwright
+        # to look for a system Chrome installation instead of using the bundled
+        # ms-playwright binary.  This makes Chrome exit immediately with code 0,
+        # resulting in TargetClosedError.  Skip the default channel.
+        if self.config.chrome_channel and self.config.chrome_channel != "chromium":
             browser_args["channel"] = self.config.chrome_channel
 
         if self.config.accept_downloads:
@@ -1278,9 +1218,7 @@ class BrowserManager:
             # Only set cookie for http/https URLs
             if url.startswith(("http://", "https://")):
                 cookie_url = url
-            elif crawlerRunConfig.base_url and crawlerRunConfig.base_url.startswith(
-                ("http://", "https://")
-            ):
+            elif crawlerRunConfig.base_url and crawlerRunConfig.base_url.startswith(("http://", "https://")):
                 # Use base_url as fallback for raw:/file:// URLs
                 cookie_url = crawlerRunConfig.base_url
 
@@ -1307,14 +1245,12 @@ class BrowserManager:
 
         # Force-open closed shadow roots when flatten_shadow_dom is enabled
         if crawlerRunConfig and crawlerRunConfig.flatten_shadow_dom:
-            await context.add_init_script(
-                """
+            await context.add_init_script("""
                 const _origAttachShadow = Element.prototype.attachShadow;
                 Element.prototype.attachShadow = function(init) {
                     return _origAttachShadow.call(this, {...init, mode: 'open'});
                 };
-            """
-            )
+            """)
             context._crawl4ai_shadow_dom_injected = True
 
         # Apply custom init_scripts from BrowserConfig (for stealth evasions, etc.)
@@ -1343,7 +1279,7 @@ class BrowserManager:
                 "creating new contexts."
             )
         # Base settings
-        user_agent = self.config.headers.get("User-Agent", self.config.user_agent)
+        user_agent = self.config.headers.get("User-Agent", self.config.user_agent) 
         viewport_settings = {
             "width": self.config.viewport_width,
             "height": self.config.viewport_height,
@@ -1356,55 +1292,18 @@ class BrowserManager:
         # Static resource extensions (blocked when text_mode is enabled)
         static_extensions = [
             # Images
-            "jpg",
-            "jpeg",
-            "png",
-            "gif",
-            "webp",
-            "svg",
-            "ico",
-            "bmp",
-            "tiff",
-            "psd",
+            "jpg", "jpeg", "png", "gif", "webp", "svg", "ico", "bmp", "tiff", "psd",
             # Fonts
-            "woff",
-            "woff2",
-            "ttf",
-            "otf",
-            "eot",
+            "woff", "woff2", "ttf", "otf", "eot",
             # Media
-            "mp4",
-            "webm",
-            "ogg",
-            "avi",
-            "mov",
-            "wmv",
-            "flv",
-            "m4v",
-            "mp3",
-            "wav",
-            "aac",
-            "m4a",
-            "opus",
-            "flac",
+            "mp4", "webm", "ogg", "avi", "mov", "wmv", "flv", "m4v",
+            "mp3", "wav", "aac", "m4a", "opus", "flac",
             # Documents
-            "pdf",
-            "doc",
-            "docx",
-            "xls",
-            "xlsx",
-            "ppt",
-            "pptx",
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
             # Archives
-            "zip",
-            "rar",
-            "7z",
-            "tar",
-            "gz",
+            "zip", "rar", "7z", "tar", "gz",
             # Scripts and data
-            "xml",
-            "swf",
-            "wasm",
+            "xml", "swf", "wasm",
         ]
 
         # Ad and tracker domain patterns (curated from uBlock/EasyList sources)
@@ -1441,12 +1340,11 @@ class BrowserManager:
             "device_scale_factor": self.config.device_scale_factor,
             "java_script_enabled": self.config.java_script_enabled,
         }
-
+        
         if crawlerRunConfig:
             # Check if there is value for crawlerRunConfig.proxy_config set add that to context
             if crawlerRunConfig.proxy_config:
                 from playwright.async_api import ProxySettings
-
                 proxy_settings = ProxySettings(
                     server=crawlerRunConfig.proxy_config.server,
                     username=crawlerRunConfig.proxy_config.username,
@@ -1590,7 +1488,7 @@ class BrowserManager:
                     self.logger.warning(
                         message="Failed to apply stealth to page: {error}",
                         tag="STEALTH",
-                        params={"error": str(e)},
+                        params={"error": str(e)}
                     )
 
     async def _get_page_by_target_id(self, context: BrowserContext, target_id: str):
@@ -1612,17 +1510,13 @@ class BrowserManager:
             # First check if Playwright already sees the page
             for page in context.pages:
                 # Playwright's internal target ID might match
-                if hasattr(page, "_impl_obj") and hasattr(page._impl_obj, "_target_id"):
+                if hasattr(page, '_impl_obj') and hasattr(page._impl_obj, '_target_id'):
                     if page._impl_obj._target_id == target_id:
                         return page
 
             # If not found, try using CDP to get targets
-            if hasattr(self.browser, "_impl_obj") and hasattr(
-                self.browser._impl_obj, "_connection"
-            ):
-                cdp_session = await context.new_cdp_session(
-                    context.pages[0] if context.pages else None
-                )
+            if hasattr(self.browser, '_impl_obj') and hasattr(self.browser._impl_obj, '_connection'):
+                cdp_session = await context.new_cdp_session(context.pages[0] if context.pages else None)
                 if cdp_session:
                     try:
                         result = await cdp_session.send("Target.getTargets")
@@ -1649,7 +1543,7 @@ class BrowserManager:
                 self.logger.warning(
                     message="Failed to get page by target ID: {error}",
                     tag="BROWSER",
-                    params={"error": str(e)},
+                    params={"error": str(e)}
                 )
             return None
 
@@ -1719,10 +1613,8 @@ class BrowserManager:
                 self._page_to_sig[page] = config_signature
             elif self.config.storage_state:
                 tmp_context = await self.create_browser_context(crawlerRunConfig)
-                ctx = self.default_context  # default context, one window only
-                ctx = await clone_runtime_state(
-                    tmp_context, ctx, crawlerRunConfig, self.config
-                )
+                ctx = self.default_context        # default context, one window only
+                ctx = await clone_runtime_state(tmp_context, ctx, crawlerRunConfig, self.config)
                 # Close the temporary context — only needed as a clone source
                 try:
                     await tmp_context.close()
@@ -1739,9 +1631,7 @@ class BrowserManager:
 
                 # Handle pre-existing target case (for reconnecting to specific CDP targets)
                 if self.config.browser_context_id and self.config.target_id:
-                    page = await self._get_page_by_target_id(
-                        context, self.config.target_id
-                    )
+                    page = await self._get_page_by_target_id(context, self.config.target_id)
                     if not page:
                         async with self._page_lock:
                             page = await context.new_page()
@@ -1769,7 +1659,8 @@ class BrowserManager:
                             pages_in_use = self._get_pages_in_use()
                             # Find first available page (exists and not currently in use)
                             available_page = next(
-                                (p for p in pages if p not in pages_in_use), None
+                                (p for p in pages if p not in pages_in_use),
+                                None
                             )
                             if available_page:
                                 page = available_page
@@ -1884,7 +1775,9 @@ class BrowserManager:
         async with self._contexts_lock:
             sig = self._page_to_sig.pop(page, None)
             if sig is not None and sig in self._context_refcounts:
-                self._context_refcounts[sig] = max(0, self._context_refcounts[sig] - 1)
+                self._context_refcounts[sig] = max(
+                    0, self._context_refcounts[sig] - 1
+                )
                 refcount = self._context_refcounts[sig]
 
         # Check if this signature belongs to an old browser waiting to be cleaned up
@@ -1978,8 +1871,7 @@ class BrowserManager:
                 # (they're stuck and will never drain naturally)
                 async with self._pending_cleanup_lock:
                     stuck_sigs = [
-                        s
-                        for s in list(self._pending_cleanup.keys())
+                        s for s in list(self._pending_cleanup.keys())
                         if self._context_refcounts.get(s, 0) == 0
                     ]
                     for sig in stuck_sigs:
@@ -2054,8 +1946,7 @@ class BrowserManager:
 
             # Check if any signatures from this old version remain
             remaining_old = [
-                s
-                for s, info in self._pending_cleanup.items()
+                s for s, info in self._pending_cleanup.items()
                 if info["version"] == old_version
             ]
 
@@ -2090,7 +1981,7 @@ class BrowserManager:
             session_ids = list(self.sessions.keys())
             for session_id in session_ids:
                 await self.kill_session(session_id)
-            for ctx in self.contexts_by_config.values():
+            for ctx in list(self.contexts_by_config.values()):
                 try:
                     await ctx.close()
                 except Exception:
@@ -2116,7 +2007,7 @@ class BrowserManager:
                     await self.kill_session(session_id)
 
                 # Close all contexts we created
-                for ctx in self.contexts_by_config.values():
+                for ctx in list(self.contexts_by_config.values()):
                     try:
                         await ctx.close()
                     except Exception:
@@ -2135,7 +2026,7 @@ class BrowserManager:
                             self.logger.debug(
                                 message="Error disconnecting from CDP browser: {error}",
                                 tag="BROWSER",
-                                params={"error": str(e)},
+                                params={"error": str(e)}
                             )
                     self.browser = None
                     # Allow time for CDP connection to fully release before another client connects
@@ -2153,7 +2044,7 @@ class BrowserManager:
             session_ids = list(self.sessions.keys())
             for session_id in session_ids:
                 await self.kill_session(session_id)
-            for ctx in self.contexts_by_config.values():
+            for ctx in list(self.contexts_by_config.values()):
                 try:
                     await ctx.close()
                 except Exception:
@@ -2185,14 +2076,14 @@ class BrowserManager:
             await self.kill_session(session_id)
 
         # Now close all contexts we created. This reclaims memory from ephemeral contexts.
-        for ctx in self.contexts_by_config.values():
+        for ctx in list(self.contexts_by_config.values()):
             try:
                 await ctx.close()
             except Exception as e:
                 self.logger.error(
                     message="Error closing context: {error}",
                     tag="ERROR",
-                    params={"error": str(e)},
+                    params={"error": str(e)}
                 )
         self.contexts_by_config.clear()
         self._context_refcounts.clear()

@@ -10,6 +10,7 @@ MCP server or Docker.
 """
 
 import inspect
+import pytest
 from starlette.routing import Route
 from starlette.testclient import TestClient
 from starlette.applications import Starlette
@@ -18,13 +19,11 @@ from starlette.responses import PlainTextResponse
 
 # -- Core issue: Route wrapping behavior --
 
-
 class TestRouteWrappingBehavior:
     """Verify that Starlette Route wraps functions but not class instances."""
 
     def test_async_function_is_wrapped(self):
         """An async function endpoint gets wrapped in request_response()."""
-
         async def handler(scope, receive, send):
             pass
 
@@ -34,7 +33,6 @@ class TestRouteWrappingBehavior:
 
     def test_callable_class_is_not_wrapped(self):
         """A callable class instance is treated as raw ASGI (not wrapped)."""
-
         class Handler:
             async def __call__(self, scope, receive, send):
                 pass
@@ -46,24 +44,19 @@ class TestRouteWrappingBehavior:
 
     def test_async_function_is_function(self):
         """Confirm async def is detected as function by inspect."""
-
         async def handler(scope, receive, send):
             pass
-
         assert inspect.isfunction(handler)
 
     def test_callable_class_is_not_function(self):
         """Confirm callable class is NOT detected as function by inspect."""
-
         class Handler:
             async def __call__(self, scope, receive, send):
                 pass
-
         assert not inspect.isfunction(Handler())
 
 
 # -- ASGI handler receives correct arguments --
-
 
 class TestASGIHandlerArgs:
     """Verify that the callable class receives scope/receive/send correctly."""
@@ -97,13 +90,12 @@ class TestASGIHandlerArgs:
 
         app = Starlette(routes=[Route("/test", endpoint=handler)])
         client = TestClient(app)
-        client.get("/test")
+        resp = client.get("/test")
         # Starlette wraps it and passes Request object (1 arg)
         assert received_type.get("is_request") is True
 
 
 # -- MCP bridge SSE handler structure --
-
 
 class TestMCPBridgeSSEHandler:
     """Verify the mcp_bridge SSE handler is correctly structured."""
@@ -112,9 +104,9 @@ class TestMCPBridgeSSEHandler:
         """The SSE handler in mcp_bridge should be a callable class, not a function."""
         # Import and check the source
         import importlib.util
-
-        importlib.util.spec_from_file_location(
-            "mcp_bridge_check", "deploy/docker/mcp_bridge.py"
+        spec = importlib.util.spec_from_file_location(
+            "mcp_bridge_check",
+            "deploy/docker/mcp_bridge.py"
         )
         # We can't fully import mcp_bridge (needs Docker deps), so check source
         with open("deploy/docker/mcp_bridge.py") as f:
@@ -142,13 +134,11 @@ class TestMCPBridgeSSEHandler:
 
 # -- Regression: ensure Route + callable class pattern works end-to-end --
 
-
 class TestRouteCallableClassEndToEnd:
     """End-to-end test that a callable class works as a Route endpoint."""
 
     def test_sse_like_handler(self):
         """Simulate an SSE-like raw ASGI handler via Route."""
-
         class SSEHandler:
             async def __call__(self, scope, receive, send):
                 response = PlainTextResponse(
@@ -165,7 +155,6 @@ class TestRouteCallableClassEndToEnd:
 
     def test_multiple_routes_with_mixed_handlers(self):
         """Callable class and regular function handlers can coexist."""
-
         class RawHandler:
             async def __call__(self, scope, receive, send):
                 response = PlainTextResponse("raw")
@@ -174,12 +163,10 @@ class TestRouteCallableClassEndToEnd:
         async def regular_handler(request):
             return PlainTextResponse("regular")
 
-        app = Starlette(
-            routes=[
-                Route("/raw", endpoint=RawHandler()),
-                Route("/regular", endpoint=regular_handler),
-            ]
-        )
+        app = Starlette(routes=[
+            Route("/raw", endpoint=RawHandler()),
+            Route("/regular", endpoint=regular_handler),
+        ])
         client = TestClient(app)
         assert client.get("/raw").text == "raw"
         assert client.get("/regular").text == "regular"

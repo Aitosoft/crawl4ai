@@ -1,21 +1,27 @@
 # Aitosoft Files Reference
 
 Quick reference for what's ours vs upstream. **Read this before making changes.**
+Current as of the v0.9.2 upgrade (2026-07-16).
 
 ---
 
 ## Integration Architecture
 
 We use a **wrapper entry point** pattern. Gunicorn loads `aitosoft_entry:app`
-instead of `server:app`. The wrapper imports upstream's app unmodified, then
-adds our auth middleware and sets `BrowserConfig` defaults from config.yml.
+instead of `server:app`. The wrapper sets `BrowserConfig` class defaults from
+config.yml, relaxes two untrusted-boundary rules for our single trusted client
+(MAS), then imports upstream's app.
 
 ```
 gunicorn → aitosoft_entry:app
              ├─ BrowserConfig.set_defaults(**config.yml)
-             ├─ from server import app  (upstream, unmodified)
-             └─ app.add_middleware(SimpleTokenAuthMiddleware)
+             ├─ untrusted-boundary relaxations (headers allowed, timeout cap 180s)
+             └─ from server import app  (upstream; AuthGateMiddleware included)
 ```
+
+Auth is upstream's `AuthGateMiddleware` (v0.9.0+): `Authorization: Bearer
+$CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
+`simple_token_auth.py` was deleted in the v0.9.2 upgrade.
 
 ---
 
@@ -23,19 +29,18 @@ gunicorn → aitosoft_entry:app
 
 ### Documentation
 - `CLAUDE.md` - Claude Code guidance (entry point for new sessions)
-- `AITOSOFT_CHANGES.md` - Change tracking and current state
+- `AITOSOFT_CHANGES.md` - Change tracking and current state (authoritative log)
 - `DEPLOYMENT_INFO.md` - Production deployment info (endpoint, token, examples)
 - `AITOSOFT_FILES.md` - This file
+- `TESTING.md`, `TEST_SITES_REGISTRY.md`, `OVERNIGHT_PLAYBOOK.md`
 
 ### Wrapper + Aitosoft Modules (in deploy/docker/)
-- `aitosoft_entry.py` - Wrapper entry point (sets defaults, adds auth)
-- `simple_token_auth.py` - Bearer token auth middleware (39 lines)
+- `aitosoft_entry.py` - Wrapper entry point (defaults + boundary relaxations)
+- `aitosoft_static_mode.py` - `render_mode: "static"` implementation (httpx + html2text)
 - `aitosoft_patchright_fallback.py` - Second-tier retry via patchright for blocked crawls
 
 ### Deployment
-- `azure-deployment/deploy-aitosoft-prod.sh` - Production deployment script
-- `azure-deployment/*.py` - Test and helper scripts
-- `azure-deployment/*.md` - Deployment guides
+- `azure-deployment/` - Deploy scripts, batch-scale.sh, alert setup, guides
 
 ### Testing
 - `test-aitosoft/` - All files (our test suite)
@@ -43,48 +48,53 @@ gunicorn → aitosoft_entry:app
 ### Development Environment
 - `.devcontainer/` - All files (our dev container setup)
 - `tasks/` - Task tracking
+- `.pre-commit-config.yaml` - Ours. Hooks are scoped to Aitosoft files ONLY
+  (top-level `files:` pattern). NEVER widen it to upstream code — formatter
+  drift on upstream files poisons every merge.
 
 ---
 
 ## Modified Upstream Files
 
-### deploy/docker/api.py
-**Lines modified**: 4 lines (patchright retry after first-tier crawl)
-**Why**: Retry blocked results through patchright/undetected-chromium
-**Upstream sync**: Lines are in result-processing section, separate from most upstream changes
+### deploy/docker/api.py (~25 lines)
+`render_mode` param + static-mode short-circuit (after SSRF validation);
+patchright retry wrapped inside upstream's wall-clock deadline;
+`render_mode: "full"` tagging of results.
+
+### deploy/docker/server.py (~30 lines)
+Static branch in `/crawl` (before stream check and all-failures→500 rewrite);
+lifespan shutdown closes static httpx client + patchright singleton.
+
+### deploy/docker/schemas.py (~15 lines)
+`CrawlRequest.render_mode: Literal["full","static"] = "full"`.
+
+### deploy/docker/crawler_pool.py (~300 lines)
+MAX_PAGES enforcement + overflow browser keys; BUSY_SINCE stuck-slot
+force-close in janitor. File is unchanged upstream since 0.8.6, so this
+carries no merge risk.
 
 ### deploy/docker/config.yml
-**What changed**: Browser kwargs (stealth, chrome channel, UA, viewport), security enabled
-**Why**: Production stealth configuration
-**Upstream sync**: Deployment config, always ours
+Deployment config (always ours): stealth browser kwargs, real-Chrome channel,
+`limits.wall_clock_s: 180`, `pool.max_pages: 5`, `stuck_busy_timeout_sec: 600`,
+`memory_threshold_percent: 85`.
 
 ### deploy/docker/supervisord.conf
-**Lines modified**: 1 word (`server:app` → `aitosoft_entry:app`)
-**Why**: Load our wrapper instead of upstream's server directly
+1 word: gunicorn target `aitosoft_entry:app`.
 
-### crawl4ai/browser_adapter.py
-**What changed**: Ported StealthAdapter to playwright-stealth 2.x API
-**Why**: Upstream bug — pins 2.x in pyproject.toml but imports 1.x names
-**Upstream sync**: PR upstream when ready, then delta drops to 0
+### crawl4ai/browser_manager.py (~10 lines)
+`_build_browser_args`: GPU flags gated on `enable_stealth` (keeps WebGL in
+stealth mode). Still broken upstream — PR-worthy.
 
-### crawl4ai/browser_manager.py
-**What changed**: Gated `--disable-gpu` flags on `enable_stealth` in `_build_browser_args`
-**Why**: Upstream bug — GPU flags kill WebGL, a major anti-bot signal
-**Upstream sync**: PR upstream when ready, then delta drops to 0
-
-### Dockerfile
-**Lines modified**: 1 line added (`RUN playwright install chrome`)
-**Why**: Install real Chrome binary (vs bundled Chromium with distinct TLS fingerprint)
-
-### .pre-commit-config.yaml
-**What changed**: Exclude patterns for ruff/mypy (upstream files with pre-existing issues)
+### Dockerfile (~10 lines)
+`RUN playwright install chrome` + copy `chrome-*` cache to appuser home.
 
 ---
 
-## NOT Modified (moved to wrapper in 2026-04-14 restructure)
+## Dropped in v0.9.2 upgrade (upstream superseded)
 
-- `deploy/docker/server.py` — was 3 lines for auth, now 0 (auth in wrapper)
-- `deploy/docker/api.py` — was ~12 lines for config merge, now 4 (merge replaced by `set_defaults()`)
+- `crawl4ai/browser_adapter.py` stealth 2.x port → upstream fixed (#1960)
+- api.py 180s `asyncio.wait_for` patch → upstream `limits.wall_clock_s`
+- `simple_token_auth.py` (deleted) → upstream `AuthGateMiddleware`
 
 ---
 
@@ -95,18 +105,7 @@ git fetch upstream
 git merge upstream/develop
 ```
 
-Expected: **near-zero conflicts** since server.py is unmodified and api.py
-has only 4 lines in a result-processing section.
-
-If conflicts occur, check:
-1. `api.py` patchright retry lines (~line 670)
-2. `browser_adapter.py` stealth 2.x port
-3. `browser_manager.py` GPU flag gating
-
----
-
-## Summary
-
-**Upstream file modifications**: 4 lines in api.py + 1 word in supervisord.conf + stealth bugfixes
-**Aitosoft-only files**: `aitosoft_entry.py`, `simple_token_auth.py`, `aitosoft_patchright_fallback.py`
-**All other work**: `azure-deployment/`, `test-aitosoft/`, `.devcontainer/`, `tasks/`
+Expected: near-zero conflicts. If conflicts occur, check the files listed
+above; `git diff upstream/develop HEAD -- crawl4ai/ deploy/ Dockerfile`
+should show ONLY the modifications documented here. If it shows more,
+someone reformatted upstream files — fix that before merging anything.

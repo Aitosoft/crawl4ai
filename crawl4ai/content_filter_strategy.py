@@ -491,7 +491,9 @@ class BM25ContentFilter(RelevantContentFilter):
                 self.stemmer.stemWord(word) for word in query.lower().split()
             ]
         else:
-            tokenized_corpus = [chunk.lower().split() for _, chunk, _, _ in candidates]
+            tokenized_corpus = [
+                chunk.lower().split() for _, chunk, _, _ in candidates
+            ]
             tokenized_query = query.lower().split()
 
         # tokenized_corpus = [[self.stemmer.stemWord(word) for word in tokenize_text(chunk.lower())]
@@ -564,6 +566,8 @@ class PruningContentFilter(RelevantContentFilter):
         min_word_threshold: int = None,
         threshold_type: str = "fixed",
         threshold: float = 0.48,
+        preserve_classes: list = None,
+        preserve_tags: list = None,
     ):
         """
         Initializes the PruningContentFilter class, if not provided, falls back to page metadata.
@@ -576,11 +580,15 @@ class PruningContentFilter(RelevantContentFilter):
             min_word_threshold (int): Minimum word threshold for filtering (optional).
             threshold_type (str): Threshold type for dynamic threshold (default: 'fixed').
             threshold (float): Fixed threshold value (default: 0.48).
+            preserve_classes (list): CSS class names to always keep regardless of score (optional).
+            preserve_tags (list): HTML tag names to always keep regardless of score (optional).
         """
         super().__init__(None)
         self.min_word_threshold = min_word_threshold
         self.threshold_type = threshold_type
         self.threshold = threshold
+        self.preserve_classes = set(preserve_classes) if preserve_classes else set()
+        self.preserve_tags = set(preserve_tags) if preserve_tags else set()
 
         # Add tag importance for dynamic threshold
         self.tag_importance = {
@@ -680,6 +688,16 @@ class PruningContentFilter(RelevantContentFilter):
             for element in soup.find_all(tag):
                 element.decompose()
 
+    def _is_preserved(self, node):
+        """Check if a node matches the preserve whitelist."""
+        if self.preserve_tags and node.name in self.preserve_tags:
+            return True
+        if self.preserve_classes and "class" in getattr(node, "attrs", {}):
+            node_classes = set(node["class"]) if isinstance(node["class"], list) else {node["class"]}
+            if node_classes & self.preserve_classes:
+                return True
+        return False
+
     def _prune_tree(self, node):
         """
         Prunes the tree starting from the given node.
@@ -688,6 +706,10 @@ class PruningContentFilter(RelevantContentFilter):
             node (Tag): The node from which the pruning starts.
         """
         if not node or not hasattr(node, "name") or node.name is None:
+            return
+
+        # Skip pruning for preserved nodes — always keep them
+        if self._is_preserved(node):
             return
 
         text_len = len(node.get_text(strip=True))
@@ -803,12 +825,11 @@ class LLMContentFilter(RelevantContentFilter):
         verbose (bool): Enable verbose logging (default: False).
         logger (AsyncLogger): Custom logger for LLM operations (optional).
     """
-
     _UNWANTED_PROPS = {
-        "provider": 'Instead, use llm_config=LLMConfig(provider="...")',
-        "api_token": 'Instead, use llm_config=LlMConfig(api_token="...")',
-        "base_url": 'Instead, use llm_config=LLMConfig(base_url="...")',
-        "api_base": 'Instead, use llm_config=LLMConfig(base_url="...")',
+        'provider' : 'Instead, use llm_config=LLMConfig(provider="...")',
+        'api_token' : 'Instead, use llm_config=LlMConfig(api_token="...")',
+        'base_url' : 'Instead, use llm_config=LLMConfig(base_url="...")',
+        'api_base' : 'Instead, use llm_config=LLMConfig(base_url="...")',
     }
 
     def __init__(
@@ -861,7 +882,7 @@ class LLMContentFilter(RelevantContentFilter):
                 },
                 colors={
                     **AsyncLogger.DEFAULT_COLORS,
-                    LogLevel.INFO: LogColor.DIM_MAGENTA,  # Dimmed purple for LLM ops
+                    LogLevel.INFO: LogColor.DIM_MAGENTA  # Dimmed purple for LLM ops
                 },
             )
         else:
@@ -869,7 +890,7 @@ class LLMContentFilter(RelevantContentFilter):
 
         self.usages = []
         self.total_usage = TokenUsage()
-
+    
     def __setattr__(self, name, value):
         """Handle attribute setting."""
         # TODO: Planning to set properties dynamically based on the __init__ signature
@@ -877,12 +898,10 @@ class LLMContentFilter(RelevantContentFilter):
         all_params = sig.parameters  # Dictionary of parameter names and their details
 
         if name in self._UNWANTED_PROPS and value is not all_params[name].default:
-            raise AttributeError(
-                f"Setting '{name}' is deprecated. {self._UNWANTED_PROPS[name]}"
-            )
-
-        super().__setattr__(name, value)
-
+            raise AttributeError(f"Setting '{name}' is deprecated. {self._UNWANTED_PROPS[name]}")
+        
+        super().__setattr__(name, value)  
+        
     def _get_cache_key(self, html: str, instruction: str) -> str:
         """Generate a unique cache key based on HTML and instruction"""
         content = f"{html}{instruction}"

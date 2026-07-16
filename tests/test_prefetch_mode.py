@@ -1,5 +1,6 @@
 """Unit tests for the quick_extract_links function used in prefetch mode."""
 
+import pytest
 from crawl4ai.utils import quick_extract_links
 
 
@@ -8,7 +9,7 @@ class TestQuickExtractLinks:
 
     def test_basic_internal_links(self):
         """Test extraction of internal links."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="/page1">Page 1</a>
@@ -16,7 +17,7 @@ class TestQuickExtractLinks:
                 <a href="https://example.com/page3">Page 3</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert len(result["internal"]) == 3
@@ -25,14 +26,14 @@ class TestQuickExtractLinks:
 
     def test_external_links(self):
         """Test extraction and classification of external links."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="https://other.com/page">External</a>
                 <a href="/internal">Internal</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert len(result["internal"]) == 1
@@ -41,7 +42,7 @@ class TestQuickExtractLinks:
 
     def test_ignores_javascript_and_mailto(self):
         """Test that javascript: and mailto: links are ignored."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="javascript:void(0)">Click</a>
@@ -50,7 +51,7 @@ class TestQuickExtractLinks:
                 <a href="/valid">Valid</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert len(result["internal"]) == 1
@@ -58,7 +59,7 @@ class TestQuickExtractLinks:
 
     def test_ignores_anchor_only_links(self):
         """Test that anchor-only links (#section) are ignored."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="#section1">Section 1</a>
@@ -66,7 +67,7 @@ class TestQuickExtractLinks:
                 <a href="/page#section">Page with anchor</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         # Only the page link should be included, anchor-only links are skipped
@@ -75,7 +76,7 @@ class TestQuickExtractLinks:
 
     def test_deduplication(self):
         """Test that duplicate URLs are deduplicated."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="/page">Link 1</a>
@@ -83,7 +84,7 @@ class TestQuickExtractLinks:
                 <a href="/page">Link 3</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert len(result["internal"]) == 1
@@ -104,7 +105,7 @@ class TestQuickExtractLinks:
 
     def test_relative_url_resolution(self):
         """Test that relative URLs are resolved correctly."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="page1.html">Relative</a>
@@ -112,7 +113,7 @@ class TestQuickExtractLinks:
                 <a href="../page3.html">Parent Relative</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com/docs/")
 
         assert len(result["internal"]) >= 1
@@ -123,13 +124,13 @@ class TestQuickExtractLinks:
     def test_text_truncation(self):
         """Test that long link text is truncated to 200 chars."""
         long_text = "A" * 300
-        html = f"""
+        html = f'''
         <html>
             <body>
                 <a href="/page">{long_text}</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert len(result["internal"]) == 1
@@ -137,7 +138,7 @@ class TestQuickExtractLinks:
 
     def test_empty_href_ignored(self):
         """Test that empty href attributes are ignored."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="">Empty</a>
@@ -145,7 +146,7 @@ class TestQuickExtractLinks:
                 <a href="/valid">Valid</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert len(result["internal"]) == 1
@@ -153,7 +154,7 @@ class TestQuickExtractLinks:
 
     def test_mixed_internal_external(self):
         """Test correct classification of mixed internal and external links."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="/internal1">Internal 1</a>
@@ -163,7 +164,7 @@ class TestQuickExtractLinks:
                 <a href="/internal3">Internal 3</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert len(result["internal"]) == 3
@@ -171,7 +172,7 @@ class TestQuickExtractLinks:
 
     def test_subdomain_handling(self):
         """Test that subdomains are handled correctly."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="https://docs.example.com/page">Docs subdomain</a>
@@ -179,7 +180,7 @@ class TestQuickExtractLinks:
                 <a href="https://example.com/main">Main domain</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         # All should be internal (same base domain)
@@ -192,14 +193,14 @@ class TestQuickExtractLinksEdgeCases:
 
     def test_no_links_in_page(self):
         """Test page with no links."""
-        html = """
+        html = '''
         <html>
             <body>
                 <h1>No Links Here</h1>
                 <p>Just some text content.</p>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert result["internal"] == []
@@ -207,7 +208,7 @@ class TestQuickExtractLinksEdgeCases:
 
     def test_links_in_nested_elements(self):
         """Test links nested in various elements."""
-        html = """
+        html = '''
         <html>
             <body>
                 <nav>
@@ -221,20 +222,20 @@ class TestQuickExtractLinksEdgeCases:
                 </div>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert len(result["internal"]) == 3
 
     def test_link_with_nested_elements(self):
         """Test links containing nested elements."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="/page"><span>Nested</span> <strong>Text</strong></a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         assert len(result["internal"]) == 1
@@ -243,13 +244,13 @@ class TestQuickExtractLinksEdgeCases:
 
     def test_protocol_relative_urls(self):
         """Test handling of protocol-relative URLs (//example.com)."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="//cdn.example.com/asset">CDN Link</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         # Should be resolved with https:
@@ -258,7 +259,7 @@ class TestQuickExtractLinksEdgeCases:
 
     def test_whitespace_in_href(self):
         """Test handling of whitespace around href values."""
-        html = """
+        html = '''
         <html>
             <body>
                 <a href="  /page1  ">Padded</a>
@@ -267,7 +268,7 @@ class TestQuickExtractLinksEdgeCases:
                 ">Multiline</a>
             </body>
         </html>
-        """
+        '''
         result = quick_extract_links(html, "https://example.com")
 
         # Both should be extracted and normalized

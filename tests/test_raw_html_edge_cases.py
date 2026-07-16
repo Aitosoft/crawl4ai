@@ -16,7 +16,6 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 # EDGE CASE: Hash characters in HTML (previously broke urlparse - Issue #283)
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_raw_html_with_hash_in_css():
     """Test that # in CSS colors doesn't break HTML parsing (regression for #283)."""
@@ -35,15 +34,11 @@ async def test_raw_html_with_hash_in_css():
     """
 
     async with AsyncWebCrawler() as crawler:
-        config = CrawlerRunConfig(
-            js_code="document.body.innerHTML += '<div id=\"added\">Added</div>'"
-        )
+        config = CrawlerRunConfig(js_code="document.body.innerHTML += '<div id=\"added\">Added</div>'")
         result = await crawler.arun(f"raw:{html}", config=config)
 
     assert result.success
-    assert (
-        "#ff5733" in result.html or "ff5733" in result.html
-    )  # Color should be preserved
+    assert "#ff5733" in result.html or "ff5733" in result.html  # Color should be preserved
     assert "Added" in result.html  # JS executed
     assert "Content with hash colors" in result.html  # Original content preserved
 
@@ -61,9 +56,7 @@ async def test_raw_html_with_fragment_links():
     """
 
     async with AsyncWebCrawler() as crawler:
-        config = CrawlerRunConfig(
-            js_code="document.getElementById('section1').innerText = 'Modified Section 1'"
-        )
+        config = CrawlerRunConfig(js_code="document.getElementById('section1').innerText = 'Modified Section 1'")
         result = await crawler.arun(f"raw:{html}", config=config)
 
     assert result.success
@@ -74,7 +67,6 @@ async def test_raw_html_with_fragment_links():
 # ============================================================================
 # EDGE CASE: Special characters and unicode
 # ============================================================================
-
 
 @pytest.mark.asyncio
 async def test_raw_html_with_unicode():
@@ -87,9 +79,7 @@ async def test_raw_html_with_unicode():
     """
 
     async with AsyncWebCrawler() as crawler:
-        config = CrawlerRunConfig(
-            js_code="document.getElementById('unicode').innerText += ' ✅ Modified'"
-        )
+        config = CrawlerRunConfig(js_code="document.getElementById('unicode').innerText += ' ✅ Modified'")
         result = await crawler.arun(f"raw:{html}", config=config)
 
     assert result.success
@@ -127,16 +117,13 @@ async def test_raw_html_with_script_tags():
 # EDGE CASE: Empty and malformed HTML
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_raw_html_empty():
     """Test empty raw HTML."""
     html = ""
 
     async with AsyncWebCrawler() as crawler:
-        config = CrawlerRunConfig(
-            js_code="document.body.innerHTML = '<div>Added to empty</div>'"
-        )
+        config = CrawlerRunConfig(js_code="document.body.innerHTML = '<div>Added to empty</div>'")
         result = await crawler.arun(f"raw:{html}", config=config)
 
     assert result.success
@@ -149,9 +136,7 @@ async def test_raw_html_minimal():
     html = "Just plain text, no HTML tags"
 
     async with AsyncWebCrawler() as crawler:
-        config = CrawlerRunConfig(
-            js_code="document.body.innerHTML += '<div id=\"injected\">Injected</div>'"
-        )
+        config = CrawlerRunConfig(js_code="document.body.innerHTML += '<div id=\"injected\">Injected</div>'")
         result = await crawler.arun(f"raw:{html}", config=config)
 
     assert result.success
@@ -165,9 +150,7 @@ async def test_raw_html_malformed():
     html = "<html><body><div><span>Unclosed tags<div>More content"
 
     async with AsyncWebCrawler() as crawler:
-        config = CrawlerRunConfig(
-            js_code="document.body.innerHTML += '<div id=\"valid\">Valid Added</div>'"
-        )
+        config = CrawlerRunConfig(js_code="document.body.innerHTML += '<div id=\"valid\">Valid Added</div>'")
         result = await crawler.arun(f"raw:{html}", config=config)
 
     assert result.success
@@ -179,17 +162,11 @@ async def test_raw_html_malformed():
 # EDGE CASE: Very large HTML
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_raw_html_large():
     """Test large raw HTML (100KB+)."""
     # Generate 100KB of HTML
-    items = "".join(
-        [
-            f'<div class="item" id="item-{i}">Item {i} content here with some text</div>\n'
-            for i in range(2000)
-        ]
-    )
+    items = "".join([f'<div class="item" id="item-{i}">Item {i} content here with some text</div>\n' for i in range(2000)])
     html = f"<html><body>{items}</body></html>"
 
     assert len(html) > 100000  # Verify it's actually large
@@ -209,7 +186,6 @@ async def test_raw_html_large():
 # EDGE CASE: JavaScript errors and timeouts
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_raw_html_js_error_doesnt_crash():
     """Test that JavaScript errors in js_code don't crash the crawl."""
@@ -219,7 +195,7 @@ async def test_raw_html_js_error_doesnt_crash():
         config = CrawlerRunConfig(
             js_code=[
                 "nonExistentFunction();",  # This will throw an error
-                "document.getElementById('test').innerText = 'Still works'",  # This should still run
+                "document.getElementById('test').innerText = 'Still works'"  # This should still run
             ]
         )
         result = await crawler.arun(f"raw:{html}", config=config)
@@ -235,7 +211,8 @@ async def test_raw_html_wait_for_timeout():
 
     async with AsyncWebCrawler() as crawler:
         config = CrawlerRunConfig(
-            wait_for="#never-exists", wait_for_timeout=1000  # 1 second timeout
+            wait_for="#never-exists",
+            wait_for_timeout=1000  # 1 second timeout
         )
         result = await crawler.arun(f"raw:{html}", config=config)
 
@@ -248,7 +225,6 @@ async def test_raw_html_wait_for_timeout():
 # ============================================================================
 # COMPATIBILITY: Normal HTTP URLs still work
 # ============================================================================
-
 
 @pytest.mark.asyncio
 async def test_http_urls_still_work():
@@ -277,12 +253,11 @@ async def test_http_with_js_code_still_works():
 # COMPATIBILITY: File URLs
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_file_url_with_js_code():
     """Test file:// URLs with js_code execution."""
     # Create a temp file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
         f.write("<html><body><div id='file-content'>File Content</div></body></html>")
         temp_path = f.name
 
@@ -302,7 +277,7 @@ async def test_file_url_with_js_code():
 @pytest.mark.asyncio
 async def test_file_url_fast_path():
     """Test file:// fast path (no browser params)."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
         f.write("<html><body>Fast path file content</body></html>")
         temp_path = f.name
 
@@ -320,7 +295,6 @@ async def test_file_url_fast_path():
 # COMPATIBILITY: Extraction strategies with raw HTML
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_raw_html_with_css_extraction():
     """Test CSS extraction on raw HTML after js_code modifies it."""
@@ -337,7 +311,9 @@ async def test_raw_html_with_css_extraction():
     schema = {
         "name": "Products",
         "baseSelector": ".product",
-        "fields": [{"name": "name", "selector": ".name", "type": "text"}],
+        "fields": [
+            {"name": "name", "selector": ".name", "type": "text"}
+        ]
     }
 
     async with AsyncWebCrawler() as crawler:
@@ -346,16 +322,15 @@ async def test_raw_html_with_css_extraction():
                 document.querySelector('.products').innerHTML +=
                 '<div class="product"><span class="name">JS Added Product</span></div>';
             """,
-            extraction_strategy=JsonCssExtractionStrategy(schema),
+            extraction_strategy=JsonCssExtractionStrategy(schema)
         )
         result = await crawler.arun(f"raw:{html}", config=config)
 
     assert result.success
     # Check that extraction found both products
     import json
-
     extracted = json.loads(result.extracted_content)
-    names = [p.get("name", "") for p in extracted]
+    names = [p.get('name', '') for p in extracted]
     assert any("JS Added Product" in name for name in names)
 
 
@@ -363,12 +338,12 @@ async def test_raw_html_with_css_extraction():
 # EDGE CASE: Concurrent raw: requests
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_concurrent_raw_requests():
     """Test multiple concurrent raw: requests don't interfere."""
     htmls = [
-        f"<html><body><div id='test'>Request {i}</div></body></html>" for i in range(5)
+        f"<html><body><div id='test'>Request {i}</div></body></html>"
+        for i in range(5)
     ]
 
     async with AsyncWebCrawler() as crawler:
@@ -396,7 +371,6 @@ async def test_concurrent_raw_requests():
 # EDGE CASE: raw: with base_url for link resolution
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_raw_html_with_base_url():
     """Test that base_url is used for link resolution in markdown."""
@@ -411,7 +385,7 @@ async def test_raw_html_with_base_url():
     async with AsyncWebCrawler() as crawler:
         config = CrawlerRunConfig(
             base_url="https://example.com",
-            process_in_browser=True,  # Force browser to test base_url handling
+            process_in_browser=True  # Force browser to test base_url handling
         )
         result = await crawler.arun(f"raw:{html}", config=config)
 
@@ -419,18 +393,13 @@ async def test_raw_html_with_base_url():
     # Check markdown has absolute URLs
     if result.markdown:
         # Links should be absolute
-        md = (
-            result.markdown.raw_markdown
-            if hasattr(result.markdown, "raw_markdown")
-            else str(result.markdown)
-        )
+        md = result.markdown.raw_markdown if hasattr(result.markdown, 'raw_markdown') else str(result.markdown)
         assert "example.com" in md or "/page1" in md
 
 
 # ============================================================================
 # EDGE CASE: raw: with screenshot of complex page
 # ============================================================================
-
 
 @pytest.mark.asyncio
 async def test_raw_html_screenshot_complex_page():
@@ -456,7 +425,7 @@ async def test_raw_html_screenshot_complex_page():
     async with AsyncWebCrawler() as crawler:
         config = CrawlerRunConfig(
             js_code="document.getElementById('title').innerText = 'Modified Title'",
-            screenshot=True,
+            screenshot=True
         )
         result = await crawler.arun(f"raw:{html}", config=config)
 
@@ -469,7 +438,6 @@ async def test_raw_html_screenshot_complex_page():
 # ============================================================================
 # EDGE CASE: JavaScript that tries to navigate away
 # ============================================================================
-
 
 @pytest.mark.asyncio
 async def test_raw_html_js_navigation_blocked():
@@ -503,7 +471,6 @@ async def test_raw_html_js_navigation_blocked():
 # EDGE CASE: Raw HTML with iframes
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_raw_html_with_iframes():
     """Test raw HTML containing iframes."""
@@ -517,7 +484,7 @@ async def test_raw_html_with_iframes():
     async with AsyncWebCrawler() as crawler:
         config = CrawlerRunConfig(
             js_code="document.getElementById('main').innerText = 'Modified main'",
-            process_iframes=True,
+            process_iframes=True
         )
         result = await crawler.arun(f"raw:{html}", config=config)
 
@@ -528,7 +495,6 @@ async def test_raw_html_with_iframes():
 # ============================================================================
 # TRICKY: Protocol inside raw content
 # ============================================================================
-
 
 @pytest.mark.asyncio
 async def test_raw_html_with_urls_inside():
@@ -557,7 +523,6 @@ async def test_raw_html_with_urls_inside():
 # TRICKY: Double raw: prefix
 # ============================================================================
 
-
 @pytest.mark.asyncio
 async def test_double_raw_prefix():
     """Test what happens with double raw: prefix (edge case)."""
@@ -572,6 +537,7 @@ async def test_double_raw_prefix():
 
 
 if __name__ == "__main__":
+    import sys
 
     async def run_tests():
         # Run a few key tests manually
@@ -592,7 +558,6 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"❌ {name} FAILED: {e}")
                 import traceback
-
                 traceback.print_exc()
 
     asyncio.run(run_tests())

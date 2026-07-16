@@ -26,9 +26,7 @@ class TestRealDomainsConditionalSupport:
             # Validate with the ETag we just got
             result = await validator.validate(url=url, stored_etag=etag)
 
-            assert (
-                result.status == CacheValidationResult.FRESH
-            ), f"Expected FRESH, got {result.status}: {result.reason}"
+            assert result.status == CacheValidationResult.FRESH, f"Expected FRESH, got {result.status}: {result.reason}"
             assert "304" in result.reason
 
     @pytest.mark.asyncio
@@ -43,9 +41,7 @@ class TestRealDomainsConditionalSupport:
 
             result = await validator.validate(url=url, stored_etag=etag)
 
-            assert (
-                result.status == CacheValidationResult.FRESH
-            ), f"Expected FRESH, got {result.status}: {result.reason}"
+            assert result.status == CacheValidationResult.FRESH, f"Expected FRESH, got {result.status}: {result.reason}"
 
     @pytest.mark.asyncio
     async def test_wikipedia_last_modified(self):
@@ -57,13 +53,9 @@ class TestRealDomainsConditionalSupport:
 
             assert last_modified is not None, "Wikipedia should return Last-Modified"
 
-            result = await validator.validate(
-                url=url, stored_last_modified=last_modified
-            )
+            result = await validator.validate(url=url, stored_last_modified=last_modified)
 
-            assert (
-                result.status == CacheValidationResult.FRESH
-            ), f"Expected FRESH, got {result.status}: {result.reason}"
+            assert result.status == CacheValidationResult.FRESH, f"Expected FRESH, got {result.status}: {result.reason}"
 
     @pytest.mark.asyncio
     async def test_github_pages(self):
@@ -94,9 +86,7 @@ class TestRealDomainsConditionalSupport:
             result = await validator.validate(url=url, stored_etag='"test-etag-value"')
 
             # httpbin should return 304 for matching ETag
-            assert (
-                result.status == CacheValidationResult.FRESH
-            ), f"Expected FRESH, got {result.status}: {result.reason}"
+            assert result.status == CacheValidationResult.FRESH, f"Expected FRESH, got {result.status}: {result.reason}"
 
 
 class TestRealDomainsNoConditionalSupport:
@@ -122,9 +112,7 @@ class TestRealDomainsNoConditionalSupport:
             )
 
             # Should be FRESH since fingerprint should match
-            assert (
-                result.status == CacheValidationResult.FRESH
-            ), f"Expected FRESH, got {result.status}: {result.reason}"
+            assert result.status == CacheValidationResult.FRESH, f"Expected FRESH, got {result.status}: {result.reason}"
             assert "fingerprint" in result.reason.lower()
 
     @pytest.mark.asyncio
@@ -145,9 +133,7 @@ class TestRealDomainsNoConditionalSupport:
             )
 
             # Should be STALE because the ETag doesn't match
-            assert (
-                result.status == CacheValidationResult.STALE
-            ), f"Expected STALE, got {result.status}: {result.reason}"
+            assert result.status == CacheValidationResult.STALE, f"Expected STALE, got {result.status}: {result.reason}"
 
 
 class TestRealDomainsEdgeCases:
@@ -174,10 +160,7 @@ class TestRealDomainsEdgeCases:
 
             # Should timeout and return ERROR
             assert result.status == CacheValidationResult.ERROR
-            assert (
-                "timeout" in result.reason.lower()
-                or "timed out" in result.reason.lower()
-            )
+            assert "timeout" in result.reason.lower() or "timed out" in result.reason.lower()
 
     @pytest.mark.asyncio
     async def test_redirect_handling(self):
@@ -266,9 +249,7 @@ class TestRealDomainsFetchHead:
             assert head_html is not None
             assert "</head>" in head_html.lower()
             # Should NOT contain body content
-            assert "<body" not in head_html.lower() or head_html.lower().index(
-                "</head>"
-            ) < head_html.lower().find("<body")
+            assert "<body" not in head_html.lower() or head_html.lower().index("</head>") < head_html.lower().find("<body")
 
     @pytest.mark.asyncio
     async def test_extracts_both_headers(self):
@@ -318,9 +299,7 @@ class TestRealDomainsValidationCombinations:
             _, _, last_modified = await validator._fetch_head(url)
 
             if last_modified:
-                result = await validator.validate(
-                    url=url, stored_last_modified=last_modified
-                )
+                result = await validator.validate(url=url, stored_last_modified=last_modified)
                 assert result.status == CacheValidationResult.FRESH
 
     @pytest.mark.asyncio
@@ -333,9 +312,7 @@ class TestRealDomainsValidationCombinations:
             fingerprint = compute_head_fingerprint(head_html)
 
             if fingerprint:
-                result = await validator.validate(
-                    url=url, stored_head_fingerprint=fingerprint
-                )
+                result = await validator.validate(url=url, stored_head_fingerprint=fingerprint)
                 assert result.status == CacheValidationResult.FRESH
 
     @pytest.mark.asyncio

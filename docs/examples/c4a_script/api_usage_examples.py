@@ -4,6 +4,7 @@ Shows how to use the new Result-based API in various scenarios
 """
 
 from crawl4ai.script.c4a_compile import compile, validate, compile_file
+from crawl4ai.script.c4a_result import CompilationResult, ValidationResult
 import json
 
 
@@ -41,7 +42,7 @@ if not result.success:
     error = result.first_error
     print(f"Error on line {error.line}: {error.message}")
     print(f"Error code: {error.code}")
-
+    
     # Show suggestions if available
     if error.suggestions:
         print("Suggestions:")
@@ -88,13 +89,11 @@ print("-" * 40)
 # Create a test file
 test_file = "test_script.c4a"
 with open(test_file, "w") as f:
-    f.write(
-        """
+    f.write("""
 GO https://example.com
 WAIT `.content` 5
 CLICK `.main-button`
-"""
-    )
+""")
 
 result = compile_file(test_file)
 print(f"File compilation: {'Success' if result.success else 'Failed'}")
@@ -103,7 +102,6 @@ if result.success:
 
 # Clean up
 import os
-
 os.remove(test_file)
 
 # Example 6: Batch processing
@@ -113,7 +111,7 @@ print("-" * 40)
 scripts = [
     "GO https://example1.com\nCLICK `.button`",
     "GO https://example2.com\nWAIT 2",
-    "GO https://example3.com\nINVALID_CMD",
+    "GO https://example3.com\nINVALID_CMD"
 ]
 
 results = []
@@ -131,11 +129,9 @@ print(f"\nBatch result: {successful}/{len(scripts)} successful")
 print("\n\n7. Custom Error Formatting")
 print("-" * 40)
 
-
 def format_error_for_ide(error):
     """Format error for IDE integration"""
     return f"{error.source_line}:{error.line}:{error.column}: {error.type.value}: {error.message} [{error.code}]"
-
 
 error_script = "IF EXISTS `.button` THEN CLICK `.button`"
 result = compile(error_script)
@@ -175,7 +171,7 @@ helper2
 
 result = compile(complex_script)
 if result.success:
-    print("Script metadata:")
+    print(f"Script metadata:")
     for key, value in result.metadata.items():
         print(f"  {key}: {value}")
 
@@ -183,25 +179,23 @@ if result.success:
 print("\n\n10. Integration Patterns")
 print("-" * 40)
 
-
 # Web API endpoint simulation
 def api_compile(request_body):
     """Simulate API endpoint"""
     script = request_body.get("script", "")
     result = compile(script)
-
+    
     response = {
         "status": "success" if result.success else "error",
-        "data": result.to_dict(),
+        "data": result.to_dict()
     }
     return response
-
 
 # CLI tool simulation
 def cli_compile(script, output_format="text"):
     """Simulate CLI tool"""
     result = compile(script)
-
+    
     if output_format == "json":
         return result.to_json()
     elif output_format == "simple":
@@ -211,7 +205,6 @@ def cli_compile(script, output_format="text"):
             return f"ERROR: {result.first_error.simple_message}"
     else:
         return str(result)
-
 
 # Test the patterns
 api_response = api_compile({"script": "GO https://example.com"})

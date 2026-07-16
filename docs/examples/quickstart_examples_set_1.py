@@ -10,25 +10,22 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, CrawlResult
 from crawl4ai import RoundRobinProxyStrategy
 from crawl4ai import JsonCssExtractionStrategy, LLMExtractionStrategy
 from crawl4ai import LLMConfig
-from crawl4ai import PruningContentFilter
+from crawl4ai import PruningContentFilter, BM25ContentFilter
 from crawl4ai import DefaultMarkdownGenerator
 from crawl4ai import BFSDeepCrawlStrategy, DomainFilter, FilterChain
 from crawl4ai import BrowserConfig
 
 __cur_dir__ = Path(__file__).parent
 
-
 async def demo_basic_crawl():
     """Basic web crawling with markdown generation"""
     print("\n=== 1. Basic Web Crawling ===")
-    async with AsyncWebCrawler(
-        config=BrowserConfig(
-            viewport_height=800,
-            viewport_width=1200,
-            headless=True,
-            verbose=True,
-        )
-    ) as crawler:
+    async with AsyncWebCrawler(config = BrowserConfig(
+        viewport_height=800,
+        viewport_width=1200,
+        headless=True,
+        verbose=True,
+    )) as crawler:
         results: List[CrawlResult] = await crawler.arun(
             url="https://news.ycombinator.com/"
         )
@@ -41,7 +38,6 @@ async def demo_basic_crawl():
                 print(f"First 100 chars: {result.markdown.raw_markdown[:100]}...")
             else:
                 print("Failed to crawl the URL")
-
 
 async def demo_parallel_crawl():
     """Crawl multiple URLs in parallel"""
@@ -64,14 +60,13 @@ async def demo_parallel_crawl():
                 f"  {i + 1}. {result.url} - {'Success' if result.success else 'Failed'}"
             )
 
-
 async def demo_fit_markdown():
     """Generate focused markdown with LLM content filter"""
     print("\n=== 3. Fit Markdown with LLM Content Filter ===")
 
     async with AsyncWebCrawler() as crawler:
         result: CrawlResult = await crawler.arun(
-            url="https://en.wikipedia.org/wiki/Python_(programming_language)",
+            url = "https://en.wikipedia.org/wiki/Python_(programming_language)",
             config=CrawlerRunConfig(
                 markdown_generator=DefaultMarkdownGenerator(
                     content_filter=PruningContentFilter()
@@ -82,7 +77,6 @@ async def demo_fit_markdown():
         # Print stats and save the fit markdown
         print(f"Raw: {len(result.markdown.raw_markdown)} chars")
         print(f"Fit: {len(result.markdown.fit_markdown)} chars")
-
 
 async def demo_llm_structured_extraction_no_schema():
     # Create a simple LLM extraction strategy (no schema required)
@@ -116,7 +110,6 @@ async def demo_llm_structured_extraction_no_schema():
                 print(json.dumps(data, indent=2))
             else:
                 print("Failed to extract structured data")
-
 
 async def demo_css_structured_extraction_no_schema():
     """Extract structured data using CSS selectors"""
@@ -184,7 +177,6 @@ async def demo_css_structured_extraction_no_schema():
             else:
                 print("Failed to extract structured data")
 
-
 async def demo_deep_crawl():
     """Deep crawling with BFS strategy"""
     print("\n=== 6. Deep Crawling ===")
@@ -205,7 +197,6 @@ async def demo_deep_crawl():
         for i, result in enumerate(results):
             depth = result.metadata.get("depth", "unknown")
             print(f"  {i + 1}. {result.url} (Depth: {depth})")
-
 
 async def demo_js_interaction():
     """Execute JavaScript to load more content"""
@@ -269,15 +260,12 @@ async def demo_js_interaction():
                 print("Failed to extract structured data")
         print(f"Total items: {len(news)}")
 
-
 async def demo_media_and_links():
     """Extract media and links from a page"""
     print("\n=== 8. Media and Links Extraction ===")
 
     async with AsyncWebCrawler() as crawler:
-        result: List[CrawlResult] = await crawler.arun(
-            "https://en.wikipedia.org/wiki/Main_Page"
-        )
+        result: List[CrawlResult] = await crawler.arun("https://en.wikipedia.org/wiki/Main_Page")
 
         for i, result in enumerate(result):
             # Extract and save all images
@@ -309,7 +297,6 @@ async def demo_media_and_links():
                     indent=2,
                 )
 
-
 async def demo_screenshot_and_pdf():
     """Capture screenshot and PDF of a page"""
     print("\n=== 9. Screenshot and PDF Capture ===")
@@ -338,7 +325,6 @@ async def demo_screenshot_and_pdf():
                     f.write(result.pdf)
                 print(f"PDF saved to {pdf_path}")
 
-
 async def demo_proxy_rotation():
     """Proxy rotation for multiple requests"""
     print("\n=== 10. Proxy Rotation ===")
@@ -356,12 +342,13 @@ async def demo_proxy_rotation():
         "Note: This example uses placeholder proxies - replace with real ones to test"
     )
 
-    async with AsyncWebCrawler():
-        CrawlerRunConfig(proxy_rotation_strategy=proxy_strategy)
+    async with AsyncWebCrawler() as crawler:
+        config = CrawlerRunConfig(
+            proxy_rotation_strategy=proxy_strategy
+        )
 
         # In a real scenario, these would be run and the proxies would rotate
         print("In a real scenario, requests would rotate through the available proxies")
-
 
 async def demo_raw_html_and_file():
     """Process raw HTML and local files"""
@@ -399,7 +386,6 @@ async def demo_raw_html_and_file():
     os.remove(file_path)
     print(f"Processed both raw HTML and local file ({file_path})")
 
-
 async def main():
     """Run all demo functions sequentially"""
     print("=== Comprehensive Crawl4AI Demo ===")
@@ -421,7 +407,6 @@ async def main():
     # Clean up any temp files that may have been created
     print("\n=== Demo Complete ===")
     print("Check for any generated files (screenshots, PDFs) in the current directory")
-
 
 if __name__ == "__main__":
     asyncio.run(main())

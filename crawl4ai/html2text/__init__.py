@@ -620,18 +620,18 @@ class HTML2Text(html.parser.HTMLParser):
         if tag == "dl" and start:
             self.p()  # Add paragraph break before list starts
             self.p_p = 0  # Reset paragraph state
-
+        
         elif tag == "dt" and start:
             if self.p_p == 0:  # If not first term
                 self.o("\n\n")  # Add spacing before new term-definition pair
             self.p_p = 0  # Reset paragraph state
-
+        
         elif tag == "dt" and not start:
             self.o("\n")  # Single newline between term and definition
-
+        
         elif tag == "dd" and start:
             self.o("    ")  # Indent definition
-
+        
         elif tag == "dd" and not start:
             self.p_p = 0
 
@@ -701,14 +701,19 @@ class HTML2Text(html.parser.HTMLParser):
             elif self.bypass_tables:
                 if start:
                     self.soft_br()
-                if tag in ["td", "th"]:
-                    if start:
-                        self.o("<{}>\n\n".format(tag))
+                    attr_str = ""
+                    if attrs:
+                        attr_str = "".join(
+                            ' {}="{}"'.format(k, v) if v is not None else " {}".format(k)
+                            for k, v in attrs.items()
+                        )
+                    if tag in ["td", "th"]:
+                        self.o("<{}{}>\n\n".format(tag, attr_str))
                     else:
-                        self.o("\n</{}>".format(tag))
+                        self.o("<{}{}>".format(tag, attr_str))
                 else:
-                    if start:
-                        self.o("<{}>".format(tag))
+                    if tag in ["td", "th"]:
+                        self.o("\n</{}>".format(tag))
                     else:
                         self.o("</{}>".format(tag))
 
@@ -1146,7 +1151,8 @@ class CustomHTML2Text(HTML2Text):
         # Handle pre tags
         if tag == "pre":
             if start:
-                self.o("\n```\n")  # Markdown code block start
+                lang = attrs.get("data-language", "")
+                self.o(f"\n```{lang}\n")  # Markdown code block start
                 self.inside_pre = True
             else:
                 self.o("\n```\n")  # Markdown code block end
@@ -1166,7 +1172,7 @@ class CustomHTML2Text(HTML2Text):
 
             # If inside a link, let the parent class handle the content
             if self.inside_link:
-                super().handle_tag(tag, attrs, start)
+                super().handle_tag(tag, attrs, start) 
         else:
             super().handle_tag(tag, attrs, start)
 

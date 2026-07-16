@@ -6,18 +6,19 @@ alongside the existing crawler_config (single dict), and that the list
 is correctly passed through to arun_many().
 """
 
-from crawl4ai import CrawlerRunConfig
+import pytest
+from unittest.mock import AsyncMock, patch, MagicMock
+from crawl4ai import CrawlerRunConfig, CacheMode
 
 
 # -- Schema tests --
-
 
 class TestCrawlRequestSchema:
     """Verify CrawlRequest schema accepts crawler_configs."""
 
     def test_schema_has_crawler_configs_field(self):
         """CrawlRequest should have an optional crawler_configs field."""
-
+        import importlib.util
         with open("deploy/docker/schemas.py") as f:
             source = f.read()
         assert "crawler_configs" in source
@@ -38,7 +39,6 @@ class TestCrawlRequestSchema:
 
 # -- API handler tests --
 
-
 class TestHandleCrawlRequestSignature:
     """Verify handle_crawl_request accepts crawler_configs parameter."""
 
@@ -57,7 +57,6 @@ class TestHandleCrawlRequestSignature:
 
 # -- Config list deserialization --
 
-
 class TestConfigListDeserialization:
     """Verify that a list of config dicts can be deserialized."""
 
@@ -71,10 +70,7 @@ class TestConfigListDeserialization:
         """Multiple config dicts should each deserialize independently."""
         configs_data = [
             {"type": "CrawlerRunConfig", "params": {"verbose": False}},
-            {
-                "type": "CrawlerRunConfig",
-                "params": {"cache_mode": {"type": "CacheMode", "params": "bypass"}},
-            },
+            {"type": "CrawlerRunConfig", "params": {"cache_mode": {"type": "CacheMode", "params": "bypass"}}},
         ]
         configs = [CrawlerRunConfig.load(c) for c in configs_data]
         assert len(configs) == 2
@@ -87,7 +83,6 @@ class TestConfigListDeserialization:
 
 
 # -- Integration: config list logic in api.py --
-
 
 class TestConfigListLogic:
     """Verify the branching logic for single vs list configs."""
@@ -115,7 +110,6 @@ class TestConfigListLogic:
 
 # -- Server endpoint passes crawler_configs --
 
-
 class TestServerEndpoint:
     """Verify the /crawl endpoint passes crawler_configs through."""
 
@@ -127,7 +121,6 @@ class TestServerEndpoint:
 
 
 # -- Backward compatibility --
-
 
 class TestBackwardCompatibility:
     """Ensure existing single-config requests still work."""

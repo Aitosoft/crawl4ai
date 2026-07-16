@@ -49,9 +49,7 @@ async def test_llm_extraction_strategy():
     async with AsyncWebCrawler(verbose=True) as crawler:
         url = "https://www.nbcnews.com/business"
         extraction_strategy = LLMExtractionStrategy(
-            llm_config=LLMConfig(
-                provider="openai/gpt-4o-mini", api_token=os.getenv("OPENAI_API_KEY")
-            ),
+            llm_config=LLMConfig(provider="openai/gpt-4o-mini",api_token=os.getenv("OPENAI_API_KEY")),
             instruction="Extract only content related to technology",
         )
         result = await crawler.arun(

@@ -16,7 +16,6 @@ CONTAINER_NAME = "crawl4ai-test"
 PORT = 11235
 REQUESTS = 10
 
-
 async def test_endpoint(url: str, count: int):
     """Hit endpoint multiple times, return stats."""
     results = []
@@ -26,19 +25,20 @@ async def test_endpoint(url: str, count: int):
             try:
                 resp = await client.get(url)
                 elapsed = (time.time() - start) * 1000  # ms
-                results.append(
-                    {
-                        "success": resp.status_code == 200,
-                        "latency_ms": elapsed,
-                        "status": resp.status_code,
-                    }
-                )
+                results.append({
+                    "success": resp.status_code == 200,
+                    "latency_ms": elapsed,
+                    "status": resp.status_code
+                })
                 print(f"  [{i+1}/{count}] ✓ {resp.status_code} - {elapsed:.0f}ms")
             except Exception as e:
-                results.append({"success": False, "latency_ms": None, "error": str(e)})
+                results.append({
+                    "success": False,
+                    "latency_ms": None,
+                    "error": str(e)
+                })
                 print(f"  [{i+1}/{count}] ✗ Error: {e}")
     return results
-
 
 def start_container(client, image: str, name: str, port: int):
     """Start container, return container object."""
@@ -58,11 +58,11 @@ def start_container(client, image: str, name: str, port: int):
         ports={f"{port}/tcp": port},
         detach=True,
         shm_size="1g",
-        environment={"PYTHON_ENV": "production"},
+        environment={"PYTHON_ENV": "production"}
     )
 
     # Wait for health
-    print("⏳ Waiting for container to be healthy...")
+    print(f"⏳ Waiting for container to be healthy...")
     for _ in range(30):  # 30s timeout
         time.sleep(1)
         container.reload()
@@ -70,28 +70,25 @@ def start_container(client, image: str, name: str, port: int):
             try:
                 # Quick health check
                 import requests
-
                 resp = requests.get(f"http://localhost:{port}/health", timeout=2)
                 if resp.status_code == 200:
-                    print("✅ Container healthy!")
+                    print(f"✅ Container healthy!")
                     return container
             except:
                 pass
     raise TimeoutError("Container failed to start")
 
-
 def stop_container(container):
     """Stop and remove container."""
-    print("🛑 Stopping container...")
+    print(f"🛑 Stopping container...")
     container.stop()
     container.remove()
-    print("✅ Container removed")
-
+    print(f"✅ Container removed")
 
 async def main():
-    print("=" * 60)
+    print("="*60)
     print("TEST 1: Basic Container Health + Single Endpoint")
-    print("=" * 60)
+    print("="*60)
 
     client = docker.from_env()
     container = None
@@ -113,7 +110,7 @@ async def main():
 
         # Print results
         print(f"\n{'='*60}")
-        print("RESULTS:")
+        print(f"RESULTS:")
         print(f"  Success Rate: {success_rate:.1f}% ({successes}/{len(results)})")
         print(f"  Avg Latency:  {avg_latency:.0f}ms")
         if latencies:
@@ -123,10 +120,10 @@ async def main():
 
         # Pass/Fail
         if success_rate >= 100:
-            print("✅ TEST PASSED")
+            print(f"✅ TEST PASSED")
             return 0
         else:
-            print("❌ TEST FAILED (expected 100% success rate)")
+            print(f"❌ TEST FAILED (expected 100% success rate)")
             return 1
 
     except Exception as e:
@@ -135,7 +132,6 @@ async def main():
     finally:
         if container:
             stop_container(container)
-
 
 if __name__ == "__main__":
     exit_code = asyncio.run(main())

@@ -18,7 +18,7 @@ Requirements:
 
 import asyncio
 import json
-from typing import Dict, Any
+from typing import Dict, Any, List
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.deep_crawling import (
     BFSDeepCrawlStrategy,
@@ -31,7 +31,6 @@ from crawl4ai.deep_crawling import (
 # Example 1: Basic Cancellation with Callback
 # =============================================================================
 
-
 async def example_callback_cancellation():
     """
     Cancel a crawl after reaching a certain number of pages.
@@ -41,9 +40,9 @@ async def example_callback_cancellation():
     giving precise cancellation control. BFS processes URLs in batches
     (levels), so cancellation happens at level boundaries.
     """
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("Example 1: Callback-based Cancellation (DFS)")
-    print("=" * 60)
+    print("="*60)
 
     pages_crawled = 0
     max_before_cancel = 5
@@ -78,9 +77,12 @@ async def example_callback_cancellation():
     print(f"Starting crawl (will cancel after {max_before_cancel} pages)...")
 
     async with AsyncWebCrawler() as crawler:
-        results = await crawler.arun("https://docs.crawl4ai.com", config=config)
+        results = await crawler.arun(
+            "https://docs.crawl4ai.com",
+            config=config
+        )
 
-    print("\nResults:")
+    print(f"\nResults:")
     print(f"  - Crawled {len(results)} pages")
     print(f"  - Strategy cancelled: {strategy.cancelled}")
     print(f"  - Pages crawled counter: {strategy._pages_crawled}")
@@ -92,15 +94,14 @@ async def example_callback_cancellation():
 # Example 2: Direct Cancellation via cancel() Method
 # =============================================================================
 
-
 async def example_direct_cancellation():
     """
     Cancel a crawl directly using the cancel() method.
     This is useful when you have direct access to the strategy instance.
     """
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("Example 2: Direct Cancellation via cancel()")
-    print("=" * 60)
+    print("="*60)
 
     strategy = BFSDeepCrawlStrategy(
         max_depth=3,
@@ -125,7 +126,10 @@ async def example_direct_cancellation():
         cancel_task = asyncio.create_task(cancel_after_delay())
 
         try:
-            results = await crawler.arun("https://docs.crawl4ai.com", config=config)
+            results = await crawler.arun(
+                "https://docs.crawl4ai.com",
+                config=config
+            )
         finally:
             cancel_task.cancel()
             try:
@@ -133,7 +137,7 @@ async def example_direct_cancellation():
             except asyncio.CancelledError:
                 pass
 
-    print("\nResults:")
+    print(f"\nResults:")
     print(f"  - Crawled {len(results)} pages")
     print(f"  - Strategy cancelled: {strategy.cancelled}")
 
@@ -144,14 +148,13 @@ async def example_direct_cancellation():
 # Example 3: Streaming Mode with Cancellation
 # =============================================================================
 
-
 async def example_streaming_cancellation():
     """
     Cancel a streaming crawl and process partial results as they arrive.
     """
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("Example 3: Streaming Mode with Cancellation")
-    print("=" * 60)
+    print("="*60)
 
     results_count = 0
     cancel_after = 3
@@ -176,13 +179,14 @@ async def example_streaming_cancellation():
     results = []
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun(
-            "https://docs.crawl4ai.com", config=config
+            "https://docs.crawl4ai.com",
+            config=config
         ):
             results_count += 1
             results.append(result)
             print(f"  Received result {results_count}: {result.url[:60]}...")
 
-    print("\nResults:")
+    print(f"\nResults:")
     print(f"  - Received {len(results)} results")
     print(f"  - Strategy cancelled: {strategy.cancelled}")
 
@@ -193,15 +197,14 @@ async def example_streaming_cancellation():
 # Example 4: Strategy Reuse After Cancellation
 # =============================================================================
 
-
 async def example_strategy_reuse():
     """
     Demonstrate that a strategy can be reused after cancellation.
     The cancel flag is automatically reset on the next crawl.
     """
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("Example 4: Strategy Reuse After Cancellation")
-    print("=" * 60)
+    print("="*60)
 
     crawl_number = 0
 
@@ -224,16 +227,22 @@ async def example_strategy_reuse():
         # First crawl - will be cancelled immediately
         crawl_number = 1
         print("First crawl (will be cancelled)...")
-        results1 = await crawler.arun("https://docs.crawl4ai.com", config=config)
+        results1 = await crawler.arun(
+            "https://docs.crawl4ai.com",
+            config=config
+        )
         print(f"  - Results: {len(results1)}, Cancelled: {strategy.cancelled}")
 
         # Second crawl - should work normally
         crawl_number = 2
         print("\nSecond crawl (should complete normally)...")
-        results2 = await crawler.arun("https://docs.crawl4ai.com", config=config)
+        results2 = await crawler.arun(
+            "https://docs.crawl4ai.com",
+            config=config
+        )
         print(f"  - Results: {len(results2)}, Cancelled: {strategy.cancelled}")
 
-    print("\nSummary:")
+    print(f"\nSummary:")
     print(f"  - First crawl: {len(results1)} results (cancelled)")
     print(f"  - Second crawl: {len(results2)} results (completed)")
 
@@ -241,7 +250,6 @@ async def example_strategy_reuse():
 # =============================================================================
 # Example 5: Best-First Strategy with Cancellation
 # =============================================================================
-
 
 async def example_best_first_cancellation():
     """
@@ -251,9 +259,9 @@ async def example_best_first_cancellation():
     happens at batch boundaries. You may see more results than the cancel
     threshold before the crawl stops.
     """
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("Example 5: Best-First Strategy with Cancellation")
-    print("=" * 60)
+    print("="*60)
 
     from crawl4ai.deep_crawling.scorers import KeywordRelevanceScorer
 
@@ -268,7 +276,10 @@ async def example_best_first_cancellation():
         pages_crawled = state.get("pages_crawled", 0)
         print(f"  Pages: {pages_crawled}, Cancelled: {state.get('cancelled', False)}")
 
-    scorer = KeywordRelevanceScorer(keywords=["api", "example", "tutorial"], weight=0.8)
+    scorer = KeywordRelevanceScorer(
+        keywords=["api", "example", "tutorial"],
+        weight=0.8
+    )
 
     strategy = BestFirstCrawlingStrategy(
         max_depth=2,
@@ -290,13 +301,14 @@ async def example_best_first_cancellation():
     results = []
     async with AsyncWebCrawler() as crawler:
         async for result in await crawler.arun(
-            "https://docs.crawl4ai.com", config=config
+            "https://docs.crawl4ai.com",
+            config=config
         ):
             results.append(result)
             score = result.metadata.get("score", 0)
             print(f"  Result: {result.url[:50]}... (score: {score:.2f})")
 
-    print("\nResults:")
+    print(f"\nResults:")
     print(f"  - Crawled {len(results)} high-priority pages")
     print(f"  - Strategy cancelled: {strategy.cancelled}")
 
@@ -305,15 +317,14 @@ async def example_best_first_cancellation():
 # Example 6: Production Pattern - Redis-Based Cancellation (Simulated)
 # =============================================================================
 
-
 async def example_production_pattern():
     """
     Simulate a production pattern where cancellation is checked from Redis.
     This pattern is suitable for cloud platforms with job management.
     """
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("Example 6: Production Pattern (Simulated Redis)")
-    print("=" * 60)
+    print("="*60)
 
     # Simulate Redis storage
     redis_storage: Dict[str, str] = {}
@@ -365,7 +376,10 @@ async def example_production_pattern():
         cancel_task = asyncio.create_task(external_cancel())
 
         try:
-            results = await crawler.arun("https://docs.crawl4ai.com", config=config)
+            results = await crawler.arun(
+                "https://docs.crawl4ai.com",
+                config=config
+            )
         finally:
             cancel_task.cancel()
             try:
@@ -377,7 +391,7 @@ async def example_production_pattern():
     final_status = "cancelled" if strategy.cancelled else "completed"
     await redis_set(f"{job_id}:status", final_status)
 
-    print("\nJob completed:")
+    print(f"\nJob completed:")
     print(f"  - Final status: {final_status}")
     print(f"  - Pages crawled: {await redis_get(f'{job_id}:pages')}")
     print(f"  - Results returned: {len(results)}")
@@ -391,12 +405,11 @@ async def example_production_pattern():
 # Main
 # =============================================================================
 
-
 async def main():
     """Run all examples."""
-    print("=" * 60)
+    print("="*60)
     print("Deep Crawl Cancellation Examples")
-    print("=" * 60)
+    print("="*60)
 
     await example_callback_cancellation()
     await example_direct_cancellation()
@@ -405,9 +418,9 @@ async def main():
     await example_best_first_cancellation()
     await example_production_pattern()
 
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("All examples completed!")
-    print("=" * 60)
+    print("="*60)
 
 
 if __name__ == "__main__":

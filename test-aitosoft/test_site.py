@@ -36,14 +36,18 @@ CONFIGS = {
     # including cookie walls (remove_consent_popups handles OneTrust/Cookiebot/Didomi).
     "optimal": {
         "wait_until": "domcontentloaded",
-        "magic": False,  # Don't use - removes content on cookie sites!
+        # NOTE: no "magic" key. Since v0.9.x the server's untrusted-config
+        # boundary rejects the field on PRESENCE (even "magic": false) with
+        # HTTP 400. It was harmful on cookie sites anyway.
         "scan_full_page": False,
         "remove_overlay_elements": False,  # Don't use - removes page!
         "remove_consent_popups": True,  # Aitosoft: CMP-aware cookie removal (v0.8.5+)
         "page_timeout": 60000,
         "delay_before_return_html": 2.0,
     },
-    # LEGACY configs - use "optimal" instead
+    # LEGACY configs - use "optimal" instead.
+    # WARNING: every config carrying "magic" now gets HTTP 400 from the
+    # v0.9.x server (forbidden untrusted field). Kept only as history.
     "fast": {
         "wait_until": "domcontentloaded",
         "magic": True,

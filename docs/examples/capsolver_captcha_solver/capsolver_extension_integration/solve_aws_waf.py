@@ -20,13 +20,12 @@ browser_config = BrowserConfig(
     use_persistent_context=True,
 )
 
-
 async def main():
     async with AsyncWebCrawler(config=browser_config) as crawler:
-        await crawler.arun(
+        result_initial = await crawler.arun(
             url="https://nft.porsche.com/onboarding@6",
             cache_mode=CacheMode.BYPASS,
-            session_id="session_captcha_test",
+            session_id="session_captcha_test"
         )
 
         # do something later

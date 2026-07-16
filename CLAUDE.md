@@ -75,9 +75,10 @@ URL → Browser (Playwright/Patchright) → HTML → Scraping → Markdown → F
   (`enable_stealth: true`) patches navigator.webdriver, WebGL, chrome.runtime, etc.
 - **Second tier:** Patchright fallback (`aitosoft_patchright_fallback.py`) — when
   antibot_detector marks a result as blocked, retry once through undetected-chromium.
-- **Config merging:** `aitosoft_browser_merge.py` merges `config.yml` browser kwargs
-  into every request so stealth/UA/viewport apply even when the client sends no
-  `browser_config`. Without this, config.yml only affected the PERMANENT pool browser.
+- **Config defaults:** `aitosoft_entry.py` calls `BrowserConfig.set_defaults(**config.yml)`
+  at import time so stealth/UA/viewport apply to every request even when the
+  client sends no `browser_config`. Without this, config.yml would only affect
+  the PERMANENT pool browser.
 
 ### Per-Request Customization (for MAS)
 MAS sends per-company browser identity via the API:
@@ -164,33 +165,46 @@ Token shapes this catches: `crawl4ai-<32-or-48 hex>`, `crawl4ai-test-<32 hex>`
 
 ### Integration Architecture (wrapper entry point)
 We use a **wrapper entry point** (`aitosoft_entry.py`) that imports and extends
-upstream's `server.py` without modifying it. This keeps merges clean.
+upstream's `server.py`. This keeps merges clean.
 
 ```
 gunicorn → aitosoft_entry:app
              ├─ BrowserConfig.set_defaults(**config.yml)  # config.yml defaults for all requests
-             ├─ from server import app                     # upstream, unmodified
-             └─ app.add_middleware(SimpleTokenAuthMiddleware)  # our auth
+             ├─ untrusted-boundary relaxations             # allow browser_config.headers; page_timeout cap 60s→180s
+             └─ from server import app                     # upstream (auth comes with it)
 ```
+
+Auth is upstream's `AuthGateMiddleware` since v0.9.2: `Authorization: Bearer
+$CRAWL4AI_API_TOKEN`, fail-closed, constant-time. Only `/health` is public.
+
+**v0.9.x untrusted-config boundary (debug 400s here):** request-body configs
+are filtered — forbidden fields (`magic`, `js_code`, `simulate_user`, proxy
+fields, `extra_args`, `cookies`…) give HTTP 400 **on presence, even falsy**;
+unknown fields are silently dropped; `page_timeout` is clamped. See
+`crawl4ai/async_configs.py` UNTRUSTED_* constants + our relaxations in
+`aitosoft_entry.py`.
 
 ### Aitosoft Modifications (changes to upstream files)
 | File | What changed |
 |------|-------------|
-| `Dockerfile` | Added `RUN playwright install chrome` for real Chrome binary |
-| `crawl4ai/browser_adapter.py` | Ported StealthAdapter to playwright-stealth 2.x API (PR upstream pending) |
-| `crawl4ai/browser_manager.py` | Gated `--disable-gpu` flags on `enable_stealth` (PR upstream pending) |
-| `deploy/docker/api.py` | 4 lines: patchright retry after first-tier crawl |
-| `deploy/docker/config.yml` | Stealth config: enable_stealth, chrome_channel, UA, viewport |
+| `Dockerfile` | `RUN playwright install chrome` + copy chrome cache to appuser |
+| `crawl4ai/browser_manager.py` | `_build_browser_args`: GPU flags gated on `enable_stealth` (PR upstream pending) |
+| `deploy/docker/api.py` | ~25 lines: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging |
+| `deploy/docker/server.py` | static branch in `/crawl`; lifespan closes static client + patchright singleton |
+| `deploy/docker/schemas.py` | `CrawlRequest.render_mode` field |
+| `deploy/docker/crawler_pool.py` | MAX_PAGES enforcement + overflow keys; BUSY_SINCE stuck-slot janitor (file unchanged upstream since 0.8.6) |
+| `deploy/docker/config.yml` | Deployment config: stealth kwargs, `wall_clock_s: 180`, pool limits |
 | `deploy/docker/supervisord.conf` | Entry point: `aitosoft_entry:app` instead of `server:app` |
-| `.pre-commit-config.yaml` | Excluded upstream files from ruff + mypy (pre-existing issues) |
 
-**NOT modified** (moved to wrapper): `server.py` (auth), `api.py` (config merge)
+Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
+(upstream #1960), api.py timeout patch (`limits.wall_clock_s`),
+`simple_token_auth.py` (upstream `AuthGateMiddleware`).
 
 ### New Aitosoft Files (in upstream directories)
 | File | Purpose |
 |------|---------|
-| `deploy/docker/aitosoft_entry.py` | Wrapper entry point: sets BrowserConfig defaults + auth middleware |
-| `deploy/docker/simple_token_auth.py` | Bearer token auth middleware (39 lines) |
+| `deploy/docker/aitosoft_entry.py` | Wrapper entry point: BrowserConfig defaults + trusted-client boundary relaxations |
+| `deploy/docker/aitosoft_static_mode.py` | `render_mode: "static"` implementation (httpx + html2text) |
 | `deploy/docker/aitosoft_patchright_fallback.py` | Second-tier retry via patchright for blocked crawls |
 
 ### 100% Aitosoft Code (safe to modify freely)
@@ -201,9 +215,10 @@ gunicorn → aitosoft_entry:app
 - `CLAUDE.md`, `AITOSOFT_CHANGES.md`, `AITOSOFT_FILES.md`, `DEPLOYMENT_INFO.md`
 
 ### Upstream sync
-- **Last synced:** upstream/develop (2026-04-14), includes v0.8.6 + security hardening
-- **Sync procedure:** `git fetch upstream && git merge upstream/develop` — should be near-conflict-free now
+- **Last synced:** upstream/develop == v0.9.2 (2026-07-16)
+- **Sync procedure:** `git fetch upstream && git merge upstream/develop` — near-conflict-free; our whole delta is the tables above
 - **Key technique:** `BrowserConfig.set_defaults()` (upstream's `@_with_defaults` in `async_configs.py`) applies config.yml defaults to every request without patching `api.py`
+- **CRITICAL:** never run formatters over upstream files — pre-commit is scoped to Aitosoft files via the top-level `files:` pattern in `.pre-commit-config.yaml`. Keep it that way or merges drown in noise (see AITOSOFT_CHANGES.md v0.9.2 entry)
 
 ---
 
