@@ -82,10 +82,20 @@ Aitosoft-only files (no upstream counterpart): `deploy/docker/aitosoft_entry.py`
 
 ## Remaining
 
-- [ ] Tero relays the compat notice + questions to MAS Claude (drafted in
-  the 2026-07-16 session final report); confirm what fields MAS sends.
+- [x] MAS compat confirmation received 2026-07-16: full field audit, test
+  batch on v0.9.2 all green ("no breakage found; next WAA batch clear").
+  Their open question — is `prefetch: true` explicitly allowed? — answered:
+  YES, it's in UPSTREAM's own UNTRUSTED_FIELD_ALLOWLIST (async_configs.py
+  "misc safe knobs" line, alongside stream/method), not slipping through
+  and not even dependent on our relaxations. remove_overlay_elements and
+  process_iframes are also upstream-allowed (not dropped).
+- [x] MAS's exact field enumeration pinned as an offline regression test:
+  `test-aitosoft/test_mas_contract.py` (7 tests). Relaxations refactored
+  into `aitosoft_trust.py` so the test imports them without the server.
+  Note: prod runs the pre-refactor entry (functionally identical); the
+  refactor rides along with the next image build.
 - [ ] Watch the first real WAA batch on 0.9.2 (OVERNIGHT_PLAYBOOK applies).
-- [ ] Move this task to done/ once MAS confirms a clean batch.
+- [ ] Move this task to done/ once the first production batch is clean.
 
 ## Learnings
 

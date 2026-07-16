@@ -89,6 +89,7 @@ amd64 image has real Chrome.
 
 | Gate | When | Bar |
 |------|------|-----|
+| MAS contract test (`pytest test-aitosoft/test_mas_contract.py`) | before every deploy + after every upstream sync | 7/7 pass — offline, pins MAS's exact request fields against the untrusted boundary |
 | Tier 1 regression | before every deploy | 4/4 pass |
 | Fingerprint diagnostic | after stealth/browser changes | no regressions vs `test-aitosoft/stealth-v4/` |
 | Soak test | after pool/leak-related changes | flat memory over 30 min |

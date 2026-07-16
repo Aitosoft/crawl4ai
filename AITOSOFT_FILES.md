@@ -35,7 +35,9 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
 - `TESTING.md`, `TEST_SITES_REGISTRY.md`, `OVERNIGHT_PLAYBOOK.md`
 
 ### Wrapper + Aitosoft Modules (in deploy/docker/)
-- `aitosoft_entry.py` - Wrapper entry point (defaults + boundary relaxations)
+- `aitosoft_entry.py` - Wrapper entry point (applies defaults + relaxations, imports app)
+- `aitosoft_trust.py` - Trusted-client relaxations of the untrusted-config boundary
+  (importable without the server — used by test_mas_contract.py)
 - `aitosoft_static_mode.py` - `render_mode: "static"` implementation (httpx + html2text)
 - `aitosoft_patchright_fallback.py` - Second-tier retry via patchright for blocked crawls
 

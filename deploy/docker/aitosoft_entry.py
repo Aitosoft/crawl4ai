@@ -7,7 +7,8 @@ behavior at import time:
 
   1. BrowserConfig class-level defaults from config.yml (stealth, real
      Chrome, UA, viewport) — upstream's own set_defaults() mechanism.
-  2. Trusted-client relaxations of the v0.9.0 untrusted-config boundary.
+  2. Trusted-client relaxations of the v0.9.0 untrusted-config boundary
+     (see aitosoft_trust.py; contract pinned by test_mas_contract.py).
 
 Auth note: our old SimpleTokenAuthMiddleware was removed in the v0.9.2
 upgrade — upstream's AuthGateMiddleware now provides the same contract
@@ -22,8 +23,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
-import crawl4ai.async_configs as _ac  # noqa: E402
 from crawl4ai import BrowserConfig  # noqa: E402
+from aitosoft_trust import apply_trust_relaxations  # noqa: E402
 from utils import load_config  # noqa: E402
 
 # ── Apply config.yml browser kwargs as BrowserConfig class defaults ──
@@ -39,50 +40,7 @@ if _yml_extra_args:
 BrowserConfig.set_defaults(**_yml_kwargs)  # type: ignore[attr-defined]
 
 # ── Trusted-client relaxations of the untrusted-config boundary ──
-# Upstream v0.9.0 treats every network request body as untrusted and rejects
-# or clamps "power fields". This service is single-tenant: the only client is
-# MAS, authenticated with a bearer token. Two upstream defaults break MAS's
-# existing request contract, so we relax exactly those and nothing else
-# (js_code, proxies, extra_args, cdp_url etc. all stay forbidden —
-# defense-in-depth against a leaked token):
-#
-#  1. browser_config.headers — MAS sends per-company persona headers
-#     (Accept-Language, sec-ch-ua). Header values only shape outbound
-#     requests to crawl targets; they cannot execute code or reroute
-#     traffic, and egress is still pinned by the SSRF broker.
-_ac.UNTRUSTED_FORBIDDEN_FIELDS["BrowserConfig"].discard("headers")
-_ac.UNTRUSTED_FIELD_ALLOWLIST["BrowserConfig"].add("headers")
-
-#  2. page_timeout clamp — upstream caps it at 60s; MAS legitimately sends
-#     90s for slow SPA sites. Raise the cap to our wall-clock deadline
-#     (config.yml limits.wall_clock_s = 180s) so the per-page timeout can
-#     never exceed the request deadline anyway.
-_ac._MAX_TIMEOUT_MS = 180_000
-
-#  3. Behavioral emulation knobs — magic / simulate_user / override_navigator
-#     are anti-bot-evasion toggles, not code-execution or traffic-routing
-#     vectors. Upstream forbids them for multi-tenant safety; for our single
-#     trusted client they're legitimate crawl tuning.
-for _f in ("magic", "simulate_user", "override_navigator"):
-    _ac.UNTRUSTED_FORBIDDEN_FIELDS["CrawlerRunConfig"].discard(_f)
-    _ac.UNTRUSTED_FIELD_ALLOWLIST["CrawlerRunConfig"].add(_f)
-
-#  4. Falsy forbidden fields are dropped, not rejected. Upstream raises 400 on
-#     the PRESENCE of a forbidden field even when its value is null/false/empty
-#     (e.g. {"magic": false} — which our own pre-0.9 configs sent). A falsy
-#     power-field is semantically identical to its absence, so absorbing it
-#     costs nothing security-wise and keeps older MAS payloads working.
-#     Truthy forbidden fields (js_code, proxy_config, cookies, ...) still 400.
-_upstream_filter = _ac._filter_untrusted_fields
-
-
-def _filter_untrusted_fields_tolerant(type_name, params):
-    forbidden = _ac.UNTRUSTED_FORBIDDEN_FIELDS.get(type_name, set())
-    pruned = {k: v for k, v in params.items() if not (k in forbidden and not v)}
-    return _upstream_filter(type_name, pruned)
-
-
-_ac._filter_untrusted_fields = _filter_untrusted_fields_tolerant
+apply_trust_relaxations()
 
 # ── Import the upstream app (auth gate + middleware come with it) ──
 from server import app  # noqa: E402, F401
