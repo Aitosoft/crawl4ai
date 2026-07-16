@@ -59,5 +59,30 @@ _ac.UNTRUSTED_FIELD_ALLOWLIST["BrowserConfig"].add("headers")
 #     never exceed the request deadline anyway.
 _ac._MAX_TIMEOUT_MS = 180_000
 
+#  3. Behavioral emulation knobs — magic / simulate_user / override_navigator
+#     are anti-bot-evasion toggles, not code-execution or traffic-routing
+#     vectors. Upstream forbids them for multi-tenant safety; for our single
+#     trusted client they're legitimate crawl tuning.
+for _f in ("magic", "simulate_user", "override_navigator"):
+    _ac.UNTRUSTED_FORBIDDEN_FIELDS["CrawlerRunConfig"].discard(_f)
+    _ac.UNTRUSTED_FIELD_ALLOWLIST["CrawlerRunConfig"].add(_f)
+
+#  4. Falsy forbidden fields are dropped, not rejected. Upstream raises 400 on
+#     the PRESENCE of a forbidden field even when its value is null/false/empty
+#     (e.g. {"magic": false} — which our own pre-0.9 configs sent). A falsy
+#     power-field is semantically identical to its absence, so absorbing it
+#     costs nothing security-wise and keeps older MAS payloads working.
+#     Truthy forbidden fields (js_code, proxy_config, cookies, ...) still 400.
+_upstream_filter = _ac._filter_untrusted_fields
+
+
+def _filter_untrusted_fields_tolerant(type_name, params):
+    forbidden = _ac.UNTRUSTED_FORBIDDEN_FIELDS.get(type_name, set())
+    pruned = {k: v for k, v in params.items() if not (k in forbidden and not v)}
+    return _upstream_filter(type_name, pruned)
+
+
+_ac._filter_untrusted_fields = _filter_untrusted_fields_tolerant
+
 # ── Import the upstream app (auth gate + middleware come with it) ──
 from server import app  # noqa: E402, F401
