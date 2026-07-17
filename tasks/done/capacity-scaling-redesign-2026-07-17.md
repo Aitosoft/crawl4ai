@@ -162,12 +162,20 @@ for the same window confirms everything:
   admitted on 255ps 14:36:32.7 — the fence released the slot cleanly. 255ps
   completed renders on its other slot throughout → per-render wedge, NOT the
   2026-07-16 replica-wide starvation. teollisuuskatot pair: same signature,
-  180.2/181.3s ≈ zero queue wait + full fence. Zero Page.goto-timeout and
-  zero [ERROR] lines fit the documented silent-retry arithmetic: page_timeout
-  80s × 2 attempts = 160s + patchright tail ≈ 180s fence, all muted in server
-  context (can't distinguish from a single indefinite page hang without the
-  observability fix). Rate 3/808 = 0.37%, ramp-only, contained by MAS's
-  2-consecutive-504 static pivot.
+  180.2/181.3s ≈ zero queue wait + full fence. Rate 3/808 = 0.37%,
+  ramp-only, contained by MAS's 2-consecutive-504 static pivot.
+  **CORRECTION (same day, Session E):** this entry originally called
+  silent-retry arithmetic (80s×2 + patchright ≈ fence) the leading
+  mechanism. Disproven — the upstream retry loop logs every retry/exception
+  via AsyncLogger and `verbose` defaults to True in server context (the
+  eval's own [FETCH]/[COMPLETE] lines come from that logger), so a
+  goto-timeout retry could not have been silent. Zero log lines for 180s
+  therefore means ONE indefinite hang inside crawler_strategy.crawl
+  (unbounded-await candidates: page-creation CDP roundtrips on a busy
+  Chromium, redirect-chain walk, hooks) — see AITOSOFT_CHANGES.md
+  fence-obs entry and tasks/done/504-fence-observability-2026-07-17.md.
+  MAS was told the old hypothesis in the 2026-07-17 cross-check relay;
+  corrected in the fence-obs FYI relay.
 - **Browser churn quantified:** 275 creates / 158 idle-closes fleet-wide in
   11 min for 739 renders (one Chromium launch per ~2.7 renders) — personas
   spread over 30 replicas mean every replica launches its own copy of each
