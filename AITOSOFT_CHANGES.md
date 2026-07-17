@@ -29,7 +29,59 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- 3/3 test-aitosoft/ tests passing
+- Offline suites green: test_mas_contract.py (7), test_admission.py (8)
+
+---
+
+## Render Admission Control + Capacity-Matched Scaling (2026-07-17)
+
+### Why
+
+2026-07-16 ~17:39–17:43 UTC incident: `kynnos.fi/yritys/` 504'd after exactly
+180s under only 4–6 concurrent renders, while sibling pages rendered in 3–4s.
+Forensics (Log Analytics): a single replica served the whole burst (ACA
+`rules: null` = default 10-concurrent/replica scale rule, never triggered);
+that replica launched 7 Chromium browsers in 10 min (per-persona configs +
+overflow browsers after `5/5` capacity warnings) on 2 vCPU; a whole-replica
+stall 17:39:24→17:42:28 starved the render until the wall-clock fence cut it.
+Memory was NOT a factor (67% peak, no MemoryError). Historic mitigation was
+pinning 3–5 warm replicas before batches — retired by this change.
+
+### What
+
+1. **`deploy/docker/aitosoft_admission.py` (new)** — `RenderGate`: hard cap of
+   `render_capacity` (2) concurrent full renders per replica, bounded queue
+   (4 waiters / 15s max wait), overflow → `RenderCapacityExceeded`. Weighted
+   all-or-nothing acquire (`min(len(urls), capacity)` slots) so multi-URL
+   batches can't smuggle renders and can't deadlock.
+2. **`api.py` (~15 lines)** — `handle_crawl_request` acquires the gate after
+   config validation, BEFORE browser get/launch and BEFORE
+   `asyncio.wait_for(wall_clock_s)` — the 180s fence now starts at DEQUEUE,
+   so queue wait can never eat the render budget. Rejection maps to
+   **HTTP 429 + `Retry-After: 5`**. Static mode bypasses the gate entirely.
+   Budget: 15s queue + browser get + 180s fence ≈ 200s < 240s ACA ingress.
+3. **`config.yml`** — `crawler.pool.render_capacity: 2`, `admission_queue: 4`,
+   `admission_max_wait_s: 15`.
+4. **ACA config (az CLI, not in repo)** — explicit HTTP scale rule
+   `concurrentRequests: 2` (replaces default 10), `maxReplicas: 30`,
+   HTTP startup/readiness probes on `/health` (lifespan pre-warms the
+   permanent browser, so serving /health == browser-ready).
+
+### Capacity number (benchmarked 2026-07-17)
+
+2-CPU-pinned Chromium render benchmark (synthetic SME page, fixed CPU work,
+MAS V13-like config): N=2 costs +7% p50 vs N=1; N=3 +13%; N=4 +22%
+(p95 +43%); N=6 +44% (p95 2×, 2.1 GB Chromium RSS). Prod degrades steeper
+(multi-browser personas + launch storms), so capacity = 2.
+
+### Tests
+
+- `test-aitosoft/test_admission.py` — 8 offline tests (gate semantics + 429
+  mapping in `handle_crawl_request`).
+- E2E local: 10 concurrent renders → 6×200 (2 immediate, 4 queued ≤14s),
+  4×429 in 0.5s with Retry-After; /health instant under load; static mode
+  unaffected. Tier 1 regression 4/4
+  (`reports/render-gate-local-regression-tier1.md`).
 
 ---
 

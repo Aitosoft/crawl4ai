@@ -115,6 +115,7 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 | Raw markdown > fit_markdown for contact extraction | PruningContentFilter removes contacts at threshold >= 0.35 |
 | Use `optimal` config by default | domcontentloaded + remove_consent_popups (2-4s) |
 | Blocked sites are IP-based, not fingerprint-based | Confirmed: two different browser engines get identical blocks |
+| Per-replica render capacity is 2 (2 vCPU) | Benchmarked 2026-07-17; >2 concurrent renders degrade all requests. Enforced by RenderGate + ACA scale rule |
 
 ---
 
@@ -189,11 +190,11 @@ unknown fields are silently dropped; `page_timeout` is clamped. See
 |------|-------------|
 | `Dockerfile` | `RUN playwright install chrome` + copy chrome cache to appuser |
 | `crawl4ai/browser_manager.py` | `_build_browser_args`: GPU flags gated on `enable_stealth` (PR upstream pending) |
-| `deploy/docker/api.py` | ~25 lines: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging |
+| `deploy/docker/api.py` | ~40 lines: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission) |
 | `deploy/docker/server.py` | static branch in `/crawl`; lifespan closes static client + patchright singleton |
 | `deploy/docker/schemas.py` | `CrawlRequest.render_mode` field |
 | `deploy/docker/crawler_pool.py` | MAX_PAGES enforcement + overflow keys; BUSY_SINCE stuck-slot janitor (file unchanged upstream since 0.8.6) |
-| `deploy/docker/config.yml` | Deployment config: stealth kwargs, `wall_clock_s: 180`, pool limits |
+| `deploy/docker/config.yml` | Deployment config: stealth kwargs, `wall_clock_s: 180`, pool limits, render admission (`render_capacity: 2` — MUST match ACA scale rule) |
 | `deploy/docker/supervisord.conf` | Entry point: `aitosoft_entry:app` instead of `server:app` |
 
 Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
@@ -206,6 +207,8 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 | `deploy/docker/aitosoft_entry.py` | Wrapper entry point: BrowserConfig defaults + trusted-client boundary relaxations |
 | `deploy/docker/aitosoft_static_mode.py` | `render_mode: "static"` implementation (httpx + html2text) |
 | `deploy/docker/aitosoft_patchright_fallback.py` | Second-tier retry via patchright for blocked crawls |
+| `deploy/docker/aitosoft_admission.py` | RenderGate: per-replica render admission (capacity 2, bounded queue, 429 + Retry-After) |
+| `deploy/docker/aitosoft_trust.py` | Trusted-client relaxations of the untrusted-config boundary (pinned by test_mas_contract.py) |
 
 ### 100% Aitosoft Code (safe to modify freely)
 - `tasks/` — task tracking

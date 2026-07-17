@@ -664,6 +664,8 @@ async def handle_crawl_request(
     # Track request start
     request_id = f"req_{uuid4().hex[:8]}"
     crawler = None
+    _gate = None
+    _gate_weight = 0
     try:
         from monitor import get_monitor
         await get_monitor().track_request_start(
@@ -711,6 +713,30 @@ async def handle_crawl_request(
         enforce_egress(browser_config)
         from governor import clamp_deep_crawl
         clamp_deep_crawl(crawler_config)
+
+        # Aitosoft: per-replica render admission control. Acquired BEFORE the
+        # browser is fetched/launched and BEFORE the wall-clock fence starts,
+        # so queue wait can never eat the render budget (the 2026-07-16 504).
+        # Full when: 429 + Retry-After, which the client absorbs with backoff.
+        # Released in the finally below. See aitosoft_admission.py.
+        from aitosoft_admission import get_render_gate, RenderCapacityExceeded
+
+        _gate = get_render_gate()
+        try:
+            _gate_weight = await _gate.acquire(weight=len(urls))
+        except RenderCapacityExceeded as e:
+            try:
+                from monitor import get_monitor
+                await get_monitor().track_request_end(
+                    request_id, success=False, error=str(e), status_code=429
+                )
+            except:
+                pass
+            raise HTTPException(
+                status_code=429,
+                detail=f"Replica at render capacity: {e.reason}. Retry with backoff.",
+                headers={"Retry-After": str(e.retry_after_s)},
+            )
 
         dispatcher = MemoryAdaptiveDispatcher(
             memory_threshold_percent=config["crawler"]["memory_threshold_percent"],
@@ -907,6 +933,8 @@ async def handle_crawl_request(
     finally:
         if crawler:
             await release_crawler(crawler)
+        if _gate is not None and _gate_weight:
+            await _gate.release(_gate_weight)
 
 async def handle_stream_crawl_request(
     urls: List[str],

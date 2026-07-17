@@ -90,6 +90,15 @@ crawler:
     max_pages: 5                           # Aitosoft: keep low; scale horizontally via replicas (2026-04-14 starvation incident)
     idle_ttl_sec: 300                     # 30 min janitor cutoff
     stuck_busy_timeout_sec: 600           # Aitosoft: janitor force-closes browsers busy longer than this (leak safety net)
+    # Aitosoft render admission (2026-07-17, kynnos.fi 504 incident). Hard cap
+    # on concurrent /crawl full renders per replica; overflow queues briefly,
+    # then 429s so the client retries against a scaled-out replica instead of
+    # contending into the 180s wall-clock fence. MUST match the ACA scale rule
+    # (--scale-rule-http-concurrency == render_capacity). See
+    # aitosoft_admission.py + tasks/capacity-scaling-redesign.md.
+    render_capacity: 2                    # concurrent renders admitted per replica
+    admission_queue: 4                    # max waiters; more than this -> instant 429
+    admission_max_wait_s: 15              # max queue wait before 429 (fence starts AFTER dequeue)
   browser:
     # Aitosoft stealth defaults (2026-04-11 stealth package). Applied to every
     # request via BrowserConfig.set_defaults() in aitosoft_entry.py.
