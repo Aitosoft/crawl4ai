@@ -95,8 +95,8 @@ Test these when working on specific features:
     "homepage_timeout",
     "multiple_phone_formats"
   ],
-  "test_priority": "tier_1",
-  "notes": "Email pattern explicitly stated: 'etunimi.sukunimi@talgraf.fi'. 5 office locations."
+  "test_priority": "RETIRED (2026-04-11, permanent Cloudflare block — DO NOT CRAWL)",
+  "notes": "Email pattern explicitly stated: 'etunimi.sukunimi@talgraf.fi'. 5 office locations. Kept for the email-pattern reference only."
 }
 ```
 
@@ -132,8 +132,8 @@ Test these when working on specific features:
     "split_line_email_format",
     "wordpress_page_id_urls"
   ],
-  "test_priority": "tier_1",
-  "notes": "Emails use 'name(at)domain.fi' format. Some split across lines. 2 offices."
+  "test_priority": "RETIRED (2026-04-11, contact page 404s — site restructured)",
+  "notes": "Emails use 'name(at)domain.fi' format. Some split across lines. 2 offices. Kept for the obfuscation-pattern reference only; jpond.fi covers (at)-obfuscation in Tier 1 now."
 }
 ```
 
@@ -169,12 +169,10 @@ Test these when working on specific features:
   },
   "challenges": [
     "cookie_consent_wall",
-    "requires_magic_true",
-    "requires_scan_full_page",
     "multi_country_site"
   ],
   "test_priority": "tier_1",
-  "notes": "CRITICAL TEST CASE: Requires `magic: true` + `scan_full_page: true` or returns only 32 tokens."
+  "notes": "CRITICAL TEST CASE: cookie wall returns only 32 tokens without handling. Solved by `remove_consent_popups: true` (the optimal config). Do NOT use `magic` — it removes content and the v0.9.x server rejects the field with HTTP 400."
 }
 ```
 
@@ -201,8 +199,8 @@ Test these when working on specific features:
   "challenges": [
     "domain_redirect"
   ],
-  "test_priority": "tier_1",
-  "notes": "Clean baseline site. Minimal tracking. Should always work fast."
+  "test_priority": "RETIRED (2026-03-26, site restructured — old paths 404)",
+  "notes": "Was the clean-baseline site; caverna.fi holds that role in Tier 1 now."
 }
 ```
 
@@ -214,10 +212,10 @@ Test these when working on specific features:
 
 | Pattern | Sites Affected | Solution | Test Command |
 |---------|----------------|----------|--------------|
-| **Cookiebot wall** (blocks content) | accountor.com | `magic: true` + `scan_full_page: true` | See V10 tests |
+| **Cookiebot wall** (blocks content) | accountor.com | `remove_consent_popups: true` (in the optimal config; `magic` is rejected by the v0.9.x server) | `test_site.py accountor.com --page fi/finland` |
 | **Cookiebot tracking** (pixel only) | neuroliitto.fi, showell.com | `removeCommonDomains` cleaning | Check for cookiebot.com URLs |
-| **Finnish popup** (text at end) | talgraf.fi | No truncation needed - let LLM see it | Check tokens don't bloat >5k |
-| **No consent** | monidor.fi, caverna.fi | Works with defaults | Fast baseline |
+| **Finnish popup** (text at end) | talgraf.fi (retired) | No truncation needed - let LLM see it | Check tokens don't bloat >5k |
+| **No consent** | caverna.fi (monidor.fi retired) | Works with defaults | Fast baseline |
 
 ### Email Obfuscation Patterns
 
@@ -276,32 +274,26 @@ Based on V9/V10 testing with Azure crawl4ai deployment:
 ## Quick Test Commands
 
 ### Test Single Site (Manual)
+
+Run from the repo root. Site safety: max 1-2 hits per site per session.
+
 ```bash
-# Test contact page extraction
-python test-aitosoft/test_site.py talgraf.fi --page yhteystiedot
+# Test contact page extraction (optimal config is the default)
+python test-aitosoft/test_site.py solwers.com --page contacts
 
-# Test with heavy config (Accountor-type)
-python test-aitosoft/test_site.py accountor.com --config heavy
+# Slow-and-thorough fallback for lazy-loading pages
+python test-aitosoft/test_site.py <domain> --config patient
 
-# Test homepage vs contact page comparison
-python test-aitosoft/test_site.py monidor.fi --compare
+# Browserless static mode
+python test-aitosoft/test_site.py <domain> --render-mode static
 ```
 
-### Test All Tier 1 Sites
+### Tier 1 Regression (before every deploy)
 ```bash
-# Regression test - run before deploying changes
-python test-aitosoft/test_regression.py --tier 1
+# --version is required; it labels the report
+python test-aitosoft/test_regression.py --tier 1 --version <label>
 
-# Full test suite (all tiers)
-python test-aitosoft/test_regression.py --all
-```
-
-### Generate Test Report
-```bash
-# Create versioned test report (like MAS Claude's V1-V10)
-python test-aitosoft/test_regression.py --tier 1 --report v11
-
-# Output: test-aitosoft/reports/v11-test-results.md
+# Output: test-aitosoft/reports/<label>-regression-tier1.md
 ```
 
 ---
@@ -361,7 +353,7 @@ When adding a test site, document:
     ]
   },
   "challenges": ["list", "of", "challenges"],
-  "test_priority": "tier_1|tier_2|tier_3",
+  "test_priority": "tier_1|tier_2|tier_3 (or RETIRED (date, reason) when a site drops out)",
   "notes": "Any special notes"
 }
 ```
@@ -373,7 +365,9 @@ When adding a test site, document:
 | Date | Change | Reason |
 |------|--------|--------|
 | 2026-01-21 | Initial registry created | Consolidate MAS V1-V10 test findings |
-| 2026-01-21 | Added V10 cookie consent learnings | Document `magic: true` requirement |
+| 2026-01-21 | Added V10 cookie consent learnings | Documented `magic: true` (since superseded) |
+| 2026-07-16 | Tier tables corrected for v0.9.2 | `magic` rejected by server; `remove_consent_popups` is the cookie-wall solution |
+| 2026-07-17 | Audit pass: retired-site blocks marked RETIRED, magic purged from metadata/solutions, test commands fixed to match actual CLI flags | Registry contradicted TESTING.md and the live server |
 
 ---
 

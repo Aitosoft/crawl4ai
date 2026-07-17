@@ -19,7 +19,7 @@ Keeping this log helps when syncing with upstream updates.
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
 - **Location**: West Europe (co-located with MAS)
 - **Resource Group**: `aitosoft-prod`
-- **Authentication**: ✅ Enabled (simple Bearer token)
+- **Authentication**: ✅ Enabled — upstream `AuthGateMiddleware` (static Bearer token, fail-closed, constant-time; only `/health` public) since v0.9.2
 - **Status**: ✅ Running
 
 ### Environment
@@ -52,8 +52,10 @@ pinning 3–5 warm replicas before batches — retired by this change.
 1. **`deploy/docker/aitosoft_admission.py` (new)** — `RenderGate`: hard cap of
    `render_capacity` (2) concurrent full renders per replica, bounded queue
    (4 waiters / 15s max wait), overflow → `RenderCapacityExceeded`. Weighted
-   all-or-nothing acquire (`min(len(urls), capacity)` slots) so multi-URL
-   batches can't smuggle renders and can't deadlock.
+   acquire (`min(len(urls), capacity)` slots), so it can't deadlock — but note
+   the weight clamp means a multi-URL request can still render at dispatcher
+   concurrency above its granted weight; latent while MAS sends single URLs
+   (see `tasks/render-gate-batch-coherence.md`).
 2. **`api.py` (~15 lines)** — `handle_crawl_request` acquires the gate after
    config validation, BEFORE browser get/launch and BEFORE
    `asyncio.wait_for(wall_clock_s)` — the 180s fence now starts at DEQUEUE,
@@ -160,9 +162,14 @@ defaults broke MAS's existing contract; we relax exactly those at import time:
 - MAS-sent fields verified allowed: `user_agent`, `viewport_*`, `locale`,
   `timezone_id`, `geolocation`, `remove_consent_popups`, `wait_until`,
   `max_retries`, `delay_before_return_html`, `scan_full_page`.
-- `ignore_https_errors` defaults true at the Playwright-context level, so
-  broken-cert sites still crawl despite upstream removing
-  `--ignore-certificate-errors` from Chromium args.
+- ~~`ignore_https_errors` defaults true at the Playwright-context level, so
+  broken-cert sites still crawl~~ **CORRECTION 2026-07-17: this is wrong
+  post-0.9.2.** Upstream's `enforce_egress` (egress_broker.py) forces
+  `ignore_https_errors=False` on every /crawl unless
+  `CRAWL4AI_ALLOW_INSECURE_TLS=true`, which is NOT set on the Container App —
+  broken-cert sites likely fail in full mode (static mode still works,
+  httpx `verify=False`). Verification + decision tracked in
+  `tasks/tls-broken-cert-regression.md`.
 
 ### Upstream infra changes that affect deployment
 
@@ -227,7 +234,17 @@ When `render_mode: "static"` (default `"full"`):
 - Each URL is fetched via a module-scope `httpx.AsyncClient`
   (`STATIC_FETCH_TIMEOUT_S = 15s` per URL, `verify=False`, follows
   redirects, UA mirrored from `config.yml`).
-- The response body is converted to markdown via the vendored
+- Before conversion, `_strip_hidden_decoys()` removes CSS-hidden nodes with
+  BeautifulSoup: `<script>/<style>/<noscript>/<template>`, inline
+  `display:none`/`visibility:hidden`, and the class allowlist
+  `oe_displaynone` (Odoo), `d-none` (Bootstrap), `is-hidden` (Bulma).
+  Motivation: Odoo sites inject a hidden `<span class="oe_displaynone">null
+  </span>` inside emails; html2text has no CSS model and would emit
+  `name@nulldomain.fi`. Deliberately does NOT strip `sr-only` /
+  `visually-hidden` (legitimate screen-reader content — a site putting
+  contact data there would lose it). If a site ever reports missing
+  contacts in static mode, check this pass first.
+- The cleaned body is converted to markdown via the vendored
   `crawl4ai.html2text.HTML2Text` (`body_width=0`, `ignore_images=True`).
 - Response envelope matches full-mode exactly; each inner result has
   `render_mode: "static"` so MAS can weight confidence downstream.

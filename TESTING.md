@@ -30,8 +30,20 @@ python test-aitosoft/test_regression.py --tier 1 --version <label>  # quality ga
 python test-aitosoft/test_site.py <domain> --page <path>            # single site
 python test-aitosoft/test_site.py <domain> --render-mode static     # static mode
 python test-aitosoft/test_fingerprint.py --label <label>            # stealth diagnostic
-python test-aitosoft/test_soak.py --duration 30                     # leak hunting
+python test-aitosoft/test_soak.py --duration-min 30                 # leak hunting
 ```
+
+Two suites are OFFLINE (no server, no network) and safe to run any time:
+
+```bash
+pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py
+```
+
+**Always run from the repo root** — artifact/report paths are relative
+(`test-aitosoft/reports/`); running from inside `test-aitosoft/` creates a
+nested `test-aitosoft/test-aitosoft/` clutter directory. Note that a bare
+`pytest test-aitosoft/` will also collect the live-HTTP tests, which need a
+running server + token — run the offline pair above instead.
 
 Reports land in `test-aitosoft/reports/`.
 
@@ -49,6 +61,10 @@ arm64 caveat (this devcontainer): real Chrome doesn't exist for linux/arm64 —
 temporarily comment the `chrome_channel`/`channel` lines in
 `deploy/docker/config.yml` for local runs (NEVER commit that). The deployed
 amd64 image has real Chrome.
+
+PyJWT caveat: a stale `jwt` 1.4.0 package can shadow PyJWT and break server
+boot locally — `pip uninstall jwt` fixes it (the image installs fresh and is
+unaffected).
 
 ## The `optimal` config (mirrors MAS)
 
@@ -90,6 +106,7 @@ amd64 image has real Chrome.
 | Gate | When | Bar |
 |------|------|-----|
 | MAS contract test (`pytest test-aitosoft/test_mas_contract.py`) | before every deploy + after every upstream sync | 7/7 pass — offline, pins MAS's exact request fields against the untrusted boundary |
+| Render-gate test (`pytest test-aitosoft/test_admission.py`) | before every deploy; after any admission/capacity change | all pass — offline, pins RenderGate capacity/queue/429 semantics |
 | Tier 1 regression | before every deploy | 4/4 pass |
 | Fingerprint diagnostic | after stealth/browser changes | no regressions vs `test-aitosoft/stealth-v4/` |
 | Soak test | after pool/leak-related changes | flat memory over 30 min |

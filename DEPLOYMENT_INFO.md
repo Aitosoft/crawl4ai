@@ -123,22 +123,28 @@ az containerapp logs show \
 ```
 
 ### Update to New Version (Image Only — Keeps Existing Token)
-```bash
-# Step 1: Build image in Azure (no local Docker needed)
-az acr build --registry aitosoftacr --image crawl4ai-service:<tag> --file Dockerfile .
 
-# Step 2: Update container app image ONLY (preserves env vars including API token)
+```bash
+./azure-deployment/deploy-image.sh <tag>
+```
+
+This is the ONLY supported deploy path. It builds in ACR (no local Docker),
+swaps the image without touching env vars (MAS's token survives), verifies
+the `render_capacity` ↔ `http-renders` scale-rule invariant, and prints the
+active revision. Equivalent manual steps, if you need them piecemeal:
+
+```bash
+az acr build --registry aitosoftacr --image crawl4ai-service:<tag> --file Dockerfile .
 az containerapp update \
   --name crawl4ai-service \
   --resource-group aitosoft-prod \
   --image aitosoftacr.azurecr.io/crawl4ai-service:<tag>
-
-# Step 3: Verify
 curl https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io/health
 ```
 
-**⚠️ WARNING**: Do NOT use `deploy-aitosoft-prod.sh --update-only` for routine updates —
-it regenerates the API token which breaks the MAS connection. Use the commands above instead.
+(The old `deploy-aitosoft-prod.sh` — which regenerated the API token on every
+run and would have broken MAS — was deleted 2026-07-17 along with the rest of
+the obsolete North-Europe-era scripts.)
 
 ### Rotate API Token
 ```bash
@@ -156,7 +162,7 @@ az containerapp update \
 
 ### Scale Resources
 ```bash
-# Current (2026-04-04): 2 CPU, 4 GiB, 0-20 replicas
+# Current: 2 CPU, 4 GiB, 0-30 replicas
 # Adjust if needed:
 az containerapp update \
   --name crawl4ai-service \
@@ -166,6 +172,35 @@ az containerapp update \
   --cpu 2.0 \
   --memory 4.0Gi
 ```
+
+### Provisioning Reference (verified against live app 2026-07-17)
+
+Everything below already exists on the app; this is the reproduce-from-scratch
+record (it used to live only in az CLI history).
+
+**Env vars** (only the first two matter; the rest are inert leftovers from the
+old deploy script): `CRAWL4AI_API_TOKEN` (Bearer token, MAS holds the value),
+`GUNICORN_BIND=0.0.0.0:11235` (upstream's entrypoint otherwise binds `[::]`),
+`ENVIRONMENT`, `LOG_LEVEL`, `MAX_CONCURRENT_REQUESTS`.
+
+**Scale rule** — MUST match `render_capacity` in `deploy/docker/config.yml`:
+```bash
+az containerapp update --name crawl4ai-service --resource-group aitosoft-prod \
+  --scale-rule-name http-renders --scale-rule-type http \
+  --scale-rule-http-concurrency 2
+
+# Verify the invariant after any config.yml change:
+az containerapp show --name crawl4ai-service --resource-group aitosoft-prod \
+  --query "properties.template.scale.rules[?name=='http-renders'].http.metadata.concurrentRequests | [0]" -o tsv
+grep render_capacity deploy/docker/config.yml   # must print the same number
+```
+
+**Probes** (live values): Startup = HTTP `/health` every 2s, timeout 2s,
+failure threshold 30, initial delay 2s; Readiness = HTTP `/health` every 5s,
+timeout 5s, failure threshold 3; Liveness = TCP :11235 every 15s, failure
+threshold 5 (deliberately generous — never kills a busy replica). Probes are
+set via YAML (`az containerapp update --yaml`), not flags; dump the current
+template with `az containerapp show` if you ever need to recreate them.
 
 ### Batch Runbook — RETIRED (2026-07-17)
 
@@ -203,30 +238,36 @@ Current configuration (updated 2026-04-04):
 - **memory_threshold**: 85% (conservative for cloud)
 - **Estimated cost**: Scales to zero when idle. Under load: ~€0.10/replica-hour
 
-### Scaling Strategy (2026-04-04)
-Investigation of 500s+ latency incidents revealed the original 1 CPU / 2 GiB config caused
-severe resource starvation — Chromium pages competed for a single CPU core, leading to
-8+ minute queuing delays on requests that actually crawled in <10s.
+Scaling history: the 2026-04-04 incident (1 CPU / 2 GiB starvation) and the
+2026-07-16 504 incident (default 10-concurrent scale rule) are narrated in
+AITOSOFT_CHANGES.md; the current model is capacity-matched scaling — 2
+renders per 2-vCPU replica, enforced twice (RenderGate in-process,
+`http-renders` rule at the scaler).
 
-Fix: fewer pages per replica (5), more replicas (up to 20). Each replica gets its own
-Chromium process with dedicated CPU. Azure scales replicas based on HTTP traffic.
+To monitor costs: Azure Portal > Cost Management. Most time is at 0 replicas
+(zero cost).
 
-To monitor costs:
-- Azure Portal > Cost Management
-- Most time will be at 0 replicas (zero cost)
+(The legacy North Europe deployment `crawl4ai-v2-rg` no longer exists —
+confirmed deleted, `az group exists` → false, 2026-07-17.)
 
 ---
 
-## Legacy North Europe Deployment
+## Monitoring & Alerts
 
-There's an old deployment in `crawl4ai-v2-rg` (North Europe) that can be deleted:
-
-```bash
-# Delete old resource group (saves ~€60-80/month)
-az group delete --name crawl4ai-v2-rg --yes --no-wait
-```
-
-**⚠️ WARNING**: Only delete after confirming the West Europe deployment works for your MAS!
+- Metric alert `crawl4ai-memory-high` (85% memory, action group
+  `crawl4ai-oncall`) exists, **but email delivery is DISABLED**: Tero was
+  removed as the only receiver on 2026-04-17. The alert still fires and is
+  visible via `az monitor metrics alert show` (`monitorCondition`) — nobody
+  gets paged. Re-subscribe if wanted:
+  ```bash
+  az monitor action-group update --name crawl4ai-oncall \
+    --resource-group aitosoft-prod \
+    --add-action email oncall1 tero.vaalamaki@aitosoft.com
+  ```
+- `azure-deployment/setup-memory-alert.sh` recreates the alert rule.
+- Rate limiting is **per-replica**, not global (upstream limiter uses
+  `memory://` storage) — accepted risk from the 2026-04-14 scale audit;
+  fine for a single trusted client (MAS), do not rely on it as a global cap.
 
 ---
 
@@ -242,8 +283,10 @@ az group delete --name crawl4ai-v2-rg --yes --no-wait
 - Verify app is running: `az containerapp show --name crawl4ai-service --resource-group aitosoft-prod --query "properties.runningStatus"`
 
 **Slow response**:
-- App may be cold starting (first request after idle takes ~30s)
-- Increase `--min-replicas 1` to keep always warm
+- App may be cold starting: ~8-12s on a node with the image cached, +40s
+  image pull on an uncached node (measured 2026-07-16)
+- 429 + Retry-After means the replica's render slots are full — expected
+  during ramp-up; MAS client retries absorb it while ACA scales out
 
 ---
 
@@ -251,4 +294,4 @@ az group delete --name crawl4ai-v2-rg --yes --no-wait
 
 - **Logs**: Azure Portal > Container Apps > crawl4ai-service > Logs
 - **Monitoring**: Azure Portal > Container Apps > crawl4ai-service > Metrics
-- **Documentation**: See `azure-deployment/SIMPLE_AUTH_DEPLOY.md`
+- **Change history**: `AITOSOFT_CHANGES.md` (authoritative log)

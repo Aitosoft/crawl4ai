@@ -36,11 +36,11 @@ curl http://localhost:11235/health
 # Code quality
 pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
-# Testing
-pytest test-aitosoft/               # Aitosoft-specific tests
-python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression
-python test-aitosoft/test_site.py <domain> --page <path>            # Single site
-python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic
+# Testing (run from repo root — relative artifact paths; see TESTING.md)
+pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py  # OFFLINE suites (no server needed)
+python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression (live server)
+python test-aitosoft/test_site.py <domain> --page <path>            # Single site (live server)
+python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic (live server)
 ```
 
 ---
@@ -150,15 +150,15 @@ Why this exact form (don't "simplify" it back):
   "never looked", so it gives false confidence. `git grep` scans tracked files, which
   is exactly the public-exposure surface — only tracked files reach GitHub.
 - **`[0-9a-f]{32,}`, not `[a-z0-9]`** — real tokens are `crawl4ai-` + `openssl rand -hex`
-  (`deploy-aitosoft-prod.sh` uses hex 24 = 48 chars; `deploy.sh` hex 16 = 32). The loose
+  (48 hex chars in prod, 32 in older scripts). The loose
   pattern matched 10 harmless strings (`crawl4ai-download-models`, `crawl4ai-standalone`,
   the `crawl4ai-service:<tag>` image names), so "must return empty" could never hold and
   trained us to wave it through. A check that always cries wolf is worse than no check.
-- **`jwt-secret-` included** — `deploy.sh` also mints `jwt-secret-$(openssl rand -hex 32)`.
-  The old pattern ignored it entirely.
+- **`jwt-secret-` included** — old deploy scripts minted `jwt-secret-$(openssl rand -hex 32)`;
+  keep catching the shape even though those scripts were deleted 2026-07-17.
 
-Token shapes this catches: `crawl4ai-<32-or-48 hex>`, `crawl4ai-test-<32 hex>`
-(`test_auth.py`), `jwt-secret-<64 hex>`.
+Token shapes this catches: `crawl4ai-<32-or-48 hex>`, `crawl4ai-test-<32 hex>`,
+`jwt-secret-<64 hex>`.
 
 ---
 
@@ -190,7 +190,7 @@ unknown fields are silently dropped; `page_timeout` is clamped. See
 |------|-------------|
 | `Dockerfile` | `RUN playwright install chrome` + copy chrome cache to appuser |
 | `crawl4ai/browser_manager.py` | `_build_browser_args`: GPU flags gated on `enable_stealth` (PR upstream pending) |
-| `deploy/docker/api.py` | ~40 lines: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission) |
+| `deploy/docker/api.py` | +95/−9: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission) |
 | `deploy/docker/server.py` | static branch in `/crawl`; lifespan closes static client + patchright singleton |
 | `deploy/docker/schemas.py` | `CrawlRequest.render_mode` field |
 | `deploy/docker/crawler_pool.py` | MAX_PAGES enforcement + overflow keys; BUSY_SINCE stuck-slot janitor (file unchanged upstream since 0.8.6) |
@@ -251,11 +251,10 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 
 **Deploy flow:**
 ```bash
-az acr build --registry aitosoftacr --image crawl4ai-service:<tag> --file Dockerfile .
-az containerapp update --name crawl4ai-service --resource-group aitosoft-prod --image aitosoftacr.azurecr.io/crawl4ai-service:<tag>
+./azure-deployment/deploy-image.sh <tag>   # az acr build + image-only update + invariant check
 ```
-Note: `deploy-aitosoft-prod.sh` regenerates the API token on every run — use the
-manual `az` commands above to swap the image without breaking MAS's token.
+Never set env vars during a deploy — that's how MAS's token gets broken.
+Provisioning reference (scale rule, probes, env vars): `DEPLOYMENT_INFO.md`.
 
 ---
 

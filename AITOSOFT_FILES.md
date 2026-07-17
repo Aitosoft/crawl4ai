@@ -1,7 +1,7 @@
 # Aitosoft Files Reference
 
 Quick reference for what's ours vs upstream. **Read this before making changes.**
-Current as of the v0.9.2 upgrade (2026-07-16).
+Current as of the 2026-07-17 repo audit (v0.9.2 + render gate deployed).
 
 ---
 
@@ -30,7 +30,7 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
 ### Documentation
 - `CLAUDE.md` - Claude Code guidance (entry point for new sessions)
 - `AITOSOFT_CHANGES.md` - Change tracking and current state (authoritative log)
-- `DEPLOYMENT_INFO.md` - Production deployment info (endpoint, token, examples)
+- `DEPLOYMENT_INFO.md` - Production deployment info (endpoint, token, provisioning reference)
 - `AITOSOFT_FILES.md` - This file
 - `TESTING.md`, `TEST_SITES_REGISTRY.md`, `OVERNIGHT_PLAYBOOK.md`
 
@@ -38,56 +38,69 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
 - `aitosoft_entry.py` - Wrapper entry point (applies defaults + relaxations, imports app)
 - `aitosoft_trust.py` - Trusted-client relaxations of the untrusted-config boundary
   (importable without the server — used by test_mas_contract.py)
+- `aitosoft_admission.py` - RenderGate: per-replica render admission
+  (capacity 2, bounded queue, 429 + Retry-After; test_admission.py pins it)
 - `aitosoft_static_mode.py` - `render_mode: "static"` implementation (httpx + html2text)
 - `aitosoft_patchright_fallback.py` - Second-tier retry via patchright for blocked crawls
 
 ### Deployment
-- `azure-deployment/` - Deploy scripts, batch-scale.sh, alert setup, guides
+- `azure-deployment/` - `deploy-image.sh` (THE deploy path), `batch-scale.sh`
+  (emergency valve only), `setup-memory-alert.sh`. Everything else was purged
+  2026-07-17 (obsolete North-Europe/JWT-era toolchain — see git history).
 
 ### Testing
-- `test-aitosoft/` - All files (our test suite)
+- `test-aitosoft/` - All files (our test suite). Live docs: TESTING.md.
+  `archive/` inside it is historical (Jan-2026 talgraf study) — do not act on it.
 
 ### Development Environment
 - `.devcontainer/` - All files (our dev container setup)
-- `tasks/` - Task tracking
+- `tasks/` - Task tracking (open work; `tasks/done/` for completed + logs)
 - `.pre-commit-config.yaml` - Ours. Hooks are scoped to Aitosoft files ONLY
   (top-level `files:` pattern). NEVER widen it to upstream code — formatter
   drift on upstream files poisons every merge.
+- `.env.example` - Env template (ours). `.env.txt` is upstream's — leave it.
+- `.github/workflows/monitor-crawl4ai-releases.yml` - Ours (upstream release watch)
 
 ---
 
 ## Modified Upstream Files
 
-### deploy/docker/api.py (~25 lines)
+Line counts are the real diff vs `upstream/develop` (checked 2026-07-17).
+
+### deploy/docker/api.py (+95/−9)
 `render_mode` param + static-mode short-circuit (after SSRF validation);
 patchright retry wrapped inside upstream's wall-clock deadline;
-`render_mode: "full"` tagging of results.
+`render_mode: "full"` tagging of results; render-admission gate acquire/release
+(429 fail-fast; wall-clock fence starts after admission).
 
-### deploy/docker/server.py (~30 lines)
+### deploy/docker/server.py (+30/−0)
 Static branch in `/crawl` (before stream check and all-failures→500 rewrite);
 lifespan shutdown closes static httpx client + patchright singleton.
 
-### deploy/docker/schemas.py (~15 lines)
+### deploy/docker/schemas.py (+14/−1)
 `CrawlRequest.render_mode: Literal["full","static"] = "full"`.
 
-### deploy/docker/crawler_pool.py (~300 lines)
+### deploy/docker/crawler_pool.py (+258/−49)
 MAX_PAGES enforcement + overflow browser keys; BUSY_SINCE stuck-slot
 force-close in janitor. File is unchanged upstream since 0.8.6, so this
-carries no merge risk.
+carries no merge risk. NOTE: ~a third of this diff is cosmetic reformatting
+that should be restored to upstream bytes — see `tasks/crawler-pool-cleanup.md`.
 
-### deploy/docker/config.yml
+### deploy/docker/config.yml (+34/−10)
 Deployment config (always ours): stealth browser kwargs, real-Chrome channel,
 `limits.wall_clock_s: 180`, `pool.max_pages: 5`, `stuck_busy_timeout_sec: 600`,
-`memory_threshold_percent: 85`.
+`memory_threshold_percent: 85`, render admission (`render_capacity: 2` —
+MUST match the ACA `http-renders` scale rule, `admission_queue: 4`,
+`admission_max_wait_s: 15`).
 
-### deploy/docker/supervisord.conf
-1 word: gunicorn target `aitosoft_entry:app`.
+### deploy/docker/supervisord.conf (1 line)
+gunicorn target `aitosoft_entry:app`.
 
-### crawl4ai/browser_manager.py (~10 lines)
+### crawl4ai/browser_manager.py (+11/−3)
 `_build_browser_args`: GPU flags gated on `enable_stealth` (keeps WebGL in
-stealth mode). Still broken upstream — PR-worthy.
+stealth mode). Still broken upstream — PR tracked in `tasks/file-upstream-prs.md`.
 
-### Dockerfile (~10 lines)
+### Dockerfile (+10/−0)
 `RUN playwright install chrome` + copy `chrome-*` cache to appuser home.
 
 ---
