@@ -1,28 +1,25 @@
 #!/usr/bin/env bash
-# Aitosoft: toggle crawl4ai-service min-replicas around a WAA batch run.
+# Aitosoft: toggle crawl4ai-service min-replicas. EMERGENCY VALVE ONLY.
 #
-# Why: default minReplicas=0 lets Azure KEDA scale to zero when idle
-# (saves cost). But during an active WAA batch, KEDA's http-scaler can
-# decide traffic is light and scale down mid-run — removing redundancy
-# right when we might need failover. Seen in the 2026-04-14 outage at
-# 12:51 UTC: replica xs697 was SIGTERM'd during Ahlman's run.
+# RETIRED as a routine pre-batch step (2026-07-17). Capacity is now managed
+# by the render-admission gate (aitosoft_admission.py, 429 + Retry-After) and
+# the `http-renders` ACA scale rule (2 concurrent renders/replica) — replicas
+# scale with load automatically. See DEPLOYMENT_INFO.md "Scaling".
+#
+# Keep for emergencies: if KEDA misbehaves mid-batch (e.g. the 2026-04-14
+# outage where replica xs697 was SIGTERM'd during an active run), pinning
+# min-replicas > 0 holds warm capacity until the batch completes.
 #
 # Usage:
-#   ./batch-scale.sh up      # Set min=1, max=20. Call BEFORE starting WAA batch.
-#   ./batch-scale.sh up 3    # Set min=3 for parallel-agent runs (3 agents).
-#   ./batch-scale.sh down    # Set min=0 (scale-to-zero). Call AFTER batch done.
+#   ./batch-scale.sh up [N]  # Pin min=N warm replicas (default 1). Emergency only.
+#   ./batch-scale.sh down    # Set min=0 (scale-to-zero). ALWAYS call after.
 #   ./batch-scale.sh status  # Show current replica config.
-#
-# Scaling guidance:
-#   1 WAA agent (sequential)     → min=1
-#   3-6 parallel WAA agents       → min=3
-#   10+ parallel agents (prod)    → min=5, revisit max if hitting 20.
 
 set -euo pipefail
 
 APP_NAME="crawl4ai-service"
 RESOURCE_GROUP="aitosoft-prod"
-MAX_REPLICAS=20
+MAX_REPLICAS=30  # keep in sync with prod scale config (DEPLOYMENT_INFO.md)
 
 action="${1:-status}"
 
