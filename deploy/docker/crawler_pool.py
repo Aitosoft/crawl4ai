@@ -92,8 +92,26 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
     Enforces MAX_PAGES per browser to prevent cascading page starvation.
     When a pooled browser is at capacity, falls through to create a new one.
     """
+    global PERMANENT
     sig = _sig(cfg)
     async with LOCK:
+        # Aitosoft: lazily re-create the permanent browser if the stuck-slot
+        # janitor force-closed it (_force_close_stuck sets PERMANENT = None).
+        # Without this, one stuck slot would degrade all default-config
+        # traffic to overflow cold browsers until the container restarts.
+        # DEFAULT_CONFIG_SIG is only set by init_permanent, so this can never
+        # fire before the first init.
+        if PERMANENT is None and _is_default_config(sig):
+            logger.warning("🔁 Re-creating permanent browser after force-close")
+            crawler = AsyncWebCrawler(config=cfg, thread_safe=False)
+            await crawler.start()
+            PERMANENT = crawler
+            LAST_USED[sig] = time.time()
+            USAGE_COUNT[sig] = USAGE_COUNT.get(sig, 0) + 1
+            _incr_active(PERMANENT)
+            logger.info("🔥 Using permanent browser")
+            return PERMANENT
+
         # Check permanent browser for default config
         if PERMANENT and _is_default_config(sig):
             if _active(PERMANENT) >= MAX_PAGES:
@@ -210,6 +228,7 @@ async def init_permanent(cfg: BrowserConfig):
 
 async def close_all():
     """Close all browsers."""
+    global OVERFLOW_SEQ
     async with LOCK:
         tasks = []
         if PERMANENT:
@@ -222,6 +241,7 @@ async def close_all():
         LAST_USED.clear()
         USAGE_COUNT.clear()
         BUSY_SINCE.clear()
+        OVERFLOW_SEQ = 0
 
 async def _force_close_stuck(now: float) -> None:
     """Force-close pool browsers whose active_requests has been > 0 too long.
