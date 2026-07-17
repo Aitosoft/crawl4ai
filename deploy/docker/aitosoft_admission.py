@@ -94,11 +94,11 @@ class RenderGate:
         weight, which MUST be passed back to release(). Raises
         RenderCapacityExceeded when the queue is full or the wait times out.
 
-        KNOWN LIMITATION: because weight is clamped to capacity, a multi-URL
-        request is admitted at weight<=capacity but the dispatcher downstream
-        may still render its URLs at higher concurrency (up to upstream's
-        GLOBAL_SEM=5). Harmless while MAS sends single-URL requests; must be
-        fixed before anyone batches — see tasks/render-gate-batch-coherence.md.
+        NOTE on weight clamping: a weight > capacity is clamped, so the gate
+        alone cannot bound a multi-URL batch's render concurrency. Not
+        reachable in practice: multi-URL requests are rejected with 400 in
+        api.py handle_crawl_request, upstream of this gate (MAS single-URL
+        contract, 2026-07-17 — see AITOSOFT_CHANGES.md).
         """
         weight = max(1, min(int(weight), self.capacity))
         async with self._cond:

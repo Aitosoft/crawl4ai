@@ -680,6 +680,26 @@ async def handle_crawl_request(
     peak_mem_mb = start_mem_mb
 
     try:
+        # Aitosoft: MAS contract is single-URL per /crawl request (accepted by
+        # MAS 2026-07-17 — see AITOSOFT_CHANGES.md). Enforced before seed
+        # validation and render admission so a multi-URL batch can never reach
+        # the render gate at a weight the dispatcher wouldn't honor.
+        if len(urls) > 1:
+            try:
+                from monitor import get_monitor
+                await get_monitor().track_request_end(
+                    request_id, success=False,
+                    error="multi-URL request rejected (single-URL contract)",
+                    status_code=400,
+                )
+            except:
+                pass
+            raise HTTPException(
+                status_code=400,
+                detail="multi-URL requests not supported: MAS contract is "
+                       "single-URL per request (AITOSOFT_CHANGES.md, 2026-07-17)",
+            )
+
         urls = _normalize_and_validate_seeds(urls)
 
         # Aitosoft: static-mode short-circuit (after SSRF validation, before

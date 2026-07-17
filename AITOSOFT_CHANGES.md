@@ -11,8 +11,9 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
-- **Production**: v0.9.2 + render admission + static-mode hardening (deployed 2026-07-17 ~06:02 UTC)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-static-hardening` (revision `crawl4ai-service--0000027`, digest `sha256:f9f6c7b7...`)
+- **Production**: v0.9.2 + render admission + static-mode hardening + single-URL contract guard (deployed 2026-07-17 ~06:53 UTC)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-single-url` (revision `crawl4ai-service--0000028`, digest `sha256:cfb14873...`)
+- **Prod smoke 2026-07-17 (single-url)**: health ✅, 2-URL request → 400 w/ contract message ✅, single-URL caverna.fi crawl ✅, Tier 1 regression 4/4 ✅
 - **Prod smoke 2026-07-17 (static-hardening)**: health ✅, static spot check caverna.fi ✅, Tier 1 regression 4/4 ✅, live SSRF probe (static redirect→10.0.0.1 blocked, opaque error, 200 envelope) ✅
 - **Prod smoke 2026-07-17 (render-gate)**: health ✅, auth 401 ✅, MAS-shaped crawl (render_mode:full, 4.0s) ✅, static mode ✅, js_code rejected 400 ✅, 8-way burst → 6×200 + 2×429@0.85s w/ Retry-After ✅, http-scaler scaled 1→2→4 during burst ✅, probes green ✅
 
@@ -30,9 +31,50 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- Offline suites green: test_mas_contract.py (7), test_admission.py (8), test_static_mode.py (10)
+- Offline suites green: test_mas_contract.py (8), test_admission.py (8), test_static_mode.py (10)
 
 ---
+
+## Contract Addendum: Single-URL /crawl Requests, Server-Enforced (2026-07-17)
+
+### The contract
+
+**One URL per /crawl request.** `len(urls) > 1` → HTTP **400** with detail
+`"multi-URL requests not supported: MAS contract is single-URL per request
+(AITOSOFT_CHANGES.md, 2026-07-17)"`. Enforced in `api.py
+handle_crawl_request` at the top of the request path — before seed
+validation, before the static-mode branch, before render admission — so it
+covers both full and static modes and the `/crawl/job` path (which reuses
+`handle_crawl_request`). `/crawl/stream` is not guarded (MAS doesn't use it;
+no second hunk in an upstream file for a path nobody calls).
+
+### MAS ack (relayed via Tero, 2026-07-17)
+
+> We commit to single-URL /crawl requests long-term — enforce it at the
+> boundary (400 on multi-URL) and document it in the contract; no change
+> needed on our side.
+
+Their client (`src/lib/crawl4ai-client.ts`) always sends `urls: [url]` and
+reads only `results[0]`; WAA agents are sequential ReAct loops; parallelism
+is many agents × single-URL requests, governed by the render-admission
+429/Retry-After contract.
+
+### Why
+
+Closes the last latent capacity-invariant gap: `RenderGate.acquire` clamps
+weight to capacity, so a multi-URL request admitted at weight ≤2 could have
+rendered at up to GLOBAL_SEM(5) concurrency, violating the 2-renders-per-
+replica invariant. Now structurally unreachable. (Weight-coherence
+implementation options preserved in tasks/render-gate-batch-coherence.md
+git history, pre-rescope, if batching ever returns.)
+
+### Tests
+
+- `test_mas_contract.py::test_multi_url_request_rejected_with_400` — 2-URL
+  request through `api.handle_crawl_request` → HTTPException 400, detail
+  names the contract. Existing single-URL contract payloads unchanged.
+- `aitosoft_admission.py` `acquire()` docstring updated: multi-URL rejected
+  upstream of the gate; weight-clamp note retained for context.
 
 ## Static-Mode Hardening: SSRF Redirect Validation + Robustness Bundle (2026-07-17)
 

@@ -81,6 +81,8 @@ URL → Browser (Playwright/Patchright) → HTML → Scraping → Markdown → F
   the PERMANENT pool browser.
 
 ### Per-Request Customization (for MAS)
+Contract: **one URL per request** — server-enforced, `len(urls) > 1` → 400
+(MAS ack 2026-07-17, see AITOSOFT_CHANGES.md contract addendum).
 MAS sends per-company browser identity via the API:
 ```json
 {
@@ -190,7 +192,7 @@ unknown fields are silently dropped; `page_timeout` is clamped. See
 |------|-------------|
 | `Dockerfile` | `RUN playwright install chrome` + copy chrome cache to appuser |
 | `crawl4ai/browser_manager.py` | `_build_browser_args`: GPU flags gated on `enable_stealth` (PR upstream pending) |
-| `deploy/docker/api.py` | +95/−9: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission) |
+| `deploy/docker/api.py` | +119/−9: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission), single-URL guard (multi-URL → 400) |
 | `deploy/docker/server.py` | static branch in `/crawl`; lifespan closes static client + patchright singleton |
 | `deploy/docker/schemas.py` | `CrawlRequest.render_mode` field |
 | `deploy/docker/crawler_pool.py` | MAX_PAGES enforcement + overflow keys; BUSY_SINCE stuck-slot janitor (file unchanged upstream since 0.8.6) |
@@ -244,7 +246,7 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 ## Azure Deployment
 
 - **Endpoint:** `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
-- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-static-hardening`
+- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-single-url`
 - **Resources:** 2 vCPU / 4 GiB per replica, 0-30 replicas (scales to zero; explicit `http-renders` scale rule at 2 concurrent/replica — MUST match `render_capacity` in config.yml)
 - **Auth:** Bearer token via `CRAWL4AI_API_TOKEN` env var
 - See `DEPLOYMENT_INFO.md` for full details

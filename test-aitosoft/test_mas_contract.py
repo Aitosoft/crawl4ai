@@ -151,3 +151,35 @@ def test_truthy_dangerous_fields_still_rejected():
 def test_unknown_fields_silently_dropped():
     cfg = load_crawler({**V13_CRAWLER_CONFIG, "some_future_field": 123})
     assert cfg.remove_consent_popups is True
+
+
+def test_multi_url_request_rejected_with_400():
+    """Single-URL contract (MAS ack 2026-07-17): a multi-URL /crawl request
+    must get HTTP 400 naming the contract, BEFORE seed validation or render
+    admission. Exercises api.handle_crawl_request directly, like
+    test_admission.py does."""
+    import asyncio
+
+    from fastapi import HTTPException
+
+    import api
+
+    async def main():
+        with pytest.raises(HTTPException) as exc_info:
+            await api.handle_crawl_request(
+                urls=["https://example.com", "https://example.org"],
+                browser_config={},
+                crawler_config={},
+                config={
+                    "crawler": {
+                        "base_config": {},
+                        "memory_threshold_percent": 85.0,
+                        "rate_limiter": {"enabled": False, "base_delay": [1, 2]},
+                    },
+                    "limits": {"wall_clock_s": 180},
+                },
+            )
+        assert exc_info.value.status_code == 400
+        assert "single-URL" in exc_info.value.detail
+
+    asyncio.get_event_loop_policy().new_event_loop().run_until_complete(main())

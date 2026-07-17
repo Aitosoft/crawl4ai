@@ -2,13 +2,13 @@
 
 **Last Updated**: 2026-07-17
 **Location**: West Europe (co-located with MAS)
-**Status**: ✅ Running v0.9.2-static-hardening (deployed 2026-07-17; adds
-static-mode per-hop SSRF redirect validation + robustness bundle on top of
-render-gate — see AITOSOFT_CHANGES.md)
+**Status**: ✅ Running v0.9.2-single-url (deployed 2026-07-17; adds the
+single-URL /crawl contract guard — multi-URL → 400 — on top of
+static-hardening — see AITOSOFT_CHANGES.md contract addendum)
 
 **Rollback (last known good)**: `az containerapp update --name crawl4ai-service
 --resource-group aitosoft-prod --image
-aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-render-gate` (image only —
+aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-static-hardening` (image only —
 NEVER set env vars during rollback).
 
 **v0.9.2-render-gate deployment notes (capacity/scaling redesign):**
@@ -72,9 +72,9 @@ All resources are in the `aitosoft-prod` resource group (West Europe):
 | `crawl4ai-service` | Container App | The crawl4ai service |
 | `workspace-aitosoftprodnCsc` | Log Analytics | Monitoring & logs |
 
-**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-static-hardening`
-(digest `sha256:f9f6c7b75f047cea3e2b325e7b52350944437ef3715612e5766026522c47af14`,
-revision `crawl4ai-service--0000027`)
+**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-single-url`
+(digest `sha256:cfb148731ec0203d29ed9ad4dae812e56e45d4e4c17832da3b3d04e8267f77d7`,
+revision `crawl4ai-service--0000028`)
 
 ---
 

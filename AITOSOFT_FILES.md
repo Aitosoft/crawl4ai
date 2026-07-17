@@ -69,12 +69,13 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
 
 Line counts are the real diff vs `upstream/develop` (checked 2026-07-17).
 
-### deploy/docker/api.py (+99/−9)
+### deploy/docker/api.py (+119/−9)
 `render_mode` param + static-mode short-circuit (after SSRF validation;
 monitor records the real aggregate outcome — 502, not 200, when every URL
 failed); patchright retry wrapped inside upstream's wall-clock deadline;
 `render_mode: "full"` tagging of results; render-admission gate acquire/release
-(429 fail-fast; wall-clock fence starts after admission).
+(429 fail-fast; wall-clock fence starts after admission); single-URL contract
+guard (multi-URL → 400 before seed validation and admission, MAS ack 2026-07-17).
 
 ### deploy/docker/server.py (+30/−0)
 Static branch in `/crawl` (before stream check and all-failures→500 rewrite);

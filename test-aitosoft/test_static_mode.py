@@ -231,8 +231,9 @@ def _restore_monitor(token):
 
 def test_all_urls_fail_records_non_200_monitor_outcome():
     """api.handle_crawl_request's static branch must record the real
-    aggregate outcome — an all-failed batch is not a 200 success, even
-    though the HTTP envelope stays 200 by contract."""
+    outcome — a failed fetch is not a 200 success, even though the HTTP
+    envelope stays 200 by contract. Single URL only: multi-URL requests are
+    rejected at the boundary since the 2026-07-17 single-URL contract."""
     import api
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -243,7 +244,7 @@ def test_all_urls_fail_records_non_200_monitor_outcome():
         _install_mock_client(handler)
         try:
             envelope = await api.handle_crawl_request(
-                urls=[f"{PUBLIC_A}/a", f"{PUBLIC_B}/b"],
+                urls=[f"{PUBLIC_A}/a"],
                 browser_config={},
                 crawler_config={},
                 config={},
@@ -252,7 +253,7 @@ def test_all_urls_fail_records_non_200_monitor_outcome():
         finally:
             await _reset_client()
             _restore_monitor(token)
-        # Envelope contract unchanged: HTTP-level success, inner failures.
+        # Envelope contract unchanged: HTTP-level success, inner failure.
         assert envelope["success"] is True
         assert all(r["success"] is False for r in envelope["results"])
         # Monitor got the truth.
@@ -263,12 +264,13 @@ def test_all_urls_fail_records_non_200_monitor_outcome():
     run(main())
 
 
-def test_partial_success_still_records_200():
+def test_static_success_records_200():
+    """Successful static fetch → monitor records 200. (Was a 2-URL
+    partial-success test; that shape is unreachable since the 2026-07-17
+    single-URL contract.)"""
     import api
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.host == "8.8.8.8":
-            raise httpx.ConnectError("connection refused")
         return httpx.Response(200, text=HTML_OK, headers={"content-type": "text/html"})
 
     async def main():
@@ -276,7 +278,7 @@ def test_partial_success_still_records_200():
         _install_mock_client(handler)
         try:
             await api.handle_crawl_request(
-                urls=[f"{PUBLIC_A}/a", f"{PUBLIC_B}/b"],
+                urls=[f"{PUBLIC_A}/a"],
                 browser_config={},
                 crawler_config={},
                 config={},
