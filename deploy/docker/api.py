@@ -666,6 +666,7 @@ async def handle_crawl_request(
     crawler = None
     _gate = None
     _gate_weight = 0
+    _deadline = None
     try:
         from monitor import get_monitor
         await get_monitor().track_request_start(
@@ -747,7 +748,9 @@ async def handle_crawl_request(
 
         _gate = get_render_gate()
         try:
-            _gate_weight = await _gate.acquire(weight=len(urls))
+            _gate_weight = await _gate.acquire(
+                weight=len(urls), label=urls[0] if urls else None
+            )
         except RenderCapacityExceeded as e:
             try:
                 from monitor import get_monitor
@@ -921,7 +924,16 @@ async def handle_crawl_request(
         raise HTTPException(status_code=400, detail=f"Rejected request: {e}")
 
     except asyncio.TimeoutError:
-        # Per-crawl wall-clock deadline exceeded.
+        # Per-crawl wall-clock deadline exceeded. Aitosoft: the 2026-07-17 WAA
+        # eval had 3 fence 504s with zero server-side log lines; every fence
+        # fire must be attributable (tasks/done/504-fence-observability-*).
+        logger.warning(
+            "WALL-CLOCK FENCE 504: url=%s deadline_s=%s elapsed_s=%.1f gate=%s",
+            urls[0] if urls else "?",
+            _deadline,
+            time.time() - start_time,
+            _gate.snapshot() if _gate is not None else None,
+        )
         raise HTTPException(status_code=504, detail="Crawl exceeded the time limit")
 
     except HTTPException:

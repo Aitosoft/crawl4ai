@@ -192,7 +192,7 @@ unknown fields are silently dropped; `page_timeout` is clamped. See
 |------|-------------|
 | `Dockerfile` | `RUN playwright install chrome` + copy chrome cache to appuser |
 | `crawl4ai/browser_manager.py` | `_build_browser_args`: GPU flags gated on `enable_stealth` (PR upstream pending) |
-| `deploy/docker/api.py` | +119/−9: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission), single-URL guard (multi-URL → 400) |
+| `deploy/docker/api.py` | +132/−10: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission), single-URL guard (multi-URL → 400), fence-504 warning ("WALL-CLOCK FENCE 504" w/ URL + elapsed + gate snapshot) |
 | `deploy/docker/server.py` | static branch in `/crawl`; lifespan closes static client + patchright singleton |
 | `deploy/docker/schemas.py` | `CrawlRequest.render_mode` field |
 | `deploy/docker/crawler_pool.py` | MAX_PAGES enforcement + overflow keys; BUSY_SINCE stuck-slot janitor (file unchanged upstream since 0.8.6) |

@@ -89,10 +89,15 @@ class RenderGate:
             "max_wait_s": self.max_wait_s,
         }
 
-    async def acquire(self, weight: int = 1) -> int:
+    async def acquire(self, weight: int = 1, label: Optional[str] = None) -> int:
         """Admit `weight` renders (clamped to capacity). Returns the granted
         weight, which MUST be passed back to release(). Raises
         RenderCapacityExceeded when the queue is full or the wait times out.
+
+        `label` (optional, typically the request URL) is echoed in the ADMIT
+        log line so every admission — immediate or queued — is attributable
+        to a request in the replica logs (2026-07-17 WAA eval: the fence 504s
+        could only be located via queue-wait timing coincidences).
 
         NOTE on weight clamping: a weight > capacity is clamped, so the gate
         alone cannot bound a multi-URL batch's render concurrency. Not
@@ -104,6 +109,7 @@ class RenderGate:
         async with self._cond:
             if self._in_use + weight <= self.capacity:
                 self._in_use += weight
+                self._log_admit(label, 0.0)
                 return weight
 
             if self._queued >= self.max_queue:
@@ -140,10 +146,19 @@ class RenderGate:
                 self._queued -= 1
 
             waited = asyncio.get_event_loop().time() - t0
-            if waited > 1.0:
-                logger.info("RenderGate admitted after %.1fs queue wait", waited)
             self._in_use += weight
+            self._log_admit(label, waited)
             return weight
+
+    def _log_admit(self, label: Optional[str], waited_s: float) -> None:
+        logger.info(
+            "RenderGate ADMIT url=%s waited=%.1fs in_use=%d/%d queued=%d",
+            label or "-",
+            waited_s,
+            self._in_use,
+            self.capacity,
+            self._queued,
+        )
 
     async def release(self, weight: int) -> None:
         async with self._cond:

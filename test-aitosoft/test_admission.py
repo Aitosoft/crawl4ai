@@ -139,6 +139,52 @@ def test_cancelled_waiter_leaves_gate_consistent():
     run(main())
 
 
+def test_admit_logs_url_for_immediate_and_queued_grants(caplog):
+    """Every grant — immediate or after a queue wait — emits one
+    'RenderGate ADMIT' info line carrying the label (URL) and wait time,
+    so 504s/slow renders can be mapped to a replica (WAA eval 2026-07-17)."""
+    import logging
+
+    async def main():
+        gate = RenderGate(capacity=1, max_queue=2, max_wait_s=5.0)
+        w = await gate.acquire(label="https://immediate.example/a")
+        waiter = asyncio.create_task(gate.acquire(label="https://queued.example/b"))
+        await asyncio.sleep(0.05)
+        await gate.release(w)
+        await asyncio.wait_for(waiter, timeout=1.0)
+
+    with caplog.at_level(logging.INFO, logger="aitosoft_admission"):
+        run(main())
+
+    admits = [
+        r.getMessage() for r in caplog.records if "RenderGate ADMIT" in r.getMessage()
+    ]
+    assert len(admits) == 2
+    assert "url=https://immediate.example/a" in admits[0]
+    assert "waited=0.0s" in admits[0]
+    assert "url=https://queued.example/b" in admits[1]
+    assert "waited=" in admits[1]
+
+
+def test_acquire_without_label_stays_backward_compatible(caplog):
+    """No-label acquire (pre-2026-07-17 signature) still admits and logs,
+    with the url field placeholdered."""
+    import logging
+
+    async def main():
+        gate = RenderGate(capacity=1, max_queue=0, max_wait_s=0.1)
+        assert await gate.acquire() == 1
+
+    with caplog.at_level(logging.INFO, logger="aitosoft_admission"):
+        run(main())
+
+    admits = [
+        r.getMessage() for r in caplog.records if "RenderGate ADMIT" in r.getMessage()
+    ]
+    assert len(admits) == 1
+    assert "url=-" in admits[0]
+
+
 def test_handle_crawl_request_maps_to_429():
     """api.handle_crawl_request must convert RenderCapacityExceeded into an
     HTTP 429 with a Retry-After header BEFORE any browser work happens."""

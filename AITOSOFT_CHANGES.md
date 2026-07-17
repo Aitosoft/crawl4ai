@@ -11,8 +11,8 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
-- **Production**: v0.9.2 + render admission + static-mode hardening + single-URL contract guard + pool cleanup/re-init + patchright tidy (deployed 2026-07-17 ~07:53 UTC)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-pool-cleanup` (revision `crawl4ai-service--0000029`, digest `sha256:24662e39...`)
+- **Production**: v0.9.2 + render admission + static-mode hardening + single-URL contract guard + pool cleanup/re-init + patchright tidy + fence-504 observability (deployed 2026-07-17)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-fence-obs` (revision: see DEPLOYMENT_INFO.md)
 - **Prod smoke 2026-07-17 (single-url)**: health ✅, 2-URL request → 400 w/ contract message ✅, single-URL caverna.fi crawl ✅, Tier 1 regression 4/4 ✅
 - **Prod smoke 2026-07-17 (static-hardening)**: health ✅, static spot check caverna.fi ✅, Tier 1 regression 4/4 ✅, live SSRF probe (static redirect→10.0.0.1 blocked, opaque error, 200 envelope) ✅
 - **Prod smoke 2026-07-17 (render-gate)**: health ✅, auth 401 ✅, MAS-shaped crawl (render_mode:full, 4.0s) ✅, static mode ✅, js_code rejected 400 ✅, 8-way burst → 6×200 + 2×429@0.85s w/ Retry-After ✅, http-scaler scaled 1→2→4 during burst ✅, probes green ✅
@@ -32,7 +32,66 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- Offline suites green: test_mas_contract.py (8), test_admission.py (8), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4)
+- Offline suites green: test_mas_contract.py (8), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4)
+
+---
+
+## Fence-504 Observability (2026-07-17)
+
+Closed `tasks/504-fence-observability.md`. Image: `0.9.2-fence-obs`.
+Logging only — zero behavior change, nothing contract-visible to MAS.
+Motivation: the 2026-07-17 WAA eval had 3 requests burn the full 180s fence
+and 504 with ZERO server-side log lines (located only via queue-wait timing
+coincidences). Every future 504 is now attributable.
+
+### The two new log lines (grep for these verbatim)
+
+1. **Fence fire** — `api.py`, the `except asyncio.TimeoutError` branch
+   (WARNING, logger `api`):
+
+   `WALL-CLOCK FENCE 504: url=%s deadline_s=%s elapsed_s=%.1f gate=%s`
+
+   e.g. `WALL-CLOCK FENCE 504: url=https://example.com deadline_s=2.0
+   elapsed_s=2.8 gate={'capacity': 2, 'in_use': 1, 'queued': 0, 'max_queue':
+   4, 'max_wait_s': 15.0}` — the snapshot still counts the fenced request
+   itself (logged before the `finally` releases the slot). `_deadline` is
+   initialized to `None` at handler top so the except-branch can't NameError
+   if a TimeoutError ever arrives before the fence is armed.
+
+2. **Admission grant** — `aitosoft_admission.py` (INFO, logger
+   `aitosoft_admission`), one line per grant, immediate or queued:
+
+   `RenderGate ADMIT url=%s waited=%.1fs in_use=%d/%d queued=%d`
+
+   `RenderGate.acquire()` gained an optional `label` keyword (backward
+   compatible; `url=-` when absent); `api.py` passes `urls[0]`. This
+   REPLACES the old `RenderGate admitted after %.1fs queue wait` line
+   (which only fired for queued admits and never carried the URL). The
+   `RenderGate REJECT` warnings are byte-identical (playbook greps them).
+   Pinned by 2 new tests in `test-aitosoft/test_admission.py` (8 → 10).
+
+### Item 3 (silent nav-retries): investigated, NO patch — premise was wrong
+
+The task assumed upstream's retry loop (`async_webcrawler.py` `arun`,
+`_max_attempts = 1 + max_retries`) swallows page timeouts invisibly in
+server context. Code reading shows it already logs every retry attempt
+(`Anti-bot retry {n}/{max} for {url}` WARNING, line ~425) and every
+exception (`error_status` "Proxy direct failed: …", line ~534 — a goto
+timeout surfaces as `RuntimeError("Failed on navigating ACS-GOTO…")`).
+These go through crawl4ai's `AsyncLogger`, console-gated ONLY on per-request
+`config.verbose` (`arun` sets `self.logger.verbose = config.verbose`),
+which defaults to True and MAS never overrides. Proof it reaches stdout in
+prod: the eval's `[FETCH]`/`[COMPLETE]` pairs come from this same logger.
+
+**Forensic consequence:** the eval's three zero-log wedges CANNOT have been
+the "80s×2 silent retry arithmetic" — a goto-timeout retry would have
+logged `[ANTIBOT]` lines. Zero lines between browser acquisition and fence
+means `crawler_strategy.crawl` neither returned nor raised for 180s → a
+single indefinite hang. Candidate unbounded awaits (noted, not chased):
+context/page creation CDP roundtrips on a busy Chromium during ramp churn,
+the redirect-chain walk (`await prev_req.response()`, no timeout), hooks.
+Next occurrence will be greppable via the fence line; escalation path in
+the done-file.
 
 ---
 

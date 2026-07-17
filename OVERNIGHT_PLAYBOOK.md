@@ -39,7 +39,9 @@ Kusto signal summary (20-min window), categorize by `case()`:
 `GATE-429` (contains "RenderGate REJECT"),
 `FORCE-CLOSE` (contains "Janitor reaped" or "force_close" or "FORCE-CLOSE"),
 `OOM`/`MemoryError` (contains "refusing new browser"),
-`FIX1-504` (contains "Crawl exceeded"), `ACTIVE-REQ`,
+`FENCE-504` (contains "WALL-CLOCK FENCE 504"), `ACTIVE-REQ`,
+`ADMIT` (contains "RenderGate ADMIT" — one INFO line per admitted render,
+carries URL + queue wait; keep it out of OTHER),
 `PW-NAV-TIMEOUT` (Page.goto 90000), `FETCH` (contains "[FETCH]"),
 `COMPLETE` (contains "[COMPLETE]"), `OTHER`.
 
@@ -71,7 +73,7 @@ ContainerAppConsoleLogs_CL
 | Signal | Meaning | Action |
 |---|---|---|
 | GATE-429 ("RenderGate REJECT") bursts at batch ramp-up | Replicas full; MAS client retries (5/10/20/30s) absorb while ACA scales out | **None** if replica count rises within ~1 min (check `SuccessfulRescale` events). Sustained 429s with replicas pegged at max = genuine capacity ceiling — talk to Tero about maxReplicas. |
-| FIX1-504 ("Crawl exceeded 180s … Releasing pool slot via finally") | Fix-1 fence fired, slot released cleanly | **STALE on 0.9.2:** fence 504s produce NO console line (upstream 504 path is unlogged — see tasks/504-fence-observability.md). Zero FIX1-504 lines ≠ zero 504s; until the observability fix deploys, 504s are only visible client-side (ask MAS) or via RenderGate "admitted after" echoes at slot release. |
+| FENCE-504 ("WALL-CLOCK FENCE 504: url=… deadline_s=… elapsed_s=… gate=…") | 180s wall-clock fence fired and the render slot released cleanly (the gate snapshot in the line still counts the fenced request; it releases immediately after). One line per 504, with URL — deployed 0.9.2-fence-obs 2026-07-17. | Expect 0–10 per window during cold-ramp bursts, then zero. **Investigate only if they cluster POST-ramp** (replica count stable for >2 min and FENCE-504 still firing) or the rate grows across windows — that escalates tasks/done/504-fence-observability-2026-07-17.md to a code fix. Pair each with its "RenderGate ADMIT url=…" line to get the replica and queue wait. |
 | PW-NAV-TIMEOUT ("Page.goto: Timeout 90000ms exceeded") | Playwright's own 90s nav timeout | **None.** Normal for slow/SPA sites. MAS pivots to static after 2 consecutive 504s per host. |
 | OOM / MemoryError "refusing new browser" | **Our pool guard**, not OS-OOM. Replica hit ~85%+ and refused a new browser spawn. | Peek pool mem% timeline (`Pool: hot=… mem=…` log lines). If it drops back within ~5 min, no action — the guard worked. If it sticks >85% for 10+ min, restart the revision. |
 | OTHER | Usually garbage. Log lines whose ms timestamp contains "504" (e.g. `02:17:04,504`) hit the regex. | Peek once per night to confirm, then ignore. |
