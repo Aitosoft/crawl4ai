@@ -127,6 +127,11 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 2. **Security first** — no secrets in code, use env vars (see Security section below)
 3. **`[aitosoft]` commit prefix** — all our commits
 4. **Test before deploy** — Tier 1 regression must pass
+5. **Claude is the lead developer.** Tero (owner) does not review code or
+   PRs — never block work on owner approval. Quality gates are tests and
+   coordinator sign-off; outward-facing artifacts (upstream PRs, cross-repo
+   contracts) are decided by the coordinator session. Tero sets direction,
+   runs sessions, and relays MAS messages.
 
 ---
 

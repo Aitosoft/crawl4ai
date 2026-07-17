@@ -1,8 +1,15 @@
 # File Upstream PR: GPU flag gating in _build_browser_args
 
-**Status:** Open
+**Status:** Filed — awaiting upstream merge (2026-07-17)
+**PR:** https://github.com/unclecode/crawl4ai/pull/2085 (`fix/gpu-flags-stealth-gating`
+→ `unclecode/crawl4ai:develop`, from commit `e63cbcc` on the Aitosoft fork)
 **Priority:** Low — our fork carries the fix; the PR is a good-citizen contribution
-**Blocked by:** Nothing
+**Blocked by:** Upstream review
+
+**On merge:** drop the fork patch from `crawl4ai/browser_manager.py` (it will
+conflict-or-noop at the next `git merge upstream/develop`), remove the row from
+the CLAUDE.md / AITOSOFT_FILES.md modification tables, delete the
+`fix/gpu-flags-stealth-gating` branch, then move this file to `tasks/done/`.
 
 ## Goal
 
