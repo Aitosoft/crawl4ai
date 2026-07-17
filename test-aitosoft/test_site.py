@@ -3,10 +3,17 @@
 Test a single site with configurable crawler options.
 
 Usage:
-    python test-aitosoft/test_site.py talgraf.fi
-    python test-aitosoft/test_site.py talgraf.fi --page yhteystiedot
-    python test-aitosoft/test_site.py accountor.com --config heavy
-    python test-aitosoft/test_site.py monidor.fi --version v11
+    python test-aitosoft/test_site.py caverna.fi
+    python test-aitosoft/test_site.py solwers.com --page contacts
+    python test-aitosoft/test_site.py accountor.com --page fi/finland
+    python test-aitosoft/test_site.py jpond.fi --version v12 --render-mode static
+
+Run from the REPO ROOT — artifact/report paths are relative
+(test-aitosoft/artifacts/...); running from inside test-aitosoft/ creates a
+nested test-aitosoft/test-aitosoft/ clutter directory.
+
+Site safety (CLAUDE.md): never hit the same site more than 1-2 times per
+session; rotate across sites.
 """
 
 import os
@@ -45,179 +52,17 @@ CONFIGS = {
         "page_timeout": 60000,
         "delay_before_return_html": 2.0,
     },
-    # LEGACY configs - use "optimal" instead.
-    # WARNING: every config carrying "magic" now gets HTTP 400 from the
-    # v0.9.x server (forbidden untrusted field). Kept only as history.
-    "fast": {
-        "wait_until": "domcontentloaded",
-        "magic": True,
-        "scan_full_page": True,
-        "remove_overlay_elements": True,
-        "page_timeout": 30000,
-    },
-    "heavy": {
+    # Slow-and-thorough fallback for lazy-loading / JS-heavy pages. Contains
+    # no forbidden fields, so it is valid against the v0.9.x untrusted-config
+    # boundary. (The old fast/heavy/magic_only/cookie_* configs all carried
+    # "magic" or "js_code" and were rejected with HTTP 400 — removed 2026-07-17,
+    # see git history if you need them for reference.)
+    "patient": {
         "wait_until": "networkidle",
-        "magic": True,
         "scan_full_page": True,
-        "remove_overlay_elements": True,
-        "page_timeout": 60000,
-    },
-    "minimal": {
-        "wait_until": "domcontentloaded",
-        "remove_overlay_elements": True,
-        "page_timeout": 30000,
-    },
-    "magic_only": {
-        "wait_until": "domcontentloaded",
-        "magic": True,
-        "remove_overlay_elements": True,
-        "page_timeout": 30000,
-    },
-    "scan_only": {
-        "wait_until": "domcontentloaded",
-        "scan_full_page": True,
-        "remove_overlay_elements": True,
-        "page_timeout": 30000,
-    },
-    # NEW: Cookie consent handling configs
-    "cookie_click": {
-        "wait_until": "domcontentloaded",
-        "magic": True,
-        "scan_full_page": True,
-        "remove_overlay_elements": True,
-        "page_timeout": 60000,
-        "delay_before_return_html": 3.0,  # Wait for consent dialog to clear
-        "js_code": """
-        (async () => {
-            const selectors = [
-                '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
-                '#onetrust-accept-btn-handler',
-                'button[data-cky-tag="accept-button"]',
-                '.fc-button.fc-cta-consent',
-            ];
-            for (const selector of selectors) {
-                const btn = document.querySelector(selector);
-                if (btn && btn.offsetParent !== null) {
-                    btn.click();
-                    await new Promise(r => setTimeout(r, 1500));
-                    return;
-                }
-            }
-        })();
-        """,
-    },
-    "cookie_click_finnish": {
-        "wait_until": "networkidle",
-        "magic": True,
-        "scan_full_page": True,
-        "remove_overlay_elements": True,
-        "page_timeout": 60000,
+        "remove_consent_popups": True,
+        "page_timeout": 90000,
         "delay_before_return_html": 3.0,
-        "js_code": """
-        (async () => {
-            const selectors = [
-                '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
-                '#onetrust-accept-btn-handler',
-                'button[data-cky-tag="accept-button"]',
-                '.fc-button.fc-cta-consent',
-            ];
-            // First try standard selectors
-            for (const selector of selectors) {
-                const btn = document.querySelector(selector);
-                if (btn && btn.offsetParent !== null) {
-                    btn.click();
-                    await new Promise(r => setTimeout(r, 1500));
-                    return;
-                }
-            }
-            // Then try Finnish text buttons
-            const sel = 'button, a.button, [role="button"]';
-            const buttons = document.querySelectorAll(sel);
-            for (const btn of buttons) {
-                const text = btn.textContent.toLowerCase();
-                if (text.includes('hyväksy') || text.includes('salli') ||
-                    text.includes('accept') || text.includes('allow all')) {
-                    btn.click();
-                    await new Promise(r => setTimeout(r, 1500));
-                    return;
-                }
-            }
-        })();
-        """,
-    },
-    # Wait for Cookiebot dialog, then click accept
-    "cookie_wait_click": {
-        "wait_until": "domcontentloaded",
-        "magic": True,
-        "scan_full_page": True,
-        "remove_overlay_elements": True,
-        "page_timeout": 60000,
-        "wait_for": "#CybotCookiebotDialog",  # Wait for dialog to appear
-        "wait_for_timeout": 10000,  # 10 seconds max wait
-        "delay_before_return_html": 2.0,
-        "js_code": """
-        (async () => {
-            // Wait a moment for button to be clickable
-            await new Promise(r => setTimeout(r, 500));
-
-            const selectors = [
-                '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
-                '#CybotCookiebotDialogBodyButtonAccept',
-                '#CybotCookiebotDialogBodyLevelButtonAccept',
-                '#onetrust-accept-btn-handler',
-            ];
-            for (const selector of selectors) {
-                const btn = document.querySelector(selector);
-                if (btn) {
-                    console.log('Clicking:', selector);
-                    btn.click();
-                    await new Promise(r => setTimeout(r, 2000));
-                    return;
-                }
-            }
-            console.log('No consent button found');
-        })();
-        """,
-    },
-    # Smart cookie consent - JS polls for button with retries
-    "cookie_smart": {
-        "wait_until": "networkidle",  # Wait for all JS to finish
-        "magic": True,
-        "scan_full_page": True,
-        "remove_overlay_elements": True,
-        "page_timeout": 60000,
-        "delay_before_return_html": 5.0,  # Extra time after cookie click
-        "js_code": """
-        (async () => {
-            // Poll for consent button with retries
-            const selectors = [
-                '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
-                '#CybotCookiebotDialogBodyButtonAccept',
-                '#CybotCookiebotDialogBodyLevelButtonAccept',
-                '#onetrust-accept-btn-handler',
-                'button[data-cky-tag="accept-button"]',
-                '.fc-button.fc-cta-consent',
-            ];
-
-            // Try up to 10 times with 500ms delay
-            for (let attempt = 0; attempt < 10; attempt++) {
-                for (const selector of selectors) {
-                    const btn = document.querySelector(selector);
-                    if (btn && btn.offsetParent !== null) {
-                        console.log('Found button:', selector, 'on attempt', attempt);
-                        btn.click();
-                        // Wait for dialog to close and content to render
-                        await new Promise(r => setTimeout(r, 2000));
-                        return { clicked: true, selector, attempt };
-                    }
-                }
-                // Wait before next attempt
-                await new Promise(r => setTimeout(r, 500));
-            }
-            console.log('No consent button found after 10 attempts');
-            return { clicked: false };
-        })();
-        """,
     },
 }
 
@@ -225,7 +70,7 @@ CONFIGS = {
 def test_site(
     domain: str,
     page: Optional[str] = None,
-    config_type: str = "fast",
+    config_type: str = "optimal",
     version: str = "manual",
     save_artifacts: bool = True,
     render_mode: str = "full",
@@ -236,7 +81,7 @@ def test_site(
     Args:
         domain: Domain to test (e.g., 'talgraf.fi')
         page: Optional page path (e.g., 'yhteystiedot')
-        config_type: One of 'fast', 'heavy', 'minimal', 'magic_only', 'scan_only'
+        config_type: 'optimal' (default, matches MAS production) or 'patient'
         version: Test version label (e.g., 'v11')
         save_artifacts: Whether to save JSON and markdown artifacts
         render_mode: 'full' (Playwright, default) or 'static' (httpx + html2text).
@@ -320,12 +165,12 @@ def test_site(
     if raw_tokens < 100:
         print(f"\n⚠️  WARNING: Very short content ({raw_tokens} tokens)")
         print("   Possible causes: cookie wall, login required, bot detection")
-        print("   Suggestion: Try --config heavy")
+        print("   Suggestion: Try --config patient (networkidle + full scroll)")
 
     if "cookiebot" in raw_markdown.lower() or "cookie consent" in raw_markdown.lower():
         print("\n⚠️  Cookie consent detected in content")
-        if not crawler_config.get("magic"):
-            print("   Suggestion: Try --config fast (includes magic: true)")
+        if not crawler_config.get("remove_consent_popups"):
+            print("   Suggestion: Use a config with remove_consent_popups: true")
 
     # Save artifacts if requested
     if save_artifacts:
@@ -380,18 +225,16 @@ def main():
         description="Test crawl4ai on a single site",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  python test-aitosoft/test_site.py talgraf.fi
-  python test-aitosoft/test_site.py talgraf.fi --page yhteystiedot
-  python test-aitosoft/test_site.py accountor.com --config heavy
-  python test-aitosoft/test_site.py monidor.fi --version v11 --no-save
+Examples (run from repo root; rotate sites — max 1-2 hits/site/session):
+  python test-aitosoft/test_site.py caverna.fi
+  python test-aitosoft/test_site.py solwers.com --page contacts
+  python test-aitosoft/test_site.py jpond.fi --version v12 --no-save
+  python test-aitosoft/test_site.py caverna.fi --render-mode static
 
 Configs:
-  fast      - domcontentloaded, magic, scan_full_page (default, 2-4s)
-  heavy     - networkidle, magic, scan_full_page (for cookie walls, 30-60s)
-  minimal   - domcontentloaded only (baseline, no special handling)
-  magic_only   - Test magic parameter alone
-  scan_only    - Test scan_full_page parameter alone
+  optimal  - domcontentloaded + remove_consent_popups (default, 2-4s,
+             matches MAS production)
+  patient  - networkidle + scan_full_page (lazy-loading pages, 30-60s)
         """,
     )
 
@@ -399,18 +242,7 @@ Configs:
     parser.add_argument("--page", help="Optional page path (e.g., yhteystiedot)")
     parser.add_argument(
         "--config",
-        choices=[
-            "optimal",
-            "fast",
-            "heavy",
-            "minimal",
-            "magic_only",
-            "scan_only",
-            "cookie_click",
-            "cookie_click_finnish",
-            "cookie_wait_click",
-            "cookie_smart",
-        ],
+        choices=["optimal", "patient"],
         default="optimal",
         help="Crawler configuration to use (default: optimal)",
     )

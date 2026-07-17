@@ -114,7 +114,7 @@ def check_contacts(markdown: str, expected_names: list) -> dict:
 
 def test_site_with_fallback(site_config: dict, version: str) -> dict:
     """
-    Test a site, with fallback to heavy config if needed.
+    Test a site, with fallback to the "patient" config if needed.
 
     Args:
         site_config: Site configuration dict
@@ -125,16 +125,16 @@ def test_site_with_fallback(site_config: dict, version: str) -> dict:
     """
     domain = site_config["domain"]
     page = site_config.get("page")
-    requires_heavy = site_config.get("requires_heavy", False)
+    requires_patient = site_config.get("requires_patient", False)
 
     print(f"\n{'=' * 80}")
     print(f"Testing: {domain}/{page or 'homepage'}")
     print(f"{'=' * 80}")
 
     # Default: "optimal" (matches MAS production config — domcontentloaded,
-    # remove_consent_popups, no magic, no scan_full_page). Heavy is only a
-    # fallback for sites that explicitly opt in.
-    config = "heavy" if requires_heavy else "optimal"
+    # remove_consent_popups, no magic, no scan_full_page). "patient"
+    # (networkidle + scan_full_page) is only a fallback for sites that opt in.
+    config = "patient" if requires_patient else "optimal"
 
     result = test_site(
         domain=domain,
@@ -156,22 +156,24 @@ def test_site_with_fallback(site_config: dict, version: str) -> dict:
     raw_markdown = result.get("markdown", {}).get("raw_markdown", "")
     raw_tokens = len(raw_markdown) // 4
 
-    # If blocked and we haven't tried heavy yet, retry (keeps the CLAUDE.md
+    # If thin and we haven't tried patient yet, retry (keeps the CLAUDE.md
     # rule "never hit the same site more than 1-2 times per session" safe —
     # maximum of 2 attempts per site).
-    if raw_tokens < 100 and config != "heavy":
-        print(f"\n⚠️  Blocked ({raw_tokens} tokens), retrying with heavy config...")
+    if raw_tokens < 100 and config != "patient":
+        print(
+            f"\n⚠️  Thin result ({raw_tokens} tokens), retrying with patient config..."
+        )
         result = test_site(
             domain=domain,
             page=page,
-            config_type="heavy",
+            config_type="patient",
             version=version,
             save_artifacts=True,
         )
         if result:
             raw_markdown = result.get("markdown", {}).get("raw_markdown", "")
             raw_tokens = len(raw_markdown) // 4
-            config = "heavy"
+            config = "patient"
 
     # Check for expected contacts
     expected_names = site_config.get("expected_decision_makers", [])

@@ -1,11 +1,14 @@
-# Test artifacts - don't commit large test outputs
-artifacts/
-reports/
+# Test outputs — don't commit large run artifacts.
+# NOTE: ignore the *contents* (artifacts/*), not the dir (artifacts/) —
+# git cannot re-include paths under a wholesale-excluded directory, so the
+# !negations below only work with this form.
+artifacts/*
+reports/*
 
 # Keep directory structure
 !artifacts/.gitkeep
 !reports/.gitkeep
 
-# But allow manual test results if needed
+# Allow deliberately-kept manual test results
 !artifacts/manual/
 !reports/manual/

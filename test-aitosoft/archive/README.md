@@ -1,6 +1,16 @@
-# Archived Testing Files
+# Archived Testing Files (historical — do not act on these)
 
-This directory contains archived files from completed testing phases.
+Everything in this directory describes the **January 2026 talgraf.fi
+reliability investigation**, which is complete. It predates the stealth
+package, the v0.9.x untrusted-config boundary, and the render-admission
+gate. Configs shown in these files (e.g. `magic: true`) are rejected by
+the current server, and talgraf.fi is a **retired test site** (permanently
+Cloudflare-blocked by the over-scraping this very study performed — see
+the site-safety rules in TESTING.md). Kept as history only.
+
+The study's runner scripts (`test_reliability_study.py`, `test_isolation.py`,
+`test_concurrency.py`, `test_batching_reliability.py`) were deleted 2026-07-17;
+they live in git history if ever needed.
 
 ## Phase 1-2: Reliability Testing (Complete)
 
@@ -10,6 +20,7 @@ This directory contains archived files from completed testing phases.
 
 ### Files
 
+- **TESTING_PROTOCOL.md** - The study's runbook (moved here from repo root 2026-07-17)
 - **PHASE_2_COMPLETE.md** - Executive summary of Phase 1-2 findings
 - **NEXT_SESSION_DEEP_DIVE.md** - Original handoff prompt for Phase 3
 - **FINDINGS_AND_RECOMMENDATIONS.md** - Detailed analysis
@@ -26,6 +37,6 @@ This directory contains archived files from completed testing phases.
 
 ### Current Work
 
-**Active**: See [../TESTING_GUIDE.md](../TESTING_GUIDE.md) for current priorities and status.
-
-**Latest Results**: See [../TESTING_RESULTS.md](../TESTING_RESULTS.md) for raw data.
+Current testing framework and priorities: [../../TESTING.md](../../TESTING.md).
+(The old `TESTING_GUIDE.md` / `TESTING_RESULTS.md` this README used to link
+were deleted in the 2026-07-16 doc cleanup.)
