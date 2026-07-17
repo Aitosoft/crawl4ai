@@ -162,13 +162,23 @@ defaults broke MAS's existing contract; we relax exactly those at import time:
 - MAS-sent fields verified allowed: `user_agent`, `viewport_*`, `locale`,
   `timezone_id`, `geolocation`, `remove_consent_popups`, `wait_until`,
   `max_retries`, `delay_before_return_html`, `scan_full_page`.
-- ~~`ignore_https_errors` defaults true at the Playwright-context level, so
-  broken-cert sites still crawl~~ **CORRECTION 2026-07-17: this is wrong
-  post-0.9.2.** Upstream's `enforce_egress` (egress_broker.py) forces
-  `ignore_https_errors=False` on every /crawl unless
-  `CRAWL4AI_ALLOW_INSECURE_TLS=true`, which is NOT set on the Container App —
-  broken-cert sites likely fail in full mode (static mode still works,
-  httpx `verify=False`). Verification + decision tracked in
+- Broken-cert sites still crawl in full mode — **RESOLVED 2026-07-17,
+  verified live.** Right behavior, but both earlier explanations were wrong.
+  The original note credited the context-level `ignore_https_errors` default
+  (true); a first CORRECTION then claimed a regression because upstream's
+  `enforce_egress` (egress_broker.py) forces `ignore_https_errors=False`
+  unless `CRAWL4AI_ALLOW_INSECURE_TLS=true` (unset on the Container App).
+  Both miss the real mechanism: upstream hardcodes
+  `--ignore-certificate-errors` into every Chromium launch
+  (`browser_manager.py` `build_browser_flags` + `_build_browser_args`),
+  disabling cert validation process-wide — the context-level setting, and
+  therefore `enforce_egress`'s forcing of it, is moot. (`enforce_egress`
+  scrubs that flag only from caller `extra_args`, not from these generated
+  launch flags.) Live proof: full-mode crawl of expired.badssl.com downloads
+  the page — its 500 is an unrelated antibot `minimal_text` false positive
+  on the tiny page; static mode returns it fine (httpx `verify=False`).
+  `CRAWL4AI_ALLOW_INSECURE_TLS` deliberately left unset — it would change
+  nothing. Re-check the flags on every upstream sync. Full record:
   `tasks/tls-broken-cert-regression.md`.
 
 ### Upstream infra changes that affect deployment

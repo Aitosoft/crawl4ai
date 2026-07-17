@@ -126,9 +126,15 @@ crawler:
       # kill WebGL, one of the loudest anti-bot signals (stealth package).
       # browser_manager gates them on enable_stealth.
       # --disable-web-security removed for security (enables cross-origin access)
-      # --ignore-certificate-errors not needed: BrowserConfig.ignore_https_errors
-      # defaults to true at the Playwright context level, which covers the
-      # broken-cert Finnish SME sites without advertising a bot flag.
+      # --ignore-certificate-errors not needed here: upstream browser_manager
+      # already hardcodes it into every Chromium launch (build_browser_flags +
+      # _build_browser_args), so cert validation is off process-wide and
+      # broken-cert SME sites crawl in full mode. Verified live 2026-07-17
+      # (expired.badssl.com downloads in full mode; see
+      # tasks/tls-broken-cert-regression.md). Note this also makes
+      # enforce_egress's ignore_https_errors=False forcing moot — if upstream
+      # ever drops those launch flags, TLS verification silently turns ON and
+      # CRAWL4AI_ALLOW_INSECURE_TLS=true becomes necessary.
 
 # Logging Configuration
 logging:
