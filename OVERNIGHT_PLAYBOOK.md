@@ -71,7 +71,7 @@ ContainerAppConsoleLogs_CL
 | Signal | Meaning | Action |
 |---|---|---|
 | GATE-429 ("RenderGate REJECT") bursts at batch ramp-up | Replicas full; MAS client retries (5/10/20/30s) absorb while ACA scales out | **None** if replica count rises within ~1 min (check `SuccessfulRescale` events). Sustained 429s with replicas pegged at max = genuine capacity ceiling — talk to Tero about maxReplicas. |
-| FIX1-504 ("Crawl exceeded 180s … Releasing pool slot via finally") | Fix-1 fence fired, slot released cleanly | **None.** This is normal. Expect 0–10 per 20-min window. |
+| FIX1-504 ("Crawl exceeded 180s … Releasing pool slot via finally") | Fix-1 fence fired, slot released cleanly | **STALE on 0.9.2:** fence 504s produce NO console line (upstream 504 path is unlogged — see tasks/504-fence-observability.md). Zero FIX1-504 lines ≠ zero 504s; until the observability fix deploys, 504s are only visible client-side (ask MAS) or via RenderGate "admitted after" echoes at slot release. |
 | PW-NAV-TIMEOUT ("Page.goto: Timeout 90000ms exceeded") | Playwright's own 90s nav timeout | **None.** Normal for slow/SPA sites. MAS pivots to static after 2 consecutive 504s per host. |
 | OOM / MemoryError "refusing new browser" | **Our pool guard**, not OS-OOM. Replica hit ~85%+ and refused a new browser spawn. | Peek pool mem% timeline (`Pool: hot=… mem=…` log lines). If it drops back within ~5 min, no action — the guard worked. If it sticks >85% for 10+ min, restart the revision. |
 | OTHER | Usually garbage. Log lines whose ms timestamp contains "504" (e.g. `02:17:04,504`) hit the regex. | Peek once per night to confirm, then ignore. |

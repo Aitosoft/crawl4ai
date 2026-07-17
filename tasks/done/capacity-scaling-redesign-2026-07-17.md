@@ -1,6 +1,7 @@
 # Capacity / scaling redesign — no warm-replica pinning
 
-**Status:** In progress (started 2026-07-17)
+**Status:** DONE 2026-07-17 — WAA eval passed, cross-check below closed the loop.
+Residual finding (3× ramp-window 504) spun off to tasks/504-fence-observability.md.
 **Priority:** High — MAS got a 504 under 4–6 concurrent renders (2026-07-16 incident)
 **Requested by:** aitosoft-platform Claude session (relayed memo), owner Tero
 
@@ -123,9 +124,71 @@ requests' retries if many nodes need the 40s image pull — acceptable for
 run one, observe before tuning (options if it bites: they stagger session
 starts, or raise admission_queue, or image diet).
 
+## WAA eval cross-check (2026-07-17 14:32:42–14:42:39 UTC — closes this task)
+
+MAS ran 100 companies / 808 requests / ~45 peak concurrent renders from a true
+cold start. Their report: 748×200, 57×429 (all resolved on ladder), 3×504,
+0×400, zero exhaustions, full-render p50 5.5s / p95 15.6s. Our Log Analytics
+for the same window confirms everything:
+
+- **429s: exact match.** 57 RenderGate REJECTs server-side = their 57 client
+  429s. Split: 45 queue-full + 12 wait-timeout(15s) — the 12 are exactly their
+  "~15s plateau" sub-mode. Last REJECT 14:36:01; zero after ramp settled.
+- **Render accounting: exact match.** 739 [FETCH]+[COMPLETE] pairs = their
+  738 full-render 200s + 1 prefetch. 9 static-mode 200s visible in static logs.
+  Zero [ERROR], zero mem-guard ("refusing new browser"), zero force-close /
+  janitor reaps, zero at-capacity warnings, 6 benign [ANTIBOT] retries (all
+  recovered). Pool mem p95 ≤82%, one 99% single-reading spike (self-healed).
+- **Scale-out:** KEDA 0→4→8→16→19→30 between 14:33:06 and 14:34:07 (72s).
+  BUT serving ramp ≠ assignment ramp: only 6 replicas served all traffic
+  until 14:35:15 — the other 24 waited on node provisioning + 1.79 GB image
+  pull; serving waves 14:35:15/14:35:27/14:36:22, last replica serving
+  14:37:17. **All 3 of their 504s started inside the 6-replica-saturation
+  window (14:33:21–14:35:04); zero after.**
+- **Overshoot to 30 (they predicted 23): expected mechanism, benign.** KEDA
+  counts concurrent requests at ingress, which during ramp = active renders
+  (~45) + gate-queued waiters held ≤15s on their connections + 429-retry
+  re-arrivals → >60 concurrent → target capped at 30. Extra capacity ended
+  contention by 14:36:01. Not the admission gate "over-driving" KEDA — the
+  scaler never sees the gate, just held connections.
+- **Scale-in: fine.** First "All metrics below target" 14:49:34 (~7 min after
+  last request = KEDA cooldown), 30→16→9→4→2→1 by 14:50:35, then to zero.
+  Their "+1 min no scale-in" observation was just the cooldown window.
+- **The 3×504s — mechanism pinned as far as logs allow** (rest in
+  tasks/504-fence-observability.md): kynnos.fi/yhteystiedot admitted on
+  replica 255ps at 14:33:32 after 10.6s queue wait (matches their fire
+  14:33:21.3 + 191.0s total), **acquired a browser instantly** (hot pool
+  sig=79149154), then produced zero log lines for exactly 180s; next waiter
+  admitted on 255ps 14:36:32.7 — the fence released the slot cleanly. 255ps
+  completed renders on its other slot throughout → per-render wedge, NOT the
+  2026-07-16 replica-wide starvation. teollisuuskatot pair: same signature,
+  180.2/181.3s ≈ zero queue wait + full fence. Zero Page.goto-timeout and
+  zero [ERROR] lines fit the documented silent-retry arithmetic: page_timeout
+  80s × 2 attempts = 160s + patchright tail ≈ 180s fence, all muted in server
+  context (can't distinguish from a single indefinite page hang without the
+  observability fix). Rate 3/808 = 0.37%, ramp-only, contained by MAS's
+  2-consecutive-504 static pivot.
+- **Browser churn quantified:** 275 creates / 158 idle-closes fleet-wide in
+  11 min for 739 renders (one Chromium launch per ~2.7 renders) — personas
+  spread over 30 replicas mean every replica launches its own copy of each
+  company persona, uses it ~2-3×, janitor closes it. CPU churn during ramp
+  is the plausible aggravator for the wedges. Persona-affinity routing would
+  fix it; parked (needs ingress/MAS work, not justified by 0.37%).
+- "Using permanent browser": 0 — every MAS request carries a persona config;
+  PERMANENT only serves warmup. Anti-bot minimal_text 500s: zero (parked task
+  stays parked).
+
 ## Learnings
 
 - ACA default HTTP scale rule (rules: null) = 10 concurrent req/replica —
   way past render capacity; must always set an explicit rule.
 - Log Analytics console logs: table ContainerAppConsoleLogs_CL, replica col
   is ContainerGroupName_s. System events: ContainerAppSystemLogs_CL.
+- az log-analytics quirk: `summarize first=min(...)` then `order by first`
+  → BadArgumentError (`first` collides with the aggregate). Rename to t0/t1.
+- Fence 504s (api.py "Crawl exceeded the time limit") produce NO console log
+  line on 0.9.2 — zero FIX1-504 lines ≠ zero 504s. Locate them via RenderGate
+  "admitted after Ns" echoes at slot-release instead (or wait for the
+  observability fix).
+- KEDA http concurrency counts gate-queued waiters + retry re-arrivals →
+  cold-ramp overshoot toward maxReplicas is expected and benign.
