@@ -11,9 +11,10 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
-- **Production**: v0.9.2 + render admission (deployed 2026-07-17 ~03:47 UTC)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-render-gate` (revision `crawl4ai-service--0000026`, digest `sha256:6f7ce204...`)
-- **Prod smoke 2026-07-17**: health ✅, auth 401 ✅, MAS-shaped crawl (render_mode:full, 4.0s) ✅, static mode ✅, js_code rejected 400 ✅, 8-way burst → 6×200 + 2×429@0.85s w/ Retry-After ✅, http-scaler scaled 1→2→4 during burst ✅, probes green ✅
+- **Production**: v0.9.2 + render admission + static-mode hardening (deployed 2026-07-17 ~06:02 UTC)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-static-hardening` (revision `crawl4ai-service--0000027`, digest `sha256:f9f6c7b7...`)
+- **Prod smoke 2026-07-17 (static-hardening)**: health ✅, static spot check caverna.fi ✅, Tier 1 regression 4/4 ✅, live SSRF probe (static redirect→10.0.0.1 blocked, opaque error, 200 envelope) ✅
+- **Prod smoke 2026-07-17 (render-gate)**: health ✅, auth 401 ✅, MAS-shaped crawl (render_mode:full, 4.0s) ✅, static mode ✅, js_code rejected 400 ✅, 8-way burst → 6×200 + 2×429@0.85s w/ Retry-After ✅, http-scaler scaled 1→2→4 during burst ✅, probes green ✅
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
@@ -29,7 +30,63 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- Offline suites green: test_mas_contract.py (7), test_admission.py (8)
+- Offline suites green: test_mas_contract.py (7), test_admission.py (8), test_static_mode.py (10)
+
+---
+
+## Static-Mode Hardening: SSRF Redirect Validation + Robustness Bundle (2026-07-17)
+
+### Why
+
+The 2026-07-17 repo audit found one real security gap: static mode's httpx
+client used `follow_redirects=True` with no per-hop validation, while full
+mode re-validates every redirect through the pinning egress proxy
+(`egress_broker.check_redirect`). A crawled public page 302-ing to
+`http://169.254.169.254/` (Azure IMDS) or an internal service would have
+been fetched and returned to the caller. Six smaller robustness issues rode
+along (tasks/done/static-mode-hardening-2026-07-17.md items 2–7).
+
+### What
+
+1. **`aitosoft_static_mode.py`** — client is now `follow_redirects=False`;
+   `_fetch_static_one` follows redirects manually (≤5 hops), resolving each
+   `Location` against the current URL and validating it with
+   `egress_broker.check_redirect` (same rule as full mode). Refused redirect
+   → inner `success:false`, opaque `error_message: "static-fetch: redirect
+   blocked (SSRF protection)"`, HTTP 200 envelope (one bad URL never fails
+   the batch). Also: per-batch fan-out bounded by `asyncio.Semaphore(10)`;
+   `HTML2Text`/egress imports at module scope (fail once, not per-request
+   through gather); dead `config` param dropped; `verify=False` comment
+   rewritten (matches full mode, where upstream hardcodes
+   `--ignore-certificate-errors` — deliberate for broken-cert SME sites).
+2. **`api.py` (static branch finally, ~6 lines)** — monitor now records the
+   real aggregate outcome: 200 only if ≥1 URL succeeded, else 502 + error
+   note (was: unconditional 200, skewing dashboards — 2026-04-15 review C1).
+3. **`config.yml`** — `crawler.static_fetch_timeout_s: 15` (was a hardcoded
+   module constant), read once per process like the admission knobs.
+
+### Tests
+
+- New OFFLINE suite `test-aitosoft/test_static_mode.py` (10 tests,
+  httpx.MockTransport + IP-literal hosts — zero network/DNS): public→private
+  and IMDS redirects refused AND never fetched, public→public + relative
+  Location followed, >5 hops refused, semaphore bound observed (peak ≤10
+  over a 30-URL batch), all-fail → monitor 502 / partial success → 200,
+  client pinned `follow_redirects=False`, timeout knob wired to config.yml.
+- Offline gates 25/25 (mas_contract 7 + admission 8 + static_mode 10).
+
+### Deploy + live verification (2026-07-17)
+
+- Image `0.9.2-static-hardening` (digest `sha256:f9f6c7b7...`, revision
+  `crawl4ai-service--0000027`) via deploy-image.sh — env vars untouched,
+  render-capacity invariant OK (config 2 == ACA rule 2).
+- Post-deploy: /health OK; static spot check caverna.fi 200/899 chars;
+  Tier 1 regression 4/4 (`--version static-hardening`); live SSRF probe
+  `https://nghttp2.org/httpbin/redirect-to?url=http://10.0.0.1/` in static
+  mode → inner `success:false`, `error_message: "static-fetch: redirect
+  blocked (SSRF protection)"`, envelope 200 — exactly the offline-test
+  contract. (httpbin.org itself was 503-ing and httpbingo.org 403s
+  datacenter IPs; the nghttp2.org mirror issues a real 302.)
 
 ---
 

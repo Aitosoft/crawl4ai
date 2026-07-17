@@ -2,7 +2,14 @@
 
 **Last Updated**: 2026-07-17
 **Location**: West Europe (co-located with MAS)
-**Status**: ✅ Running v0.9.2-render-gate (deployed 2026-07-17)
+**Status**: ✅ Running v0.9.2-static-hardening (deployed 2026-07-17; adds
+static-mode per-hop SSRF redirect validation + robustness bundle on top of
+render-gate — see AITOSOFT_CHANGES.md)
+
+**Rollback (last known good)**: `az containerapp update --name crawl4ai-service
+--resource-group aitosoft-prod --image
+aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-render-gate` (image only —
+NEVER set env vars during rollback).
 
 **v0.9.2-render-gate deployment notes (capacity/scaling redesign):**
 - **Render admission**: each replica admits max 2 concurrent full renders
@@ -65,9 +72,9 @@ All resources are in the `aitosoft-prod` resource group (West Europe):
 | `crawl4ai-service` | Container App | The crawl4ai service |
 | `workspace-aitosoftprodnCsc` | Log Analytics | Monitoring & logs |
 
-**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-render-gate`
-(digest `sha256:6f7ce204e9e9a0d0d6c900d2eb49d815fc103222795e99f1854e2174aab96ed5`,
-revision `crawl4ai-service--0000026`)
+**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-static-hardening`
+(digest `sha256:f9f6c7b75f047cea3e2b325e7b52350944437ef3715612e5766026522c47af14`,
+revision `crawl4ai-service--0000027`)
 
 ---
 

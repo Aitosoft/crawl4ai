@@ -689,9 +689,7 @@ async def handle_crawl_request(
 
             static_result = None
             try:
-                static_result = await handle_static_crawl_request(
-                    urls=urls, config=config
-                )
+                static_result = await handle_static_crawl_request(urls=urls)
                 return static_result
             finally:
                 try:
@@ -701,8 +699,14 @@ async def handle_crawl_request(
                         bool(r.get("success"))
                         for r in static_result.get("results", [])
                     )
+                    # Record the real aggregate outcome: the HTTP envelope is
+                    # always 200 by contract, but the monitor must not count
+                    # an all-URLs-failed batch as a 200 success.
                     await get_monitor().track_request_end(
-                        request_id, success=any_success, status_code=200
+                        request_id,
+                        success=any_success,
+                        error=None if any_success else "static: all URL fetches failed",
+                        status_code=200 if any_success else 502,
                     )
                 except Exception:
                     pass

@@ -37,7 +37,7 @@ curl http://localhost:11235/health
 pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
 # Testing (run from repo root — relative artifact paths; see TESTING.md)
-pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py  # OFFLINE suites (no server needed)
+pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py  # OFFLINE suites (no server needed)
 python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression (live server)
 python test-aitosoft/test_site.py <domain> --page <path>            # Single site (live server)
 python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic (live server)
@@ -244,7 +244,7 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 ## Azure Deployment
 
 - **Endpoint:** `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
-- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-render-gate`
+- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-static-hardening`
 - **Resources:** 2 vCPU / 4 GiB per replica, 0-30 replicas (scales to zero; explicit `http-renders` scale rule at 2 concurrent/replica — MUST match `render_capacity` in config.yml)
 - **Auth:** Bearer token via `CRAWL4AI_API_TOKEN` env var
 - See `DEPLOYMENT_INFO.md` for full details

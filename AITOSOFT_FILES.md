@@ -40,7 +40,9 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
   (importable without the server — used by test_mas_contract.py)
 - `aitosoft_admission.py` - RenderGate: per-replica render admission
   (capacity 2, bounded queue, 429 + Retry-After; test_admission.py pins it)
-- `aitosoft_static_mode.py` - `render_mode: "static"` implementation (httpx + html2text)
+- `aitosoft_static_mode.py` - `render_mode: "static"` implementation (httpx + html2text;
+  per-hop SSRF redirect validation via egress_broker, bounded fan-out;
+  test_static_mode.py pins it)
 - `aitosoft_patchright_fallback.py` - Second-tier retry via patchright for blocked crawls
 
 ### Deployment
@@ -67,9 +69,10 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
 
 Line counts are the real diff vs `upstream/develop` (checked 2026-07-17).
 
-### deploy/docker/api.py (+95/−9)
-`render_mode` param + static-mode short-circuit (after SSRF validation);
-patchright retry wrapped inside upstream's wall-clock deadline;
+### deploy/docker/api.py (+99/−9)
+`render_mode` param + static-mode short-circuit (after SSRF validation;
+monitor records the real aggregate outcome — 502, not 200, when every URL
+failed); patchright retry wrapped inside upstream's wall-clock deadline;
 `render_mode: "full"` tagging of results; render-admission gate acquire/release
 (429 fail-fast; wall-clock fence starts after admission).
 
@@ -86,10 +89,11 @@ force-close in janitor. File is unchanged upstream since 0.8.6, so this
 carries no merge risk. NOTE: ~a third of this diff is cosmetic reformatting
 that should be restored to upstream bytes — see `tasks/crawler-pool-cleanup.md`.
 
-### deploy/docker/config.yml (+34/−10)
+### deploy/docker/config.yml (+45/−10)
 Deployment config (always ours): stealth browser kwargs, real-Chrome channel,
 `limits.wall_clock_s: 180`, `pool.max_pages: 5`, `stuck_busy_timeout_sec: 600`,
-`memory_threshold_percent: 85`, render admission (`render_capacity: 2` —
+`memory_threshold_percent: 85`, `static_fetch_timeout_s: 15` (per-URL httpx
+timeout for static mode), render admission (`render_capacity: 2` —
 MUST match the ACA `http-renders` scale rule, `admission_queue: 4`,
 `admission_max_wait_s: 15`).
 
@@ -135,4 +139,5 @@ Post-merge checklist (beyond Tier 1 + the diff check):
   genuinely needed on the Container App. Verified 2026-07-17 — details in
   `tasks/done/tls-broken-cert-regression-2026-07-17.md`.
 - Offline gates: `pytest test-aitosoft/test_mas_contract.py
-  test-aitosoft/test_admission.py` (plus any offline suites added since).
+  test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py`
+  (plus any offline suites added since).

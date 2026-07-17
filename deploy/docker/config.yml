@@ -86,6 +86,11 @@ crawler:
   timeouts:
     stream_init: 30.0  # Timeout for stream initialization
     batch_process: 300.0  # Timeout for batch processing
+  # Aitosoft: per-URL httpx timeout for render_mode "static". Deliberately
+  # short — static mode is the fast/cheap alternative to Playwright, so
+  # fetches should be fast or fail fast. Read once per process by
+  # aitosoft_static_mode.py at client creation.
+  static_fetch_timeout_s: 15
   pool:
     max_pages: 5                           # Aitosoft: keep low; scale horizontally via replicas (2026-04-14 starvation incident)
     idle_ttl_sec: 300                     # 30 min janitor cutoff
