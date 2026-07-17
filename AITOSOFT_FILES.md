@@ -124,3 +124,15 @@ Expected: near-zero conflicts. If conflicts occur, check the files listed
 above; `git diff upstream/develop HEAD -- crawl4ai/ deploy/ Dockerfile`
 should show ONLY the modifications documented here. If it shows more,
 someone reformatted upstream files — fix that before merging anything.
+
+Post-merge checklist (beyond Tier 1 + the diff check):
+
+- `grep -n "ignore-certificate-errors" crawl4ai/browser_manager.py` — full
+  mode only tolerates broken-cert sites because upstream hardcodes these
+  launch flags. If upstream ever drops them (they're a known fingerprinting
+  signal), TLS verification silently turns ON (`enforce_egress` forces the
+  context-level setting False) and `CRAWL4AI_ALLOW_INSECURE_TLS=true` becomes
+  genuinely needed on the Container App. Verified 2026-07-17 — details in
+  `tasks/done/tls-broken-cert-regression-2026-07-17.md`.
+- Offline gates: `pytest test-aitosoft/test_mas_contract.py
+  test-aitosoft/test_admission.py` (plus any offline suites added since).

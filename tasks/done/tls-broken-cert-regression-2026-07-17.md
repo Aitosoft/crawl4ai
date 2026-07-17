@@ -1,8 +1,9 @@
 # Verify + resolve: broken-cert sites likely fail in full mode since v0.9.2
 
-**Status:** Verified 2026-07-17 — NO regression exists; no env change made.
-Awaiting coordination sign-off before moving to done/ (outcome contradicted
-the pre-approved plan, per its own stop-condition).
+**Status:** Done (2026-07-17). Verified — NO regression exists; no env change
+made. Coordinator signed off same day: the fragility re-check is now a line
+in AITOSOFT_FILES.md's upstream-sync checklist, and the antibot minimal_text
+side observation got its own task (tasks/antibot-minimal-text-false-positive.md).
 **Priority:** High — silent crawl failures on SME sites are exactly MAS's use case
 **Effort:** S. **Risk:** none (investigation + doc change only).
 
