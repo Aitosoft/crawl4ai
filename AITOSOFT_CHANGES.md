@@ -11,11 +11,12 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
-- **Production**: v0.9.2 + render admission + static-mode hardening + single-URL contract guard (deployed 2026-07-17 ~06:53 UTC)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-single-url` (revision `crawl4ai-service--0000028`, digest `sha256:cfb14873...`)
+- **Production**: v0.9.2 + render admission + static-mode hardening + single-URL contract guard + pool cleanup/re-init + patchright tidy (deployed 2026-07-17 ~07:53 UTC)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-pool-cleanup` (revision `crawl4ai-service--0000029`, digest `sha256:24662e39...`)
 - **Prod smoke 2026-07-17 (single-url)**: health ✅, 2-URL request → 400 w/ contract message ✅, single-URL caverna.fi crawl ✅, Tier 1 regression 4/4 ✅
 - **Prod smoke 2026-07-17 (static-hardening)**: health ✅, static spot check caverna.fi ✅, Tier 1 regression 4/4 ✅, live SSRF probe (static redirect→10.0.0.1 blocked, opaque error, 200 envelope) ✅
 - **Prod smoke 2026-07-17 (render-gate)**: health ✅, auth 401 ✅, MAS-shaped crawl (render_mode:full, 4.0s) ✅, static mode ✅, js_code rejected 400 ✅, 8-way burst → 6×200 + 2×429@0.85s w/ Retry-After ✅, http-scaler scaled 1→2→4 during burst ✅, probes green ✅
+- **Prod smoke 2026-07-17 (pool-cleanup)**: health ✅, single-URL caverna.fi crawl ✅ (full render 3.9s), Tier 1 regression 4/4 ✅, replica logs clean (permanent browser init, cold→hot promotion at count=3, RenderGate capacity 2, no janitor/force-close warnings) ✅
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
@@ -31,7 +32,51 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- Offline suites green: test_mas_contract.py (8), test_admission.py (8), test_static_mode.py (10)
+- Offline suites green: test_mas_contract.py (8), test_admission.py (8), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4)
+
+---
+
+## Pool Cleanup + Patchright Tidy (2026-07-17)
+
+Closed `tasks/crawler-pool-cleanup.md` and `tasks/patchright-fallback-tidy.md`.
+Image: `0.9.2-pool-cleanup`.
+
+### crawler_pool.py de-noise (zero behavior change)
+
+Rebuilt the file from exact upstream bytes + only the real changes. Diff vs
+`upstream/develop` shrank **+258/−49 → +210/−36** (net of the re-init feature
+below); every remaining hunk is nameable: MAX_PAGES enforcement, overflow
+keys, BUSY_SINCE stuck-slot janitor, PERMANENT lazy re-init. Also removed the
+dead overflow scan over HOT_POOL (`_ovf_` keys are only created in COLD_POOL
+and promotion only moves plain-sig keys — the branch could never match).
+
+### crawler_pool.py: PERMANENT lazy re-init (behavior fix)
+
+After `_force_close_stuck` closed the permanent browser it set
+`PERMANENT = None` and nothing re-created it — one stuck slot degraded ALL
+default-config traffic to overflow cold browsers until container restart.
+Now `get_crawler` lazily rebuilds it on the next default-sig request
+(assigns only after `start()` succeeds; can't fire before `init_permanent`
+because `DEFAULT_CONFIG_SIG` is unset until then). Ride-along: `OVERFLOW_SEQ`
+reset in `close_all` (parked secondary finding, trivial). NOT taken:
+BUSY_SINCE id()-rekeying (stays parked — see tasks/done archive).
+Pinned by `test-aitosoft/test_crawler_pool.py` (4 tests, mocked browsers).
+
+### aitosoft_patchright_fallback.py tidy
+
+1. Explicit `_UNDETECTED_IN_FLIGHT` counter replaces `_UNDETECTED_SEM._value`
+   peeking (private asyncio internals) in the recycle gate.
+2. **Recycle race closed**: singleton now dereferenced INSIDE the semaphore
+   with the counter already raised; `_recycle_undetected` only swaps at
+   in_flight == 0. Previously a recycle between the early deref and the
+   semaphore acquire closed the crawler mid-flight (retry silently lost).
+3. Frozen first persona documented as ACCEPTED (coordination decision
+   2026-07-17): patchright's value is its own stealth fingerprint;
+   per-company personas deliberately don't apply to the fallback path.
+4. GLOBAL_SEM interplay comment at the arun call site: upstream's class-wide
+   `capped_arun` means retries also consume GLOBAL_SEM permits — safe while
+   render_capacity (2) < pool.max_pages (5).
+Pinned by `test-aitosoft/test_patchright_fallback.py` (4 tests).
 
 ---
 

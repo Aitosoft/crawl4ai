@@ -84,11 +84,13 @@ lifespan shutdown closes static httpx client + patchright singleton.
 ### deploy/docker/schemas.py (+14/−1)
 `CrawlRequest.render_mode: Literal["full","static"] = "full"`.
 
-### deploy/docker/crawler_pool.py (+258/−49)
+### deploy/docker/crawler_pool.py (+210/−36)
 MAX_PAGES enforcement + overflow browser keys; BUSY_SINCE stuck-slot
-force-close in janitor. File is unchanged upstream since 0.8.6, so this
-carries no merge risk. NOTE: ~a third of this diff is cosmetic reformatting
-that should be restored to upstream bytes — see `tasks/crawler-pool-cleanup.md`.
+force-close in janitor; lazy PERMANENT re-init after a stuck force-close
+(test_crawler_pool.py pins it). De-noised 2026-07-17: every hunk vs upstream
+is now a real change (cosmetic churn restored to upstream bytes, dead
+HOT_POOL overflow scan removed). File is unchanged upstream since 0.8.6, so
+this carries no merge risk.
 
 ### deploy/docker/config.yml (+45/−10)
 Deployment config (always ours): stealth browser kwargs, real-Chrome channel,

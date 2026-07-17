@@ -1,6 +1,6 @@
 # crawler_pool.py: de-noise the upstream diff + fix PERMANENT re-init
 
-**Status:** Open (created 2026-07-17 from the repo audit)
+**Status:** DONE (closed 2026-07-17, deployed in `0.9.2-pool-cleanup`)
 **Priority:** Medium
 **Two independent changes — land 1 first (mechanical, no behavior), then 2.**
 
@@ -41,3 +41,24 @@ until container restart.
 ## Progress
 
 - 2026-07-17: Task created. No code changes yet.
+- 2026-07-17: Both changes landed and deployed (`0.9.2-pool-cleanup`,
+  revision `crawl4ai-service--0000029`).
+  - **De-noise** (commit b253526): rebuilt the file from exact upstream bytes
+    + only the real changes. Diff vs upstream/develop: +258/−49 → +210/−36
+    (net of the re-init feature); every remaining hunk is nameable. Dead
+    HOT_POOL `_ovf_` scan removed (overflow keys only ever live in COLD_POOL;
+    promotion only moves plain-sig keys). Zero behavior change — verified
+    with `git diff -w`: only f-string collapses (identical log bytes), quote
+    style, blank lines.
+  - **PERMANENT lazy re-init** (commit 9e6220d): `get_crawler` rebuilds the
+    permanent browser on the next default-sig request after
+    `_force_close_stuck` nulled it (assign only after `start()` succeeds;
+    can't fire pre-init since DEFAULT_CONFIG_SIG is unset until
+    init_permanent). Pinned by test-aitosoft/test_crawler_pool.py (4 offline
+    tests, mocked browsers).
+  - Secondary findings: took `OVERFLOW_SEQ` reset in `close_all` (trivial).
+    **BUSY_SINCE id()-rekeying NOT taken** — touches 4 call sites, not a
+    ride-along; still bounded by pop-on-release/close discipline. Re-open a
+    task if it ever matters.
+  - Verified: offline gates 34/34, Tier 1 regression 4/4 against prod, replica
+    logs clean (permanent init, cold→hot promotion, no janitor warnings).

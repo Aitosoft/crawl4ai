@@ -1,6 +1,6 @@
 # Patchright fallback: internals tidy (counter, recycle race, frozen persona)
 
-**Status:** Open (created 2026-07-17 from the repo audit)
+**Status:** DONE (closed 2026-07-17, deployed in `0.9.2-pool-cleanup`)
 **Priority:** Low — fallback path only; current failures already degrade gracefully
 **Effort:** S-M. **Risk:** low-medium.
 
@@ -34,3 +34,20 @@ between deref and acquire). No deploy urgency; ride along with the next image.
 ## Progress
 
 - 2026-07-17: Task created. No code changes yet.
+- 2026-07-17: All four items landed in commit 0a4bf14, deployed in
+  `0.9.2-pool-cleanup`.
+  1. Explicit `_UNDETECTED_IN_FLIGHT` counter; no more `_UNDETECTED_SEM._value`
+     peeking anywhere in the file.
+  2. Recycle race closed via "acquire before deref": the singleton is
+     dereferenced inside the semaphore with the in-flight counter already
+     raised; `_recycle_undetected` only swaps at in_flight == 0. (Chose this
+     over generation-tagging — simpler, no re-fetch loop.)
+  3. Frozen first persona documented as ACCEPTED (module docstring +
+     `_get_undetected_crawler` docstring, marked as coordination decision
+     2026-07-17 with explicit "do not fix" guidance).
+  4. GLOBAL_SEM interplay comment at the arun call site (retries consume
+     GLOBAL_SEM permits via upstream's class-wide capped_arun; safe while
+     render_capacity 2 < pool.max_pages 5).
+  - Pinned by test-aitosoft/test_patchright_fallback.py (4 offline tests):
+    stale-ref regression, recycle no-op mid-arun, counter reset on arun
+    exception / startup failure.
