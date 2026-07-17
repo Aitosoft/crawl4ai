@@ -17,6 +17,9 @@ Design:
 - Stealth adapter is NOT used on top of patchright (they conflict — see
   browser_manager.py:787: `not self.use_undetected`). Patchright's own
   stealth is sufficient.
+- One frozen identity: the singleton keeps the FIRST request's BrowserConfig;
+  later per-company personas do not apply to the fallback path (accepted
+  behavior — see _get_undetected_crawler docstring).
 - The retry only fires when `error_message` starts with "Blocked by anti-bot
   protection:" — i.e. the signal antibot_detector writes in async_webcrawler.
 - If the retry still fails (either block or error), we keep the ORIGINAL
@@ -56,6 +59,13 @@ _UNDETECTED_LOCK = asyncio.Lock()
 _UNDETECTED_CONCURRENCY = 5
 _UNDETECTED_SEM = asyncio.Semaphore(_UNDETECTED_CONCURRENCY)
 
+# Aitosoft: explicit in-flight call counter. The semaphore bounds concurrency;
+# this counter *reports* it for the recycle gate. Kept separately so we never
+# peek asyncio.Semaphore._value (private internals — fragile across Python
+# versions). Raised inside the semaphore before the singleton is dereferenced,
+# lowered after arun returns; single event loop, so plain int +/- is atomic.
+_UNDETECTED_IN_FLIGHT = 0
+
 # Aitosoft: recycle the singleton periodically to bound long-run memory
 # growth. Even if every arun frees its page cleanly, long-running Chromium
 # processes accumulate cruft (cookies, caches, in-progress fetches from
@@ -85,6 +95,15 @@ def _is_blocked(result: Any) -> bool:
 
 async def _get_undetected_crawler(base_cfg: BrowserConfig) -> AsyncWebCrawler:
     """Return (lazy-creating) a shared patchright-backed crawler.
+
+    FROZEN FIRST PERSONA — accepted behavior (coordination decision
+    2026-07-17): the singleton is built from the FIRST request's
+    BrowserConfig; later requests' per-company personas (UA / viewport /
+    headers) deliberately do NOT apply to the fallback path. Patchright's
+    value is its own undetected-chromium stealth fingerprint, not persona
+    fidelity — rebuilding per persona would forfeit the warm shared
+    singleton (3-5s startup) for no anti-bot gain. Do not "fix" this by
+    rebuilding on persona mismatch.
 
     The base_cfg is the same BrowserConfig we'd normally use — we strip
     enable_stealth because patchright handles stealth natively and the two
@@ -150,13 +169,7 @@ async def maybe_retry_blocked(
         f"result(s) blocked, retrying"
     )
 
-    try:
-        undetected = await _get_undetected_crawler(base_browser_config)
-    except Exception as e:
-        logger.warning(f"[patchright] crawler startup failed: {e}")
-        return results
-
-    global _UNDETECTED_USES
+    global _UNDETECTED_USES, _UNDETECTED_IN_FLIGHT
 
     for i in blocked_indices:
         url = urls[i] if i < len(urls) else None
@@ -167,8 +180,34 @@ async def maybe_retry_blocked(
             # shared singleton under parallel-agent load. Waiters queue here;
             # each retry is short (~5-10s normally, bounded by api.py's
             # asyncio.wait_for(180s)).
+            #
+            # GLOBAL_SEM interplay: upstream server.py monkeypatches
+            # AsyncWebCrawler.arun class-wide (capped_arun), so this retry's
+            # arun ALSO consumes a GLOBAL_SEM permit (pool.max_pages = 5).
+            # Safe today: the render admission gate admits at most
+            # render_capacity (2) requests per replica, and the retry runs
+            # AFTER the first-tier arun released its permit, so concurrent
+            # permit demand from this path is <= 2 < 5. Re-check that math
+            # before raising _UNDETECTED_CONCURRENCY, render_capacity, or
+            # lowering pool.max_pages.
             async with _UNDETECTED_SEM:
-                raw: Any = await undetected.arun(url=url, config=crawler_config)
+                _UNDETECTED_IN_FLIGHT += 1
+                try:
+                    # Deref the singleton INSIDE the semaphore, with the
+                    # in-flight counter already raised: _recycle_undetected
+                    # only swaps when _UNDETECTED_IN_FLIGHT == 0, so the ref
+                    # obtained here cannot be closed under us. (Previously
+                    # the deref happened before the semaphore — a recycle in
+                    # that window closed the crawler mid-flight and the retry
+                    # was silently lost to the per-URL except.)
+                    try:
+                        undetected = await _get_undetected_crawler(base_browser_config)
+                    except Exception as e:
+                        logger.warning(f"[patchright] crawler startup failed: {e}")
+                        return results
+                    raw: Any = await undetected.arun(url=url, config=crawler_config)
+                finally:
+                    _UNDETECTED_IN_FLIGHT -= 1
             _UNDETECTED_USES += 1
             new_result: Any
             if isinstance(raw, list):
@@ -215,21 +254,24 @@ async def maybe_retry_blocked(
 async def _recycle_undetected() -> None:
     """Close + clear the singleton so the next call builds a fresh one.
 
-    Only runs if we can grab _UNDETECTED_LOCK AND the concurrency semaphore
-    shows zero in-flight callers. Avoids closing a crawler that another
-    coroutine is mid-arun on. Under sustained parallel load this may wait
-    for a gap before recycling, which is acceptable — we want bounded
-    long-term growth, not strict periodicity.
+    Only runs if we can grab _UNDETECTED_LOCK AND _UNDETECTED_IN_FLIGHT shows
+    zero in-flight callers. Avoids closing a crawler that another coroutine
+    is mid-arun on (callers raise the counter inside the semaphore BEFORE
+    dereferencing the singleton, so in_flight == 0 here guarantees nobody
+    holds a ref they still intend to use). Under sustained parallel load this
+    may wait for a gap before recycling, which is acceptable — we want
+    bounded long-term growth, not strict periodicity.
     """
     global _UNDETECTED_CRAWLER, _UNDETECTED_USES
-    # Cheap check before acquiring the lock — if fully busy, skip this round.
-    if _UNDETECTED_SEM._value < _UNDETECTED_CONCURRENCY:
+    # Cheap check before acquiring the lock — if calls are in flight, skip
+    # this round; the next threshold-crossing call will try again.
+    if _UNDETECTED_IN_FLIGHT > 0:
         return
     async with _UNDETECTED_LOCK:
         if _UNDETECTED_CRAWLER is None:
             _UNDETECTED_USES = 0
             return
-        if _UNDETECTED_SEM._value < _UNDETECTED_CONCURRENCY:
+        if _UNDETECTED_IN_FLIGHT > 0:
             return
         logger.info(f"[patchright] Recycling singleton after {_UNDETECTED_USES} uses")
         old = _UNDETECTED_CRAWLER
