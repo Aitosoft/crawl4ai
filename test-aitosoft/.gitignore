@@ -9,6 +9,9 @@ reports/*
 !artifacts/.gitkeep
 !reports/.gitkeep
 
-# Allow deliberately-kept manual test results
-!artifacts/manual/
-!reports/manual/
+# Allow deliberately-kept results (copy them into keep/ by hand).
+# Named keep/, NOT manual/ — test_site.py's default --version label is
+# "manual", so routine default-label runs would otherwise become untracked
+# noise here.
+!artifacts/keep/
+!reports/keep/
