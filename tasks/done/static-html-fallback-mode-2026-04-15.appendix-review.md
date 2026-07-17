@@ -61,6 +61,12 @@ html2text produces `name@nullroadscanners.com`. The BS4 pass removes:
 - Conservative class allowlist: `oe_displaynone`, `d-none`, `is-hidden`,
   `sr-only`, `visually-hidden`
 
+> **Correction 2026-07-17:** the C3 mitigation below was applied — the
+> shipped code strips only `oe_displaynone`, `d-none`, `is-hidden` and
+> deliberately does NOT match `sr-only` / `visually-hidden` (see
+> `aitosoft_static_mode.py:_strip_hidden_decoys`). The list above reflects
+> the draft under review, not what shipped.
+
 Reasoning: this is the right layer — html2text has no CSS model, and writing
 a CSS-aware pass would explode scope. The class list is scoped to well-known
 utility conventions, which limits false-positive surface.

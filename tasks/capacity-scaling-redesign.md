@@ -79,7 +79,8 @@ MAS client retries), zero pinned warm replicas. Six asks from MAS:
        6×200 (queued 3-5s) + 2×429@0.85s w/ Retry-After; gate logs match;
        **http-scaler scaled 1→2→4 during the burst** (vs never in the
        incident). No ReplicaUnhealthy events (probes good).
-9. [x] Memo written: tasks/capacity-scaling-memo-to-mas.md (relay via Tero)
+9. [x] Memo written: tasks/done/capacity-scaling-memo-to-mas-2026-07-17.md
+       (delivered via Tero; MAS ack 3a1bf5b0 — see Remaining below)
 
 ## Remaining
 

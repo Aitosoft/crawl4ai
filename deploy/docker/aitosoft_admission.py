@@ -93,6 +93,12 @@ class RenderGate:
         """Admit `weight` renders (clamped to capacity). Returns the granted
         weight, which MUST be passed back to release(). Raises
         RenderCapacityExceeded when the queue is full or the wait times out.
+
+        KNOWN LIMITATION: because weight is clamped to capacity, a multi-URL
+        request is admitted at weight<=capacity but the dispatcher downstream
+        may still render its URLs at higher concurrency (up to upstream's
+        GLOBAL_SEM=5). Harmless while MAS sends single-URL requests; must be
+        fixed before anyone batches — see tasks/render-gate-batch-coherence.md.
         """
         weight = max(1, min(int(weight), self.capacity))
         async with self._cond:

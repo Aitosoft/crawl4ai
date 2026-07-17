@@ -36,10 +36,12 @@ Merged 8 upstream commits from `upstream/develop`:
 Conflicts resolved in api.py (trivial: added `crawler_configs` param,
 took `effective_config`). server.py taken entirely from upstream.
 
-## Remaining Work
-- [ ] Update AITOSOFT_CHANGES.md with restructure + merge notes
-- [ ] Update CLAUDE.md architecture section
-- [ ] Build + deploy new image
-- [ ] Run Tier 1 regression on deployed image
-- [ ] PR browser_adapter.py stealth 2.x fix upstream
-- [ ] PR browser_manager.py GPU flag gating upstream
+## Remaining Work (all closed — boxes updated 2026-07-17)
+- [x] Update AITOSOFT_CHANGES.md with restructure + merge notes
+- [x] Update CLAUDE.md architecture section
+- [x] Build + deploy new image (0.8.6, then 0.8.6-leak-fix 2026-04-14)
+- [x] Run Tier 1 regression on deployed image
+- [x] PR browser_adapter.py stealth 2.x fix upstream — OBSOLETE, upstream
+      fixed it themselves (#1960); our patch dropped in the v0.9.2 upgrade
+- [x] PR browser_manager.py GPU flag gating upstream — still pending, now
+      tracked in tasks/file-upstream-prs.md

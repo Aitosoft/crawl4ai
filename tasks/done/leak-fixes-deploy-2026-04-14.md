@@ -1,6 +1,9 @@
 # Deploy Leak Fixes — 0.8.6-leak-fix
 
-**Status:** in progress
+**Status:** Done (2026-04-14 — `0.8.6-leak-fix` deployed to prod; this file
+was frozen mid-flight and never updated. Deploy + verification evidence:
+`overnight-intervention-log-2026-04-14.md` and the AITOSOFT_CHANGES.md
+`0.8.6-leak-fix` entry. Header corrected 2026-07-17.)
 **Started:** 2026-04-14 15:15 UTC
 
 ## Goal

@@ -1,6 +1,8 @@
 # Add `mode=static` Fallback to `/crawl` Endpoint
 
-**Status:** open, ready to start
+**Status:** Done (2026-04-15 — deployed as `0.8.6-static-mode`, revision
+`crawl4ai-service--0000011`; see Deploy record below. Header was never
+flipped from "open"; corrected 2026-07-17.)
 **Origin:** Inbound handoff from the MAS repo after the 2026-04-15 roadscanners.com investigation (F-87o-04). Reframed from "fix the hang" to "route around the Playwright capability gap."
 **Estimated effort:** ~2h implementation + ~1h verification + deploy.
 

@@ -1,6 +1,11 @@
 # To: aitosoft-platform Claude session (via Tero)
 # From: crawl4ai repo Claude session
 # Re: Capacity/scaling redesign — DEPLOYED. Answers to your 6 points.
+#
+# [Record note 2026-07-17: this is a delivered outbound memo, not a task.
+#  Sent via Tero 2026-07-17; MAS acknowledged in their commit 3a1bf5b0.
+#  Kept here as the cross-repo contract record. Live tracking:
+#  tasks/capacity-scaling-redesign.md]
 
 Everything you asked for is designed, implemented, tested, and live as image
 `crawl4ai-service:0.9.2-render-gate`. Scale-to-zero kept, warm-replica

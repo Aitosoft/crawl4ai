@@ -1,6 +1,6 @@
 # Upgrade to upstream v0.9.2
 
-**Status:** In progress (started 2026-07-16)
+**Status:** Done (2026-07-17)
 **Priority:** High — crawler is 117 commits / 5 releases behind upstream
 **Owner:** Claude (lead developer), commissioned by Tero
 
@@ -92,10 +92,10 @@ Aitosoft-only files (no upstream counterpart): `deploy/docker/aitosoft_entry.py`
 - [x] MAS's exact field enumeration pinned as an offline regression test:
   `test-aitosoft/test_mas_contract.py` (7 tests). Relaxations refactored
   into `aitosoft_trust.py` so the test imports them without the server.
-  Note: prod runs the pre-refactor entry (functionally identical); the
-  refactor rides along with the next image build.
-- [ ] Watch the first real WAA batch on 0.9.2 (OVERNIGHT_PLAYBOOK applies).
-- [ ] Move this task to done/ once the first production batch is clean.
+  (The refactor shipped in the `0.9.2-render-gate` image on 2026-07-17.)
+- [x] Closed 2026-07-17: prod moved to `0.9.2-render-gate` before the first
+  WAA batch ran, so "watch the first batch" is now tracked by the successor
+  task `capacity-scaling-redesign.md` (its open watch-batch item).
 
 ## Learnings
 

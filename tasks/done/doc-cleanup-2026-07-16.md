@@ -1,7 +1,6 @@
 # Documentation Cleanup
 
-**Status:** Done (2026-07-16, completed during the v0.9.2 upgrade)
-**Move to done/ after the v0.9.2 deploy settles.**
+**Status:** Done (2026-07-16, completed during the v0.9.2 upgrade; moved to done/ 2026-07-17 after the deploy settled)
 
 ## What was done (2026-07-16)
 
