@@ -87,6 +87,14 @@ MAS client retries), zero pinned warm replicas. Six asks from MAS:
 - [ ] Watch the first WAA batch on the new admission scheme: expect 429
       bursts at ramp-up (absorbed by client retries), scale-out within
       ~30s, zero 504s from contention. Then move task to done/.
+      2026-07-17: eval-request memo sent to MAS (via Tero) — they run WAA
+      evals against `0.9.2-pool-cleanup` (rev 0000029) and report outcome
+      stats + timeline back. When the report arrives: cross-check
+      ContainerAppConsoleLogs_CL / SystemLogs for the eval window (429
+      rates, scale-out timing, replica browser counts, any stalls), then
+      close this task. If tiny-page minimal_text 500s appear in their
+      report, that activates tasks/antibot-minimal-text-false-positive.md
+      with real data.
 - [x] MAS side landed (their commit 3a1bf5b0, 2026-07-17, ack relayed via
       Tero): 429 retries 5/10/20/30s (65s span); page_timeout 80s ×
       max_retries 1 (160s < 180s fence, ~20s left for patchright tier);
