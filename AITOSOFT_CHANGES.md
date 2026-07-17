@@ -12,7 +12,8 @@ Keeping this log helps when syncing with upstream updates.
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
 - **Production**: v0.9.2 + render admission + static-mode hardening + single-URL contract guard + pool cleanup/re-init + patchright tidy + fence-504 observability (deployed 2026-07-17)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-fence-obs` (revision: see DEPLOYMENT_INFO.md)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-fence-obs` (revision `crawl4ai-service--0000030`, digest `sha256:9944c935...`)
+- **Prod smoke 2026-07-17 (fence-obs)**: health ✅, authenticated render 200 (1.1s, new revision) ✅, "RenderGate ADMIT url=… waited=0.0s in_use=1/2" visible in container logs ✅ (Tier 1 4/4 was run pre-deploy vs local server, `--version fence-obs-local`)
 - **Prod smoke 2026-07-17 (single-url)**: health ✅, 2-URL request → 400 w/ contract message ✅, single-URL caverna.fi crawl ✅, Tier 1 regression 4/4 ✅
 - **Prod smoke 2026-07-17 (static-hardening)**: health ✅, static spot check caverna.fi ✅, Tier 1 regression 4/4 ✅, live SSRF probe (static redirect→10.0.0.1 blocked, opaque error, 200 envelope) ✅
 - **Prod smoke 2026-07-17 (render-gate)**: health ✅, auth 401 ✅, MAS-shaped crawl (render_mode:full, 4.0s) ✅, static mode ✅, js_code rejected 400 ✅, 8-way burst → 6×200 + 2×429@0.85s w/ Retry-After ✅, http-scaler scaled 1→2→4 during burst ✅, probes green ✅

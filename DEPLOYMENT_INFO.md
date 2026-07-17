@@ -2,13 +2,14 @@
 
 **Last Updated**: 2026-07-17
 **Location**: West Europe (co-located with MAS)
-**Status**: ✅ Running v0.9.2-pool-cleanup (deployed 2026-07-17; crawler_pool
-diff de-noise + PERMANENT lazy re-init after stuck force-close + patchright
-fallback tidy — see AITOSOFT_CHANGES.md "Pool Cleanup + Patchright Tidy")
+**Status**: ✅ Running v0.9.2-fence-obs (deployed 2026-07-17 15:49 UTC,
+revision `crawl4ai-service--0000030`, digest `sha256:9944c935...`;
+fence-504 + admission observability, logging only — see AITOSOFT_CHANGES.md
+"Fence-504 Observability")
 
 **Rollback (last known good)**: `az containerapp update --name crawl4ai-service
 --resource-group aitosoft-prod --image
-aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-single-url` (image only —
+aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-pool-cleanup` (image only —
 NEVER set env vars during rollback).
 
 **v0.9.2-render-gate deployment notes (capacity/scaling redesign):**
