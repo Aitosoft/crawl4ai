@@ -86,8 +86,23 @@ MAS client retries), zero pinned warm replicas. Six asks from MAS:
 - [ ] Watch the first WAA batch on the new admission scheme: expect 429
       bursts at ramp-up (absorbed by client retries), scale-out within
       ~30s, zero 504s from contention. Then move task to done/.
-- [ ] MAS side: lengthen 429 backoff to span ≥60s (asked in memo).
+- [x] MAS side landed (their commit 3a1bf5b0, 2026-07-17, ack relayed via
+      Tero): 429 retries 5/10/20/30s (65s span); page_timeout 80s ×
+      max_retries 1 (160s < 180s fence, ~20s left for patchright tier);
+      client hard timeout 210s (our worst case ≈ 200s: 15s queue + browser
+      get + 180s fence — 210 is adequate, don't lower it); pinning retired
+      from their runbook too.
 - [ ] Optional follow-up: image diet (1.79 GB → faster uncached-node pulls).
+
+## First-batch capacity math (their stated shape: ~15 sessions × 3 renders)
+
+~45 concurrent renders ÷ 2 per replica ≈ 23 replicas steady-state — inside
+maxReplicas 30. Cold ramp from zero: first replica ~10s (cached node), KEDA
+poll (~30s) then fans out; expect full capacity in ~1-3 min. Their 65s retry
+span covers cached-node ramp; a 45-at-once cold spike could exhaust a few
+requests' retries if many nodes need the 40s image pull — acceptable for
+run one, observe before tuning (options if it bites: they stagger session
+starts, or raise admission_queue, or image diet).
 
 ## Learnings
 
