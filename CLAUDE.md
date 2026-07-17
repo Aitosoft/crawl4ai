@@ -244,8 +244,8 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 ## Azure Deployment
 
 - **Endpoint:** `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
-- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.8.6-maxpages-fix`
-- **Resources:** 2 vCPU / 4 GiB per replica, 0-20 replicas (scales to zero)
+- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-render-gate`
+- **Resources:** 2 vCPU / 4 GiB per replica, 0-30 replicas (scales to zero; explicit `http-renders` scale rule at 2 concurrent/replica — MUST match `render_capacity` in config.yml)
 - **Auth:** Bearer token via `CRAWL4AI_API_TOKEN` env var
 - See `DEPLOYMENT_INFO.md` for full details
 

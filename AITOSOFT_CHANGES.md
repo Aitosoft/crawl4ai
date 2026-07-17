@@ -7,13 +7,13 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-07-16
+**Last Updated**: 2026-07-17
 
 ### Version
-- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see v0.9.2 upgrade entry below)
-- **Production**: v0.9.2 (deployed 2026-07-16 ~12:23 UTC)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2` (revision `crawl4ai-service--0000025`, digest `sha256:cfde8b42...`)
-- **Prod smoke 2026-07-16**: health 0.9.2 ✅, auth 401 ✅, MAS-shaped crawl (headers + magic:false + 90s timeout) ✅, static mode ✅, js_code rejected 400 ✅, caverna.fi spot check ✅
+- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
+- **Production**: v0.9.2 + render admission (deployed 2026-07-17 ~03:47 UTC)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-render-gate` (revision `crawl4ai-service--0000026`, digest `sha256:6f7ce204...`)
+- **Prod smoke 2026-07-17**: health ✅, auth 401 ✅, MAS-shaped crawl (render_mode:full, 4.0s) ✅, static mode ✅, js_code rejected 400 ✅, 8-way burst → 6×200 + 2×429@0.85s w/ Retry-After ✅, http-scaler scaled 1→2→4 during burst ✅, probes green ✅
 
 ### Production Deployment
 - **Endpoint**: `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`

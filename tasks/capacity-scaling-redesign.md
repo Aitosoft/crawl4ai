@@ -69,12 +69,25 @@ MAS client retries), zero pinned warm replicas. Six asks from MAS:
 5. [x] Local e2e: 10 concurrent → 6×200 (queued ≤14s) + 4×429 in 0.5s w/
        Retry-After; /health instant under load; static mode bypasses gate
 6. [x] Tier 1 regression local 4/4 (reports/render-gate-local-regression-tier1.md)
-7. [ ] ACA: explicit http scale rule (concurrency=2), maxReplicas 30,
-       HTTP startup/readiness probes on /health
-8. [ ] Build + deploy image, prod smoke (no extra test-site hits)
-9. [ ] Reply memo to MAS (relay via Tero): capacity number, 429 semantics,
-       max queue wait, cold-start numbers, backoff sizing advice, contract
-       confirmation
+7. [x] ACA applied: `http-renders` rule concurrentRequests=2 (NOTE: `az
+       containerapp update --yaml` silently dropped the metadata value —
+       had to re-apply with `--scale-rule-http-concurrency 2`; verify with
+       `az containerapp show`, not the update response), maxReplicas 30,
+       HTTP Startup+Readiness probes on /health, TCP liveness
+8. [x] Deployed 2026-07-17 ~03:47 UTC: image `0.9.2-render-gate`, revision
+       `crawl4ai-service--0000026`. Prod smoke all green. Prod 8-way burst:
+       6×200 (queued 3-5s) + 2×429@0.85s w/ Retry-After; gate logs match;
+       **http-scaler scaled 1→2→4 during the burst** (vs never in the
+       incident). No ReplicaUnhealthy events (probes good).
+9. [x] Memo written: tasks/capacity-scaling-memo-to-mas.md (relay via Tero)
+
+## Remaining
+
+- [ ] Watch the first WAA batch on the new admission scheme: expect 429
+      bursts at ramp-up (absorbed by client retries), scale-out within
+      ~30s, zero 504s from contention. Then move task to done/.
+- [ ] MAS side: lengthen 429 backoff to span ≥60s (asked in memo).
+- [ ] Optional follow-up: image diet (1.79 GB → faster uncached-node pulls).
 
 ## Learnings
 

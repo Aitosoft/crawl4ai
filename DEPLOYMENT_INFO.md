@@ -1,8 +1,24 @@
 # Crawl4AI Production Deployment
 
-**Last Updated**: 2026-07-16
+**Last Updated**: 2026-07-17
 **Location**: West Europe (co-located with MAS)
-**Status**: ✅ Running v0.9.2 (deployed 2026-07-16, revision `crawl4ai-service--0000025`)
+**Status**: ✅ Running v0.9.2-render-gate (deployed 2026-07-17)
+
+**v0.9.2-render-gate deployment notes (capacity/scaling redesign):**
+- **Render admission**: each replica admits max 2 concurrent full renders
+  (`config.yml crawler.pool.render_capacity`), queues up to 4 waiters for
+  ≤15s, then returns **429 + Retry-After: 5**. The 180s wall-clock fence
+  starts AFTER a render slot is granted. Static mode bypasses the gate.
+- **Explicit ACA scale rule** `http-renders`: `concurrentRequests: 2`
+  (replaces the default 10/replica that caused the 2026-07-16 504 incident).
+  `minReplicas: 0` (scale-to-zero kept), `maxReplicas: 30`.
+  ⚠️ If `render_capacity` in config.yml changes, change the scale rule too.
+- **Probes** (were null/TCP defaults): HTTP Startup + Readiness on `/health`
+  — lifespan pre-warms the browser before serving, so passing readiness ==
+  browser-pool-ready. Liveness is TCP with generous thresholds (never kills
+  a busy replica).
+- **Cold start (measured 2026-07-16 logs)**: node with cached image ~8–12s
+  from scheduling to render-capable; uncached node +40s image pull (1.79 GB).
 
 **v0.9.2 deployment notes:**
 - Container env now includes `GUNICORN_BIND=0.0.0.0:11235` (upstream's
@@ -49,8 +65,9 @@ All resources are in the `aitosoft-prod` resource group (West Europe):
 | `crawl4ai-service` | Container App | The crawl4ai service |
 | `workspace-aitosoftprodnCsc` | Log Analytics | Monitoring & logs |
 
-**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2`
-(digest `sha256:cfde8b42a89cf5eb2d89137724ee7d7279f11e81c4829690518057206a81c4cf`)
+**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-render-gate`
+(digest `sha256:6f7ce204e9e9a0d0d6c900d2eb49d815fc103222795e99f1854e2174aab96ed5`,
+revision `crawl4ai-service--0000026`)
 
 ---
 
@@ -145,41 +162,41 @@ az containerapp update \
   --name crawl4ai-service \
   --resource-group aitosoft-prod \
   --min-replicas 0 \
-  --max-replicas 20 \
+  --max-replicas 30 \
   --cpu 2.0 \
   --memory 4.0Gi
 ```
 
-### Batch Runbook — WAA Warm-Up / Cool-Down (2026-04-14)
+### Batch Runbook — RETIRED (2026-07-17)
 
-KEDA's http-scaler can scale 2→1 replicas mid-batch if traffic looks light to
-its polling (seen in the 2026-04-14 outage at 12:51 UTC — replica SIGTERM'd
-during an active crawl). Before any WAA batch larger than a handful of
-companies, hold `min-replicas` up so you always have warm capacity and
-failover.
+Warm-replica pinning before WAA batches is **no longer needed**. The
+render-admission gate + the explicit `http-renders` scale rule
+(`concurrentRequests: 2`) make scale-out track real render load: bursts get
+fast 429s (absorbed by MAS client retries) while ACA boots replicas in
+~10–50s. `batch-scale.sh` is kept ONLY as an emergency valve if scaling
+misbehaves:
 
 ```bash
-# BEFORE starting a WAA batch run:
-./azure-deployment/batch-scale.sh up        # 1 warm replica (sequential)
-./azure-deployment/batch-scale.sh up 3      # 3 warm replicas (3-6 parallel agents)
-./azure-deployment/batch-scale.sh up 5      # 5 warm (10+ parallel agents)
-
-# AFTER batch completes:
-./azure-deployment/batch-scale.sh down      # Back to scale-to-zero
-
-# Check current state:
-./azure-deployment/batch-scale.sh status
+./azure-deployment/batch-scale.sh status    # check
+./azure-deployment/batch-scale.sh up 3      # EMERGENCY ONLY: pin warm capacity
+./azure-deployment/batch-scale.sh down      # back to scale-to-zero
 ```
 
-Cost impact of `up 1` for an 8-hour batch: ~€0.80 extra (1 replica × €0.10/h).
-Worth it for reliability.
+Watch scaling during a batch:
+```bash
+az monitor log-analytics query -w be17d63b-1807-49da-9846-82091ac8971d \
+  --analytics-query "ContainerAppSystemLogs_CL | where TimeGenerated > ago(1h) \
+  | where ContainerAppName_s == 'crawl4ai-service' \
+  | where Reason_s in ('SuccessfulRescale','AssigningReplica') \
+  | project TimeGenerated, Log_s | order by TimeGenerated desc" -o table
+```
 
 ---
 
 ## Cost Optimization
 
 Current configuration (updated 2026-04-04):
-- **Replicas**: 0-20 (scales to zero when idle, scales out under load)
+- **Replicas**: 0-30 (scales to zero when idle, scales out under load via http-renders rule at 2 concurrent renders/replica)
 - **CPU**: 2.0 cores per replica
 - **Memory**: 4.0 GiB per replica
 - **max_pages**: 5 per replica (horizontal scaling strategy)
