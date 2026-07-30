@@ -1,6 +1,12 @@
 # Hard-blocked hosts cost ~12 page loads per company
 
-**Status:** Open — ready to implement, no external input needed
+**Status:** Open — ready to implement, no external input needed.
+**Priority raised 2026-07-30:** `tasks/redirect-status-blinds-block-detection.md`
+shipped, so every redirect-to-block host now takes this path too (measured
+~13 s and 4 page loads per request, up from 1). Pinned by
+`test-aitosoft/test_redirect_block_detection.py::test_blocked_result_costs_one_page_load_per_attempt`.
+This is also the residual that lets a slow+blocked host still reach the 180 s
+fence, because the patchright tier gets its own `total_timeout` budget.
 **Priority:** Medium. Not a correctness bug; a cost, latency and politeness bug
 that also makes us look worse to the blocking edge over time.
 **Effort:** S-M. **Risk:** low, but see the false-negative warning below.

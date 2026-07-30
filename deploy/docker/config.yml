@@ -79,6 +79,19 @@ security:
 crawler:
   base_config:
     simulate_user: true
+    # Aitosoft 2026-07-30: hard budget for the fetch phase of one arun() — all
+    # anti-bot attempts and proxy retries share it. Without it a page that keeps
+    # renavigating wedges an untimed Playwright call (page.content /
+    # page.evaluate carry no protocol timeout) and burns the whole 180 s fence
+    # in silence, returning a 504 with no diagnostic. See
+    # tasks/render-retry-unbounded-hang.md.
+    # Sized at ~fence/2 + margin: the second tier (patchright) runs a second
+    # arun() inside the same fence, and only for results already judged blocked,
+    # which by construction loaded fast. Must stay above the largest page_timeout
+    # a client may send (MAS V14 sends 80 s) so one slow navigation still fits.
+    # Applied by api.py's base_config pass; not client-settable (absent from
+    # UNTRUSTED_FIELD_ALLOWLIST, so a client-sent value is dropped).
+    total_timeout: 100000
   memory_threshold_percent: 85.0  # Aitosoft: was 95 — leave headroom on 4 GiB replicas
   rate_limiter:
     enabled: true

@@ -91,6 +91,21 @@ Three independent conclusions, each load-bearing:
    per-operation timeout, so no timeout tuning will fix this — only a hard
    internal budget will.
 
+> **Resolved 2026-07-30 (implementation session), by reproduction.** The
+> blocking call is any `page.evaluate()` / `page.content()`: the Python client
+> sends them with **no `timeout` field**, the driver therefore arms **no timer**,
+> and they wait on the frame's execution-context promise — which every
+> navigation replaces with a fresh unresolved one. Confirmed by walking the real
+> `await` chain of the hung task against a local fixture that reproduces the
+> race; the frame was `adapter.evaluate(update_image_dimensions_js)`. This
+> explains conclusion 3 exactly (`page_timeout` reaches only `page.goto` and the
+> `wait_*` family) and the total log silence (both call sites sit inside
+> swallow-all `try/except`).
+>
+> One correction to the read above: the **first** 504 (13:25:17 → 13:28:17) has
+> no `[ANTIBOT]` retry line, so attempt 1 hung too. The defect was never
+> retry-specific. Fixed in `tasks/render-retry-unbounded-hang.md`.
+
 **Same-day mitigation available to MAS with no deploy on our side: drop
 `delay_before_return_html` from the V14 render config.** That converts a
 360-second total loss into a ~5-second success for this class of site.
@@ -157,6 +172,25 @@ poisons the corpus at scale. It is the direct cause of MAS recording
 MAS has an immediate client-side mitigation: treat
 `redirected_status_code >= 400` as a failure. It is already in the payload.
 
+> **Correction 2026-07-30 (implementation session).** That mitigation works
+> **only until we deploy the fix**. Once block detection is correct, the result
+> becomes `success:false`; `server.py:940` then raises `HTTPException(500)` for
+> an all-failed request (always, under the single-URL contract) and
+> `server.py:517-528` genericizes it to
+> `{"error": "Internal server error", "correlation_id": …}`. The whole envelope
+> — `status_code`, `redirected_status_code`, `error_message`, `crawl_stats` —
+> is discarded. Verified end-to-end against a fixture origin.
+>
+> Consequence for §3: **the "konecranes HTTP 500" MAS recorded is most likely
+> this path**, not the ACS-GOTO laundering §3 describes. `www.konecranes.com`
+> (no redirect) has always been detected as blocked → `success:false` → 500 →
+> genericized. Same wire symptom, different mechanism; §3's mechanism is real
+> but is `anitamakela.com`'s.
+>
+> Under the single-URL contract **every** full-mode failure already reaches MAS
+> as an opaque 500. That is the single largest diagnosability gap we have, and
+> it is what Q2 must settle.
+
 ---
 
 ## 3. Origin HTTP errors are laundered into *our* HTTP 500
@@ -221,8 +255,8 @@ not capacity.** Three distinct hosts account for every error line in the week.
 
 | Task | From | Gate |
 |---|---|---|
-| `tasks/redirect-status-blinds-block-detection.md` | §2b | none — implement first |
-| `tasks/render-retry-unbounded-hang.md` | §1 | none |
+| `tasks/redirect-status-blinds-block-detection.md` | §2b | ✅ implemented 2026-07-30; deploy gated on MAS warning |
+| `tasks/render-retry-unbounded-hang.md` | §1 | ✅ implemented 2026-07-30; ships with the above |
 | `tasks/origin-vs-crawler-failure-classification.md` | §3, §2a | MAS answer to Q2 |
 | `tasks/static-fallback-within-fence.md` | §1, §3 | MAS answer to Q1 |
 | `tasks/static-mode-tls-impersonation.md` | §2a (general population, not konecranes) | none |

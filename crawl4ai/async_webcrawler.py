@@ -52,7 +52,7 @@ from .utils import (
     compute_head_fingerprint,
 )
 from .cache_validator import CacheValidator, CacheValidationResult
-from .antibot_detector import is_blocked
+from .antibot_detector import is_blocked, effective_status
 
 
 class AsyncWebCrawler:
@@ -403,6 +403,18 @@ class AsyncWebCrawler:
                     _is_raw_url = url.startswith("raw:") or url.startswith("raw://")
 
                     _max_attempts = 1 + getattr(config, "max_retries", 0)
+                    # One shared budget for the whole fetch phase (every attempt
+                    # and every proxy).  page_timeout only bounds navigation and
+                    # the wait_* family; Playwright calls sent without a timeout
+                    # (page.content, page.evaluate, page.close) are not covered by
+                    # anything, so without this a single wedged page can consume
+                    # the caller's entire deadline in silence.
+                    _total_timeout = getattr(config, "total_timeout", None)
+                    _fetch_deadline = (
+                        time.perf_counter() + _total_timeout / 1000.0
+                        if _total_timeout
+                        else None
+                    )
                     _proxy_list = config._get_proxy_list()
                     _original_proxy_config = config.proxy_config
                     _block_reason = ""
@@ -456,8 +468,25 @@ class AsyncWebCrawler:
                                     self.crawler_strategy.update_user_agent(
                                         config.user_agent)
 
-                                async_response = await self.crawler_strategy.crawl(
-                                    url, config=config)
+                                _remaining = None
+                                if _fetch_deadline is not None:
+                                    _remaining = _fetch_deadline - time.perf_counter()
+                                    if _remaining <= 0:
+                                        raise TimeoutError(
+                                            f"Fetch budget of {_total_timeout} ms exhausted "
+                                            f"before attempt {_attempt + 1}/{_max_attempts}")
+                                try:
+                                    async_response = await asyncio.wait_for(
+                                        self.crawler_strategy.crawl(url, config=config),
+                                        timeout=_remaining,
+                                    )
+                                except asyncio.TimeoutError:
+                                    # asyncio.TimeoutError carries no message —
+                                    # name the budget so the failure is attributable.
+                                    raise TimeoutError(
+                                        f"Crawl attempt exceeded the {_total_timeout} ms "
+                                        f"fetch budget ({_remaining:.1f}s remained for "
+                                        f"attempt {_attempt + 1}/{_max_attempts})") from None
 
                                 html = sanitize_input_encode(async_response.html)
                                 screenshot_data = async_response.screenshot
@@ -509,8 +538,17 @@ class AsyncWebCrawler:
                                     _blocked = False
                                     _block_reason = ""
                                 else:
+                                    # Judge the body by the status that produced
+                                    # it — the LAST hop.  status_code holds the
+                                    # first hop (a 3xx on any redirect), which no
+                                    # status rule in is_blocked() can ever match.
                                     _blocked, _block_reason = is_blocked(
-                                        async_response.status_code, html)
+                                        effective_status(
+                                            async_response.status_code,
+                                            async_response.redirected_status_code,
+                                        ),
+                                        html,
+                                    )
 
                                 _crawl_stats["proxies_used"].append({
                                     "proxy": _proxy.server if _proxy else None,
@@ -554,7 +592,13 @@ class AsyncWebCrawler:
                     if _fallback_fn and not _done and not _is_raw_url:
                         _needs_fallback = (
                             crawl_result is None  # All proxies threw exceptions
-                            or is_blocked(crawl_result.status_code, crawl_result.html or "")[0]
+                            or is_blocked(
+                                effective_status(
+                                    crawl_result.status_code,
+                                    crawl_result.redirected_status_code,
+                                ),
+                                crawl_result.html or "",
+                            )[0]
                         )
                         if _needs_fallback:
                             self.logger.warning(
@@ -627,7 +671,12 @@ class AsyncWebCrawler:
                         _has_download = bool(getattr(crawl_result, "downloaded_files", None))
                         if not _fallback_succeeded and not _is_raw_url and not _has_download:
                             _blocked, _block_reason = is_blocked(
-                                crawl_result.status_code, crawl_result.html or "")
+                                effective_status(
+                                    crawl_result.status_code,
+                                    crawl_result.redirected_status_code,
+                                ),
+                                crawl_result.html or "",
+                            )
                             if _blocked:
                                 crawl_result.success = False
                                 crawl_result.error_message = f"Blocked by anti-bot protection: {_block_reason}"

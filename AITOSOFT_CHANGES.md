@@ -33,7 +33,160 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- Offline suites green: test_mas_contract.py (8), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4)
+- Offline suites green: test_mas_contract.py (8), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4), test_redirect_block_detection.py (11), test_render_bounds.py (17) — **64 total**
+
+---
+
+## Block detection behind redirects + bounded render calls (2026-07-30)
+
+Closes `tasks/redirect-status-blinds-block-detection.md` and
+`tasks/render-retry-unbounded-hang.md`. Evidence base:
+`tasks/waa-eval-2026-07-30-forensics.md` §1 and §2b.
+Both are upstream defects; both filed as PRs (see "Upstream PRs" below).
+
+### 1. Block detection judged the wrong hop of a redirect chain
+
+`AsyncCrawlResponse.status_code` deliberately carries the **first** hop of a
+redirect chain (upstream design, issue #660 → PR #1435), while the HTML always
+comes from the **last** hop, kept separately as `redirected_status_code`.
+`async_webcrawler.py` fed the *first* hop to `antibot_detector.is_blocked()` at
+all three call sites, so a 301 was judged instead of the 403 it led to — and no
+status rule in `is_blocked` can fire on a 3xx.
+
+Effect: **every site that redirects (apex→www, http→https) and then serves a
+4xx/5xx block page was returned as `success: true` with the block page as its
+content.** Finnish company sites redirect almost universally, so this silently
+poisoned the corpus at scale. Live proof (prod, 2026-07-30): `konecranes.com`
+returned `success:true, status_code:301, redirected_status_code:403` with
+"Error 403 Forbidden … Varnish cache server" as its markdown.
+
+Fix: `antibot_detector.effective_status(status_code, redirected_status_code)`
+— one helper, used at the three `is_blocked` call sites. `status_code` itself is
+untouched: it is upstream semantics, `tests/test_pr_1435_redirected_status_code.py`
+pins it, and MAS may branch on it.
+
+Why the consumer and not the producer: the HTTP (non-browser) strategy already
+sets `status_code` to the post-redirect final status, so the same URL used to
+yield *different* block verdicts depending on which crawler strategy ran. The
+fix makes them agree.
+
+**Blast radius, measured end-to-end against a local fixture origin:**
+
+| Case | Before | After |
+|---|---|---|
+| 301 → 200 benign | HTTP 200, success | HTTP 200, success (3.7 s) — no false positive |
+| 301 → 403 block | HTTP 200, `success:true`, block page as content | **HTTP 500** (13.5 s) |
+| direct 403 block | HTTP 500 | HTTP 500 (12.7 s) — unchanged |
+
+The change is **strictly additive**: redirect hops are 3xx by construction, and
+no status rule in `is_blocked` matches a 3xx, so it can only add blocked
+verdicts, never remove one. A no-redirect request has
+`status_code == redirected_status_code`, so it is a literal no-op there.
+
+⚠ **The HTTP mapping is the important part, and it is NOT what the task file
+assumed.** `server.py:940` raises `HTTPException(500)` when every result is
+unsuccessful, and our security handler (`server.py:517-528`) then genericizes
+any 500 to `{"error": "Internal server error", "correlation_id": …}`. So a
+redirect-to-block host moves from a wrong-but-parseable 200 to an **opaque 500
+with `redirected_status_code` stripped** — the exact field the forensics record
+told MAS to key on client-side. Consequences, all verified in code and live:
+
+- MAS retries 500s (3×, 1/2/4 s), so per-company cost rises further on top of
+  the extra first-tier attempt and the now-armed patchright tier.
+- Under the single-URL contract, **every** full-mode failure is already an
+  opaque 500 today — this change enlarges that population, it does not create
+  it. `www.konecranes.com` (no redirect) has always landed there.
+- **This is also the true mechanism behind the "konecranes HTTP 500" MAS
+  reported**, not (only) the ACS-GOTO laundering described in forensics §3:
+  block detected → `success:false` → `all(not success)` → 500 → genericized.
+
+The HTTP mapping is Q2 to MAS (`tasks/origin-vs-crawler-failure-classification.md`)
+and is deliberately **not** changed here — it is an outward-facing contract with
+an answer pending. Recorded in that task file as new evidence.
+
+### 2. Render calls that no timeout covered
+
+Root cause, isolated by reproduction rather than inference (local fixture
+server + async await-chain dump; the exact blocking frame was
+`async_crawler_strategy.py` `adapter.evaluate(update_image_dimensions_js)`):
+
+**Playwright's `page.content()` and `page.evaluate()` are sent to the driver
+with no `timeout` field, so the driver arms no timer at all.** They wait on the
+frame's execution-context promise, and every navigation *replaces* that promise
+with a fresh unresolved one. A page that keeps committing navigations therefore
+wedges them forever. `page_timeout` reaches only `page.goto` and the `wait_*`
+family, which is why the forensics matrix saw 80 s → 30 s change nothing. Both
+call sites sit inside swallow-all `try/except`, so nothing was logged either —
+matching the 172 s of total silence before the fence fired.
+`page.close()` is unbounded for the same reason, which matters during cleanup.
+
+Three bounds, outermost last:
+
+| Bound | Where | Value |
+|---|---|---|
+| `bounded_evaluate` | `browser_adapter.py`, all three adapters | 30 s default, per-call override |
+| optional DOM steps | image dimensions, consent + overlay removal | 10 s (they already degrade gracefully) |
+| `_capture_html` | `page.content()` with settle-and-retry | 15 s/attempt, 25 s total, 3 attempts |
+| `page.close()` | `_crawl_web` finally block | 10 s |
+| `total_timeout` | new `CrawlerRunConfig` field, shared by every attempt in `arun()` | `config.yml` → 100 s |
+
+`_capture_html` is the one that turns failures into successes: on the
+"page is navigating and changing the content" error it waits for the next
+document to reach `domcontentloaded` and captures again, which is the documented
+remedy — static mode had already proved the content was right there. It bails
+out early if the page cannot even reach `domcontentloaded`, so a genuinely stuck
+page pays one bounded cost instead of one per attempt.
+
+`total_timeout` is server-side only: it is absent from
+`UNTRUSTED_FIELD_ALLOWLIST`, so a client-sent value is dropped, and it is
+injected by api.py's existing `crawler.base_config` pass. Sized at ~fence/2:
+the patchright tier runs a second `arun()` inside the same 180 s fence, and it
+must stay above the largest `page_timeout` a client may send (MAS V14 sends
+80 s) so one slow navigation still fits in a single attempt.
+
+**Measured, same fixture origin, MAS V14-shaped request:**
+
+| Case | Before | After |
+|---|---|---|
+| navigation race (the `maitokolmio.fi` shape) | 504 @ 180 s, no diagnostic | **HTTP 200, full content, 5.0 s** |
+| permanently wedged page | 504 @ 180 s, no diagnostic | HTTP 500 @ 94 s, exact reason in the log |
+| `arun()` with a 0.4 s budget, 4 attempts | unbounded | ≤ 2 attempts, bounded |
+
+Residual (stated, not fixed here): a host that is *both* slow and blocked can
+still reach the fence, because the patchright tier gets its own `total_timeout`.
+`tasks/blocked-host-retry-economy.md` removes that by not running patchright for
+reputation blocks.
+
+### Files touched
+
+| File | Change |
+|---|---|
+| `crawl4ai/antibot_detector.py` | +`effective_status()` helper |
+| `crawl4ai/async_webcrawler.py` | 3 × `is_blocked` call sites use the final hop; `total_timeout` deadline shared across attempts |
+| `crawl4ai/browser_adapter.py` | `bounded_evaluate()` + `timeout` kwarg on all three adapters |
+| `crawl4ai/async_crawler_strategy.py` | `_capture_html()` settle-and-retry; bounds on optional DOM steps, `page.close()`, virtual scroll; capture constants |
+| `crawl4ai/async_configs.py` | `CrawlerRunConfig.total_timeout` (default None) |
+| `deploy/docker/config.yml` | `crawler.base_config.total_timeout: 100000` |
+| `test-aitosoft/test_redirect_block_detection.py` | new, 11 tests |
+| `test-aitosoft/test_render_bounds.py` | new, 17 tests |
+
+Both new suites were verified to **fail without the fix** (3 of 11 redirect
+tests fail on the unpatched tree; the 8 others are regression guards that must
+pass both ways).
+
+### Side findings (recorded, not fixed)
+
+- `config.yml`'s `crawler.base_config.simulate_user: true` **never takes
+  effect**: api.py applies base_config only when the current value
+  `is None or == ""`, and `CrawlerRunConfig.simulate_user` defaults to `False`,
+  which is neither. Latent since the base_config mechanism was adopted.
+- `_crawl_web`'s cleanup skips `page.close()` when the browser has ≤1 page and
+  is headless, so the first page of each pool browser is never closed. Benign at
+  steady state (one leaked tab per browser) but it means a wedged tab is never
+  disposed, and disposing it is what aborts the orphaned driver operation.
+- `api.py`'s full-mode branch calls `track_request_end(success=True, status_code=200)`
+  unconditionally, so monitor metrics record a success even when the client
+  receives a 500. This will hide the new failure population.
 
 ---
 

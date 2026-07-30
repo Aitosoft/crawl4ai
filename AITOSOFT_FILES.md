@@ -96,7 +96,9 @@ this carries no merge risk.
 Deployment config (always ours): stealth browser kwargs, real-Chrome channel,
 `limits.wall_clock_s: 180`, `pool.max_pages: 5`, `stuck_busy_timeout_sec: 600`,
 `memory_threshold_percent: 85`, `static_fetch_timeout_s: 15` (per-URL httpx
-timeout for static mode), render admission (`render_capacity: 2` —
+timeout for static mode), `crawler.base_config.total_timeout: 100000` (per-`arun`
+fetch budget; must stay under `wall_clock_s` and above the largest client
+`page_timeout`), render admission (`render_capacity: 2` —
 MUST match the ACA `http-renders` scale rule, `admission_queue: 4`,
 `admission_max_wait_s: 15`).
 
@@ -106,6 +108,32 @@ gunicorn target `aitosoft_entry:app`.
 ### crawl4ai/browser_manager.py (+11/−3)
 `_build_browser_args`: GPU flags gated on `enable_stealth` (keeps WebGL in
 stealth mode). Still broken upstream — PR tracked in `tasks/file-upstream-prs.md`.
+
+### crawl4ai/antibot_detector.py (+28/−0)
+`effective_status(status_code, redirected_status_code)` — block detection must
+judge the FINAL hop of a redirect chain, not the first. PR upstream pending.
+
+### crawl4ai/async_webcrawler.py (+55/−6)
+Two changes, both upstream defects (PRs pending):
+1. All three `is_blocked()` call sites feed `effective_status(...)` instead of
+   `status_code`, so a 301→403 block page is no longer returned as success.
+2. `total_timeout` deadline computed once and shared by every attempt/proxy in
+   the fetch loop, so one wedged page cannot consume the caller's whole budget.
+
+### crawl4ai/browser_adapter.py (+66/−15)
+`bounded_evaluate()` + a `timeout` kwarg on all three adapters. Playwright's
+`page.evaluate` carries no protocol timeout, so it can wait forever on a frame
+whose execution context a navigation replaced. PR upstream pending.
+
+### crawl4ai/async_crawler_strategy.py (+95/−13)
+`_capture_html()`: bounded `page.content()` with settle-and-retry (same
+untimed-protocol-call problem). Plus explicit ceilings on the optional DOM
+steps, `page.close()` and virtual scroll, and the capture constants.
+PR upstream pending.
+
+### crawl4ai/async_configs.py (+11/−0)
+`CrawlerRunConfig.total_timeout` (ms, default None). Deliberately absent from
+`UNTRUSTED_FIELD_ALLOWLIST` — server-side deadline only. PR upstream pending.
 
 ### Dockerfile (+10/−0)
 `RUN playwright install chrome` + copy `chrome-*` cache to appuser home.

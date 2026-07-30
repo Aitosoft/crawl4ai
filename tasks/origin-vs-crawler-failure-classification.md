@@ -3,8 +3,10 @@
 **Status:** DRAFT — blocked on MAS's answer to Q2 (`tasks/waa-eval-2026-07-30-forensics.md` §7).
 Do not implement the wire-format change until that answer is in. The
 *diagnosis* below is settled; only the contract is open.
-**Priority:** High. Currently a broken customer website is indistinguishable
-from a broken crawler, and MAS's retry policy amplifies it.
+**Priority:** HIGHEST of the remaining batch (raised 2026-07-30). Currently a
+broken customer website is indistinguishable from a broken crawler, and MAS's
+retry policy amplifies it — and the redirect fix that shipped 2026-07-30 moved
+more hosts into that class. See "Sharper statement of the problem" below.
 **Effort:** M. **Risk:** medium — changes status codes MAS branches on.
 **Evidence:** `tasks/waa-eval-2026-07-30-forensics.md` §3, §2a
 
@@ -24,6 +26,53 @@ Prod, 2026-07-27, one host, 35 seconds: **eight** `server error 500` lines. MAS
 treats 500 as retryable (3 retries, 1/2/4 s), so a site that is simply down
 costs four requests per page and is recorded as a crawler fault. This is
 near-certainly the "konecranes HTTP 500" MAS logged in April and July.
+
+## Sharper statement of the problem (added 2026-07-30, verified in code + live)
+
+The `except Exception` path in api.py is not the main channel. The main channel
+is upstream's own all-failed rule plus our security handler:
+
+```python
+# deploy/docker/server.py:940
+if all(not result["success"] for result in results["results"]):
+    raise HTTPException(500, f"Crawl request failed: {results['results'][0]['error_message']}")
+```
+```python
+# deploy/docker/server.py:517-528  — 5xx detail is stripped for security
+if exc.status_code == 500:
+    return JSONResponse({"error": "Internal server error", "correlation_id": cid}, 500)
+```
+
+**Under the single-URL contract these compose into: every full-mode failure,
+whatever its cause, reaches MAS as an opaque HTTP 500.** No `status_code`, no
+`redirected_status_code`, no `error_message`, no `crawl_stats`. Verified
+end-to-end 2026-07-30 against a fixture origin: a 403 block page, a wedged
+render and an origin 5xx are byte-identical on the wire.
+
+Two consequences that change how this task should be framed:
+
+1. **The "konecranes HTTP 500" is this path, not §3's.** Block detected →
+   `success:false` → 500 → genericized. §3's ACS-GOTO mechanism is real but is
+   `anitamakela.com`'s. Both land in the same opaque response.
+2. **`tasks/redirect-status-blinds-block-detection.md` (shipped 2026-07-30)
+   enlarged this population** — every redirect-to-block host joins it. That was
+   accepted deliberately: the alternative was leaving block pages in MAS's
+   corpus as content. But it raises this task's priority, and it means MAS's
+   client-side `redirected_status_code >= 400` mitigation stops being available
+   for exactly those hosts once we deploy.
+
+Static mode already has the right shape and is the reference implementation:
+`aitosoft_static_mode.py` computes `success = 200 <= status < 400` from the
+final hop and never raises, so the same host returns HTTP 200 + `success:false`
++ the real `status_code`. **Full mode is the only path that turns a perfectly
+well-understood finding into an unattributable 500.**
+
+Minimum viable version if Q2 stays unanswered: at `server.py:940`, return the
+envelope with `success:false` instead of raising, whenever the result carries a
+real origin `status_code`/`redirected_status_code` (i.e. we reached the origin
+and it answered). Keep 500 for the no-status cases (navigation failure, browser
+crash, budget exhausted). That is one branch, no new vocabulary, and it does not
+pre-empt the `failure_class` naming.
 
 The same category error runs through the whole surface:
 

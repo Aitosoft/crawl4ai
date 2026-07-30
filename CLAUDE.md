@@ -37,7 +37,7 @@ curl http://localhost:11235/health
 pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
 # Testing (run from repo root — relative artifact paths; see TESTING.md)
-pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py  # OFFLINE suites (no server needed)
+pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py  # OFFLINE suites (no server needed)
 python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression (live server)
 python test-aitosoft/test_site.py <domain> --page <path>            # Single site (live server)
 python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic (live server)
@@ -117,6 +117,9 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 | Raw markdown > fit_markdown for contact extraction | PruningContentFilter removes contacts at threshold >= 0.35 |
 | Use `optimal` config by default | domcontentloaded + remove_consent_popups (2-4s) |
 | Blocked sites are IP-based, not fingerprint-based | Confirmed: two different browser engines get identical blocks |
+| Block detection must use `redirected_status_code` | `status_code` is the FIRST redirect hop; the body is the LAST. Judging the 301 let every redirect-to-block page through as success (2026-07-30) |
+| `page.content()` / `page.evaluate()` have NO timeout | Sent to the driver with no timeout field ⇒ no timer armed; they wait on the frame's execution-context promise, which a navigation replaces forever. `page_timeout` does not cover them. Bounded in `browser_adapter.bounded_evaluate` + `_capture_html` |
+| Every full-mode failure reaches MAS as an opaque 500 | `server.py` all-failed ⇒ `HTTPException(500)` ⇒ security handler strips the detail. `error_message`/`redirected_status_code` never leave the server. Open: `tasks/origin-vs-crawler-failure-classification.md` |
 | Per-replica render capacity is 2 (2 vCPU) | Benchmarked 2026-07-17; >2 concurrent renders degrade all requests. Enforced by RenderGate + ACA scale rule |
 
 ---
@@ -197,11 +200,16 @@ unknown fields are silently dropped; `page_timeout` is clamped. See
 |------|-------------|
 | `Dockerfile` | `RUN playwright install chrome` + copy chrome cache to appuser |
 | `crawl4ai/browser_manager.py` | `_build_browser_args`: GPU flags gated on `enable_stealth` (PR upstream pending) |
+| `crawl4ai/antibot_detector.py` | +`effective_status()` — the final redirect hop is what block detection must judge (PR upstream pending) |
+| `crawl4ai/async_webcrawler.py` | 3× `is_blocked` fed the final hop; `total_timeout` deadline shared by every attempt (PR upstream pending) |
+| `crawl4ai/browser_adapter.py` | `bounded_evaluate()` + `timeout` kwarg — `page.evaluate` has no protocol timeout (PR upstream pending) |
+| `crawl4ai/async_crawler_strategy.py` | `_capture_html()` settle-and-retry for `page.content()`; bounds on optional DOM steps, `page.close()`, virtual scroll (PR upstream pending) |
+| `crawl4ai/async_configs.py` | +`CrawlerRunConfig.total_timeout` (default None, server-side only) (PR upstream pending) |
 | `deploy/docker/api.py` | +132/−10: static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission), single-URL guard (multi-URL → 400), fence-504 warning ("WALL-CLOCK FENCE 504" w/ URL + elapsed + gate snapshot) |
 | `deploy/docker/server.py` | static branch in `/crawl`; lifespan closes static client + patchright singleton |
 | `deploy/docker/schemas.py` | `CrawlRequest.render_mode` field |
 | `deploy/docker/crawler_pool.py` | MAX_PAGES enforcement + overflow keys; BUSY_SINCE stuck-slot janitor (file unchanged upstream since 0.8.6) |
-| `deploy/docker/config.yml` | Deployment config: stealth kwargs, `wall_clock_s: 180`, pool limits, render admission (`render_capacity: 2` — MUST match ACA scale rule) |
+| `deploy/docker/config.yml` | Deployment config: stealth kwargs, `wall_clock_s: 180`, `total_timeout: 100000` (per-`arun` fetch budget), pool limits, render admission (`render_capacity: 2` — MUST match ACA scale rule) |
 | `deploy/docker/supervisord.conf` | Entry point: `aitosoft_entry:app` instead of `server:app` |
 
 Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
