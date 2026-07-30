@@ -207,7 +207,10 @@ reputation blocks. Not a regression — that path was unbounded before.
 
 ### Upstream
 
-Filed against `unclecode/crawl4ai:develop`. Related prior art: PR #1923 (open)
+**PR:** https://github.com/unclecode/crawl4ai/pull/2113
+(`fix/bound-untimed-render-calls` → `unclecode/crawl4ai:develop`), with
+`tests/async/test_render_call_bounds.py` (14 tests) and docs for
+`total_timeout`. Related prior art: PR #1923 (open)
 adds a `total_timeout` at the **dispatcher** level, which only covers
 `arun_many` — the Docker `/crawl` path calls `arun()` directly and gets no
 protection from it. Cited in the PR as complementary. The

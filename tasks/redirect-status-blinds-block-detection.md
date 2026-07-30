@@ -172,7 +172,10 @@ forensics §2a measurement). Pinned by
 
 ### Upstream
 
-Filed against `unclecode/crawl4ai:develop`. Supporting history found while
+**PR:** https://github.com/unclecode/crawl4ai/pull/2112
+(`fix/antibot-redirect-status` → `unclecode/crawl4ai:develop`), with
+`tests/proxy/test_antibot_redirect_status.py` (8 tests) and a docs note in
+`docs/md_v2/advanced/anti-bot-and-fallback.md`. Supporting history found while
 preparing it, worth keeping: issue #660 (status_code wrong for redirects) →
 issue #1434 ("no way to tell if a redirected result succeeded") → PR #1435 added
 `redirected_status_code` (2026-02-06) → `antibot_detector.py` was added

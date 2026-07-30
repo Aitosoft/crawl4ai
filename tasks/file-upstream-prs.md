@@ -1,6 +1,33 @@
-# File Upstream PR: GPU flag gating in _build_browser_args
+# File Upstream PRs
 
-**Status:** Filed — awaiting upstream merge (2026-07-17)
+**Status:** three filed, all awaiting upstream review.
+
+| PR | Branch | Filed | Fork patch |
+|---|---|---|---|
+| [#2085](https://github.com/unclecode/crawl4ai/pull/2085) GPU flag gating in `_build_browser_args` | `fix/gpu-flags-stealth-gating` | 2026-07-17 | `crawl4ai/browser_manager.py` |
+| [#2112](https://github.com/unclecode/crawl4ai/pull/2112) block detection behind a redirect chain | `fix/antibot-redirect-status` | 2026-07-30 | `crawl4ai/antibot_detector.py`, `crawl4ai/async_webcrawler.py` |
+| [#2113](https://github.com/unclecode/crawl4ai/pull/2113) bound the Playwright calls with no protocol timeout | `fix/bound-untimed-render-calls` | 2026-07-30 | `crawl4ai/browser_adapter.py`, `crawl4ai/async_crawler_strategy.py`, `crawl4ai/async_configs.py`, `crawl4ai/async_webcrawler.py` |
+
+**On each merge:** drop the corresponding fork patch (it will conflict-or-noop
+at the next `git merge upstream/develop`), remove the row from the CLAUDE.md /
+AITOSOFT_FILES.md modification tables, and delete the branch. Move this file to
+`tasks/done/` only when all three have landed or been closed.
+
+**Review cadence, measured 2026-07-30:** 101 open PRs vs 22 open issues; small
+self-evident `fix(docker):` PRs merge in 1-5 days, core-crawler behavioural
+changes sit for months (#1923 open since 2026-04-16). #2085 had zero engagement
+after 13 days. No CI runs on PRs — `.github/workflows/main.yml` is Discord
+notifications only — so the PR body must show the commands and pass counts.
+CodeRabbit auto-review is disabled for PRs targeting `develop`.
+
+**Known textual conflict:** #2112 touches the same three `is_blocked` call sites
+as the open community PR #2088 (`check_blocked` opt-out). Orthogonal in intent;
+flagged in the PR body with an offer to rebase.
+
+---
+
+## Detail: #2085 — GPU flag gating
+
 **PR:** https://github.com/unclecode/crawl4ai/pull/2085 (`fix/gpu-flags-stealth-gating`
 → `unclecode/crawl4ai:develop`, from commit `e63cbcc` on the Aitosoft fork)
 **Priority:** Low — our fork carries the fix; the PR is a good-citizen contribution
@@ -8,10 +35,10 @@
 
 **On merge:** drop the fork patch from `crawl4ai/browser_manager.py` (it will
 conflict-or-noop at the next `git merge upstream/develop`), remove the row from
-the CLAUDE.md / AITOSOFT_FILES.md modification tables, delete the
-`fix/gpu-flags-stealth-gating` branch, then move this file to `tasks/done/`.
+the CLAUDE.md / AITOSOFT_FILES.md modification tables, and delete the
+`fix/gpu-flags-stealth-gating` branch.
 
-## Goal
+### Goal
 
 File one PR to `unclecode/crawl4ai` (target branch `develop`) for the GPU
 flag bug we carry as a fork patch in `crawl4ai/browser_manager.py`:
@@ -26,7 +53,7 @@ flag bug we carry as a fork patch in `crawl4ai/browser_manager.py`:
 Once merged upstream, drop our patch from `browser_manager.py` and remove
 the row from the CLAUDE.md / AITOSOFT_FILES.md modification tables.
 
-## History
+### History
 
 This task originally planned 4 PRs (2026-04-11). Triage after the v0.9.2
 upgrade (2026-07-16) reduced it to this one:
