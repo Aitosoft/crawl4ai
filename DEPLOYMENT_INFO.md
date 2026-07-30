@@ -234,6 +234,30 @@ az monitor log-analytics query -w be17d63b-1807-49da-9846-82091ac8971d \
   | project TimeGenerated, Log_s | order by TimeGenerated desc" -o table
 ```
 
+### Probing the network from *inside* the container
+
+You almost never need `az containerapp exec` for this. **`render_mode: "static"`
+is an in-container httpx GET** that returns the origin's real status, byte count
+and error class — use it as the network probe:
+
+```bash
+# egress IP as the origin sees it (~0.3s round trip)
+curl -s -X POST "$CRAWL4AI_API_URL/crawl" -H "Authorization: Bearer $CRAWL4AI_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"urls":["https://api.ipify.org"],"render_mode":"static"}' | jq -r '.results[0].markdown.raw_markdown'
+```
+
+Swap the URL for any host to answer "can the crawler reach this, and what does
+it get?" — status, timing and `error_message` all come back inside a 200.
+Verified 2026-07-30: egress is `172.199.49.233` (West Europe; the environment
+has **no VNet integration**, so that address comes from Azure's shared SNAT pool
+and is not contractually stable).
+
+If you do need a real shell, `az containerapp exec` has two traps: it needs a
+pty (wrap it in `script -qec "…" /dev/null`), and the command is carried **in
+the websocket URL**, so anything over roughly 300 characters fails with
+`Could not find container` or a 404 handshake. Keep exec commands tiny.
+
 ---
 
 ## Cost Optimization

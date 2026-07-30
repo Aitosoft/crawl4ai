@@ -43,3 +43,13 @@ live-test against blocked sites (site-safety rules).
 ## Progress
 
 - 2026-07-17: Task created from Session-A finding. No code changes yet.
+- 2026-07-30: **Consider merging this into
+  `tasks/origin-vs-crawler-failure-classification.md`.** The WAA eval found the
+  same family of defect from the other direction: block detection is *blind* on
+  redirecting sites (`tasks/redirect-status-blinds-block-detection.md`) while it
+  *over-fires* on tiny pages here — and both surface as an HTTP 500 that MAS
+  reads as a crawler fault and retries. Direction 2 above ("low-confidence
+  pass-through with `blocked_suspect`") is exactly the flag the classification
+  task proposes, so the MAS contract question it was waiting on is now open as
+  Q2 in `tasks/waa-eval-2026-07-30-forensics.md` §7. Do not solve this one in
+  isolation.
