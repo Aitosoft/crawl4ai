@@ -1,11 +1,30 @@
 # Residential/ISP egress on the retry path (reputation-blocked hosts)
 
-**Status:** Open — approved in principle by Tero 2026-07-30 (build the task;
-provider choice and spend authorisation still to come). **Do not sign a
+**Status:** Open, but **on hold pending a re-count** (2026-07-30 evening). The
+mechanism below is sound; the population it was sized for may have largely
+evaporated. Approved in principle by Tero 2026-07-30 for *framing* only —
+provider choice and spend authorisation still to come. **Do not sign a
 contract or commit credentials without Tero's explicit go-ahead.**
-**Priority:** Medium. It is the only thing that makes konecranes-class hosts
-crawlable at all, but it affects a minority of hosts and every other task in
-this batch is a correctness defect that costs us more.
+
+> **Read before doing anything here: `waa-eval-2026-07-30-forensics.md` §8d.**
+> This task was sized on "171 of MAS's 243 affected hosts are egress
+> reputation". Then we probed five of those hosts — four of them nominated by
+> MAS — and **all five returned clean content to our Azure egress**. The
+> challenge looks like a time-bounded 2026-04 deployment that has been
+> withdrawn, not a standing block on our IP. If that holds, the genuine
+> reputation class is roughly `konecranes.com` + `louisvuitton.com` + `alpit.io`
+> — three hosts, not 171, and the cost table below is answering a question
+> nobody is asking.
+>
+> **The gate is MAS's post-deploy re-scrape of the 171 challenge hosts.** It
+> produces the real number for free. Re-decide then. Do not spend, and do not
+> let MAS spend either — they were about to take option C to their owner as a
+> budget decision (their reply-4 §3), on our now-superseded classification.
+
+**Priority:** Low until the re-count lands, then whatever the real number says.
+It is the only thing that makes konecranes-class hosts crawlable at all, but on
+current evidence that class is small, and every other open task is a
+correctness defect that costs us more.
 **Effort:** M-L. **Risk:** medium-high — money, credentials, and a change to
 the egress path that carries our SSRF guarantee.
 **Evidence:** `tasks/waa-eval-2026-07-30-forensics.md` §0, §2a

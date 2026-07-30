@@ -16,8 +16,9 @@ lives in other files; read those when needed.
 ## Task Tracking
 
 Work is tracked in `tasks/` as markdown files. Completed tasks move to `tasks/done/`.
-Each task file has: goal, status, plan, progress, learnings. Start each session by
-checking `ls tasks/` for open work.
+Each task file has: goal, status, plan, progress, learnings. **Start each session by
+reading `tasks/README.md`** — the ordered index of open work, with the gate on each.
+Ordering lives only there; the task files carry the reasoning.
 
 ---
 
@@ -247,11 +248,13 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 
 ## Documentation Index
 
-**Always read at session start:** This file (auto-loaded) + `ls tasks/` for open work.
+**Always read at session start:** This file (auto-loaded) + `tasks/README.md`
+(ordered open work).
 
 **Read when needed:**
 | Doc | When |
 |-----|------|
+| `tasks/waa-eval-2026-07-30-forensics.md` | The five root causes behind the 2026-07-30 image; cited by most open tasks |
 | `AITOSOFT_CHANGES.md` | Understanding what we changed and why (authoritative change log) |
 | `AITOSOFT_FILES.md` | Quick inventory of our files vs upstream |
 | `DEPLOYMENT_INFO.md` | Endpoint, credentials, Azure resource details |

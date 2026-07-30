@@ -39,7 +39,11 @@ Kusto signal summary (20-min window), categorize by `case()`:
 `GATE-429` (contains "RenderGate REJECT"),
 `FORCE-CLOSE` (contains "Janitor reaped" or "force_close" or "FORCE-CLOSE"),
 `OOM`/`MemoryError` (contains "refusing new browser"),
-`FENCE-504` (contains "WALL-CLOCK FENCE 504"), `ACTIVE-REQ`,
+`FENCE-504` (contains "WALL-CLOCK FENCE 504"),
+`ORIGIN-FAIL` (contains "ORIGIN FAILURE" — new in `0.9.2-failure-class`;
+must be its own bucket, it is expected traffic and would otherwise flood
+`OTHER`, which this file tells you to ignore),
+`ACTIVE-REQ`,
 `ADMIT` (contains "RenderGate ADMIT" — one INFO line per admitted render,
 carries URL + queue wait; keep it out of OTHER),
 `PW-NAV-TIMEOUT` (Page.goto 90000), `FETCH` (contains "[FETCH]"),
@@ -74,6 +78,8 @@ ContainerAppConsoleLogs_CL
 |---|---|---|
 | GATE-429 ("RenderGate REJECT") bursts at batch ramp-up | Replicas full; MAS client retries (5/10/20/30s) absorb while ACA scales out | **None** if replica count rises within ~1 min (check `SuccessfulRescale` events). Sustained 429s with replicas pegged at max = genuine capacity ceiling — talk to Tero about maxReplicas. |
 | FENCE-504 ("WALL-CLOCK FENCE 504: url=… deadline_s=… elapsed_s=… gate=…") | 180s wall-clock fence fired and the render slot released cleanly (the gate snapshot in the line still counts the fenced request; it releases immediately after). One line per 504, with URL — deployed 0.9.2-fence-obs 2026-07-17. | Expect 0–10 per window during cold-ramp bursts, then zero. **Investigate only if they cluster POST-ramp** (replica count stable for >2 min and FENCE-504 still firing) or the rate grows across windows — that escalates tasks/done/504-fence-observability-2026-07-17.md to a code fix. Pair each with its "RenderGate ADMIT url=…" line to get the replica and queue wait. |
+| ORIGIN-FAIL ("ORIGIN FAILURE: url=… failure_class=… error=…") | The origin broke, not us — the request returns **HTTP 200 with `success:false`** and a `failure_class`, by MAS's Q2 contract. New in `0.9.2-failure-class` (2026-07-30). | **None, and expect a lot of them at first.** This population used to be invisible: it arrived as our HTTP 500 and MAS retried it three times. Seeing it is the fix working. Investigate only if a *single host* dominates the bucket (worth telling MAS — it may be a dead customer site in their list) or if `failure_class=render_error` climbs, which is genuinely ours. |
+| MAS success rate drops after 2026-07-30 | Not a log signal — expect it in MAS's own counters | **Do not roll back for this.** Challenge screens, redirect-blocked hosts and origin 5xx all used to be stored as successes. They now fail honestly. `AITOSOFT_CHANGES.md` 2026-07-30 entry has the expected direction. |
 | PW-NAV-TIMEOUT ("Page.goto: Timeout 90000ms exceeded") | Playwright's own 90s nav timeout | **None.** Normal for slow/SPA sites. MAS pivots to static after 2 consecutive 504s per host. |
 | OOM / MemoryError "refusing new browser" | **Our pool guard**, not OS-OOM. Replica hit ~85%+ and refused a new browser spawn. | Peek pool mem% timeline (`Pool: hot=… mem=…` log lines). If it drops back within ~5 min, no action — the guard worked. If it sticks >85% for 10+ min, restart the revision. |
 | OTHER | Usually garbage. Log lines whose ms timestamp contains "504" (e.g. `02:17:04,504`) hit the regex. | Peek once per night to confirm, then ignore. |

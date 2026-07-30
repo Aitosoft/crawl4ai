@@ -30,6 +30,28 @@ Current since 2026-04-11:
 | **tilitoimistovahtivuori.fi** | 2026-04-11 | Contact page 404s (site restructured) |
 | **monidor.fi** | 2026-03-26 | Site restructured, old paths 404 |
 
+### Burned during the 2026-07-30 WAA eval — do NOT live-test
+
+These are **not** test sites. They are customer sites from MAS's corpus that a
+diagnosis forced us to hit, several of them well past the 1–2 rule. Every one
+of them has a recorded fixture or an offline reproduction, so re-hitting them
+buys nothing. A future session verifying one of the 2026-07-30 fixes will be
+tempted by exactly this list — don't.
+
+| Host | Hits | Why it was hit | Verify instead by |
+|------|------|----------------|-------------------|
+| **maitokolmio.fi** | 8 | config matrix isolating the untimed-render hang | `test_render_bounds.py` (17 offline tests) |
+| **kiertopakkaus.fi** | 4 | reference case for the nested-`<noscript>` body loss | `test_noscript_body_collapse.py`; DOM captured |
+| **konecranes.com** / `www.` | 3 | reputation-blocked at a Varnish edge | `test_redirect_block_detection.py`; already smoke-verified in prod once, that's enough |
+| **magicad.com** | 3 | challenge-family probe | `test_antibot_challenge_detection.py` (fixtures from MAS's stored samples) |
+| **savagroup.fi**, **palsatech.fi**, **pajala.fi**, **recset.fi** | 1 each | challenge-family probes, MAS-nominated | as above |
+| **anitamakela.com** | 1 | origin's own zero-byte Apache 500 | `test_failure_classification.py` |
+
+**Standing rule:** never live-test a host MAS has classified `blocked` or
+`challenge` in `tmp/crawl4ai-affected-hosts.txt`. Probing a host that is
+deciding whether to trust our egress is how the decision goes against us, and
+we cannot tell a fresh block from the one we caused.
+
 ### Tier 2: Extended Test Sites (Regression Testing)
 
 Test these when making significant changes:

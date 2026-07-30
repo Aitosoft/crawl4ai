@@ -253,12 +253,17 @@ not capacity.** Three distinct hosts account for every error line in the week.
 
 ## 6. Tasks opened from this record
 
+Status as of the 2026-07-30 18:24 deploy (§9); ordering for what remains is in
+`tasks/README.md`.
+
 | Task | From | Gate |
 |---|---|---|
-| `tasks/redirect-status-blinds-block-detection.md` | §2b | ✅ implemented 2026-07-30; deploy gated on MAS warning |
-| `tasks/render-retry-unbounded-hang.md` | §1 | ✅ implemented 2026-07-30; ships with the above |
-| `tasks/origin-vs-crawler-failure-classification.md` | §3, §2a | MAS answer to Q2 |
-| `tasks/static-fallback-within-fence.md` | §1, §3 | MAS answer to Q1 |
+| `done/redirect-status-blinds-block-detection.md` | §2b | ✅ shipped in `0.9.2-failure-class` |
+| `done/render-retry-unbounded-hang.md` | §1 | ✅ shipped in the same image |
+| `done/origin-vs-crawler-failure-classification.md` | §3, §2a | ✅ shipped; MAS answered Q2 (a) |
+| `done/noscript-collapses-body-to-empty-markdown.md` | §8c | ✅ shipped |
+| `done/antibot-detector-challenge-blindspot.md` | §8b | ✅ shipped |
+| `tasks/static-fallback-within-fence.md` | §1, §3 | unblocked — MAS answered Q1 (b) |
 | `tasks/static-mode-tls-impersonation.md` | §2a (general population, not konecranes) | none |
 | `tasks/blocked-host-retry-economy.md` | §2a | none |
 | `tasks/residential-egress-retry-path.md` | §0, §2a | Tero's provider/spend go-ahead |
@@ -426,13 +431,48 @@ plugin markup), `vaskisepat.fi` recovering on its own (markup changed), JSON
 through `wp-json` working while HTML came back empty (no HTML parse), and the
 "nav-only" hosts yielding one character.
 
-### 8d. Live re-check of the challenge family — could not reproduce
+### 8d. Live re-check of the challenge family — 5 of 5 came back clean
 
-`magicad.com` (classified `challenge_all`, 4/4 pages) returned clean content
-from our Azure egress on 2026-07-30: static 12,304 B, full 15,982 B. So the
-challenge is **not** unconditionally applied to our IP. Intermittent or rolled
-back. Consequence: the blindspot fix must be built against MAS's stored bodies
-as fixtures, not against live hosts.
+First `magicad.com` (classified `challenge_all`, 4/4 pages) returned clean
+content from our Azure egress: static 12,304 B, full 15,982 B. After MAS's
+reply-4 nominated four more `challenge_all` hosts to probe, **all four were
+clean too** — full mode, MAS's V14 config, prod rev 0000030:
+
+| host | MAS's April capture | our Azure egress, 2026-07-30 |
+|---|---|---|
+| `magicad.com` | 4/4 pages challenged | 200, 96,764 B html, 15,982 B md |
+| `savagroup.fi` | 16/16 challenged | 200, 183,502 B html, 8,842 B md |
+| `palsatech.fi` | 10 pages challenged | 200, 102,354 B html, 8,096 B md |
+| `pajala.fi` | 10 pages challenged | 200, 156,137 B html, 9,320 B md |
+| `recset.fi` | 13 pages challenged | 200, 100,248 B html, 1,671 B md |
+
+None carried `robot-suspicion` or `connection security`. MAS separately
+confirmed three of their hosts serve clean content from a Finnish consumer IP,
+and `magicad.com` is clean to *both* of us.
+
+**Reading: the challenge looks time-bounded — a deployment around 2026-04 that
+has since been withdrawn — not a standing block on our egress.** MAS's captures
+are dated 2026-04-21.
+
+**This is the finding that moves money.** The residential-proxy case rested on
+"171 of 243 affected hosts are egress-reputation" (§8b). If the challenge is
+gone, most of those 171 are re-capturable today at zero cost, and the genuine
+reputation class shrinks to roughly `konecranes.com` + `louisvuitton.com` +
+`alpit.io`. **Do not authorise proxy spend on the 171 number** — re-decide from
+MAS's post-deploy re-scrape. Carried into
+`tasks/residential-egress-retry-path.md`.
+
+Honest caveats: n=5, MAS-nominated rather than randomly sampled, and per-host
+site changes could explain individual cases. Suggestive, not conclusive.
+
+Two consequences that already bound implementation work:
+
+- The blindspot fix had to be built against MAS's stored bodies as fixtures,
+  not against live hosts — which is what was done.
+- `recset.fi` returned 1,671 B of markdown from 100,248 B of HTML. Thin but not
+  1 byte, so probably a genuinely thin page rather than the `<noscript>`
+  collapse. Worth a second look in MAS's re-scrape data rather than another
+  live hit; the host is now on the do-not-test ledger.
 
 ### 8e. Open with MAS
 
