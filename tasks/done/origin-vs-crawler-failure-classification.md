@@ -165,3 +165,86 @@ whether to merge them as part of this work.
 `tasks/antibot-detector-challenge-blindspot.md` matters here too: `origin_blocked`
 is only as accurate as the detector, which MAS measured as missing ~370 of ~400
 challenge pages in their corpus.
+
+---
+
+## Implemented 2026-07-30 — this was the deploy gate
+
+**New file:** `deploy/docker/aitosoft_failure_class.py` — the vocabulary, all
+error-text matching, and the transport mapping, in one place. Nothing else in
+the codebase matches on `net::ERR_*` or on the ACS-GOTO wrapper text.
+
+### The crux — `server.py`'s all-failed branch
+
+```python
+_status = http_status_for(r.get("failure_class") for r in results["results"])
+if _status == 200: return JSONResponse(results)     # origin's fault: full envelope
+if _status == 504: raise HTTPException(504, ...)    # ours: fence fired
+raise HTTPException(500, ...)                       # ours: render broke
+```
+
+Under the single-URL contract this branch fired on *every* full-mode failure and
+the security handler then replaced the body with
+`{"error": "Internal server error"}`. `status_code`, `redirected_status_code`,
+`error_message` and `crawl_stats` all reached MAS as nothing.
+
+### The second channel — `api.py`'s `except Exception`
+
+Upstream re-raises a navigation failure when there is a single proxy and
+`max_retries <= 1`, so `anitamakela.com`'s zero-byte Apache 500 arrived as an
+exception rather than a result and became our 500 (8 client retries in 35 s).
+That path now classifies the exception and, when the origin owns it, returns the
+same envelope shape a failed result would have.
+
+### Contract, as MAS specified it
+
+| | |
+|---|---|
+| `failure_class` | on **every** result including successes (`"none"`), so a missing field means an old build, never a success |
+| envelope `failure_class` | only where no result exists — `capacity` (429), `auth` (401/403), `bad_request` (400), plus `render_error`/`render_timeout` on our 5xx |
+| origin-caused | HTTP 200 + result `success:false` — `origin_http_error`, `origin_blocked`, `origin_unreachable` |
+| ours | 500 `render_error`, 504 `render_timeout` |
+| capacity | 429 + Retry-After, unchanged |
+
+**`status_code` now carries the origin's real FINAL status** — the last redirect
+hop — which is what MAS asked for and what static mode has always reported under
+that name. Full mode reported the *first* hop, so an apex→www redirect to a 403
+block page was labelled 301. `redirected_status_code` is untouched, so MAS's
+client-side `redirected_status_code >= 400` mitigation keeps working through the
+transition, and it is now part of the documented contract as they requested.
+
+Static mode carries `failure_class` too, so both render modes parse identically.
+
+### Classification bias — deliberate, and stated
+
+Unrecognised failures classify as `render_error` (ours, 500, retryable), never
+as an origin class, and an unknown `net::ERR_*` logs a breadcrumb so the table
+grows from evidence. Wrong in that direction costs wasted renders and is loud;
+wrong the other way tells MAS a healthy company site is permanently broken,
+silently — the failure mode they called the most expensive thing that happened
+to them this month.
+
+### Verified
+
+- `test-aitosoft/test_failure_classification.py` — 33 tests: the three real
+  incidents (anitamakela ACS-GOTO, konecranes block, konecranes redirect chain),
+  the `net::ERR_*` table, unknown-error bias, timeouts staying ours, the
+  `Page.content` race staying ours, `"none"` on success, the full transport
+  matrix, and two end-to-end runs through `api.handle_crawl_request`.
+- `test-aitosoft/test_mas_contract.py` — two new tests drive the **real app**
+  through `TestClient` including the security exception handler: an origin block
+  returns 200 with `status_code`/`redirected_status_code`/`error_message`
+  intact; our own crash still returns 500 carrying envelope
+  `failure_class: render_error`.
+- Full offline gate: **126/126**.
+
+### One open question for MAS
+
+Envelope `success` stays `true` when the single result failed, matching static
+mode exactly ("the request was processed"; the result carries the outcome). Our
+own monitor already treats an all-failed batch as a failure, so the envelope is
+the last place still saying "green". Left alone deliberately — static mode is
+the shape they are adopting *right now* as a pre-delete gate, and flipping it
+under them mid-adoption is the kind of change that should be asked for, not
+shipped. Ask whether they want envelope `success` to become the aggregate; it is
+a one-line change in both paths once they answer.

@@ -86,3 +86,57 @@ stored bodies as fixtures.
 (`tasks/preflight-batch-endpoint.md`) is only as good as this list. MAS said it
 plainly: *"a preflight that misses the dominant failure is worse than none,
 because it licenses the delete."* Do not ship the preflight before this.
+
+---
+
+## Implemented 2026-07-30
+
+**1. The two measured signatures.** Both added to `_TIER1_PATTERNS`
+(`crawl4ai/antibot_detector.py`): `robot-suspicion` and
+`d1rozh26tys225.cloudfront.net`. Tier 1 because a hyphenated asset filename is
+not prose — it cannot appear in real content, so no size or status gate is
+needed and the 371-page family is caught however the vendor pads the page.
+No vendor was guessed; the literals MAS measured are matched as literals.
+
+**2. A third root cause, found while wiring the above.** The tier-2 list is only
+ever evaluated on 4xx/5xx (`is_blocked`: the 403/503 branch, then
+`status_code >= 400`). Challenge interstitials are overwhelmingly served with
+**HTTP 200** — so `Checking your browser` had *never once been consulted for the
+pages it was written for*. That, not `_TIER2_MAX_SIZE`, is what silenced MAS's
+29-page family; the size gate was never reached. Answers the question the task
+asked us to check, from the code rather than from their page sizes.
+
+Closed with a new `_CHALLENGE_PATTERNS` tier, checked at **any** status:
+`Checking the site connection security`, `Checking your browser`,
+`<title>Just a moment`. Deliberately tiny — interstitial wording only, no
+generic block phrases and no CAPTCHA-class markers, because a false positive
+here now costs a real page.
+
+**3. Two gates on that tier, not one.** The obvious gate (`_TIER2_MAX_SIZE`) is
+not sufficient, and the test suite caught it: a 40-paragraph Finnish article
+*about* bot protection, quoting every phrase in the list, is 8.2 KB — under the
+10 KB gate. Size cannot separate a challenge screen from an article that
+mentions one. Added `_CHALLENGE_MAX_VISIBLE_TEXT = 1500`: a real interstitial is
+a few hundred characters of visible prose. Both gates now apply.
+
+**4. The Shopify false positive.** `Access\s+Denied` →
+`<(?:title|h[1-3])[^>]*>[^<]{0,60}Access\s+Denied`. Keeps the genuine Akamai
+page (`<TITLE>Access Denied</TITLE><H1>Access Denied</H1>`, one of MAS's 2 true
+positives) and drops navigation-link text. Real 403s lose nothing: the 403/503
+branch already flags any non-data HTML body without consulting this pattern.
+
+**Verified** — `test-aitosoft/test_antibot_challenge_detection.py`, 15 tests:
+challenge family detected at 200/403/429/503/None and on a padded 20 KB page;
+Shopify storefront clean at 200 and 404; Akamai and title-only Access Denied
+still caught; the 8 KB and 20 KB articles clean; Cloudflare/Incapsula tier 1 and
+the JSON-response exemption unchanged.
+
+**Fixture provenance, stated plainly:** synthesised from the signatures MAS
+measured, not from their stored bodies — those had not arrived. Live
+verification is impossible by construction (§8d: `magicad.com`, classified
+`challenge_all`, served clean content to our egress the same day) and would
+burn requests against hosts already classified as blocked.
+
+**Still open:** the request in §8e for one full stored challenge HTML. With it,
+a later session can identify the vendor and generalise the pattern properly
+instead of matching artefacts. Until then this is coverage, not understanding.

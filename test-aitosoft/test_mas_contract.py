@@ -153,6 +153,127 @@ def test_unknown_fields_silently_dropped():
     assert cfg.remove_consent_popups is True
 
 
+def test_response_contract_fields_are_documented():
+    """The fields MAS parses off every result. `redirected_status_code` is here
+    because MAS asked for it explicitly on 2026-07-30: it is absent from their
+    CrawlResult interface (crawl4ai-client.ts:33-56) — they found it in a
+    forensics reply, not in a contract. `failure_class` is here because it is
+    the machine-readable half of the Q2 answer.
+
+    Kept as a literal enumeration on purpose: if a future change drops one of
+    these, this test names it before a WAA batch does.
+    """
+    from aitosoft_failure_class import NONE, ORIGIN_CLASSES, http_status_for
+
+    documented = {
+        "url",
+        "success",
+        "status_code",  # the origin's FINAL status (last redirect hop)
+        "redirected_status_code",  # same value when redirected; None otherwise
+        "error_message",
+        "failure_class",  # "none" on success, never absent
+        "render_mode",  # "full" | "static"
+        "markdown",
+        "links",
+    }
+    from aitosoft_failure_class import failed_result
+
+    assert documented <= set(failed_result("https://x.fi/", "render_error", "e"))
+
+    # Transport rule: origin-caused never reaches MAS as a 5xx.
+    assert all(http_status_for([c]) == 200 for c in ORIGIN_CLASSES)
+    assert http_status_for([NONE]) == 200
+    assert http_status_for(["render_error"]) == 500
+    assert http_status_for(["render_timeout"]) == 504
+
+
+def _crawl_client_and_app():
+    """A TestClient over the real app, with real auth. Imported lazily so the
+    pure-config tests above stay independent of server startup."""
+    os.environ.setdefault("CRAWL4AI_API_TOKEN", "test-token-for-contract-suite")
+    import server
+    from fastapi.testclient import TestClient
+
+    return TestClient(server.app), server
+
+
+def _one_result_response(**fields):
+    async def _fake(**kwargs):
+        return {
+            "success": True,
+            "results": [{"url": "https://x.fi/", "render_mode": "full", **fields}],
+        }
+
+    return _fake
+
+
+def test_all_failed_crawl_returns_envelope_for_origin_failures(monkeypatch):
+    """The crux of tasks/origin-vs-crawler-failure-classification.md, exercised
+    through the real app including the security exception handler.
+
+    server.py's all-failed branch used to raise HTTPException(500)
+    unconditionally, and the handler then replaced the body with
+    {"error": "Internal server error"} — so under the single-URL contract every
+    full-mode failure reached MAS with no status_code, no
+    redirected_status_code, no error_message and no crawl_stats. This is the
+    deploy gate for the redirect fix: that fix moves redirect-blocked hosts into
+    the failed population, so without this they would go from a
+    wrong-but-parseable 200 to an opaque, retried 500.
+    """
+    client, server = _crawl_client_and_app()
+    monkeypatch.setattr(
+        server,
+        "handle_crawl_request",
+        _one_result_response(
+            success=False,
+            status_code=403,
+            redirected_status_code=403,
+            error_message="Blocked by anti-bot protection: HTTP 403 with HTML content",
+            failure_class="origin_blocked",
+        ),
+    )
+
+    r = client.post(
+        "/crawl",
+        json={"urls": ["https://konecranes.com/"]},
+        headers={"Authorization": f"Bearer {os.environ['CRAWL4AI_API_TOKEN']}"},
+    )
+
+    assert r.status_code == 200, "origin failure laundered into our 5xx again"
+    result = r.json()["results"][0]
+    assert result["success"] is False
+    assert result["failure_class"] == "origin_blocked"
+    # The whole point: none of this survived the old 500.
+    assert result["status_code"] == 403
+    assert result["redirected_status_code"] == 403
+    assert result["error_message"]
+
+
+def test_all_failed_crawl_still_5xx_when_the_fault_is_ours(monkeypatch):
+    """5xx must keep meaning 'ours, retry may help'. The security handler still
+    strips the detail; the envelope-level failure_class is what survives."""
+    client, server = _crawl_client_and_app()
+    monkeypatch.setattr(
+        server,
+        "handle_crawl_request",
+        _one_result_response(
+            success=False,
+            status_code=None,
+            error_message="browser process died",
+            failure_class="render_error",
+        ),
+    )
+
+    r = client.post(
+        "/crawl",
+        json={"urls": ["https://example.com/"]},
+        headers={"Authorization": f"Bearer {os.environ['CRAWL4AI_API_TOKEN']}"},
+    )
+
+    assert r.status_code == 500
+    assert r.json()["failure_class"] == "render_error"
+
+
 def test_multi_url_request_rejected_with_400():
     """Single-URL contract (MAS ack 2026-07-17): a multi-URL /crawl request
     must get HTTP 400 naming the contract, BEFORE seed validation or render

@@ -33,7 +33,185 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- Offline suites green: test_mas_contract.py (8), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4), test_redirect_block_detection.py (11), test_render_bounds.py (17) — **64 total**
+- Offline suites green: test_mas_contract.py (11), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4), test_redirect_block_detection.py (11), test_render_bounds.py (17), test_failure_classification.py (34), test_noscript_body_collapse.py (11), test_antibot_challenge_detection.py (15) — **127 total**
+
+---
+
+## Failure classification + noscript body loss + challenge detection (2026-07-30, round 2)
+
+Closes `tasks/done/origin-vs-crawler-failure-classification.md`,
+`tasks/done/noscript-collapses-body-to-empty-markdown.md`,
+`tasks/done/antibot-detector-challenge-blindspot.md`. Evidence base:
+`tasks/waa-eval-2026-07-30-forensics.md` §2a, §3, §8b, §8c and MAS's answers in §7.
+
+Ships together with the two fixes from round 1 (below), which were held for this.
+
+### 1. `failure_class` — origin failures stop being our 5xx (the deploy gate)
+
+**New file:** `deploy/docker/aitosoft_failure_class.py`. The vocabulary, all
+error-text matching and the transport mapping live there and nowhere else — no
+call site matches on `net::ERR_*` or the ACS-GOTO wrapper text itself.
+
+The problem was a composition, not a single line:
+
+```python
+# server.py — upstream's all-failed rule
+if all(not result["success"] for result in results["results"]):
+    raise HTTPException(500, ...)
+# server.py — our security handler, added 2026-04-14
+if exc.status_code == 500:
+    return JSONResponse({"error": "Internal server error", "correlation_id": cid}, 500)
+```
+
+Under the single-URL contract these compose into: **every full-mode failure,
+whatever its cause, reached MAS as an opaque HTTP 500** with `status_code`,
+`redirected_status_code`, `error_message` and `crawl_stats` all discarded. MAS
+retries 500 three times, so a permanently blocked or broken origin cost four
+browser renders to learn nothing. This is why the redirect fix in round 1 could
+not ship alone: it *moves hosts into that population*.
+
+MAS answered Q2 with option (a) unreservedly. Implemented as specified:
+
+| Reality | Now |
+|---|---|
+| origin 4xx/5xx, edge block, DNS/TCP/TLS failure | HTTP **200**, result `success:false`, `failure_class` = `origin_http_error` / `origin_blocked` / `origin_unreachable` |
+| our render broke | HTTP 500, envelope `failure_class: render_error` |
+| our fence fired | HTTP 504, envelope `failure_class: render_timeout` |
+| replica at capacity | HTTP 429 + Retry-After, envelope `failure_class: capacity` (unchanged) |
+
+`failure_class` is on **every** result including successes (as `"none"`), so a
+missing field means an old build rather than a success — MAS's requirement.
+Envelope level only where no result exists to carry it (`capacity`, `auth`,
+`bad_request`, plus our two 5xx classes), which is their division of labour, not
+duplication.
+
+Two channels needed fixing, not one. Besides `server.py`'s all-failed branch,
+`api.py`'s `except Exception` is where `anitamakela.com`'s zero-byte Apache 500
+landed: upstream re-raises a navigation failure when there is a single proxy and
+`max_retries <= 1`, so the origin's own error never became a result at all. That
+path now classifies the exception and returns the same envelope shape a failed
+result would have.
+
+**`status_code` in the API response is now the origin's FINAL status** (last
+redirect hop). Note this reverses the round-1 decision below, deliberately and
+at a different layer: `CrawlResult.status_code` keeps upstream's first-hop
+semantics and `tests/test_pr_1435_redirected_status_code.py` still passes — the
+rewrite happens in `api.py` when the result is serialised. Reasons: MAS asked
+for exactly this in their Q2 answer; static mode has *always* reported the final
+hop under that name, so the two render modes disagreed on a shared field; and a
+redirect-to-block host was labelled `301`. `redirected_status_code` is untouched
+and is now documented, as MAS requested — it was absent from their
+`CrawlResult` interface entirely.
+
+**Classification bias is deliberate:** anything unrecognised is `render_error`
+(ours, 500, retryable), never an origin class, and an unknown `net::ERR_*` logs
+a breadcrumb so the table grows from evidence. Wrong in that direction costs
+wasted renders and is loud; wrong the other way tells MAS a healthy company site
+is permanently broken, silently.
+
+**Also fixed here (side finding):** `api.py` recorded
+`track_request_end(success=True, status_code=200)` unconditionally once results
+were processed — including for the all-failed case that became a 500. The
+monitor read green while the client got an error, which would have hidden the
+entire new failure population exactly when it needs watching. It now records the
+outcome the client will actually see, using the same mapping `server.py` uses.
+
+Static mode carries `failure_class` too, so both render modes parse identically.
+
+### 2. Nested `<noscript>` discarded the entire page body
+
+`crawl4ai/content_scraping_strategy.py` — new `strip_noscript()`, called at the
+top of `_scrap()` immediately before `lhtml.document_fromstring()`.
+
+`<noscript>` may not nest: with scripting enabled its content is raw text, so a
+parser never sees an inner `<noscript>` as an element and the **outer** one is
+left unclosed — everything after it is swallowed. A WordPress lazy-load plugin
+wrapping the GTM block in a second `<noscript>` therefore cost the whole page:
+`https://www.kiertopakkaus.fi/` produced 312,628 B of rendered HTML → **97 B**
+of `cleaned_html` → **1 B** of markdown, at HTTP 200 with `success: true`.
+**406 pages across 70 hosts** in MAS's corpus, reproducing identically 3½ months
+apart. Static mode was never affected — `_strip_hidden_decoys` already
+decomposes `noscript`, which is why the two modes disagreed by four orders of
+magnitude on the same URL.
+
+Removal rather than unwrapping, because we render with JavaScript enabled: by
+definition `<noscript>` content is not what the page showed, and its scripted
+equivalent is already in the DOM. Two passes — well-formed elements, then any
+unpaired tag — so a truncated `<noscript>` cannot swallow a body either. Pages
+without the substring return unchanged and unparsed.
+
+### 3. `antibot_detector` — the challenge family, and a false positive
+
+MAS scanned all 117,323 stored pages with our pattern list: **22 hits, 2
+genuine**. The dominant signature (371 pages) was not in the list at all; ~15 of
+the hits were healthy Shopify storefronts condemned by their own
+`/pages/access-denied` navigation link.
+
+- **Tier 1 +2 patterns:** `robot-suspicion`, `d1rozh26tys225.cloudfront.net`.
+  Tier 1 because a hyphenated asset filename is not prose. No vendor guessed —
+  the literals MAS measured are matched as literals.
+- **New challenge tier.** Found while wiring the above: the tier-2 list is only
+  ever evaluated on 4xx/5xx, and challenge interstitials are served with **HTTP
+  200** — so `Checking your browser` had never once been consulted for the pages
+  it was written for. That, not `_TIER2_MAX_SIZE`, silenced MAS's 29-page family.
+  `_CHALLENGE_PATTERNS` is checked at any status, with two gates: HTML under
+  10 KB *and* visible text under 1500 chars. The second gate exists because the
+  test suite caught the first one failing — a 40-paragraph Finnish article about
+  bot protection, quoting every phrase in the list, is 8.2 KB and passes the size
+  gate.
+- **`Access Denied` tightened** to `<title>`/`<h1..h3>` context. Keeps the
+  genuine Akamai page; drops link text. Real 403s lose nothing — the 403/503
+  branch already flags any non-data HTML body without this pattern.
+
+Built against fixtures synthesised from MAS's measurements, not their stored
+bodies. Live verification is impossible by construction: `magicad.com`,
+classified `challenge_all`, served clean content to our egress the same day.
+
+### Tests
+
+Offline gate **127/127** (was 64). New: `test_failure_classification.py` (34),
+`test_noscript_body_collapse.py` (11), `test_antibot_challenge_detection.py`
+(15). `test_mas_contract.py` gained two tests that drive the **real app**
+through `TestClient`, security exception handler included.
+
+**Live pre-deploy verification** (local server, threaded fixture origin on
+127.0.0.1:8099, `CRAWL4AI_ALLOW_INTERNAL_URLS=true`):
+
+| Fixture | HTTP | `status_code` | `failure_class` |
+|---|---|---|---|
+| healthy page | 200 | 200 | `none` |
+| 500 + zero body (anitamakela shape) | **200** (was opaque 500) | **500** | `origin_http_error` |
+| direct 403 block page | **200** (was opaque 500) | 403 | `origin_blocked` |
+| 301 → 403 block (konecranes shape) | **200** | **403** (was `301`) | `origin_blocked` |
+
+That last row is the redirect fix and the final-hop rewrite working together —
+the case this whole deploy exists for.
+
+The 500-with-empty-body run is why `classify_error_text` special-cases 5xx: the
+block detector judges the *body*, and an empty 5xx body trips its structural
+check, so a site that is simply broken came back labelled `origin_blocked`. Both
+verdicts are origin-caused and both map to HTTP 200, but only `origin_blocked`
+is what a residential-egress retry would target. 503 stays a block — Incapsula
+and Varnish really do serve blocks with it.
+
+Tier 1 regression **4/4** (`--version waa-round2-local`). Caveat: run against
+bundled Chromium, not real Chrome — this dev container is ARM64 and
+`playwright install chrome` is unsupported there, so `chrome_channel` was
+switched to `chromium` for the run and reverted immediately after
+(`git checkout deploy/docker/config.yml`, verified). Tier 1 exercises markdown,
+consent-popup removal and contact extraction, none of which depend on the
+channel; the stealth first tier is the part not covered locally.
+
+### Open with MAS
+
+- Envelope `success` stays `true` when the single result failed, matching static
+  mode. Our own monitor already treats an all-failed batch as a failure, so the
+  envelope is the last place still reading green. Not flipped unilaterally:
+  static mode is the shape they are adopting *right now* as a pre-delete gate.
+  Asked whether they want it to become the aggregate.
+- Re-scrape the 70 `empty_*` hosts and report the recovery rate, so the noscript
+  fix is measured rather than trusted.
+- Still waiting on one full stored challenge HTML (§8e) to identify the vendor.
 
 ---
 

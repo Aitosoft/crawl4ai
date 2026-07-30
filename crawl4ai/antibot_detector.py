@@ -11,6 +11,7 @@ Err on the side of detection.
 Detection is layered:
 - HTTP 403/503 with HTML content → always blocked (these are never desired content)
 - Tier 1 patterns (structural markers) trigger on any page size
+- Challenge patterns (interstitial prose) trigger on short pages at any status
 - Tier 2 patterns (generic terms) trigger on short pages or any error status
 - Tier 3 structural integrity catches silent blocks and empty shells
 """
@@ -64,6 +65,40 @@ _TIER1_PATTERNS = [
     # with this message buried under 100KB+ of CSS/JS
     (re.compile(r"blocked\s+by\s+network\s+security", re.IGNORECASE),
      "Network security block"),
+    # Aitosoft 2026-07-30 — the challenge family that dominates Finnish SME
+    # crawling. MAS measured 371 of 402 stored challenge pages carrying this
+    # asset; nothing in the list above matched any of them. The vendor is not
+    # identified yet, so match the literal artefacts rather than inventing a
+    # family (tasks/antibot-detector-challenge-blindspot.md). Tier 1 because a
+    # hyphenated asset filename is not prose and cannot appear in real content.
+    (re.compile(r"robot-suspicion", re.IGNORECASE),
+     "Unidentified challenge (robot-suspicion asset)"),
+    (re.compile(r"d1rozh26tys225\.cloudfront\.net", re.IGNORECASE),
+     "Unidentified challenge (challenge asset host)"),
+]
+
+# ---------------------------------------------------------------------------
+# Challenge tier: interstitial prose, checked on ANY status code for small
+# pages.
+#
+# Aitosoft 2026-07-30. The tier-2 list below is only ever evaluated on 4xx/5xx
+# responses (see is_blocked), but JS challenge interstitials are overwhelmingly
+# served with **HTTP 200** — so "Checking your browser" has never once been
+# consulted for the pages it was written for. MAS found 29 such pages stored as
+# successful content. This tier closes that gap with a deliberately tiny,
+# high-confidence list: interstitial wording only, no generic block phrases and
+# no CAPTCHA-class markers, because a false positive here costs a real page.
+# Size-gated exactly like tier 2 so an article discussing bot challenges cannot
+# match. The entries stay in _TIER2_PATTERNS as well — that path adds
+# large-page coverage for 403/503 via the stripped deep snippet.
+# ---------------------------------------------------------------------------
+_CHALLENGE_PATTERNS = [
+    (re.compile(r"Checking\s+the\s+site\s+connection\s+security", re.IGNORECASE),
+     "Challenge interstitial (checking site connection security)"),
+    (re.compile(r"Checking\s+your\s+browser", re.IGNORECASE),
+     "Challenge interstitial (checking your browser)"),
+    (re.compile(r"<title>\s*Just\s+a\s+moment", re.IGNORECASE),
+     "Challenge interstitial (Just a moment)"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -72,9 +107,19 @@ _TIER1_PATTERNS = [
 # so we require the page to be small to avoid false positives.
 # ---------------------------------------------------------------------------
 _TIER2_PATTERNS = [
-    # Akamai / generic — "Access Denied" (extremely common on legit 403s too)
-    (re.compile(r"Access\s+Denied", re.IGNORECASE),
-     "Access Denied on short page"),
+    # Akamai / generic — "Access Denied", but only where a block page puts it:
+    # the title or a top-level heading.
+    #
+    # Aitosoft 2026-07-30: the bare `Access\s+Denied` form was this list's worst
+    # pattern in production. MAS's corpus scan returned 22 hits of which ~15
+    # were Shopify storefronts carrying an `/pages/access-denied` navigation
+    # link — full, healthy pages condemned by their own menu. Requiring
+    # title/heading context keeps the genuine Akamai page
+    # (`<TITLE>Access Denied</TITLE><H1>Access Denied</H1>`) and drops link
+    # text. Real 403s are unaffected: the 403/503 branch below already flags any
+    # non-data HTML body without needing this pattern at all.
+    (re.compile(r"<(?:title|h[1-3])[^>]*>[^<]{0,60}Access\s+Denied", re.IGNORECASE),
+     "Access Denied in title/heading on short page"),
     # Cloudflare — "Just a moment" / "Checking your browser"
     (re.compile(r"Checking\s+your\s+browser", re.IGNORECASE),
      "Cloudflare browser check"),
@@ -96,6 +141,11 @@ _TIER2_PATTERNS = [
 ]
 
 _TIER2_MAX_SIZE = 10000  # Only check tier 2 patterns on pages under 10KB
+
+# Challenge tier: a real interstitial carries a heading, a sentence and a ray
+# ID — a few hundred characters. 1500 leaves generous headroom for a wordy
+# vendor while staying far below any page with actual content on it.
+_CHALLENGE_MAX_VISIBLE_TEXT = 1500
 
 # ---------------------------------------------------------------------------
 # Tier 3: Structural integrity — catches silent blocks, anti-bot redirects,
@@ -135,6 +185,17 @@ def _looks_like_data(html: str) -> bool:
     return stripped[0] == '<'
 
 
+def _visible_text(html: str) -> str:
+    """Body text with scripts, styles and tags removed. Cheap approximation —
+    used to tell a block/challenge screen (a few hundred characters of prose)
+    from a real page that merely mentions one."""
+    body_match = re.search(r'<body\b[^>]*>([\s\S]*)</body>', html, re.IGNORECASE)
+    body_content = body_match.group(1) if body_match else html
+    stripped = _SCRIPT_BLOCK_RE.sub('', body_content)
+    stripped = _STYLE_TAG_RE.sub('', stripped)
+    return _TAG_RE.sub('', stripped).strip()
+
+
 def _structural_integrity_check(html: str) -> Tuple[bool, str]:
     """
     Tier 3: Structural integrity check for pages that pass pattern detection
@@ -158,12 +219,7 @@ def _structural_integrity_check(html: str) -> Tuple[bool, str]:
         return True, f"Structural: no <body> tag ({html_len} bytes)"
 
     # Signal 2: Minimal visible text after stripping scripts/styles/tags
-    body_match = re.search(r'<body\b[^>]*>([\s\S]*)</body>', html, re.IGNORECASE)
-    body_content = body_match.group(1) if body_match else html
-    stripped = _SCRIPT_BLOCK_RE.sub('', body_content)
-    stripped = _STYLE_TAG_RE.sub('', stripped)
-    visible_text = _TAG_RE.sub('', stripped).strip()
-    visible_len = len(visible_text)
+    visible_len = len(_visible_text(html))
     if visible_len < 50:
         signals.append("minimal_text")
 
@@ -263,6 +319,26 @@ def is_blocked(
         for pattern, reason in _TIER1_PATTERNS:
             if pattern.search(_deep_snippet):
                 return True, reason
+
+    # --- Challenge interstitials on a small page, at ANY status ---
+    # Challenge screens are normally served with HTTP 200, which the tier-2
+    # path below never reaches. See _CHALLENGE_PATTERNS.
+    if html_len < _TIER2_MAX_SIZE and not _looks_like_data(html):
+        for pattern, reason in _CHALLENGE_PATTERNS:
+            if pattern.search(snippet):
+                # A challenge screen is a few hundred characters of prose. An
+                # article *about* bot challenges quotes the same wording and is
+                # thousands. Size alone does not separate them — an 8 KB page
+                # is under the tier-2 gate yet holds ~6 KB of real text — so
+                # require the page to be as empty as an interstitial actually
+                # is. Without this, one Finnish blog post on bot protection
+                # would be classified as a block.
+                _visible_len = len(_visible_text(html))
+                if _visible_len < _CHALLENGE_MAX_VISIBLE_TEXT:
+                    return True, (
+                        f"{reason} (HTTP {status_code}, {html_len} bytes, "
+                        f"{_visible_len} chars visible)"
+                    )
 
     # --- HTTP 403/503 — always blocked for non-data HTML responses ---
     # Rationale: 403/503 are never the content the user wants. Modern block pages

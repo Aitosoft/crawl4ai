@@ -30,6 +30,13 @@ import httpx
 # Module scope on purpose: _fetch_static_one's contract is "never raises", so
 # an import failure must surface at first module load (one clear 500), not
 # propagate through gather() on every request.
+from aitosoft_failure_class import (
+    BAD_REQUEST,
+    NONE,
+    ORIGIN_HTTP_ERROR,
+    ORIGIN_UNREACHABLE,
+    RENDER_ERROR,
+)
 from crawl4ai.html2text import HTML2Text
 from egress_broker import EgressBlocked, check_redirect
 
@@ -158,12 +165,17 @@ def _static_error_result(
     *,
     status_code: int = 0,
     error_message: Optional[str] = None,
+    failure_class: str = ORIGIN_UNREACHABLE,
 ) -> dict:
+    """A failed static result. Default `failure_class` is ORIGIN_UNREACHABLE
+    because every raising path here is a connect/DNS/TLS/timeout failure — we
+    never reached the origin. Callers that know better pass their own."""
     return {
         "url": url,
         "success": False,
         "status_code": status_code,
         "error_message": error_message,
+        "failure_class": failure_class,
         "render_mode": "static",
         "markdown": {"raw_markdown": "", "fit_markdown": ""},
         "links": {"internal": [], "external": []},
@@ -256,12 +268,15 @@ async def _fetch_static_one(url: str) -> dict:
                         f"static-fetch: too many redirects "
                         f"(>{STATIC_MAX_REDIRECT_HOPS})"
                     ),
+                    failure_class=ORIGIN_HTTP_ERROR,
                 )
             try:
                 next_url = str(httpx.URL(current_url).join(resp.headers["location"]))
             except Exception:
                 return _static_error_result(
-                    url, error_message="static-fetch: invalid redirect location"
+                    url,
+                    error_message="static-fetch: invalid redirect location",
+                    failure_class=ORIGIN_HTTP_ERROR,
                 )
             try:
                 check_redirect(next_url)
@@ -275,6 +290,9 @@ async def _fetch_static_one(url: str) -> dict:
                 return _static_error_result(
                     url,
                     error_message=("static-fetch: redirect blocked (SSRF protection)"),
+                    # Our policy refused the destination — not the origin's
+                    # fault and not a crawler fault. MAS must never retry it.
+                    failure_class=BAD_REQUEST,
                 )
             current_url = next_url
     except httpx.TimeoutException:
@@ -294,6 +312,8 @@ async def _fetch_static_one(url: str) -> dict:
         return _static_error_result(
             url,
             error_message=f"static-fetch: {type(e).__name__}: {e}",
+            # Not a network failure — something in our own path broke.
+            failure_class=RENDER_ERROR,
         )
 
     elapsed_ms = int((time.time() - t0) * 1000)
@@ -332,6 +352,7 @@ async def _fetch_static_one(url: str) -> dict:
         "success": success,
         "status_code": status_code,
         "error_message": None if success else f"HTTP {status_code}",
+        "failure_class": NONE if success else ORIGIN_HTTP_ERROR,
         "render_mode": "static",
         "markdown": {"raw_markdown": markdown, "fit_markdown": ""},
         "links": {"internal": [], "external": []},

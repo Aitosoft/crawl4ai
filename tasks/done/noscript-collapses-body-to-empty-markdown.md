@@ -127,3 +127,42 @@ kind of upstream bug report.
 MAS should re-scrape all 70 `empty_*` hosts after this deploys. On this evidence
 the fix converts them from 1 character to full content. Worth telling them the
 expected recovery so they can measure it rather than take our word.
+
+---
+
+## Implemented 2026-07-30
+
+**Fix:** `crawl4ai/content_scraping_strategy.py` — new module-level
+`strip_noscript()`, called at the top of `LXMLWebScrapingStrategy._scrap()`
+immediately before `lhtml.document_fromstring()`. That is the only shared parse
+point: `WebScrapingStrategy` is an alias of `LXMLWebScrapingStrategy` (line
+1014) and `ascrap()` delegates to `scrap()`, which is why both "strategies"
+produced identical 97-byte output. One call site covers everything.
+
+Two passes, matching the instruction to handle the tag rather than the nesting:
+
+1. `<noscript…>…</noscript>` non-greedy — a lazy match stops at the first
+   `</noscript>`, which is exactly where a browser's parser ends the outer
+   element too, so the nested shape collapses correctly.
+2. any leftover unpaired `</?noscript…>` — so a truncated or never-closed
+   `<noscript>` can no longer swallow a body either.
+
+Fast path: pages without the substring return the same object, unparsed.
+
+**Verified** — `test-aitosoft/test_noscript_body_collapse.py`, 11 tests:
+nested / single / unclosed / uppercase / attributed / absent all keep the full
+body; nested and single now produce byte-identical output; a page whose only
+content is inside `<noscript>` correctly stays empty (JS was enabled); the
+lazy-load + GTM + skip-link markup from the reference host recovers.
+
+Reproduced the defect first, exactly as documented: 42 B vs 187 B on the
+6-line fixture. No live requests to `kiertopakkaus.fi`.
+
+**Known limitation, accepted:** a `<noscript>` literal inside a `<script>`
+string could in principle start a match that ends at a later real
+`</noscript>`. Any pre-parse repair carries this; the alternative is a
+spec-compliant HTML5 parse of every document, which is a far larger change than
+the bug warrants. Not observed in the corpus.
+
+**Still to do:** MAS should re-scrape the 70 `empty_*` hosts after this deploys
+and report the recovery rate, so the fix is measured rather than trusted.

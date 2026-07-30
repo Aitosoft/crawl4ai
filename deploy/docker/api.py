@@ -26,6 +26,15 @@ from crawl4ai import (
     LLMConfig
 )
 from crawl4ai.async_configs import Provenance, UntrustedConfigError
+from aitosoft_failure_class import (
+    ORIGIN_CLASSES,
+    RENDER_ERROR,
+    classify_exception,
+    classify_result,
+    effective_status_of,
+    failed_result,
+    http_status_for,
+)
 from hook_registry import build_declarative_hooks, HookValidationError
 from llm_broker import LLMProviderNotAllowed
 from crawl4ai.utils import perform_completion_with_backoff
@@ -878,6 +887,22 @@ async def handle_crawl_request(
                 # responses produced by Playwright vs the static-mode fallback.
                 result_dict["render_mode"] = "full"
 
+                # Aitosoft: report the status that actually produced this body.
+                # Upstream keeps the FIRST redirect hop in `status_code` and the
+                # last in `redirected_status_code`; static mode has always
+                # reported the final hop as `status_code`. Make the two modes
+                # agree, and give MAS the field they asked for in Q2 — the
+                # origin's real final status. `redirected_status_code` is left
+                # untouched and is now part of the documented contract.
+                _eff_status = effective_status_of(result_dict)
+                if _eff_status is not None:
+                    result_dict["status_code"] = _eff_status
+
+                # Aitosoft: `failure_class` on every result, successes included
+                # ("none"), so a missing field means an old build rather than a
+                # success. See aitosoft_failure_class.py.
+                result_dict["failure_class"] = classify_result(result_dict)
+
                 processed_results.append(result_dict)
             except Exception as e:
                 logger.error(f"Error processing result: {e}")
@@ -885,9 +910,13 @@ async def handle_crawl_request(
                     "url": "unknown",
                     "success": False,
                     "error_message": str(e),
-                    "render_mode": "full"
+                    "render_mode": "full",
+                    "failure_class": RENDER_ERROR,
                 })
-            
+
+        # Envelope `success` means "the request was processed", matching static
+        # mode; per-result `success` carries the outcome. server.py maps the
+        # failure classes below to the HTTP status.
         response = {
             "success": True,
             "results": processed_results,
@@ -896,11 +925,26 @@ async def handle_crawl_request(
             "server_peak_memory_mb": peak_mem_mb
         }
 
-        # Track request completion
+        # Track request completion. Aitosoft: this used to record success=True
+        # unconditionally — including for the all-failed case that server.py
+        # turns into a 500 — so the monitor read green while the client got an
+        # error. Record the outcome the client will actually see.
+        _any_success = any(r.get("success") for r in processed_results)
+        _client_status = (
+            200 if _any_success
+            else http_status_for(r.get("failure_class") for r in processed_results)
+        )
         try:
             from monitor import get_monitor
             await get_monitor().track_request_end(
-                request_id, success=True, pool_hit=True, status_code=200
+                request_id,
+                success=_any_success,
+                pool_hit=True,
+                error=None if _any_success else "; ".join(
+                    f"{r.get('failure_class')}: {r.get('error_message') or '?'}"
+                    for r in processed_results
+                )[:500],
+                status_code=_client_status,
             )
         except:
             pass
@@ -944,6 +988,49 @@ async def handle_crawl_request(
     except Exception as e:
         logger.error(f"Crawl error: {str(e)}", exc_info=True)
 
+        # Measure memory even on error if possible
+        end_mem_mb_error = _get_memory_mb()
+        if start_mem_mb is not None and end_mem_mb_error is not None:
+            mem_delta_mb = end_mem_mb_error - start_mem_mb
+
+        # Aitosoft: the origin's own failure must not become our 5xx.
+        # Upstream re-raises a navigation failure when there is a single proxy
+        # and max_retries <= 1 (async_webcrawler.py ~543), so an origin that
+        # serves an unrenderable 5xx — anitamakela.com's zero-byte Apache 500 —
+        # arrives here as RuntimeError("Failed on navigating ACS-GOTO: …
+        # net::ERR_HTTP_RESPONSE_CODE_FAILURE"). That produced 8 client retries
+        # in 35 s for a site that was simply broken. Return the same envelope
+        # shape a failed result would have, with the verdict attached.
+        _exc_class = classify_exception(e)
+        if _exc_class in ORIGIN_CLASSES:
+            logger.warning(
+                "ORIGIN FAILURE: url=%s failure_class=%s error=%s",
+                urls[0] if urls else "?", _exc_class, str(e)[:300],
+            )
+            try:
+                from monitor import get_monitor
+                await get_monitor().track_request_end(
+                    request_id, success=False,
+                    error=f"{_exc_class}: {str(e)[:300]}", status_code=200,
+                )
+            except:
+                pass
+            return {
+                "success": True,
+                "results": [
+                    failed_result(
+                        urls[0] if urls else "unknown",
+                        _exc_class,
+                        str(e),
+                    )
+                ],
+                "server_processing_time_s": time.time() - start_time,
+                "server_memory_delta_mb": mem_delta_mb,
+                "server_peak_memory_mb": max(
+                    peak_mem_mb if peak_mem_mb else 0, end_mem_mb_error or 0
+                ),
+            }
+
         # Track request error
         try:
             from monitor import get_monitor
@@ -952,11 +1039,6 @@ async def handle_crawl_request(
             )
         except:
             pass
-
-        # Measure memory even on error if possible
-        end_mem_mb_error = _get_memory_mb()
-        if start_mem_mb is not None and end_mem_mb_error is not None:
-            mem_delta_mb = end_mem_mb_error - start_mem_mb
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

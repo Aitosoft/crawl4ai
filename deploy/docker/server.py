@@ -519,15 +519,29 @@ async def _http_exception_handler(request: Request, exc: _StarletteHTTPException
     # 500 is the raw-str(e) leak vector -> genericize with a correlation id.
     # Deliberate operational statuses (502/503/504, with their own short
     # messages + headers like Retry-After) pass through, as do 4xx.
+    # Aitosoft: envelope-level `failure_class` for failures that have no result
+    # to carry one (capacity, auth, malformed request, our own faults). MAS's
+    # division of labour: result level for anything a crawl produced, envelope
+    # level only where there is nothing to attach to.
+    from aitosoft_failure_class import envelope_class_for_status
+
+    _fc = envelope_class_for_status(exc.status_code)
     if exc.status_code == 500:
         cid = _uuid.uuid4().hex[:12]
         logger.error("server error 500 [cid=%s]: %s", cid, exc.detail)
         return JSONResponse(
-            {"error": "Internal server error", "correlation_id": cid},
+            {
+                "error": "Internal server error",
+                "correlation_id": cid,
+                "failure_class": _fc,
+            },
             status_code=500,
         )
+    body = {"detail": exc.detail}
+    if _fc:
+        body["failure_class"] = _fc
     return JSONResponse(
-        {"detail": exc.detail},
+        body,
         status_code=exc.status_code,
         headers=getattr(exc, "headers", None),
     )
@@ -535,10 +549,16 @@ async def _http_exception_handler(request: Request, exc: _StarletteHTTPException
 
 @app.exception_handler(Exception)
 async def _unhandled_exception_handler(request: Request, exc: Exception):
+    from aitosoft_failure_class import RENDER_ERROR
+
     cid = _uuid.uuid4().hex[:12]
     logger.exception("unhandled exception [cid=%s]", cid)
     return JSONResponse(
-        {"error": "Internal server error", "correlation_id": cid},
+        {
+            "error": "Internal server error",
+            "correlation_id": cid,
+            "failure_class": RENDER_ERROR,
+        },
         status_code=500,
     )
 
@@ -938,6 +958,28 @@ async def crawl(
     )
     # check if all of the results are not successful
     if all(not result["success"] for result in results["results"]):
+        # Aitosoft: upstream raises 500 here unconditionally, and our security
+        # handler above then strips the detail — so under the single-URL
+        # contract EVERY full-mode failure reached MAS as an opaque
+        # {"error": "Internal server error"} with no status_code, no
+        # redirected_status_code, no error_message and no crawl_stats. MAS
+        # retries 500 three times, so a permanently blocked or broken origin
+        # cost four browser renders to learn nothing.
+        #
+        # MAS answered Q2 (a) on 2026-07-30: origin-caused => HTTP 200 +
+        # success:false + failure_class + the origin's real final status; 5xx
+        # reserved for our own faults. Return the envelope when the origin owns
+        # the failure; keep 500/504 when we do.
+        # See tasks/origin-vs-crawler-failure-classification.md.
+        from aitosoft_failure_class import http_status_for
+
+        _status = http_status_for(
+            r.get("failure_class") for r in results["results"]
+        )
+        if _status == 200:
+            return JSONResponse(results)
+        if _status == 504:
+            raise HTTPException(504, "Crawl exceeded the time limit")
         raise HTTPException(500, f"Crawl request failed: {results['results'][0]['error_message']}")
     return JSONResponse(results)
 
