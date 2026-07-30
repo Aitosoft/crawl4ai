@@ -174,6 +174,22 @@ Both new suites were verified to **fail without the fix** (3 of 11 redirect
 tests fail on the unpatched tree; the 8 others are regression guards that must
 pass both ways).
 
+### Pre-deploy verification (2026-07-30, local server)
+
+- Offline gate: **64/64** across seven suites.
+- Upstream `tests/proxy/test_antibot_detector.py`: 47/47; PR #1435 model tests 4/4.
+- **Tier 1 regression 4/4** against a local server, `--version
+  2026-07-30-redirect-bounds-local`: caverna.fi 302 tok, accountor.com 8516 tok
+  (1/1 contacts — the Cookiebot wall still clears inside the new 10 s bound on
+  consent-popup removal), solwers.com 13173 tok (1/1), jpond.fi 1685 tok (1/1).
+  `jpond.fi` is itself a 301 → 200 redirect and stayed a success — the
+  false-positive tripwire, live.
+- **Zero** bound-firing log lines across the whole Tier 1 run: the new ceilings
+  are invisible on healthy pages, which is the intended shape.
+- Local server ran on bundled Chromium, not real Chrome — this dev container is
+  arm64 and `playwright install chrome` is unsupported there. Stealth
+  fingerprint therefore differs from prod; everything else is the deployed path.
+
 ### Side findings (recorded, not fixed)
 
 - `config.yml`'s `crawler.base_config.simulate_user: true` **never takes
