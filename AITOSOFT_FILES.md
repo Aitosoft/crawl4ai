@@ -44,6 +44,9 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
   per-hop SSRF redirect validation via egress_broker, bounded fan-out;
   test_static_mode.py pins it)
 - `aitosoft_patchright_fallback.py` - Second-tier retry via patchright for blocked crawls
+- `aitosoft_failure_class.py` - `failure_class` taxonomy + transport mapping. The ONLY
+  place `net::ERR_*` / ACS-GOTO error text is matched; origin-caused => HTTP 200,
+  5xx reserved for our own faults (test_failure_classification.py pins it)
 
 ### Deployment
 - `azure-deployment/` - `deploy-image.sh` (THE deploy path), `batch-scale.sh`
@@ -109,9 +112,19 @@ gunicorn target `aitosoft_entry:app`.
 `_build_browser_args`: GPU flags gated on `enable_stealth` (keeps WebGL in
 stealth mode). Still broken upstream — PR tracked in `tasks/file-upstream-prs.md`.
 
-### crawl4ai/antibot_detector.py (+28/−0)
-`effective_status(status_code, redirected_status_code)` — block detection must
-judge the FINAL hop of a redirect chain, not the first. PR upstream pending.
+### crawl4ai/antibot_detector.py (+28/−0 upstream PR; +66/−4 ours)
+1. `effective_status(status_code, redirected_status_code)` — block detection must
+   judge the FINAL hop of a redirect chain, not the first. PR upstream pending
+   (#2112).
+2. Challenge tier (`robot-suspicion`, the challenge asset host, browser-check
+   prose) and a tightened `Access Denied`. NOT filed upstream: the pattern set is
+   where our Finnish-market knowledge lives and it will keep diverging.
+
+### crawl4ai/content_scraping_strategy.py (+39/−0)
+`strip_noscript()` before `document_fromstring`. `<noscript>` cannot nest, so a
+nested one leaves the outer element unclosed and libxml2 swallows the whole
+body — 312 KB of HTML became 1 B of markdown at HTTP 200 `success:true`, across
+70 hosts. PR upstream pending (#2114).
 
 ### crawl4ai/async_webcrawler.py (+55/−6)
 Two changes, both upstream defects (PRs pending):
