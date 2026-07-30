@@ -33,7 +33,7 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- Offline suites green: test_mas_contract.py (11), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4), test_redirect_block_detection.py (11), test_render_bounds.py (17), test_failure_classification.py (34), test_noscript_body_collapse.py (11), test_antibot_challenge_detection.py (15) — **127 total**
+- Offline suites green: test_mas_contract.py (11), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4), test_redirect_block_detection.py (11), test_render_bounds.py (17), test_failure_classification.py (34), test_noscript_body_collapse.py (11), test_antibot_challenge_detection.py (18) — **130 total**
 
 ---
 
@@ -163,13 +163,21 @@ the hits were healthy Shopify storefronts condemned by their own
   genuine Akamai page; drops link text. Real 403s lose nothing — the 403/503
   branch already flags any non-data HTML body without this pattern.
 
-Built against fixtures synthesised from MAS's measurements, not their stored
-bodies. Live verification is impossible by construction: `magicad.com`,
-classified `challenge_all`, served clean content to our egress the same day.
+Built against fixtures, not live hosts — verification against a live challenged
+host is impossible by construction and MAS confirmed why: from a Finnish
+consumer IP the same hosts return 200 with full content, so the challenge is
+keyed on our Azure egress at capture time. MAS's reply-4 (arrived
+mid-implementation) supplied one verbatim stored sample of the 371-family, which
+the fixtures are now reconstructed from, and **corrected our size-gate
+hypothesis**: the 29 `Checking your browser` pages are 61 B and 99 B, far under
+the gate. Their correction points at exactly the defect found here — the pattern
+existed, the page was tiny, and it still was not caught, because tier 2 is only
+reachable on 4xx/5xx. Confirmed against the pre-fix detector (commit `2a9daa1`):
+both families return `(False, "")` at HTTP 200, and both are detected after.
 
 ### Tests
 
-Offline gate **127/127** (was 64). New: `test_failure_classification.py` (34),
+Offline gate **130/130** (was 64). New: `test_failure_classification.py` (34),
 `test_noscript_body_collapse.py` (11), `test_antibot_challenge_detection.py`
 (15). `test_mas_contract.py` gained two tests that drive the **real app**
 through `TestClient`, security exception handler included.

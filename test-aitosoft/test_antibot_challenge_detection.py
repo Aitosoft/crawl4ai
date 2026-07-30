@@ -84,6 +84,40 @@ SHOPIFY_STOREFRONT = (
 )
 
 
+# Reconstructed from MAS's *verbatim stored markdown* (reply-4 §1, 2026-07-30)
+# — the largest of the 371 at 325 B, www.kotkanjulkisetkiinteistot.fi/yhteystiedot
+# captured 2026-04-21. They store markdown only, never HTML, so this is the HTML
+# that markdown implies rather than a byte-exact body. Every token asserted on
+# below appears in their sample verbatim.
+FAMILY_371_FROM_MAS = (
+    "<!DOCTYPE html><html><head><title>kotkanjulkisetkiinteistot.fi</title></head>"
+    "<body>"
+    '<img alt="Robot" src="https://d1rozh26tys225.cloudfront.net/robot-suspicion.svg">'
+    "<h1>kotkanjulkisetkiinteistot.fi</h1>"
+    "<p>Checking the site connection security</p>"
+    '<img alt="CDN icon" src="https://d1rozh26tys225.cloudfront.net/loader.svg">'
+    "<p>This page requires cookies to be enabled in your browser settings. "
+    "Please check this setting and enable cookies (if disabled)</p>"
+    "</body></html>"
+)
+
+# The 29-family, sized to MAS's measurement: 18 pages stored at 61 B of markdown
+# and 11 at 99 B. They corrected our size-gate hypothesis with these numbers —
+# both are three orders of magnitude under the 10 KB gate, so the gate was never
+# what suppressed them.
+FAMILY_29_SHORT = (
+    "<html><head><title>Please wait</title></head><body>"
+    "<h1>Checking your browser. This will only take a few seconds.</h1>"
+    "</body></html>"
+)
+FAMILY_29_LONGER = (
+    "<html><head><title>Just a moment...</title></head><body>"
+    "<h1>Checking your browser. This will only take a few seconds...</h1>"
+    "<p>Please enable JavaScript and cookies to continue browsing.</p>"
+    "</body></html>"
+)
+
+
 # ── the dominant signature must be detected ──────────────────────────────
 
 
@@ -98,6 +132,33 @@ SHOPIFY_STOREFRONT = (
 def test_challenge_pages_are_detected(label, html, status):
     blocked, reason = is_blocked(status, html)
     assert blocked, f"{label}: challenge page passed through as content"
+    assert reason
+
+
+@pytest.mark.parametrize(
+    "label,html",
+    [
+        ("371-family, from MAS's stored sample", FAMILY_371_FROM_MAS),
+        ("29-family, 61 B stored", FAMILY_29_SHORT),
+        ("29-family, 99 B stored", FAMILY_29_LONGER),
+    ],
+)
+def test_mas_measured_families_are_detected_at_http_200(label, html):
+    """The corpus cases, as measured rather than as imagined.
+
+    Both families were served with **HTTP 200**, and that — not
+    `_TIER2_MAX_SIZE` — is what silenced detection: `is_blocked` only ever
+    reached the tier-2 list through its 4xx/5xx branches, so `Checking your
+    browser` had never once been consulted for the pages it was written for.
+    MAS's numbers (61 B and 99 B of stored markdown, three orders of magnitude
+    under the gate) rule the size hypothesis out directly.
+
+    Verified against the pre-fix detector (commit 2a9daa1): both families
+    returned `(False, '')` at HTTP 200, which is exactly how 402 challenge
+    screens entered their corpus as successful content.
+    """
+    blocked, reason = is_blocked(200, html)
+    assert blocked, f"{label}: still passes as content at HTTP 200"
     assert reason
 
 

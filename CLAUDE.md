@@ -37,7 +37,7 @@ curl http://localhost:11235/health
 pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
 # Testing (run from repo root — relative artifact paths; see TESTING.md)
-pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py  # OFFLINE suites (no server needed), 127 tests
+pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py  # OFFLINE suites (no server needed), 130 tests
 python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression (live server)
 python test-aitosoft/test_site.py <domain> --page <path>            # Single site (live server)
 python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic (live server)

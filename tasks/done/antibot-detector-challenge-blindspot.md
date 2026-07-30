@@ -140,3 +140,49 @@ burn requests against hosts already classified as blocked.
 **Still open:** the request in §8e for one full stored challenge HTML. With it,
 a later session can identify the vendor and generalise the pattern properly
 instead of matching artefacts. Until then this is coverage, not understanding.
+
+### Addendum — MAS reply-4 (2026-07-30, arrived mid-implementation)
+
+They answered §8e's request and corrected one of our hypotheses. Both land the
+same way: the fix above is right, for the reason we gave.
+
+**No HTML sample is coming.** `scraped_pages` stores `markdown_raw` and
+`markdown_cleaned` only — the HTML body is discarded the moment our response is
+converted. (Landing `cleaned_html` storage is on their roadmap for exactly this
+reason.) So the fixtures stay reconstructed; what changed is that they are now
+reconstructed from a **verbatim stored sample** rather than from a description.
+The largest of the 371, `www.kotkanjulkisetkiinteistot.fi/yhteystiedot`
+(2026-04-21, 325 B), carries `robot-suspicion.svg` *and* `loader.svg` from
+`d1rozh26tys225.cloudfront.net`, an `<h1>` that is the bare hostname, and one
+cookie sentence. Both of our Tier-1 tokens appear in it.
+
+**Their correction: the size gate was never the suppressor.** We had asked
+whether the 29 `Checking your browser` pages exceeded `_TIER2_MAX_SIZE`. They
+measured: 18 at **61 B** and 11 at **99 B** of stored markdown — three orders of
+magnitude *under* the gate. Their note is the right one: *"the pattern exists
+and the page is tiny and it still was not caught"* is a different bug from *"the
+pattern was missing"*.
+
+It is, and it is the one diagnosed above independently while wiring the Tier-1
+additions: **the tier-2 list is only reachable through `is_blocked`'s 4xx/5xx
+branches, and these pages were served with HTTP 200.** Confirmed empirically
+against the pre-fix detector (commit `2a9daa1`) — both families return
+`(False, '')` at HTTP 200 — and both are detected after. Pinned as
+`test_mas_measured_families_are_detected_at_http_200`.
+
+They also note the two families are probably different vendors (the 371 say
+"Checking the site connection security", the 29 say "Checking your browser"),
+which is why both phrases are listed separately rather than generalised.
+
+**Egress-specificity confirmed, closing §8d.** From a Finnish consumer IP today:
+`kotkanjulkisetkiinteistot.fi` 200/210,008 B, `savagroup.fi` 200/166,817 B,
+`magicad.com` 200/72,212 B — all clean. So these origins serve normally to an
+ordinary Finnish client and challenged our Azure egress at capture time. Since
+`magicad.com` now reads clean to *both* sides, that one looks like a rollback on
+the origin rather than intermittency on ours. This is the population
+`tasks/residential-egress-retry-path.md` exists for; MAS is explicitly not
+asking for it yet.
+
+Probe hosts they offered, if a future session needs them (all currently
+classified challenged — do not scrape casually): `savagroup.fi`, `recset.fi`,
+`palsatech.fi`, `pajala.fi`, `inlumi.com`.
