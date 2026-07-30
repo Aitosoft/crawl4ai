@@ -1,8 +1,10 @@
 # Stop laundering origin failures into crawl4ai 5xx — failure classification
 
-**Status:** DRAFT — blocked on MAS's answer to Q2 (`tasks/waa-eval-2026-07-30-forensics.md` §7).
-Do not implement the wire-format change until that answer is in. The
-*diagnosis* below is settled; only the contract is open.
+**Status:** UNBLOCKED 2026-07-30 — MAS answered Q2 **(a), unreservedly**. Ready
+to implement, and it is now the **deploy gate**: the redirect fix is already
+committed, so the next deploy carries it, and shipping that without this one
+moves redirect-blocked hosts from a wrong-but-parseable 200 to an opaque,
+retried 500. Both must land in the same image.
 **Priority:** HIGHEST of the remaining batch (raised 2026-07-30). Currently a
 broken customer website is indistinguishable from a broken crawler, and MAS's
 retry policy amplifies it — and the redirect fix that shipped 2026-07-30 moved
@@ -100,12 +102,26 @@ Proposed `failure_class` values (final naming to be agreed with MAS):
 - `render_error` — our browser/pipeline broke (a genuine 500 on our side)
 - `capacity` — admission gate rejected (429)
 
-Transport mapping — **this is Q2 to MAS**. The option I recommend:
+Transport mapping — **SETTLED. MAS chose (a), our recommendation, unreservedly:**
 
 > Anything the origin caused ⇒ **HTTP 200**, `success: false`,
 > `failure_class`, `status_code` = the origin's real final status.
 > Only our own faults keep 5xx (`render_error` → 500, `render_timeout` → 504),
 > and `capacity` keeps 429 + Retry-After.
+
+**Placement, as MAS specified:** `failure_class` at the **result level, present
+on every result including successes** (`null` or `"none"`), so a missing field
+never needs interpretation. Envelope level *additionally* for request-scoped
+failures only — capacity, auth, malformed request — where there is no result to
+attach it to. Both, with that division of labour rather than duplication.
+
+**They explicitly rejected (b):** *"A distinct 502 would preserve our existing
+branching, but it preserves the wrong branching: it keeps 'is this retryable?'
+as a thing we infer from a status code you had to overload."*
+
+**Also required by this task (MAS asked):** document `redirected_status_code` in
+the response contract. It is absent from their `CrawlResult` interface
+(`crawl4ai-client.ts:33-56`) — they found it in our reply, not in a contract.
 
 Rationale: it matches what static mode already does (network failures never
 raise; they become `success=false` inside a 200 — `aitosoft_static_mode.py`
@@ -113,9 +129,15 @@ docstring), it makes MAS's retry policy correct by construction (200 is never
 retried; 5xx/429 always are and are always genuinely ours), and it removes the
 "is this us or them?" question from every future incident.
 
-The alternative MAS may prefer is a distinct upstream-error status (502) so
-their existing status-code branching keeps working. Both are implementable;
-pick one and pin it in `test-aitosoft/test_mas_contract.py`.
+Pin the chosen shape in `test-aitosoft/test_mas_contract.py`.
+
+**The `server.py:940` branch is the crux.** Today `if all(not result["success"] …)`
+raises `HTTPException(500, …)`, and the security handler at `server.py:517-528`
+genericizes it to `{"error": "Internal server error", "correlation_id": …}` —
+stripping `status_code`, `redirected_status_code`, `error_message` and
+`crawl_stats`. Under the single-URL contract that fires on *every* full-mode
+failure. Return the envelope when we have a real origin status; keep 500 only
+for `render_error`.
 
 ## Implementation notes
 
@@ -137,5 +159,9 @@ pick one and pin it in `test-aitosoft/test_mas_contract.py`.
 
 `tasks/antibot-minimal-text-false-positive.md` is the same family: a legitimately
 tiny page is classified as a block and surfaces as a 500. A correct taxonomy
-plus a `blocked_suspect` flag would resolve both. Consider merging the two once
-Q2 is answered.
+plus a `blocked_suspect` flag would resolve both. Q2 is now answered — decide
+whether to merge them as part of this work.
+
+`tasks/antibot-detector-challenge-blindspot.md` matters here too: `origin_blocked`
+is only as accurate as the detector, which MAS measured as missing ~370 of ~400
+challenge pages in their corpus.

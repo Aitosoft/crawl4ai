@@ -275,9 +275,9 @@ questions below are the durable copy).
 
 ---
 
-## 7. Open questions to MAS (sent 2026-07-30, awaiting answer)
+## 7. Questions to MAS — ANSWERED 2026-07-30 (`tmp/crawl4ai-reply-2.md` §5)
 
-Two tasks are gated on these. Record the answers **here** when they arrive.
+All three answered the same day. Both gated tasks are now unblocked.
 
 ### Q1 — automatic static degradation inside the request?
 
@@ -289,8 +289,22 @@ a JS-dependent site it is a worse capture that looks like a success. Options
 offered: (a) yes, automatic + tagged; (b) yes, but `success: false` with content
 attached; (c) no, keep their client-side pivot.
 
-**Gates:** `tasks/static-fallback-within-fence.md`
-**Answer:** _pending_
+**Gates:** `tasks/static-fallback-within-fence.md` — **UNBLOCKED**
+**Answer: (b), with an amendment.** Return it with `success: false` and the
+content attached; their logic decides. Reason given is empirical, not
+aesthetic: twice this week their most costly failure was *a degraded capture
+wearing a success label* (our §2b block pages, and the 1-character family now
+diagnosed in §8) — every counter they own read green. *"A tag is advisory;
+`success: false` is structural."*
+
+**Amendment — our stated downside was wrong.** We warned that
+`links.internal`/`links.external` come back empty in static mode. They do not
+depend on those fields: `scrape-page.tool.ts:1586-1587` harvests links from the
+markdown body and unions the two sources, and their page discovery has been
+running mostly off body-markdown links for months. So an empty `links` array
+costs them very little **as long as static markdown preserves anchor text and
+hrefs** — which html2text does. The JS-content half of the warning stands and is
+the real cost, and is exactly why they want `success: false`.
 
 ### Q2 — transport shape for the failure taxonomy?
 
@@ -307,9 +321,28 @@ We proposed a `failure_class` on every result: `origin_http_error`,
 
 Also asked: should `failure_class` sit at result level, envelope level, or both?
 
-**Gates:** `tasks/origin-vs-crawler-failure-classification.md` (and probably
-`tasks/antibot-minimal-text-false-positive.md`, which wants the same flag)
-**Answer:** _pending_
+**Gates:** `tasks/origin-vs-crawler-failure-classification.md` — **UNBLOCKED**
+(and `tasks/antibot-minimal-text-false-positive.md`, which wants the same flag)
+**Answer: (a), unreservedly.** Origin-caused ⇒ HTTP 200 + `success: false` +
+`failure_class` + `status_code` = the origin's real final status. 5xx reserved
+for our own faults. They explicitly do not want (b): *"a distinct 502 would
+preserve our existing branching, but it preserves the wrong branching."*
+
+They confirmed their current policy is measurably wrong in the way we described:
+`RETRY_CONFIG.retryableStatuses = [500, 502, 503]`, 3 retries — so a permanent
+origin 403 arriving as a 500 costs four browser renders to learn nothing, and
+our `anitamakela.com` example (8 retries in 35 s) is their client doing that.
+
+**Placement:** `failure_class` at the **result level, present on every result
+including successes** (as `null` or `"none"`) so a missing field never needs
+interpretation. Envelope level *additionally* for request-scoped failures only
+(capacity, auth, malformed request) where there is no result to attach it to.
+Both, with that division of labour rather than duplication.
+
+**Contract addition they asked for:** document `redirected_status_code`. It is
+not in their `CrawlResult` interface at all (`crawl4ai-client.ts:33-56`) — they
+found it in our reply, not in a contract. Add it to the documented response
+shape as part of this work.
 
 ### Q3 — purpose-built preflight endpoint?
 
@@ -319,5 +352,92 @@ never 504s). Do they want a dedicated endpoint returning
 markdown conversion — and if so, one URL per call or a batch? A batch preflight
 is the one place where relaxing our single-URL contract would obviously pay.
 
-**Gates:** nothing yet — opens a task only if they say yes.
-**Answer:** _pending
+**Gates:** `tasks/preflight-batch-endpoint.md` — **OPENED**
+**Answer: yes, and batch.** Up to ~100 URLs per call, returning per URL
+`{reachable, status, final_url, bytes, elapsed_ms, blocked_suspect}`, no
+markdown conversion. Rationale: ~15,000 preflight calls at 0.3–2 s each is a
+serial hour or a concurrency problem against our autoscaler. They are adopting
+single-URL static mode as the pre-delete gate immediately, ahead of any batch
+endpoint.
+
+**Hard requirement attached:** `blocked_suspect` must cover the challenge family
+(§8b), not just the block-page family — *"a preflight that misses the dominant
+failure is worse than none because it licenses the delete."*
+
+---
+
+## 8. Second round (2026-07-30 evening) — corrections and a fifth root cause
+
+### 8a. CORRECTION: §2b's Konecranes attribution was wrong
+
+This record claimed *"MAS's recorded data defect (Konecranes' website stored as
+`konecranes.careers`) traces directly here."* **It does not.** MAS checked
+`scraped_pages` directly: they have **zero stored pages** for `konecranes.com`
+and never received a block page as content for that host. They got our 500 and
+correctly failed it; the `konecranes.careers` URL came from a different upstream
+process. §2b remains a real and serious bug — see §8b for its actual size — but
+Konecranes is not evidence for it. My inference from mechanism to their symptom
+outran the data.
+
+**The apparent divergence is not non-determinism.** MAS asked whether the
+mechanism is random, since they get a hard 500 and we measured
+`301 → redirected_status_code 403 → success: true`. It is deterministic and
+**URL-dependent**: MAS scrapes `https://www.konecranes.com` (no redirect ⇒
+direct 403 ⇒ block detected ⇒ `success:false` ⇒ `server.py:940` ⇒ opaque 500),
+while our probe used the apex `https://konecranes.com` (301 → 403 ⇒ blinded by
+§2b ⇒ 200 with the block page). Two URLs, two paths, both explained. The
+sequencing argument between §2b and §3 never rested on Konecranes anyway — it
+rests on §8b.
+
+### 8b. §2b's real size, measured by MAS across 117,323 stored pages
+
+**402 challenge/block pages stored as successful content; 155 companies
+affected; 80 of them have a challenge screen as their *entire* captured
+website; 243 distinct hosts** (`tmp/crawl4ai-affected-hosts.txt`).
+
+And our detector is blind to almost all of it. Their scan with our pattern list
+found 22 pages, **only 2 genuine** — the other ~15 were Shopify skip-links
+pointing at `/pages/access-denied` matching our Tier-2 `Access Denied` pattern.
+The dominant signature (`robot-suspicion.svg`, 371 pages) is not in our list at
+all. Opened as `tasks/antibot-detector-challenge-blindspot.md`.
+
+Downstream damage is currently near zero — of the 80 fully-challenged companies
+only 5 have a profile and those wrote 0 contacts, because the LLM recognises a
+bot-challenge screen and refuses it. **`success: true` is being caught by a
+language model, not by code**, on either side. That holds only while block pages
+read as recognisable prose.
+
+### 8c. FIFTH ROOT CAUSE: nested `<noscript>` discards the whole body
+
+MAS's `empty_*` family — **406 pages, 70 hosts, HTTP 200 with markdown of
+exactly one character** — was the one class this record could not explain. Now
+diagnosed, offline-reproducible, one-line fix:
+`tasks/noscript-collapses-body-to-empty-markdown.md`.
+
+`https://www.kiertopakkaus.fi/`: 312,628 B rendered HTML → **97 B
+`cleaned_html`** → 1 B markdown. A WordPress lazy-load plugin emits a **nested
+`<noscript>`** around the GTM block; `<noscript>` cannot nest, the outer element
+is never closed, and libxml2 swallows the entire remaining document. Excising
+that one region alone: 97 B → 47,310 B. Static mode is unaffected because
+`aitosoft_static_mode._strip_hidden_decoys` already decomposes `noscript`.
+
+Explains every observation MAS had: exact reproduction 3½ months apart (stable
+plugin markup), `vaskisepat.fi` recovering on its own (markup changed), JSON
+through `wp-json` working while HTML came back empty (no HTML parse), and the
+"nav-only" hosts yielding one character.
+
+### 8d. Live re-check of the challenge family — could not reproduce
+
+`magicad.com` (classified `challenge_all`, 4/4 pages) returned clean content
+from our Azure egress on 2026-07-30: static 12,304 B, full 15,982 B. So the
+challenge is **not** unconditionally applied to our IP. Intermittent or rolled
+back. Consequence: the blindspot fix must be built against MAS's stored bodies
+as fixtures, not against live hosts.
+
+### 8e. Open with MAS
+
+- Asked for one full stored challenge HTML so the `robot-suspicion` vendor can
+  be identified and the pattern generalised properly rather than guessed.
+- Told them the deploy now bundles Q2, so their `redirected_status_code >= 400`
+  check keeps working and redirect-blocked hosts never pass through an
+  opaque-500 window.

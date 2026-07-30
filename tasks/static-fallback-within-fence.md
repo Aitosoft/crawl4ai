@@ -1,8 +1,9 @@
 # Degrade to static inside the request instead of returning a 504
 
-**Status:** DRAFT — blocked on MAS's answer to Q1 (`tasks/waa-eval-2026-07-30-forensics.md` §7).
-The mechanism is settled and cheap; whether MAS wants it automatic is theirs
-to decide.
+**Status:** UNBLOCKED 2026-07-30 — MAS answered Q1 **(b)**: return the static
+content with `success: false` and the content attached; their logic decides.
+Not in the current deploy batch — sequence it after the Q2 classification work,
+whose `failure_class` shape this response should use.
 **Priority:** High if MAS says yes — it converts the most expensive failure
 mode we have (180 s for zero bytes) into a ~5 s degraded success.
 **Effort:** M. **Risk:** medium — changes what a `/crawl` response can contain.
@@ -57,21 +58,26 @@ two-stage budget — a soft deadline (proposal: ~60–75 s) after which the brow
 task is cancelled and a static fetch is run inside the remaining budget. A
 504 then means "even static failed", which is a much stronger signal.
 
-Response must be explicit about what happened. Proposal:
-`render_mode: "static-fallback"` (distinct from both `"full"` and `"static"`)
-plus the existing `success`/`status_code`. MAS can then decide whether a
-degraded capture is acceptable per use case — **this is Q1**.
+Response must be explicit about what happened: `render_mode: "static-fallback"`
+(distinct from both `"full"` and `"static"`) **plus `success: false` with the
+content attached** — MAS's answer to Q1.
+
+Their reasoning, worth keeping because it should shape other decisions here:
+twice in one week their most costly failure was *a degraded capture wearing a
+success label* (our §2b block pages, and the 1-character family in §8c) and
+every counter they owned read green. *"A tag is advisory; `success: false` is
+structural."*
 
 ## Trade-offs MAS needs to weigh (put these in the question)
 
-- Static markdown is **not** equivalent: no JS-rendered content, no
-  `fit_markdown`, `links.internal`/`external` are empty (see
-  `aitosoft_static_mode.py` — links are deliberately not extracted). For a site
-  whose contacts are behind JS, a static fallback is a *worse* capture that
-  looks like a success.
-- Against that: today they get nothing at all, 180 s later.
-- A middle option is to return the static content but keep `success: false`
-  with the content attached, so MAS's own logic decides. Ugly, but honest.
+- ~~empty `links.internal`/`links.external`~~ — **MAS corrected us: this costs
+  them very little.** `scrape-page.tool.ts:1586-1587` harvests links from the
+  markdown body and unions the two sources; their page discovery has run mostly
+  off body-markdown links for months. Requirement that follows: **static
+  markdown must preserve anchor text and hrefs** (html2text does; verify it
+  survives any move to curl_cffi).
+- No JS-rendered content **is** the real cost, and stands.
+- No `fit_markdown`.
 
 ## Sequencing
 

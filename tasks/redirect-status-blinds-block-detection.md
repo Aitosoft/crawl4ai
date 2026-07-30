@@ -1,7 +1,19 @@
 # Redirect-chain status blinds block detection (block pages returned as success)
 
-**Status:** IMPLEMENTED 2026-07-30, committed, **not yet deployed** — deploy is
-gated on Tero relaying the MAS warning below. Upstream PR filed.
+**Status:** IMPLEMENTED 2026-07-30, committed, **not yet deployed**. Upstream PR
+#2112 filed.
+
+**Deploy gate changed 2026-07-30 (coordinator), superseding "relay the MAS
+warning":** MAS answered Q2 the same day, so the right answer is no longer to
+warn them about an opaque-500 window — it is to not create one. This fix now
+ships **in the same image as** `tasks/origin-vs-crawler-failure-classification.md`.
+Rationale: the implementer's correction is right that after this change a
+301→403 host returns an opaque 500 with `redirected_status_code` stripped; MAS
+retries 500s three times (~12–16 page loads/company); and MAS has *just* adopted
+the `redirected_status_code >= 400` check we recommended. Deploying this alone
+would break that check for exactly the hosts it was adopted for. With Q2 in the
+same image those hosts return 200 + `success:false` + `failure_class` + the real
+403, and their check keeps working. Do not deploy this fix on its own.
 **Priority:** HIGHEST of the 2026-07-30 batch. Silent data corruption, at scale,
 in the direction that costs most (false negative: block page treated as content).
 **Effort:** S (a few lines) + M (regression fixtures)
