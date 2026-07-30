@@ -1,7 +1,8 @@
 # Anti-bot retry can hang unboundedly — only the 180 s fence stops it
 
-**Status:** IMPLEMENTED 2026-07-30, committed, **not yet deployed** (ships with
-`tasks/redirect-status-blinds-block-detection.md`). Upstream PR filed.
+**Status:** DONE — deployed 2026-07-30 18:24 UTC in `0.9.2-failure-class`
+(revision `crawl4ai-service--0000031`), alongside
+`tasks/done/redirect-status-blinds-block-detection.md`. Upstream PR #2113 filed.
 Root cause isolated by reproduction, not inference — see Progress.
 **Priority:** High. This is the mechanism behind every 504 MAS has ever seen.
 **Effort:** M. **Risk:** medium — touches the retry loop that also serves the
@@ -216,3 +217,20 @@ adds a `total_timeout` at the **dispatcher** level, which only covers
 protection from it. Cited in the PR as complementary. The
 `page.content()` navigation-race error string has **zero** prior mentions
 upstream.
+
+---
+
+## Deployed 2026-07-30
+
+In `0.9.2-failure-class` (revision `crawl4ai-service--0000031`). Not
+independently smoke-tested in prod: reproducing it requires a host that wedges
+`page.content()`, and the only known one is `maitokolmio.fi`, which took 8
+requests during the investigation and is on the do-not-test list. The bounds are
+pinned offline by `test-aitosoft/test_render_bounds.py` (17 tests).
+
+**What to watch instead:** `WALL-CLOCK FENCE 504` lines in
+`ContainerAppConsoleLogs_CL`. There were 3 in the 7 days before this deploy
+(2 maitokolmio, 1 kiertopakkaus). If the fix works, that count goes to
+approximately zero and any remaining fence fire is a genuinely slow site rather
+than a wedged one — the untimed calls now surface as bounded errors instead of
+silence.

@@ -441,3 +441,65 @@ as fixtures, not against live hosts.
 - Told them the deploy now bundles Q2, so their `redirected_status_code >= 400`
   check keeps working and redirect-blocked hosts never pass through an
   opaque-500 window.
+
+---
+
+## 9. Deployed 2026-07-30 18:24 UTC — `0.9.2-failure-class`, revision `--0000031`
+
+All five root causes from this record are now in production in one image.
+
+| § | Root cause | Task | Verified in prod |
+|---|---|---|---|
+| §1 | untimed `page.content()`/`page.evaluate()` wedge the render | `done/render-retry-unbounded-hang.md` | offline only — see below |
+| §2b | block detection judged the first redirect hop | `done/redirect-status-blinds-block-detection.md` | ✅ konecranes.com |
+| §2a/§3 | origin failures laundered into our 5xx | `done/origin-vs-crawler-failure-classification.md` | ✅ konecranes.com |
+| §8b | detector blind to the dominant challenge family | `done/antibot-detector-challenge-blindspot.md` | fixtures only — challenge is egress-specific and intermittent |
+| §8c | nested `<noscript>` discards the body | `done/noscript-collapses-body-to-empty-markdown.md` | fixtures only — reference host is on the do-not-test list |
+
+`https://konecranes.com` in prod, one response carrying two of the fixes:
+
+```json
+{ "success": false, "status_code": 403, "redirected_status_code": 403,
+  "failure_class": "origin_blocked", "render_mode": "full" }
+```
+
+HTTP 200. Before: `success:true, status_code:301` with the Varnish block page as
+content. Before *that* (for `www.`, no redirect): an opaque, retried HTTP 500.
+
+### What this record got wrong, kept for calibration
+
+- **§2b's Konecranes attribution** (corrected in §8a by MAS's data, not by us).
+- **The `Checking your browser` size-gate hypothesis** (§8b step 1). MAS measured
+  those pages at 61 B and 99 B — three orders of magnitude under the gate. The
+  real suppressor was that the tier-2 list is only reachable through
+  `is_blocked`'s 4xx/5xx branches while challenge screens are served with
+  **HTTP 200**, so that pattern had never been consulted for the pages it was
+  written for, in any version of the detector. Found while implementing;
+  confirmed against the pre-fix detector at commit `2a9daa1`.
+
+Both errors were inferences that outran the data, and both were caught by
+someone measuring instead of reasoning. That is the pattern worth carrying
+forward from this eval, more than any individual fix.
+
+### Not verifiable in prod, and why
+
+The `<noscript>` and challenge fixes cannot be confirmed live by us. The
+reference hosts are on the do-not-test list, and the challenge family is
+egress-specific *and* intermittent — MAS confirmed from a Finnish consumer IP
+that `kotkanjulkisetkiinteistot.fi`, `savagroup.fi` and `magicad.com` all serve
+200 with full content, so a clean fetch from anywhere proves nothing. **MAS's
+re-scrape is the measurement**: the 70 `empty_*` hosts should recover full
+content, and the 243 challenge hosts should start failing honestly.
+
+Expect their success rate to drop on the next sweep. Everything that drops was
+already broken.
+
+### Open, carried forward
+
+- §8e's request for a stored challenge HTML is **closed unfulfillable**: MAS
+  stores markdown only. They gave a verbatim markdown sample instead, which was
+  enough. Landing `cleaned_html` storage is on their roadmap.
+- The 171 egress-blocked pages remain unaddressed by design —
+  `tasks/residential-egress-retry-path.md`, a budget decision.
+- Envelope `success` still reads `true` when the single result failed. Asked MAS
+  whether they want it as the aggregate.

@@ -7,12 +7,13 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-07-17
+**Last Updated**: 2026-07-30
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
-- **Production**: v0.9.2 + render admission + static-mode hardening + single-URL contract guard + pool cleanup/re-init + patchright tidy + fence-504 observability (deployed 2026-07-17)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-fence-obs` (revision `crawl4ai-service--0000030`, digest `sha256:9944c935...`)
+- **Production**: v0.9.2 + render admission + static-mode hardening + single-URL contract guard + pool cleanup/re-init + patchright tidy + fence-504 observability + redirect-aware block detection + bounded render calls + `failure_class` taxonomy + `<noscript>` body-loss fix + challenge detection (deployed 2026-07-30)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-failure-class` (revision `crawl4ai-service--0000031`, digest `sha256:afd98e31...`)
+- **Prod smoke 2026-07-30 (failure-class)**: health ✅, unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅. `caverna.fi` → 200 / `success:true` / `failure_class:"none"` / 1210 B markdown (2.8 s) ✅. **`konecranes.com` — the reported incident — → HTTP 200, `success:false`, `status_code:403` (was `301`), `redirected_status_code:403`, `failure_class:"origin_blocked"`, real `error_message`** ✅ — previously `success:true` with the Varnish block page as content, and before that an opaque retried 500. Both fixes visible in one response, which is what this image was assembled for. Caveat: the first smoke run hit revision 0000030 mid-cutover and showed pre-fix output; re-run after traffic reached 100% on 0000031.
 - **Prod smoke 2026-07-17 (fence-obs)**: health ✅, authenticated render 200 (1.1s, new revision) ✅, "RenderGate ADMIT url=… waited=0.0s in_use=1/2" visible in container logs ✅ (Tier 1 4/4 was run pre-deploy vs local server, `--version fence-obs-local`)
 - **Prod smoke 2026-07-17 (single-url)**: health ✅, 2-URL request → 400 w/ contract message ✅, single-URL caverna.fi crawl ✅, Tier 1 regression 4/4 ✅
 - **Prod smoke 2026-07-17 (static-hardening)**: health ✅, static spot check caverna.fi ✅, Tier 1 regression 4/4 ✅, live SSRF probe (static redirect→10.0.0.1 blocked, opaque error, 200 envelope) ✅

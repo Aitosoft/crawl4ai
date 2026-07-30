@@ -1,7 +1,7 @@
 # Redirect-chain status blinds block detection (block pages returned as success)
 
-**Status:** IMPLEMENTED 2026-07-30, committed, **not yet deployed**. Upstream PR
-#2112 filed.
+**Status:** DONE — deployed 2026-07-30 18:24 UTC in `0.9.2-failure-class`
+(revision `crawl4ai-service--0000031`). Upstream PR #2112 filed.
 
 **Deploy gate changed 2026-07-30 (coordinator), superseding "relay the MAS
 warning":** MAS answered Q2 the same day, so the right answer is no longer to
@@ -197,3 +197,25 @@ code ignores. `AsyncHTTPCrawlerStrategy` already uses the final status, so the
 same URL yielded different verdicts per strategy. Note PR #2088 (open) edits the
 same three lines to add a `check_blocked` opt-out — complementary, will conflict
 textually.
+
+---
+
+## Deployed and verified in prod, 2026-07-30
+
+Live against `crawl4ai-service--0000031`, `https://konecranes.com` (apex,
+301 → 403 Fastly/Varnish), the exact host this task was opened for:
+
+```json
+{ "success": false, "status_code": 403, "redirected_status_code": 403,
+  "failure_class": "origin_blocked",
+  "error_message": "Blocked by anti-bot protection: HTTP 403 with HTML content (380 bytes)" }
+```
+
+HTTP 200 on the wire. Before this deploy the same request returned
+`success: true, status_code: 301` with the Varnish block page as its markdown.
+
+The gate held: the 500 that this fix would otherwise have produced never
+existed, because `tasks/done/origin-vs-crawler-failure-classification.md`
+shipped in the same image. MAS's client-side `redirected_status_code >= 400`
+mitigation still works — that field is unchanged — so there was no window in
+which redirect-blocked hosts were undiagnosable.

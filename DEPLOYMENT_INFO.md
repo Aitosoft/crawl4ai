@@ -1,15 +1,23 @@
 # Crawl4AI Production Deployment
 
-**Last Updated**: 2026-07-17
+**Last Updated**: 2026-07-30
 **Location**: West Europe (co-located with MAS)
-**Status**: ✅ Running v0.9.2-fence-obs (deployed 2026-07-17 15:49 UTC,
-revision `crawl4ai-service--0000030`, digest `sha256:9944c935...`;
-fence-504 + admission observability, logging only — see AITOSOFT_CHANGES.md
-"Fence-504 Observability")
+**Status**: ✅ Running v0.9.2-failure-class (deployed 2026-07-30 18:24 UTC,
+revision `crawl4ai-service--0000031`, digest `sha256:afd98e31...`;
+failure classification + `<noscript>` body loss + challenge detection +
+redirect-aware block detection + bounded render calls — see AITOSOFT_CHANGES.md
+"Failure classification + noscript body loss + challenge detection")
+
+**Contract note for this revision**: `status_code` on a full-mode result is now
+the origin's FINAL redirect hop (it was the first), and every result carries
+`failure_class`. Origin-caused failures return HTTP 200 with `success: false`;
+5xx is reserved for our own faults. Rolling back reverts that contract, so
+coordinate with MAS before doing it — their retry policy is being changed to
+match.
 
 **Rollback (last known good)**: `az containerapp update --name crawl4ai-service
 --resource-group aitosoft-prod --image
-aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-pool-cleanup` (image only —
+aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-fence-obs` (image only —
 NEVER set env vars during rollback).
 
 **v0.9.2-render-gate deployment notes (capacity/scaling redesign):**
