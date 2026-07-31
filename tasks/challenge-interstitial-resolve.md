@@ -10,6 +10,26 @@ in phase 1.
 **Evidence:** `tmp/mas-repo-messages/07-from-us-243-host-rescrape.md` §2, §4, §5;
 `tasks/waa-eval-2026-07-30-forensics.md` §1, §8b, §8d.
 
+**The instrument exists as of 2026-07-31 — phase 1 costs zero live requests.**
+`tasks/done/fixture-origin.md` shipped these routes, all at HTTP 202 and all
+with the resolve delay as an argument:
+
+| Route | Serves |
+|---|---|
+| `/challenge/resolve-after/{s}` | interstitial → content by DOM rewrite |
+| `/challenge/resolve-by-nav/{s}` | interstitial → content by top-level navigation (also forensics §1's `page.content()` race) |
+| `/challenge/never` | the control — waiting longer must not rescue it |
+| `?marker=robot-suspicion\|checking-browser\|none` | which family, or none at all |
+
+`test_fixture_origin.py` already pins both halves of the premise: at a 0.1 s
+capture wait the interstitial is what we store (`origin_blocked`, status 202);
+at MAS's 2.0 s a challenge that resolves in 0.5 s gives the real page — **at the
+same 202**. So the shape is confirmed reproducible; what phase 1 still owes is
+the number, against the real families. Use the fixture to settle every
+mechanism question (does a longer wait help? does the nav race lose the
+capture? does an adaptive wait beat a global one?) and spend live requests only
+on "do these specific hosts behave like the fixture".
+
 ## The observation that started this
 
 MAS re-scraped their 243 affected hosts against `0.9.2-failure-class` and found

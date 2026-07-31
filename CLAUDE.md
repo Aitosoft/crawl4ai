@@ -38,7 +38,9 @@ curl http://localhost:11235/health
 pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
 # Testing (run from repo root — relative artifact paths; see TESTING.md)
-pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py  # OFFLINE suites (no server needed), 130 tests
+pytest test-aitosoft/            # ALL offline suites, 153 tests, ~60 s — no server, no customer site
+pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py  # pure-function subset, 130 tests, ~8 s
+pytest test-aitosoft/test_fixture_origin.py   # browser-driven, local fixture origin, 23 tests, ~50 s
 python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression (live server)
 python test-aitosoft/test_site.py <domain> --page <path>            # Single site (live server)
 python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic (live server)
@@ -107,6 +109,13 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 **Quality gate:** All 4 must pass. Run `test_regression.py --tier 1 --version <label>`.
 
 **CRITICAL: Test site safety rules:**
+- **Live traffic is the last instrument, not the first.** A new failure class
+  gets a route in `test-aitosoft/fixture_origin.py` (a local origin driven
+  through the real production path — delay, size, status and markup shape are
+  all arguments). A live request is justified only when the question is about a
+  specific third party's behaviour and cannot be answered any other way — then
+  it is one request, recorded in `TEST_SITES_REGISTRY.md`, host added to the
+  burned list the same session. See TESTING.md golden rule 0.
 - NEVER hit the same site more than 1-2 times per session
 - Rotate across different sites
 - Past over-scraping caused permanent Cloudflare blocks (talgraf.fi lesson)
@@ -122,6 +131,7 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 | `page.content()` / `page.evaluate()` have NO timeout | Sent to the driver with no timeout field ⇒ no timer armed; they wait on the frame's execution-context promise, which a navigation replaces forever. `page_timeout` does not cover them. Bounded in `browser_adapter.bounded_evaluate` + `_capture_html` |
 | Origin failures must never be our 5xx | Fixed 2026-07-30: `failure_class` on every result; origin-caused ⇒ HTTP 200 + `success:false`; 5xx reserved for us. `deploy/docker/aitosoft_failure_class.py`, MAS Q2 answer (a) |
 | A nested `<noscript>` deletes the whole page | `<noscript>` can't nest ⇒ outer element never closes ⇒ libxml2 swallows the rest. 312 KB → 97 B `cleaned_html` → 1 B markdown, at HTTP 200 `success:true`. 406 pages / 70 hosts. Fixed by `strip_noscript()` pre-parse |
+| An **unclosed** `<noscript>` still does, and the offline suite can't see it | libxml2 auto-closes it, so `test_noscript_body_collapse.py` reports that shape fixed. Chromium instead enters raw-text mode and serializes the rest of the document — `</body></html>` included — *inside* the element, so `strip_noscript()` correctly removes the element and takes the page with it. Same silent HTTP 200 `success:true` loss. Only visible with a browser in the loop; found by `fixture_origin` 2026-07-31, owned by `tasks/cleaned-html-collapse-guard.md` |
 | Tier-2 antibot patterns never see HTTP 200 | `is_blocked` only reaches tier 2 via the 4xx/5xx branches, but challenge interstitials are served with 200 — so `Checking your browser` had never fired. Fixed by the challenge tier (2026-07-30) |
 | Per-replica render capacity is 2 (2 vCPU) | Benchmarked 2026-07-17; >2 concurrent renders degrade all requests. Enforced by RenderGate + ACA scale rule |
 
@@ -233,7 +243,10 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 
 ### 100% Aitosoft Code (safe to modify freely)
 - `tasks/` — task tracking
-- `test-aitosoft/` — test suite, fingerprint diagnostics, persona reference
+- `test-aitosoft/` — test suite, fingerprint diagnostics, persona reference.
+  `fixture_origin.py` is the local failure-class origin (routes + the
+  `fixture_origin` / `production_path` pytest fixtures, registered for the
+  directory by `conftest.py`); reach for it before reaching for a live host
 - `azure-deployment/` — deployment scripts and docs
 - `.devcontainer/` — dev container setup
 - `CLAUDE.md`, `AITOSOFT_CHANGES.md`, `AITOSOFT_FILES.md`, `DEPLOYMENT_INFO.md`

@@ -85,11 +85,40 @@ and decide recovery on its numbers.
 An earlier draft of this task opened with "one production `/crawl` per host". Try
 the offline route first; it is likely to be faster *and* it produces a better fix.
 
-`test_noscript_body_collapse.py` already has the right shape: it parameterises
-over markup **shapes** (`NESTED`, `SINGLE`, `UNCLOSED`, `UPPERCASE`,
-`WITH_ATTRS`) against fixed surrounding content. Extend that idea into an
-enumeration of the whole family and run each shape through
-`LXMLWebScrapingStrategy._scrap` (`crawl4ai/content_scraping_strategy.py:650`):
+**Start from the member the fixture origin already found (2026-07-31).** Route
+`/collapse/unclosed-noscript` reproduces the target fingerprint exactly, offline:
+73 KB in, `<html><head><title>…</title></head></html>` out, one newline of
+markdown, at HTTP 200 `success: true`. Pinned by
+`test_fixture_origin.py::test_an_unclosed_noscript_still_swallows_the_body` —
+invert that test when the guard ships.
+
+The mechanism corrects this section's plan, so read it before enumerating:
+
+> `test_noscript_body_collapse.py` reports the `UNCLOSED` shape **fixed**, and it
+> is telling the truth about libxml2 — given the raw string, libxml2 auto-closes
+> the element and the body survives. Chromium does the opposite. An unclosed
+> `<noscript>` puts its parser into raw-text mode, so the rest of the document —
+> `</body></html>` included — is serialized *inside* the element, and
+> `strip_noscript()` then correctly removes the element and takes the page with
+> it. The bug is in what the browser hands us, not in what libxml2 does with it.
+
+Two consequences:
+
+- **Enumerate through the browser, not only through `LXMLWebScrapingStrategy`.**
+  A shape that is harmless to libxml2 can be fatal after Chromium re-serializes
+  it, and the pure-function suite will report it green. Add each candidate as a
+  `/collapse/{shape}` entry in `fixture_origin.COLLAPSE_SHAPES` (a dict entry
+  plus a parametrize case) and run it through `production_path.crawl`. Keep the
+  libxml2-level test too — the two disagreeing *is* the signal.
+- `strip_noscript()` is not wrong and should not be reverted; a pre-parse repair
+  that excises an unclosed raw-text element has to decide what is *inside* it,
+  and Chromium's answer is "everything". The repair needs to bound the region
+  (e.g. re-attach content that follows the document's real `</body>`), not stop
+  removing it.
+
+Then continue the enumeration. Each shape through
+`LXMLWebScrapingStrategy._scrap` (`crawl4ai/content_scraping_strategy.py:650`)
+**and** through the fixture origin:
 
 - every element that **cannot nest or is RCDATA/CDATA** and therefore swallows
   the document when unclosed — `<title>`, `<textarea>`, `<style>`, `<script>`,
@@ -111,16 +140,22 @@ is a better outcome than a second one-off, and a stronger upstream PR than the
 **Only if the enumeration comes up empty** do we need `apteam.fi`'s actual bytes.
 In that case, do not fetch it through production: use the dev container, whose
 egress is a Finnish consumer ISP rather than our shared Azure address
-(`tasks/fixture-origin.md` explains why that distinction matters). One request,
-save the `html`, add the host to `TEST_SITES_REGISTRY.md`, never again. MAS may
-also be able to supply it — they now store `cleaned_html` for degenerate captures
-and re-scrape these hosts naturally, so asking costs neither side a request.
+(`tasks/done/fixture-origin.md` explains why that distinction matters). One
+request, save the `html`, add the host to `TEST_SITES_REGISTRY.md`, never again.
+MAS may also be able to supply it — they now store `cleaned_html` for degenerate
+captures and re-scrape these hosts naturally, so asking costs neither side a
+request. Note that `apteam.fi`'s fingerprint (73,970 / 96 / 1, byte-identical
+across two visits) is the same shape `/collapse/unclosed-noscript` now produces,
+so it may already be reproduced — check that before spending the request.
 
 ## Verification
 
 - Offline suite in the shape of `test_noscript_body_collapse.py`: the two
   fixtures must produce real `cleaned_html`, and a healthy fixture must be
   untouched by the repair.
+- `test_fixture_origin.py::test_an_unclosed_noscript_still_swallows_the_body`
+  inverted, and `test_no_markup_shape_swallows_the_body` re-parameterised over
+  the full `COLLAPSE_SHAPES` set with no exclusion.
 - The guard: assert it fires on the pre-fix fixtures and does **not** fire on any
   Tier 1 capture. Record the Tier 1 ratios in the test as the evidence for the
   thresholds.

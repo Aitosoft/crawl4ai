@@ -1,8 +1,10 @@
 # A local fixture origin, so failure classes stop costing customer-site traffic
 
-**Status:** Open — do this first. Three other open tasks are cheaper and safer
-once it exists, and one of them is currently written as "spend six page loads on
-hosts that already distrust us".
+**Status:** DONE 2026-07-31. Shipped `test-aitosoft/fixture_origin.py`,
+`test_fixture_origin.py` (23 tests), `conftest.py`. `pytest test-aitosoft/` =
+153 tests, ~60 s, all offline. Test-only — no production file touched. See
+"What shipped" at the bottom, which includes one defect the fixture found on
+day one.
 **Priority:** Highest. It is small, it is reusable, and it removes the standing
 reason every diagnosis has ended up hitting a live site.
 **Effort:** S. **Risk:** none — test-only code, no production path touched.
@@ -106,3 +108,84 @@ the change.
   run.
 - `pytest test-aitosoft/` stays green, and the offline count in
   `AITOSOFT_CHANGES.md` is updated.
+
+---
+
+## What shipped (2026-07-31)
+
+Every route in the table above exists, plus `/ok` (the healthy control, and the
+redirect target) and two universal query parameters — `?stall=<s>` (server-side
+sleep, which is how the wall-clock fence is now exercised) and `?status=<n>`
+(any body shape under any code). Delay, body size, visible-text length, status,
+markup shape and challenge family are all arguments.
+
+**The production path is real.** `production_path.crawl()` imports
+`aitosoft_entry` (config.yml `BrowserConfig` defaults + the trusted-client
+boundary relaxations) and calls `api.handle_crawl_request`, so a fixture request
+goes through the render-admission gate, the browser pool, the patchright retry,
+the final-hop `status_code` rewrite, `failure_class`, `render_mode` and the
+fence. `Outcome.http_status` mirrors server.py's `/crawl` mapping using the same
+`http_status_for`, so a test can assert what MAS's retry policy would see.
+
+**The egress seam.** `loopback_allowed()` flips
+`utils.ALLOW_INTERNAL_URLS` and `egress_broker.ALLOW_INTERNAL` — the two flags
+`CRAWL4AI_ALLOW_INTERNAL_URLS` sets — scoped to a `with` block around each
+crawl, never as an environment variable. `egress_broker` itself is untouched:
+the rule, the pinning and the opaque error all stand.
+`test_production_configuration_refuses_the_fixture_origin` and
+`test_the_loopback_allowance_is_scoped_and_never_process_wide` assert that in
+the same suite. The env-var route was rejected because module-level constants
+are read at import, so setting it would silently disarm test_static_mode.py's
+per-hop SSRF assertions in the same pytest process.
+
+### Three tests pin defects on purpose
+
+Invert them when the owning task ships; do not delete them.
+
+| Pinned | Owner |
+|---|---|
+| `/block/padded-403`: ~80 KB, 36 visible chars, HTTP 202 → `success:true`, `failure_class:none`. `test_the_padding_is_the_only_difference` shows the same notice at `?bytes=0` *is* caught, isolating it to the `len(html)` gate | `detector-round3-evidence-vs-inference.md` |
+| `/challenge/never?marker=none`: no vendor marker, no "Just a moment" title → stored as content. 53 chars of prose clears every tier, because tier 3 counts an `<h1>` and a `<p>` as content elements | same |
+| `/collapse/unclosed-noscript`: whole body lost, silently | `cleaned-html-collapse-guard.md` |
+
+### The fixture paid for itself on day one
+
+The third row was **not** a known defect. `strip_noscript()` fixed the nested
+`<noscript>` shape, and `test_noscript_body_collapse.py` reports the *unclosed*
+shape fixed too — truthfully, about libxml2, which auto-closes it when handed
+the raw string. Chromium does the opposite: an unclosed `<noscript>` puts its
+parser into raw-text mode, so the rest of the document — `</body></html>`
+included — is serialized *inside* the element, and `strip_noscript()` then
+correctly removes the element and takes the page with it. `cleaned_html` comes
+back as `<html><head><title>…</title></head></html>`, markdown as one newline,
+at HTTP 200 `success: true`.
+
+That is byte for byte the silent whole-body loss that ran 3½ months across 406
+pages, surviving its own fix through a parser difference that **only a browser
+in the loop can show** — which is the entire thesis of this task, demonstrated
+by accident within an hour of the instrument existing. It also matches
+`apteam.fi`'s fingerprint (73,970 / 96 / 1, byte-identical across two visits),
+so `cleaned-html-collapse-guard.md` may already have its reproduction and should
+check before spending a live request. Details and the corrected enumeration plan
+are in that task file.
+
+### Notes for the next session
+
+- **Delays must beat the pipeline's own overhead.** Everything between
+  `page.goto` returning and the capture — consent-popup removal, settle steps,
+  `delay_before_return_html` — costs ~0.5 s even at the shortest wait. A 0.5 s
+  interstitial resolves before a "too early" capture can miss it, so the suite
+  uses 5.0 s for "never resolves in time" and 0.5 s for "always does". Neither
+  costs wall-clock: the 5 s timer never fires, the page is torn down first.
+- **A blocked host costs exactly 2 document loads** (first-tier render +
+  patchright retry), now measured by `FixtureOrigin.hits_for()` rather than
+  inferred from prod logs. That is the number
+  `blocked-host-retry-economy.md` is trying to reduce.
+- config.yml pins `chrome_channel: chrome`; there is no arm64 Chrome, so
+  `_resolve_channel()` falls back to bundled Chromium when no Chrome binary is
+  on PATH. This replaces TESTING.md's old advice to hand-edit config.yml, which
+  has been committed by accident before. Override with
+  `CRAWL4AI_FIXTURE_CHANNEL`.
+- `test-aitosoft/conftest.py` also stops pytest collecting the four live CLI
+  scripts, whose `test_*`-named helpers made every clean run report three
+  errors.

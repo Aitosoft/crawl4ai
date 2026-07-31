@@ -34,7 +34,77 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- Offline suites green: test_mas_contract.py (11), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4), test_redirect_block_detection.py (11), test_render_bounds.py (17), test_failure_classification.py (34), test_noscript_body_collapse.py (11), test_antibot_challenge_detection.py (18) — **130 total**
+- Offline suites green: test_mas_contract.py (11), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4), test_redirect_block_detection.py (11), test_render_bounds.py (17), test_failure_classification.py (34), test_noscript_body_collapse.py (11), test_antibot_challenge_detection.py (18) — **130 pure-function tests, ~8 s**
+- Plus test_fixture_origin.py (23) — browser-driven against a local fixture origin, ~50 s. **`pytest test-aitosoft/` = 153 tests, ~60 s, all offline** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
+
+---
+
+## Local fixture origin (2026-07-31)
+
+Closes `tasks/done/fixture-origin.md`. **Test-only — no production file
+touched.** New: `test-aitosoft/fixture_origin.py`,
+`test-aitosoft/test_fixture_origin.py`, `test-aitosoft/conftest.py`.
+
+Every failure class diagnosed since 2026-04 was diagnosed against a customer's
+website — 8 hits on `maitokolmio.fi`, 4 on `kiertopakkaus.fi`, 3 on
+`konecranes.com`, `talgraf.fi` permanently Cloudflare-blocked by our own
+over-scraping. All of it egresses from one Azure SNAT address that is not
+contractually ours (`vnetConfiguration: null`) and that MAS's production fetches
+share, so "this host blocks datacentre IPs" and "this host blocked us because of
+what we did" were not distinguishable. That is an epistemics problem, not a
+politeness one.
+
+The 130 pure-function tests cover `strip_noscript`, `is_blocked` and
+`classify_result` fed synthetic strings. Nothing covered **time, navigation or
+the browser** — which is exactly the set of classes that kept costing live
+traffic. `fixture_origin.py` is a threaded `HTTPServer` (upstream's own idiom,
+`tests/async/test_redirect_url_resolution.py`) with a route per failure class,
+driven through `aitosoft_entry` → `api.handle_crawl_request` → a real pool
+browser, so `failure_class`, `render_mode`, the final-hop `status_code` rewrite,
+the patchright retry and the wall-clock fence are genuinely exercised. Delay,
+body size, visible-text length, status code and markup shape are arguments;
+`?stall=` and `?status=` work on every route. A new failure class is a new
+parameter, not a new website.
+
+`egress_broker` is **not** weakened. `loopback_allowed()` flips the two flags
+`CRAWL4AI_ALLOW_INTERNAL_URLS` sets, scoped to a `with` block around each crawl
+rather than set as an environment variable, and the same suite asserts that the
+production configuration still refuses the fixture's own URL — including the
+opaque `reason`. Setting the env var instead would silently disarm
+test_static_mode.py's per-hop SSRF assertions in the same pytest process.
+
+Three tests pin defects **on purpose**, so the tasks that fix them have a red
+test to turn green (invert, don't delete):
+
+| Pinned | Owner |
+|---|---|
+| ~80 KB padded block page at HTTP 202 → `success:true`, `failure_class:none` — every size gate is on `len(html)` (10 KB tier 2, 50 KB tier 3) | `detector-round3-evidence-vs-inference.md` |
+| Interstitial with no vendor marker and no "Just a moment" title → stored as content; 53 chars of prose clears every tier | same |
+| **Unclosed `<noscript>` still swallows the whole body — found by this fixture** | `cleaned-html-collapse-guard.md` |
+
+That last one is the fixture paying for itself on day one. `strip_noscript()`
+fixed the *nested* shape, and test_noscript_body_collapse.py reports the
+unclosed shape fixed too — but it feeds the raw string to libxml2, which
+auto-closes the element. Chromium does the opposite: an unclosed `<noscript>`
+puts the parser into raw-text mode, so the rest of the document (`</body></html>`
+included) is serialized *inside* the element, and `strip_noscript()` then
+correctly removes the element and takes the page with it. `cleaned_html` =
+`<html><head><title>…</title></head></html>`, markdown = one newline, at HTTP
+200 `success: true`. Byte for byte the silent whole-body loss that ran 3½
+months, surviving its own fix through a parser difference that only a browser in
+the loop can show.
+
+Also here: `test-aitosoft/conftest.py` stops pytest collecting the four live CLI
+scripts (`test_regression.py`, `test_site.py`, `test_fingerprint.py`,
+`test_soak.py`). Three of their helpers are named `test_*`, so `pytest
+test-aitosoft/` reported three errors on every clean run — a permanently red bar
+trains you to ignore the bar. They are unchanged as command-line tools.
+
+Local-run note: config.yml pins `chrome_channel: chrome` for the deployed amd64
+image; no such build exists for the arm64 devcontainer, so `_resolve_channel()`
+falls back to bundled Chromium when no Chrome binary is on PATH. That replaces
+the old advice to hand-edit config.yml (TESTING.md), which has been committed by
+accident before. Override with `CRAWL4AI_FIXTURE_CHANNEL`.
 
 ---
 

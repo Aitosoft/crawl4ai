@@ -56,6 +56,13 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
 ### Testing
 - `test-aitosoft/` - All files (our test suite). Live docs: TESTING.md.
   `archive/` inside it is historical (Jan-2026 talgraf study) — do not act on it.
+- `test-aitosoft/fixture_origin.py` - The local failure-class origin: a threaded
+  HTTP server with a parameterised route per class, plus the `fixture_origin` /
+  `production_path` pytest fixtures that drive it through the real path
+  (`aitosoft_entry` → `api.handle_crawl_request` → pool browser). Reach for a
+  route here before reaching for a live host — TESTING.md golden rule 0.
+- `test-aitosoft/conftest.py` - Registers those fixtures for the directory and
+  keeps pytest from collecting the four live CLI scripts.
 
 ### Development Environment
 - `.devcontainer/` - All files (our dev container setup)
@@ -182,6 +189,5 @@ Post-merge checklist (beyond Tier 1 + the diff check):
   context-level setting False) and `CRAWL4AI_ALLOW_INSECURE_TLS=true` becomes
   genuinely needed on the Container App. Verified 2026-07-17 — details in
   `tasks/done/tls-broken-cert-regression-2026-07-17.md`.
-- Offline gates: `pytest test-aitosoft/test_mas_contract.py
-  test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py`
-  (plus any offline suites added since).
+- Offline gates: `pytest test-aitosoft/` — everything pytest collects here is
+  offline (153 tests, ~60 s), so there is no list to keep in sync.

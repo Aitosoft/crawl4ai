@@ -11,6 +11,24 @@ negative silently poisons MAS's corpus. Fixture-driven only.
 Also closes `tasks/antibot-minimal-text-false-positive.md`, whose latent defect
 has now been observed live.
 
+**Defect A already has a red test, as of 2026-07-31.**
+`tasks/done/fixture-origin.md` shipped `/block/padded-403` — ~80 KB body, ~36
+characters of visible text, HTTP 202, every parameter overridable
+(`?bytes=`, `?text=`, `?status=`). Two tests pin the defect through the real
+production path and isolate it to the size gate rather than to the body:
+
+- `test_a_padded_block_page_is_not_detected_today` — asserts today's
+  `success: true, failure_class: none`. **Invert it; do not delete it.**
+- `test_the_padding_is_the_only_difference` — the same notice at `?bytes=0` *is*
+  detected, so the gate is the whole mechanism.
+
+A third test, `test_an_unmarked_interstitial_is_stored_as_content`, is the same
+failure reached from the other side: strip the vendor marker and the "Just a
+moment" title, and one sentence of Finnish prose (53 characters) clears every
+tier — because tier 3 counts an `<h1>` and a `<p>` as "has content elements".
+That is worth fixing in the same pass and is why this task is about evidence
+rather than about adding patterns.
+
 ## Defect A — an 80 KB body whose entire content is "403 - Forbidden" passes
 
 Four hosts returned an 80,671-byte `html` rendering to a 92-character markdown

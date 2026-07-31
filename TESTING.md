@@ -9,6 +9,11 @@ Tier 1. If you see advice contradicting this file elsewhere, this file wins.
 
 ## Golden rules
 
+0. **Live traffic is the last instrument, not the first.** A new failure class
+   gets a fixture route. A live request is justified only when the question is
+   about a specific third party's behaviour and cannot be answered any other
+   way — and then it is one request, recorded in `TEST_SITES_REGISTRY.md`, with
+   the host added to the burned list in the same session.
 1. **Site safety:** never hit the same site more than 1-2 times per session.
    Over-scraping permanently Cloudflare-blocked talgraf.fi. Rotate sites.
    Hosts already burned (and the offline suite that replaces each) are listed
@@ -19,6 +24,16 @@ Tier 1. If you see advice contradicting this file elsewhere, this file wins.
    (`TIER_1_SITES`). Site metadata: `TEST_SITES_REGISTRY.md`.
 4. Use the `optimal` config (matches MAS production). Never `magic` — it
    removes content on cookie sites AND the server rejects it when truthy.
+
+Why rule 0 outranks rule 1: rule 1 is a budget, and we had no way to spend it
+honestly. Every failure class diagnosed since 2026-04 was diagnosed against a
+customer's site, all of it leaving from one Azure SNAT address that is not
+contractually ours and that MAS's production fetches share — so "this host
+blocks datacentre IPs" and "this host blocked us because of what we did" were
+indistinguishable, and their re-scrape and our test hits drew on one account.
+`test-aitosoft/fixture_origin.py` removes the reason: a local origin with a
+route per failure class, driven through the real production path. Adding a
+class there is a query parameter. See `tasks/done/fixture-origin.md`.
 
 ## How to run
 
@@ -36,8 +51,19 @@ python test-aitosoft/test_fingerprint.py --label <label>            # stealth di
 python test-aitosoft/test_soak.py --duration-min 30                 # leak hunting
 ```
 
-Ten suites are OFFLINE (no server, no network, no browser) and safe to run
-any time — 130 tests, ~8 s:
+Everything pytest collects is OFFLINE — no server, no customer site:
+
+```bash
+pytest test-aitosoft/          # 153 tests, ~60 s
+```
+
+That splits in two, and the split matters when you are choosing where to put a
+new test:
+
+| | Suites | Tests | Time | Covers |
+|---|---|---:|---|---|
+| Pure-function | the ten below | 130 | ~8 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the config boundary, the gate |
+| Browser-driven | `test_fixture_origin.py` | 23 | ~50 s | **time, navigation and the browser** — challenge resolution, hydration races, redirect chains, the wall-clock fence |
 
 ```bash
 pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py
@@ -48,11 +74,15 @@ once (this file still said "seven suites, 64 tests" three suites later), and
 this file declares itself the winner in a contradiction, so the stale copy
 was the one a fresh session would have trusted.
 
+The four CLI scripts (`test_regression.py`, `test_site.py`,
+`test_fingerprint.py`, `test_soak.py`) need a live server + token and are run by
+hand as shown above. `test-aitosoft/conftest.py` keeps pytest from collecting
+them; three of their helpers are named `test_*`, so a clean run used to report
+three errors, and a permanently red bar trains you to ignore the bar.
+
 **Always run from the repo root** — artifact/report paths are relative
 (`test-aitosoft/reports/`); running from inside `test-aitosoft/` creates a
-nested `test-aitosoft/test-aitosoft/` clutter directory. Note that a bare
-`pytest test-aitosoft/` will also collect the live-HTTP tests, which need a
-running server + token — run the offline suites above instead.
+nested `test-aitosoft/test-aitosoft/` clutter directory.
 
 Reports land in `test-aitosoft/reports/`.
 
@@ -73,6 +103,42 @@ This is how the nested-`<noscript>` body loss was found and fixed (312 KB HTML
 Same trick for block detection: `antibot_detector.is_blocked(...)` takes stored
 HTML/markdown, which is how the challenge families were fixed against MAS's
 stored samples rather than against live challenged hosts.
+
+### Reproducing one that needs a browser
+
+Stored HTML cannot answer anything about *when* we captured it. For challenge
+resolution, hydration races, `page.content()` against a navigating frame or a
+redirect chain ending in a block, use the fixture origin
+(`test-aitosoft/fixture_origin.py`): a threaded HTTP server with a route per
+failure class, driven through `aitosoft_entry` → `api.handle_crawl_request` →
+a real pool browser, so `failure_class`, `render_mode`, the final-hop
+`status_code` rewrite, the patchright retry and the wall-clock fence are all
+genuinely exercised.
+
+```python
+def test_something(fixture_origin, production_path):        # fixtures are global
+    outcome = production_path.crawl(
+        fixture_origin.url("/challenge/resolve-after/5"),   # delay is an argument
+        delay_before_return_html=0.1,                       # the capture wait
+    )
+    assert outcome.failure_class == "origin_blocked"
+    assert outcome.http_status == 200                       # what MAS would see
+    assert fixture_origin.hits_for("/challenge") == 2       # what it cost us
+```
+
+Everything is a parameter — delay, body size, visible-text length, status code,
+markup shape, plus `?stall=` (server-side sleep) and `?status=` on every route.
+**A new failure class should be a new argument or one short route, never a new
+website.** Existing routes are listed in the module docstring.
+
+The fixture runs on loopback, which `egress_broker` exists to refuse. It is not
+weakened: `loopback_allowed()` flips the two flags
+`CRAWL4AI_ALLOW_INTERNAL_URLS` sets, scoped to a `with` block around each crawl,
+never as a process-wide environment variable —
+`test_fixture_origin.py::test_production_configuration_refuses_the_fixture_origin`
+asserts the production configuration still refuses the fixture's own URL, in the
+same suite. Do not turn that into an env var; the other suites in the same
+pytest process would silently lose their SSRF assertions.
 
 ### Running the server locally (devcontainer)
 
@@ -142,6 +208,7 @@ unaffected).
 | Failure-classification test (`pytest test-aitosoft/test_failure_classification.py`) | before every deploy; after any change to `failure_class`, the error-text matching, or the 200/500/504 mapping | 34/34 pass — offline, pins MAS's Q2 contract: origin-caused ⇒ 200 + `success:false`, 5xx reserved for us, `failure_class` on every result |
 | Noscript-collapse test (`pytest test-aitosoft/test_noscript_body_collapse.py`) | before every deploy; after any change to `strip_noscript()` or the scraping strategy | 11/11 pass — offline, pins that a nested `<noscript>` no longer swallows the body |
 | Challenge-detection test (`pytest test-aitosoft/test_antibot_challenge_detection.py`) | before every deploy; after any `antibot_detector` pattern change | 18/18 pass — offline, pins both measured challenge families at HTTP 200 and the Shopify `Access Denied` false positive |
+| Fixture-origin test (`pytest test-aitosoft/test_fixture_origin.py`) | before every deploy; after any change to the capture path, block detection, `failure_class` or the fence | 23/23 pass — offline but browser-driven (~50 s). Three of its tests pin defects **on purpose** (padded block at 202, unmarked interstitial, unclosed `<noscript>`); when the owning task ships, invert them, don't delete them |
 | Tier 1 regression | before every deploy | 4/4 pass |
 | Fingerprint diagnostic | after stealth/browser changes | no regressions vs `test-aitosoft/stealth-v4/` |
 | Soak test | after pool/leak-related changes | flat memory over 30 min |
