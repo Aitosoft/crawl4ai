@@ -117,10 +117,18 @@ measurable in one deploy.
 
 ## Verification
 
-- Fixtures for all eight §4 hosts. The 80,671-byte body is obtainable in **one**
-  production `/crawl` of `talpa.fi` (it currently returns `success: true`, so the
-  body comes back in the response) — capture it once, save it, add the host to
-  `TEST_SITES_REGISTRY.md`, never hit it again.
+- **No live requests. This task needs none** — an earlier draft proposed fetching
+  `talpa.fi` for the real 80,671-byte body, which was fetching a page to test a
+  property that can be stated in one line. The defect is that our size gates read
+  `len(html)` while the page's *visible text* is ~50 characters, so a **synthetic**
+  body — 80 KB of padding, `403 - Forbidden` in a heading, served at status 202 —
+  exercises it exactly. Build it as `/block/padded-403` in
+  `tasks/fixture-origin.md` so the whole production path is covered, not just
+  `is_blocked`.
+- The real body would only add *pattern* material for identifying the vendor,
+  which is `tasks/challenge-interstitial-resolve.md`'s question and is deferred
+  there. If it is ever wanted, ask MAS first — they re-scrape these hosts
+  naturally, so a copy may already exist without either side making a request.
 - `test_antibot_challenge_detection.py` and `test_failure_classification.py` must
   both grow: A's four passed hosts become blocked, B's cases stop being
   `origin_blocked`, and **every existing case stays as it is**. A regression in

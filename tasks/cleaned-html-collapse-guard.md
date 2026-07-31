@@ -80,27 +80,41 @@ degraded-but-real content. Cheap, reuses what we ship, and mirrors the
 static-fallback decision. Do not bundle it with the guard; ship detection first
 and decide recovery on its numbers.
 
-### 2. The root cause
+### 2. The root cause — enumerate offline before fetching anything
 
-Fixtures first, then offline. `apteam.fi` and `flvi.fi` return byte-identical
-HTML, so **one production `/crawl` per host is enough forever** — save the `html`
-field to `test-aitosoft/fixtures/` and never hit them again. Same recipe as
-`kiertopakkaus.fi`; add both to the burned-hosts table in
-`TEST_SITES_REGISTRY.md`.
+An earlier draft of this task opened with "one production `/crawl` per host". Try
+the offline route first; it is likely to be faster *and* it produces a better fix.
 
-Then reproduce against `LXMLWebScrapingStrategy._scrap`
-(`crawl4ai/content_scraping_strategy.py:650`) and bisect the HTML to the region
-that kills it, exactly as the `<noscript>` diagnosis did. Note the shape of the
-existing bug for orientation without letting it anchor you: `<noscript>` failed
-because it **cannot nest**, so the outer element never closed and libxml2
-swallowed the rest of the document. The same "never closes" property belongs to
-every RCDATA/CDATA-ish element — `<title>`, `<textarea>`, `<style>`, `<script>`,
-`<iframe>` under HTML4 parsing — and also to malformed comments and to libxml2's
-nesting-depth limit. That is a list of places to look, not a diagnosis.
+`test_noscript_body_collapse.py` already has the right shape: it parameterises
+over markup **shapes** (`NESTED`, `SINGLE`, `UNCLOSED`, `UPPERCASE`,
+`WITH_ATTRS`) against fixed surrounding content. Extend that idea into an
+enumeration of the whole family and run each shape through
+`LXMLWebScrapingStrategy._scrap` (`crawl4ai/content_scraping_strategy.py:650`):
 
-If the fix generalises, prefer generalising `strip_noscript()` into one named
-pre-parse repair with one test file over adding a second independent hack. It is
-already an upstream-PR candidate; a second one-off is not.
+- every element that **cannot nest or is RCDATA/CDATA** and therefore swallows
+  the document when unclosed — `<title>`, `<textarea>`, `<style>`, `<script>`,
+  `<iframe>`, `<plaintext>`, `<xmp>`, on top of the `<noscript>` case already fixed
+- malformed comments — `<!-->`, `<!-- --`, `--` inside a comment
+- libxml2's **nesting-depth limit** against deeply nested `<div>`s
+- foreign content — inline `<svg>` carrying `<style>`, self-closing shapes, MathML
+- an early stray `</html>` or a second `<body>`
+
+The target fingerprint is specific and easy to test against: **~73 KB of HTML
+reduced to ~90 bytes of `cleaned_html`, deterministically.** Any shape that
+reproduces it is a candidate; shapes that merely truncate partially are not.
+
+If the enumeration produces a candidate, the fix generalises `strip_noscript()`
+into **one named pre-parse repair** covering the family, with one test file. That
+is a better outcome than a second one-off, and a stronger upstream PR than the
+`<noscript>` fix alone.
+
+**Only if the enumeration comes up empty** do we need `apteam.fi`'s actual bytes.
+In that case, do not fetch it through production: use the dev container, whose
+egress is a Finnish consumer ISP rather than our shared Azure address
+(`tasks/fixture-origin.md` explains why that distinction matters). One request,
+save the `html`, add the host to `TEST_SITES_REGISTRY.md`, never again. MAS may
+also be able to supply it — they now store `cleaned_html` for degenerate captures
+and re-scrape these hosts naturally, so asking costs neither side a request.
 
 ## Verification
 

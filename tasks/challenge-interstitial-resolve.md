@@ -59,42 +59,52 @@ to the 4 hosts serving a hard 403 template.**
 If it does not hold, we have spent one session and closed a hypothesis that would
 otherwise have kept re-appearing.
 
-## Phase 1 — the experiment (no code)
+## Phase 1 — the experiment, and it needs **no live sites at all**
 
-Against **3 hosts**, chosen from the 23 `robot-suspicion` hosts in MAS's
-`origin_blocked` list, **2 requests each** (see site-safety below).
+An earlier draft of this task proposed six page loads against MAS's customer
+hosts. That was wrong, and the reason it was wrong generalises: the question
+"does our pipeline capture the interstitial instead of the page it becomes" is a
+question about **our pipeline**, and it is answerable against an origin we
+control.
 
-| Cell | `wait_until` | `delay_before_return_html` | Asking |
-|---|---|---|---|
-| 1 | `domcontentloaded` | 2.0 | reproduce MAS's result — do we get the interstitial? |
-| 2 | `networkidle` | absent | does the challenge resolve if we let it? |
+Build the fixture origin (`tasks/fixture-origin.md`) and serve, from localhost:
 
-Record for every cell: `status_code`, `redirected_status_code`, `failure_class`,
-`len(html)`, `len(cleaned_html)`, `len(markdown)`, elapsed, and whether the body
-carries `robot-suspicion`.
+| Fixture | Serves | Asking |
+|---|---|---|
+| `resolve-fast` | interstitial → real content after ~1 s | does a short settle already work? |
+| `resolve-slow` | interstitial → real content after ~5 s | does `domcontentloaded` + 2.0 miss it? |
+| `resolve-never` | interstitial, forever | do we still report `origin_blocked`? |
+| `resolve-by-nav` | interstitial that top-level-navigates to content | does the navigation path differ from the DOM-rewrite path? |
 
-Also capture **one full interstitial body** and answer, from the markup, the
-question the forensics record has been unable to answer since §8e: **which vendor
-is this?** Grep the stored HTML for `awswaf`, `token.awswaf.com`, `botguard`,
-`blackwall`, `challenge-platform`, and for whatever script fetches
-`d1rozh26tys225.cloudfront.net`. The asset host is a CloudFront distribution over
-an S3 bucket (verified 2026-07-31: `server: AmazonS3`, `*.cloudfront.net` cert,
-no owner information in TLS) so it identifies nothing by itself — the page markup
-will.
+The last one matters most and is the closest analogue to what a real challenge
+does — it is also the mechanism behind `maitokolmio.fi`'s `page.content()` race
+(forensics §1), so the two findings should be tested against the same fixture.
 
-Phase 1 is done when the report says either "cell 2 returns the real page" or
-"cell 2 returns the interstitial too", with the vendor named or explicitly
-recorded as still unidentified.
+Run each fixture through the **full production path** (`aitosoft_entry` +
+`api.handle_crawl_request`, MAS's V14 config) and record `status_code`,
+`failure_class`, `len(html)`, `len(cleaned_html)`, `len(markdown)`, elapsed.
 
-### Site safety — read before running
+**The result is decisive in both directions and neither branch costs a page load:**
 
-These are customer sites MAS has classified `challenge`, and
-`TEST_SITES_REGISTRY.md` carries a standing rule against live-testing them. This
-task is a **deliberate, bounded exception** of the same kind already logged for
-the WAA eval: 3 hosts, 2 hits each, six page loads total. Do not extend the
-matrix "while we are here". Add the hosts and hit counts to the burned-hosts
-table in `TEST_SITES_REGISTRY.md` in the same session, and prefer hosts MAS has
-already re-hit this week over fresh ones.
+- If we capture the resolved content already → the hypothesis is dead, this task
+  closes, and `residential-egress-retry-path.md` keeps its 31-host population.
+- If we capture the interstitial → that is a real defect in our capture timing,
+  worth fixing whatever vendor is on the other end, and phase 2 proceeds.
+
+### What phase 1 deliberately does *not* establish
+
+That **this** vendor's challenge resolves for us. Only a live host shows that.
+Do not spend one to find out — MAS re-scrapes these hosts naturally, so if phase 2
+ships, their next sweep is the confirmation, at zero marginal traffic. If a live
+probe ever becomes genuinely necessary, it is a separate decision with Tero, not
+a step inside this task.
+
+Vendor identification is likewise deferred. `d1rozh26tys225.cloudfront.net` is a
+CloudFront distribution over an S3 bucket (verified 2026-07-31: `server:
+AmazonS3`, wildcard `*.cloudfront.net` certificate, no owner information in TLS or
+headers), so the asset host identifies nothing. The page markup would — and MAS
+may be able to supply one from a stored capture without either side making a
+request. Ask before fetching.
 
 ## Phase 2 — the feature, only if phase 1 confirms
 
