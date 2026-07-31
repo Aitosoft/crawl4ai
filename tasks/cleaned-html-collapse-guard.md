@@ -63,15 +63,52 @@ structurally impossible for a healthy page. Detect it:
 - The unit hazard applies: `html` and `cleaned_html` are HTML bytes, `markdown`
   is markdown characters. Name the unit in the field, the log line and the test.
 
-What to do when it fires is a contract question, and MAS's stated principle
-answers most of it — *"a tag is advisory; `success: false` is structural"*, from
-their Q1 answer. The default we should propose is the same shape as everything
-else we shipped on 2026-07-30: `success: false` with a `failure_class` and the
-content still attached, so their logic decides. **`render_error` is the honest
-class** — this is our pipeline losing a body the origin served correctly, and the
-classification bias in `aitosoft_failure_class.py` says unrecognised failures are
-ours. Confirm with MAS rather than assuming; the question is in
-`tmp/mas-repo-messages/08-*`.
+### The transport — ANSWERED 2026-07-31, and not the way the question was asked
+
+We asked MAS whether the taxonomy needed a non-retryable "ours and permanent"
+class. Their answer (message 09 §1), read out of their client code rather than
+their documentation:
+
+**The class name is not the lever. The wire status is, and it is the only thing
+that is.** Their retry branch is
+`RETRY_CONFIG.retryableStatuses.includes(response.status)`, evaluated *before* the
+body is parsed. `failure_class` is received, logged, and otherwise unread. Their
+full table:
+
+```
+2xx            -> results[0] returned.  envelope `success` is never read
+504            -> NOT retried; 2 consecutive on a host pivots it to static
+429            -> long backoff spanning an ACA scale-out
+500 / 502 / 503 -> retried 3x, 1s / 2s / 4s
+anything else  -> failure, no retry
+```
+
+**So: serve a detected collapse in an HTTP 200 envelope with result-level
+`success: false`.** That is the `savaterra.fi` shape they verified end to end in
+the same run — a 200 envelope carrying a result-level 403 and
+`failure_class: origin_blocked` tripped their check cleanly and cost zero
+retries. Do **not** put it behind 500/502/503, which is what `render_error` maps
+to today via `http_status_for`.
+
+The class name is ours to choose and should still say what happened, because it
+is what we debug from and what they may eventually branch on. A distinct
+`render_defect` — ours, permanent, not retryable — is worth adding for exactly
+that reason, but understand it buys diagnosis, not behaviour: **the 200 does the
+work.**
+
+> **A defect this uncovered, and it is ours to fix in the same change.** MAS
+> noticed that `render_error` is "sometimes the retryable one and sometimes not".
+> They are right, and the mechanism is worse than they could see:
+> `aitosoft_static_mode.py:316` returns `failure_class: RENDER_ERROR` inside a
+> **200** — static mode never raises, which is its pinned contract — while full
+> mode's identical class goes out at **500** through `http_status_for`. Same
+> class, opposite retry behaviour, decided by `render_mode` and documented
+> nowhere. Fix it here rather than adding a third meaning on top of it: put the
+> permanence distinction in the vocabulary, map it in one place, and pin both
+> render modes to the same wire status for the same class.
+
+Content stays attached either way — *"a tag is advisory; `success: false` is
+structural"*.
 
 Consider whether recovery is worth adding *after* the guard works: `html2text`
 over the raw rendered HTML — the conversion `aitosoft_static_mode` already uses,
