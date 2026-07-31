@@ -1,41 +1,59 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-07-30, after `0.9.2-failure-class` shipped (rev `--0000031`).
+**Updated:** 2026-07-31, after MAS's 243-host re-scrape landed
+(`waa-eval-2026-07-30-forensics.md` §10).
 **This file holds ordering and gating only** — the reasoning lives in each task
 file, the evidence in `waa-eval-2026-07-30-forensics.md`. If they disagree, the
 task file wins and this index is stale; fix it.
 
-Production is current. Nothing below is a deploy blocker.
+Production is current (`0.9.2-failure-class`, rev `--0000031`). Nothing below is
+a deploy blocker.
+
+**The re-scrape re-ordered this list.** Three items moved down because the fixes
+that shipped on 2026-07-30 took most of their value, and three new items moved to
+the top because MAS measured defects we did not know about. Read §10 before
+trusting any priority written before 2026-07-31.
 
 | # | Task | Gate | Why here |
 |---|------|------|----------|
-| 1 | `post-deploy-measurement-0.9.2-failure-class.md` | MAS's re-scrape | The only task waiting on someone else, and it sets the size of #2, #6 and #7. Everything else is cheaper to decide after it. |
-| 2 | `blocked-host-retry-economy.md` | none | A blocked host costs ~4 page loads to re-prove it is blocked, and the redirect fix just moved a new population onto that path. Its classifier is also the prerequisite for #7 — that decision cannot be made properly until this exists. |
-| 3 | `static-fallback-within-fence.md` | none — MAS answered Q1 (b) | Converts our most expensive failure (180 s for zero bytes) into a ~5 s degraded success. Build it on the `failure_class` shape that just shipped. |
-| 4 | `preflight-batch-endpoint.md` | none — the detector fix it waited for shipped | Time-boxed by MAS's ~15,000-company sweep: it is the gate that stops that sweep destroying good captures. Slips to urgent the moment they schedule. |
-| 5 | `base-config-boolean-defaults-never-applied.md` | none | `simulate_user` has never taken effect, and the next boolean anyone adds won't either. Small fix, but turning it on changes every render on a 2 vCPU replica — measure before shipping. |
-| 6 | `static-mode-tls-impersonation.md` | informed by #1 | Hardens the path #3 makes everything fall back to. Lower priority than it looked: IP has dominated fingerprint in every case we have measured. |
-| 7 | `residential-egress-retry-path.md` | **#1's numbers, then Tero** | On hold. Sized for 171 hosts; 5/5 probes came back clean (forensics §8d), so the population may be ~3. Do not spend before the re-count. |
-| 8 | `antibot-minimal-text-false-positive.md` | none | Latent, no MAS report. Likely merges into the classification work now that Q2 is settled. |
-| 9 | `pool-browser-retains-last-page.md` | none | One document's memory pinned per browser. Low impact, but it is why our memory numbers have never been readable. |
-| — | `file-upstream-prs.md` | upstream | Standing tracker, four PRs open. No action beyond checking. Small `fix(docker):` PRs merge in 1–5 days; core behavioural changes sit for months — expect no movement. |
+| 1 | `challenge-interstitial-resolve.md` | none — **experiment first** | 202 turns out to be the challenge layer's code, and it serves both the interstitial and the real page. If a wait resolves it, 23 of the 31 blocked hosts come back for free and the proxy question shrinks to 4. Costs one session and six page loads to find out. Also time-boxed: MAS is about to raise their capture wait across ~15,000 companies partly on this. |
+| 2 | `cleaned-html-collapse-guard.md` | none — MAS gave us two reproducible hosts | Second silent whole-body loss in a month. The first ran 3½ months across 406 pages at `success: true`. The guard is the generic defence; the root cause is bounded by the fixtures. |
+| 3 | `detector-round3-evidence-vs-inference.md` | none | Eight hosts measured in prod: four blocks missed (every size gate is on `len(html)`; the vendor pads to 80 KB), four invented (including our own error placeholder reported as the origin blocking us). Gates #6. |
+| 4 | `post-deploy-measurement-0.9.2-failure-class.md` | MAS's half is **delivered** | What remains is ours: a prod-log census since rev 31. It re-prices #5 and #7 and costs a Log Analytics query. |
+| 5 | `static-fallback-within-fence.md` | #4's numbers | Was "high": 180 s for zero bytes. But `done/render-retry-unbounded-hang.md` shipped, so the fence should now fire rarely. Re-derive the rate before spending M on it. |
+| 6 | `preflight-batch-endpoint.md` | #3, then MAS's sweep date | Their ~15,000-company sweep is what makes this urgent, and they have already adopted single-URL static as the pre-delete gate — so this is a throughput fix, not a correctness gate. Ask when the sweep is scheduled. |
+| 7 | `blocked-host-retry-economy.md` | none | Still real, but smaller: MAS no longer retries origin-class failures, so a blocked host costs ~4 page loads, not ~12–16. Its classifier is still #9's trigger. |
+| 8 | `base-config-boolean-defaults-never-applied.md` | none | `simulate_user` has never taken effect and the next boolean won't either. Small. Decide whether the setting should exist at all rather than restoring an intent nobody measured. |
+| 9 | `residential-egress-retry-path.md` | **#1's outcome, then Tero** | On hold. The population is 31, not 3 — an order of magnitude more than we told Tero on 2026-07-30. But ≤8 of those may survive #1, and no one on either side has evidence a residential IP gets through. We can now test that for free: the dev container egresses from a Finnish consumer ISP. |
+| 10 | `static-mode-tls-impersonation.md` | #1, #9 | Hardens the path #5 makes everything fall back to. IP has dominated fingerprint in every case measured so far; #1 and #9 are what would change that. |
+| 11 | `pool-browser-retains-last-page.md` | none | One document's memory pinned per browser. Low impact, but it is why our memory numbers have never been readable. |
+| — | `antibot-minimal-text-false-positive.md` | — | **Merged into #3** — the latent defect was observed live (`norex.com`). Close it when #3 ships. |
+| — | `file-upstream-prs.md` | upstream | Standing tracker, four PRs open. Small `fix(docker):` PRs merge in 1–5 days; core behavioural changes sit for months — expect no movement. |
 | — | `waa-eval-2026-07-30-forensics.md` | — | Reference, not a task. Never close it; task files cite it instead of re-deriving. |
 
 ## Cross-repo state
 
-MAS (`aitosoft-platform`) is our only consumer. The exchange is markdown files
-in gitignored `tmp/`, relayed by Tero both ways. Durable conclusions get copied
-into the forensics record; `tmp/` is the transcript, not the source of truth.
+MAS (`aitosoft-platform`) is our only consumer. The exchange is markdown files in
+gitignored `tmp/mas-repo-messages/`, numbered and direction-labelled, relayed by
+Tero both ways. Durable conclusions get copied into the forensics record; the
+messages are the transcript, not the source of truth.
 
-Open with MAS after the deploy note:
+Settled 2026-07-31 (their message 07):
 
-- **They re-scrape and report** the 70 `empty_*` and the 171 `challenge_*`.
-- **We asked one question:** should envelope `success` become the aggregate?
-  Today it stays `true` when the single result failed — matching static mode,
-  which they are adopting right now as a pre-delete gate. Their call; it is one
-  line in each path.
-- **They cannot answer HTML-side questions** about their corpus: `scraped_pages`
-  stores markdown only. Landing `cleaned_html` storage is on their roadmap.
-  Our `/crawl` response already returns both `html` and `cleaned_html`.
-- **Unit hazard:** they measure markdown, we reason about HTML. It has already
-  caused one bad inference. Name the unit explicitly every time.
+- **Envelope `success`:** flip it to the aggregate, **conditional on the HTTP
+  wire status staying 200**. That condition is the load-bearing half. Shipping in
+  #3.
+- **Their `DEGENERATE_CAPTURE_CHARS = 500` floor is 500 markdown characters**,
+  not HTML bytes. The unit hazard is live — we reason in HTML bytes, they store
+  markdown. Name the unit every time.
+- They now store `cleaned_html` alongside markdown when a capture comes back
+  degenerate, which removes the round-trips that dominated 2026-07-30.
+
+Open with MAS (sent in message 08):
+
+- The 202 finding, **before** they roll out a global capture-wait increase.
+- Whether a detected collapse should be `success: false` + `render_error` with
+  content attached (our default) or something else.
+- When the ~15,000-company sweep is scheduled — it paces #6.
+- Their observed rate of our 5xx/504 since rev 31 — it re-prices #5 from their
+  side while #4 does it from ours.

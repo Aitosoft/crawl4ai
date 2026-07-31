@@ -1,5 +1,15 @@
 # Antibot minimal_text heuristic: full mode 500s on legitimately tiny pages
 
+**Status 2026-07-31: MERGED into
+`tasks/detector-round3-evidence-vs-inference.md`.** Do not implement from this
+file. The defect stopped being latent — MAS measured it in production on
+`norex.com`, where our own `Crawl4AI Error:` placeholder (15 bytes) tripped the
+near-empty heuristic and was reported to them as *the origin blocking us*.
+Direction 2 below ("low-confidence pass-through") is superseded by the shape that
+actually shipped: the evidence that produced a blocked verdict decides the
+`failure_class`, so a shape-inferred block becomes `render_error` rather than
+`origin_blocked`. Close this file when round 3 ships.
+
 **Status:** Open (created 2026-07-17 from the TLS task's side observation)
 **Priority:** Low — latent; no MAS report yet. Pick up if MAS reports a
 missing tiny page, or bundle with the next antibot_detector work.

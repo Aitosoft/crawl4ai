@@ -1,8 +1,18 @@
 # Batch preflight endpoint (MAS Q3: "yes, and batch")
 
 **Status:** Open — unblocked by MAS's answer 2026-07-30, but **sequenced behind
-`tasks/antibot-detector-challenge-blindspot.md`**. Do not ship the endpoint
-before the detector can see the challenge family.
+`tasks/detector-round3-evidence-vs-inference.md`** (2026-07-31 — the
+challenge-blindspot task it originally waited on has shipped, and round 3
+replaced it as the gate). MAS measured four hosts where an 80,671-byte
+`403 - Forbidden` body passed as `success: true` at status 202. A
+`blocked_suspect` computed by today's detector returns `false` for exactly those,
+which is the failure mode their hard requirement below was written to prevent.
+
+**Pacing input needed:** MAS have already adopted single-URL static mode as their
+pre-delete gate, so this endpoint is now a throughput fix rather than a
+correctness gate. Its urgency is entirely "when is the ~15,000-company sweep
+scheduled" — asked in `tmp/mas-repo-messages/08-*`. Do not build ahead of that
+answer.
 **Priority:** Medium-high, and time-boxed by MAS's planned ~15,000-company
 re-enrichment sweep — this is the gate that stops that sweep destroying good
 captures.

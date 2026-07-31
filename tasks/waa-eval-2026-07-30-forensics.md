@@ -543,3 +543,109 @@ already broken.
   `tasks/residential-egress-retry-path.md`, a budget decision.
 - Envelope `success` still reads `true` when the single result failed. Asked MAS
   whether they want it as the aggregate.
+
+---
+
+## 10. MAS's 243-host re-scrape, 2026-07-31 — the measurement that reads §9
+
+Source: `tmp/mas-repo-messages/07-from-us-243-host-rescrape.md`. One page per
+host, chosen as a page demonstrably broken in April, production config, 243/243
+carrying `failure_class` so the build is confirmed. 251 page loads for 243 hosts
+(they flag five hosts that received extra visits through their retrying client,
+plus 3 A/B requests — 254 for the day).
+
+This is the deliverable `post-deploy-measurement-0.9.2-failure-class.md` was
+waiting for. Four of the five fixes are now measured from outside.
+
+| Population | n | Result | Predicted |
+|---|---:|---|---|
+| `empty_*` | 70 | **35 recovered, 33 still empty, 2 origin-error** | we said 70/70; MAS said 62–68 |
+| `challenge_*` | 171 | **133 real content, 31 `origin_blocked`, 4 block-page, 2 empty, 1 origin-error** | split — correct in shape |
+| challenge leakage | — | **zero** challenge screens returned as `success: true` | the challenge tier did its job |
+
+### 10a. The `<noscript>` fix worked, and it was not the whole `empty_*` family
+
+Half the family recovered. The other half is a **split with proof in both
+directions**, produced by MAS's one-field A/B (`delay_before_return_html` 2.0 →
+10 on three hosts):
+
+- **Theirs:** `revisol.fi` rendered 237,037 more bytes given eight more seconds;
+  `cleaned_html` 242 → 101,091. Captured before it painted.
+- **Ours:** `apteam.fi` and `flvi.fi` returned **byte-identical** `html` across
+  two visits forty minutes apart with a five-times-longer wait, and identical
+  ~90-byte `cleaned_html`. A 73 KB body reduced deterministically inside our
+  cleaning path. Second member of the `<noscript>` failure *shape*, different
+  cause. → `tasks/cleaned-html-collapse-guard.md`.
+
+Neither side claims proportions: 1 of 3 is an existence proof in each direction,
+not a rate. MAS ruled their own content-filtering config out by measurement
+(`word_count_threshold` inert at 1,000; `excluded_tags` reproduces the
+fingerprint exactly and they do not send it).
+
+**Calibration:** our "70/70, anything else is a second root cause" prediction was
+wrong on the number and right on the inference. There was a second cause, and a
+third.
+
+### 10b. The challenge family: §8d's read held, its number did not
+
+133 of 171 return real content, so the 2026-04 challenge is largely gone — §8d's
+5/5 probe pointed the right way. But **31 hosts are genuinely blocked, not ~3.**
+
+| class | n | content | `origin_blocked` | blocked rate |
+|---|---:|---:|---:|---:|
+| `challenge_all` | 117 | 108 | 9 | 7.7 % |
+| `challenge_partial` | 54 | 25 | 22 | **40.7 %** |
+
+Both sides predicted the reverse split. MAS checked whether our five §8d probes
+had been drawn from the easy half and found they had not — four of the five were
+`challenge_partial`, the harder one. **The sample was fine and simply too small:**
+five clean draws is entirely compatible with an 18 % block rate (0.82⁵ ≈ 0.37).
+"Roughly three hosts" was the most optimistic reading of a sample that could not
+exclude 31. Recorded as a calibration lesson of the same family as §9's two: an
+inference outrunning its data, in the cheap direction this time.
+
+**27 of the ~29 genuine blocks are two vendors** — 23 serve the `robot-suspicion`
+challenge from cloudfront `d1rozh26tys225`, 4 serve an 80,671-byte
+`403 - Forbidden` template. So the question is not "31 heterogeneous hosts" but
+"what do these two do". Neither side has evidence that a residential IP gets
+through; MAS explicitly declines to recommend spend on it.
+
+### 10c. HTTP 202 — the code that is not a page status
+
+36 of 243 responses carried origin status **202**, `redirected_status_code: 202`,
+`render_mode: full`. **100 % came from the challenge families** — not one
+`empty_*` or `blockpage_*` host produced one — and 19 of the 23 challenge screens
+in the whole run arrived at 202. The same 202 served a challenge screen (19), a
+block page (4), the real site (10) and an empty body (3).
+
+A status that returns both the interstitial *and* the real content is the
+signature of a JS challenge that resolves into the page. That reframes the
+challenge family as a possible **capture-timing** problem rather than an egress
+block, which would make 23 of the 31 free to recover.
+→ `tasks/challenge-interstitial-resolve.md`, which must produce a number before
+anything is built on it.
+
+### 10d. Two measured defects in the detector, in opposite directions
+
+Both from MAS's own run, both now tasked as
+`tasks/detector-round3-evidence-vs-inference.md`.
+
+- **Misses:** an 80,671-byte body whose entire visible content is
+  `403 - Forbidden` passed as `success: true` at status 202 on four hosts, while
+  the identical bytes at status 403 were caught on four others. Every size gate
+  in `antibot_detector` is on `len(html)`; this vendor pads.
+- **Invents:** four of 33 `origin_blocked` verdicts are not blocks, including
+  `norex.com`, where **our own `Crawl4AI Error:` placeholder** was reported to MAS
+  as the origin blocking us — the classification bias in
+  `aitosoft_failure_class.py` inverted, in the direction its docstring calls the
+  expensive one.
+
+### 10e. What changed in the open work
+
+| Task | Before | After 10 |
+|---|---|---|
+| `post-deploy-measurement-…` | gate on everything | **delivered here**; residual is a prod-log census |
+| `residential-egress-retry-path` | on hold at ~3 hosts | 31, of which ≤8 may survive `challenge-interstitial-resolve` |
+| `blocked-host-retry-economy` | ~12–16 page loads/company | MAS no longer retries origin-class failures ⇒ ~4; the win shrank |
+| `antibot-minimal-text-false-positive` | latent, no report | **observed live** (`norex.com`); merged into detector round 3 |
+| `static-fallback-within-fence` | high | re-price first — the hang fix should have made fence-504s rare |

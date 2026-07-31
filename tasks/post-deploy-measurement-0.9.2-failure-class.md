@@ -1,9 +1,21 @@
 # Post-deploy measurement: did the five fixes do what we claimed?
 
-**Status:** Open — the only task that is *waiting on someone else*, and the one
-that gates three others.
-**Priority:** Highest. Not because it is hard, but because until it lands we are
-guessing about the size of every remaining decision.
+**Status 2026-07-31: MAS's half is DELIVERED.** Their 243-host re-scrape is
+recorded in `waa-eval-2026-07-30-forensics.md` §10 and has already re-ordered
+`tasks/README.md`. Three new task files came out of it
+(`challenge-interstitial-resolve`, `cleaned-html-collapse-guard`,
+`detector-round3-evidence-vs-inference`).
+
+**What remains is ours and is a Log Analytics query**, not a wait: the "What our
+side watches" section below has never been run against production since rev
+`--0000031` (deployed 2026-07-30 18:24 UTC). It is what re-prices
+`static-fallback-within-fence.md` (does the fence still fire?) and confirms the
+taxonomy is not mis-sorting (`render_error` must not climb). Queries and the
+`ContainerAppConsoleLogs_CL` recipes are in `OVERNIGHT_PLAYBOOK.md` and
+`DEPLOYMENT_INFO.md`.
+
+**Priority:** Do it in the same session as any other Azure work; it is cheap and
+two open tasks are sized by it.
 **Effort:** S (our side). **Risk:** none — pure observation.
 **Evidence:** `tasks/waa-eval-2026-07-30-forensics.md` §9, §8d
 

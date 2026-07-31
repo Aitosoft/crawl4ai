@@ -6,7 +6,32 @@ evaporated. Approved in principle by Tero 2026-07-30 for *framing* only —
 provider choice and spend authorisation still to come. **Do not sign a
 contract or commit credentials without Tero's explicit go-ahead.**
 
-> **Read before doing anything here: `waa-eval-2026-07-30-forensics.md` §8d.**
+> **UPDATE 2026-07-31 — the re-count landed and the number is 31, not 3.**
+> MAS re-scraped all 171 challenge hosts (forensics §10b): 133 return real
+> content, **31 are `origin_blocked`**. §8d's *direction* was right and its
+> *number* was not — five clean draws is compatible with an 18 % block rate
+> (0.82⁵ ≈ 0.37), so "roughly three" was the most optimistic reading of a sample
+> that could not exclude 31. Everything below sized for 171 is still too big;
+> everything Tero was told on 2026-07-30 about "three hosts" is too small.
+>
+> **Two things must happen before this is re-priced again, in this order:**
+> 1. `tasks/challenge-interstitial-resolve.md`. 23 of the 31 serve a JS
+>    challenge at HTTP 202 — the code AWS WAF's Challenge action uses — and the
+>    same 202 also returned the real site on 10 hosts. If a wait resolves it,
+>    those 23 are not an egress problem at all and this task's population is 4
+>    hosts serving a hard 403 template. **Do not spend before that number.**
+> 2. A residential probe, which is now free. The dev container egresses from
+>    `109.204.176.244` — Valoo Oy, a Finnish consumer ISP in Lappeenranta, not a
+>    datacentre. We can run our exact code from a residential IP without buying
+>    anything. That is the discriminator the cost table below has been waiting
+>    for, and it also answers `static-mode-tls-impersonation.md`: run static
+>    (httpx TLS) and full (Chrome TLS) from the same residential IP and see
+>    whether the fingerprint or the IP is doing the work.
+>    Site-safety: these are MAS-classified blocked hosts and the standing rule in
+>    `TEST_SITES_REGISTRY.md` applies; bound it to one hit per host per cell and
+>    log it. Burning Tero's own connection is a worse outcome than not knowing.
+>
+> **Read also: `waa-eval-2026-07-30-forensics.md` §8d.**
 > This task was sized on "171 of MAS's 243 affected hosts are egress
 > reputation". Then we probed five of those hosts — four of them nominated by
 > MAS — and **all five returned clean content to our Azure egress**. The

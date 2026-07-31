@@ -1,5 +1,15 @@
 # Hard-blocked hosts cost ~12 page loads per company
 
+**Priority lowered 2026-07-31.** The "~12–16 page loads per company" figure below
+assumed MAS retries our failures three times. Since `failure_class` shipped they
+receive origin-class failures as HTTP 200 + `success: false`, which their retry
+policy treats as terminal — so a blocked host now costs **~4 page loads, once**.
+The remaining win is levers 1 and 3 (skip patchright on a reputation block: 4 → 2)
+plus the per-host memo, and the classifier is still what
+`residential-egress-retry-path.md` triggers on. Real, smaller, no longer urgent.
+Re-read after `tasks/challenge-interstitial-resolve.md`, which may reclassify most
+of the population out of "blocked" entirely.
+
 **Status:** Open — ready to implement, no external input needed.
 **Priority raised 2026-07-30:** `tasks/redirect-status-blinds-block-detection.md`
 shipped, so every redirect-to-block host now takes this path too (measured

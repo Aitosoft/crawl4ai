@@ -1,5 +1,16 @@
 # Degrade to static inside the request instead of returning a 504
 
+**Re-price before building (2026-07-31).** This was sized when the untimed
+`page.content()` / `page.evaluate()` hang was live and a wedged render burned the
+whole 180 s fence. `done/render-retry-unbounded-hang.md` shipped on 2026-07-30
+and bounded exactly that, so the population this task rescues may have largely
+disappeared. **Do not spend M here until
+`post-deploy-measurement-0.9.2-failure-class.md` reports the 504 and
+`render_timeout` rate since rev `--0000031`.** If the fence now fires rarely, the
+remaining value is as a fallback for `render_error` and `origin_blocked`, which is
+a different and smaller argument than the one written below — rewrite it before
+implementing rather than inheriting it.
+
 **Status:** UNBLOCKED 2026-07-30 — MAS answered Q1 **(b)**: return the static
 content with `success: false` and the content attached; their logic decides.
 Not in the current deploy batch — sequence it after the Q2 classification work,
