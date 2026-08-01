@@ -83,7 +83,20 @@ to answer, at minimum:
   224 pool gets, ~130 MB of `anon` per replica). It ships in the earlier image
   and reduces the pressure this task operates under; do not re-litigate it here.
 - **`minReplicas: 1`** removes the scale-from-zero burst that made this visible.
-  Not code, a standing-spend decision, with Tero.
+  Not code, a spend decision, with Tero — **but it does not have to be standing
+  spend, and framing it that way has been making it look more expensive than it
+  is** (coordinator, 2026-08-02). The burst only matters when a wave starts
+  against an idle service, so the setting only has to hold for the sweep window:
+  `az containerapp update --min-replicas 1` before wave 1, reverted after. That
+  is a **scale** setting — *not* `--set-env-vars`, which is the operation that
+  has broken MAS's token before (`DEPLOYMENT_INFO.md`), so it does not carry that
+  risk. Price both shapes before deciding; a scoped window may cost little enough
+  that it is not a decision at all.
+
+  **It does not replace this task.** It removes the *trigger* we have observed;
+  the unbounded browser count still means memory is governed by a threshold on a
+  reading rather than by construction, and a warm replica holding 8 idle browsers
+  is the same defect without the cold start to make it visible.
 
 ## Verification
 

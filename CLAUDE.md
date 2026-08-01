@@ -158,6 +158,26 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
    coordinator sign-off; outward-facing artifacts (upstream PRs, cross-repo
    contracts) are decided by the coordinator session. Tero sets direction,
    runs sessions, and relays MAS messages.
+6. **Roles are separated across sessions, each with a clean context.** Whoever
+   *writes* a plan does not *implement* it; whoever implements does not sign off
+   on it; experiments, evals and review are their own sessions again. This is
+   not process for its own sake — it is the quality gate that has actually
+   worked here. **Four consecutive implementing sessions found the coordinator's
+   task file materially wrong about something load-bearing**, each time because
+   a fresh context re-derived the diagnosis instead of inheriting it (see the
+   `tasks/README.md` intro for the running count). A session that plans and then
+   implements cannot do that: it re-reads its own reasoning as evidence.
+
+   Practically:
+   - The coordinator writes task files, holds the big picture and the cross-repo
+     state, and does not edit `crawl4ai/`, `deploy/` or `test-aitosoft/`.
+   - The implementing session is expected — required — to **challenge the task
+     file**, and to record what it found wrong in the file itself. A task file
+     that survives implementation unamended is the unusual case, not the norm.
+   - **Verify the diagnosis, not just the plan.** For a detector claim that means
+     asserting *which branch fired*, not that some verdict came back.
+   - Disagreement between two sessions is the signal, not a problem to smooth
+     over. Write down which one measurement settled it.
 
 ---
 

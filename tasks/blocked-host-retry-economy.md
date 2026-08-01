@@ -51,6 +51,23 @@ weight for a *reputation* block.
 
 Three independent levers; do 1 and 2, consider 3.
 
+> **The last image gave lever 1 a second cost, and it is not priced below
+> (coordinator, 2026-08-02).** `challenge-interstitial-resolve.md` phase 2 gave
+> the patchright retry a 10 s capture wait, and the measured dividend was that it
+> **also rescues slow-hydrating shells** — MAS's `revisol.fi` class — because a
+> near-empty page trips tier 3, that verdict arms the retry, and by 11.2 s the
+> page has painted. So the patchright retry is no longer only a fingerprint-block
+> instrument: it is now the only place a slow shell gets a second, longer look.
+>
+> Narrowing its trigger therefore removes that rescue for **anything the new
+> classifier calls a reputation block**, including every misclassification. The
+> lever is still right — a Fastly 403 to three engines is not waiting for
+> hydration — but "skip patchright" now has a false-positive cost that did not
+> exist when this file was written. Price it before narrowing: what does the
+> classifier do with a near-empty tier-3 verdict, which has no CDN block-page
+> signature at all? If the answer is "not a reputation block, so keep the retry",
+> the interaction is benign and should be **asserted in a test**, not assumed.
+
 ### 1. Don't run patchright when the block cannot be a fingerprint block
 
 `aitosoft_patchright_fallback.maybe_retry_blocked` fires whenever
