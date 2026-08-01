@@ -93,16 +93,63 @@ if _DOCKER_DIR not in sys.path:
 # One body of real content, reused by every route that is supposed to end in a
 # successful capture, so "did we get the page" is the same assertion everywhere.
 # Finnish SME shape (heading + contacts) because that is the corpus MAS crawls.
+#
+# SIZE IS LOAD-BEARING, and it was wrong until 2026-08-01. This page rendered to
+# ~140 markdown characters — *below* MAS's `DEGENERATE_CAPTURE_CHARS = 500`, so
+# the control every route uses for "this capture succeeded" was already
+# degenerate by the customer's own floor. Harmless while the only question was
+# "interstitial or content?"; fatal for tasks/cleaned-html-collapse-guard.md,
+# whose entire output is a threshold measured against this page.
+#
+# It now renders to ~1500 markdown characters over ~1200 characters of visible
+# text — comfortably above 500 on both sides of the unit boundary, so a healthy
+# control is unambiguously healthy no matter which side you measure from.
+# Keep it that way: `test_fixture_origin.py::test_the_healthy_control_is_not_
+# degenerate` fails if anyone trims this back.
 
 CONTENT_HTML = (
     "<h1>Yritys Oy</h1>"
     "<p>Puhelin 010 123 4567, sahkoposti info@yritys.fi</p>"
     "<p>Osoite: Esimerkkikatu 1, 00100 Helsinki.</p>"
-    "<ul><li>Palvelut</li><li>Referenssit</li><li>Yhteystiedot</li></ul>"
+    "<h2>Yritys</h2>"
+    "<p>Yritys Oy on vuonna 1998 perustettu suomalainen perheyritys, joka "
+    "toimittaa teollisuuden kunnossapitopalveluita ja projektitoimituksia "
+    "koko Suomen alueella. Palveluksessamme on 42 alan ammattilaista, ja "
+    "toimipisteemme sijaitsevat Helsingissa, Tampereella ja Oulussa.</p>"
+    "<p>Toimintaamme ohjaavat sertifioidut laatu- ja "
+    "ymparistojarjestelmat seka pitka kokemus vaativista kohteista. "
+    "Liikevaihtomme oli viime tilikaudella 8,4 miljoonaa euroa.</p>"
+    "<h2>Palvelut</h2>"
+    "<ul>"
+    "<li>Ennakoiva kunnossapito ja kuntokartoitukset</li>"
+    "<li>Sahko- ja automaatioasennukset</li>"
+    "<li>Putkistojen ja sailioiden korjaustyot</li>"
+    "<li>Projektinjohto ja valvonta</li>"
+    "<li>Varaosapalvelu ja logistiikka</li>"
+    "</ul>"
+    "<h2>Yhteystiedot</h2>"
+    "<p>Myynti: myynti@yritys.fi, puhelin 010 123 4500. "
+    "Laskutus: laskutus@yritys.fi. Paivystys arkisin klo 7-21.</p>"
+    "<table>"
+    "<tr><td>Matti Meikalainen</td><td>toimitusjohtaja</td>"
+    "<td>040 123 4501</td></tr>"
+    "<tr><td>Liisa Virtanen</td><td>myyntijohtaja</td>"
+    "<td>040 123 4502</td></tr>"
+    "<tr><td>Pekka Nieminen</td><td>huoltopaallikko</td>"
+    "<td>040 123 4503</td></tr>"
+    "</table>"
+    "<h2>Referenssit</h2>"
+    "<p>Olemme toteuttaneet kunnossapitosopimuksia metsateollisuudelle, "
+    "elintarviketeollisuudelle ja kunnallisille vesilaitoksille. "
+    "Pyydä referenssiluettelo osoitteesta info@yritys.fi.</p>"
 )
 
 #: Present in the markdown of every successful capture.
 CONTENT_MARKER = "info@yritys.fi"
+
+#: Text that sits at the very END of CONTENT_HTML. A collapse that eats the tail
+#: but leaves the heading looks like a success if you only assert the marker.
+CONTENT_TAIL_MARKER = "vesilaitoksille"
 
 PAGE = (
     "<!DOCTYPE html><html><head><title>Yritys Oy</title></head>"
@@ -158,17 +205,92 @@ VARNISH_403 = (
 PADDED_BLOCK_BYTES = 80_000
 PADDED_BLOCK_TEXT = "Access to this page has been denied."
 
-#: The `<noscript>` family from tasks/done/noscript-collapses-body-to-empty-markdown.md,
-#: plus room for the next member. `nested` is the shape that ran 3.5 months
-#: across 406 pages at success:true; the others are controls.
+#: Markup shapes that can make the document swallow its own body. Each is
+#: injected ahead of CONTENT_HTML by `/collapse/{shape}`, so "did the page
+#: survive this shape" is one assertion for the whole family.
+#:
+#: The `<noscript>` members come from
+#: tasks/done/noscript-collapses-body-to-empty-markdown.md — `nested-noscript`
+#: is the shape that ran 3.5 months across 406 pages at success:true. The rest
+#: is the enumeration tasks/cleaned-html-collapse-guard.md asks for: every
+#: element that cannot nest or is raw-text/RCDATA and therefore swallows the
+#: document when left unclosed, the malformed-comment family, libxml2's
+#: nesting-depth limit, foreign content, and the structural strays.
+#:
+#: Enumerate through the BROWSER, not only through libxml2. A shape that is
+#: harmless to libxml2 can be fatal after Chromium re-serializes it — that
+#: difference is exactly what hid `unclosed-noscript` behind a green
+#: test_noscript_body_collapse.py for a month.
 _GTM = '<iframe src="about:blank"></iframe>'
 COLLAPSE_SHAPES: Dict[str, str] = {
+    # -- the <noscript> family --
     "nested-noscript": f"<noscript>{_GTM}<noscript>{_GTM}</noscript>",
     "single-noscript": f"<noscript>{_GTM}</noscript>",
     "unclosed-noscript": f"<noscript>{_GTM}",
     "uppercase-noscript": f"<NOSCRIPT>{_GTM}<NOSCRIPT>{_GTM}</NOSCRIPT>",
+    # -- unclosed raw-text / RCDATA elements: same mechanism, other elements --
+    "unclosed-title": "<title>Yritys Oy",
+    "unclosed-textarea": "<textarea>Kirjoita palautteesi",
+    "unclosed-style": "<style>.banner{color:red}",
+    "unclosed-script": "<script>var analytics=1;",
+    "unclosed-iframe": '<iframe src="about:blank">',
+    "unclosed-xmp": "<xmp>esimerkkikoodi",
+    "plaintext": "<plaintext>",
+    # -- malformed comments --
+    "abrupt-comment": "<!-->",
+    "unterminated-comment": "<!-- evaste-ilmoitus",
+    "dashes-in-comment": "<!-- a -- b -->",
+    # -- structural strays --
+    "stray-close-html": "</html>",
+    "second-body": "<body>",
+    "deep-nesting": "<div>" * 512,  # past libxml2's default depth limit
+    # -- foreign content --
+    "svg-style": "<svg><style>.a{fill:red}</style></svg>",
+    "svg-unclosed-foreignobject": "<svg><foreignObject>",
+    "mathml-annotation": "<math><annotation-xml encoding='text/html'><div>",
+    # -- the control --
     "none": "",
 }
+
+#: **Measured 2026-08-01**, every shape above run through `ProductionPath.crawl`
+#: at `?bytes=73000` (apteam.fi's size), twice each. These four lose the whole
+#: body; the other seventeen come back intact. All four are **deterministic** —
+#: byte-identical `html` and `cleaned_html` across two visits — which is the
+#: property that told MAS `apteam.fi` and `flvi.fi` were ours and not a timing
+#: artefact.
+#:
+#: This refutes the inference the task file carried until today ("the root cause
+#: is probably already found", from `unclosed-noscript` alone). There are three
+#: distinct mechanisms here, not one:
+#:
+#:   unclosed-noscript     Chromium re-serializes the rest of the document
+#:   unclosed-script       *inside* the unclosed raw-text element; the
+#:                         pre-parse repair then removes element and page alike.
+#:   deep-nesting          libxml2's nesting-depth limit — nothing to do with
+#:                         raw text at all.
+#:   unterminated-comment  `cleaned_html` survives INTACT (74,523 bytes,
+#:                         contact details present) and markdown is still empty,
+#:                         because the content sits inside the comment.
+#:
+#: That last one is why the guard measures markdown and not `cleaned_html`: the
+#: ratio the task file originally proposed cannot see it at all.
+BODY_SWALLOWING_SHAPES = frozenset(
+    {
+        "unclosed-noscript",
+        "unclosed-script",
+        "unterminated-comment",
+        "deep-nesting",
+    }
+)
+
+#: Of those, the one the collapse guard cannot see, and this is by design.
+#: `unclosed-script` puts the whole document inside a `<script>` element, and
+#: the guard's visible-text measure strips script blocks — it must, because real
+#: pages carry hundreds of KB of inline JS and counting it would wreck the
+#: ratio. So the browser hands us a document with zero visible text, which is
+#: indistinguishable from a legitimately empty page. This shape belongs to the
+#: pre-parse repair, not to the guard. Pinned rather than forgotten.
+GUARD_BLIND_SHAPES = frozenset({"unclosed-script"})
 
 
 def _padding(nbytes: int) -> str:

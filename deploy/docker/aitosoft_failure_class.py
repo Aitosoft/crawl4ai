@@ -60,15 +60,36 @@ ORIGIN_HTTP_ERROR = "origin_http_error"  # origin answered 4xx/5xx
 ORIGIN_BLOCKED = "origin_blocked"  # anti-bot / WAF / edge block
 ORIGIN_UNREACHABLE = "origin_unreachable"  # DNS / TCP / TLS never got there
 RENDER_TIMEOUT = "render_timeout"  # our wall-clock fence fired
-RENDER_ERROR = "render_error"  # our browser/pipeline broke
+RENDER_ERROR = "render_error"  # our browser/pipeline broke, transiently
+RENDER_DEFECT = "render_defect"  # our parse lost the body — ours and PERMANENT
 
-# Envelope-level only (no result exists to carry them).
+# Normally envelope-level (no result exists to carry them).
 CAPACITY = "capacity"  # render gate rejected -> 429
 AUTH = "auth"  # 401/403 from us, not the origin
 BAD_REQUEST = "bad_request"  # malformed request -> 400
+# ...except BAD_REQUEST, which static mode also attaches to a *result* when a
+# redirect hop is refused by the egress broker. That result must never be
+# retried, so it has to be in NON_RETRYABLE_CLASSES below — routing static mode
+# through `http_status_for` without it turns an SSRF refusal into a 500 and buys
+# MAS three more attempts at a URL our own policy has already declined.
 
 #: Classes the origin is responsible for. These must never be reported as 5xx.
 ORIGIN_CLASSES = frozenset({ORIGIN_HTTP_ERROR, ORIGIN_BLOCKED, ORIGIN_UNREACHABLE})
+
+#: Everything that must NOT come back as a retryable 5xx, whoever caused it.
+#:
+#: The distinction the taxonomy was missing is **permanence, not ownership**.
+#: `render_defect` is entirely our fault, and retrying it is still pointless:
+#: the same markup will collapse the same way on every attempt (all four
+#: reproducible shapes return byte-identical HTML across visits). MAS's retry
+#: branch keys on the wire status alone — `failure_class` is received, logged
+#: and unread (their message 09) — so serving this at 500 would buy three more
+#: renders of a page we already know we cannot parse, and 500 is exactly where
+#: `render_error` sits.
+#:
+#: Ownership still lives in the class *name*, which is what we debug from and
+#: what they may eventually branch on. It just no longer decides the status.
+NON_RETRYABLE_CLASSES = ORIGIN_CLASSES | {RENDER_DEFECT, BAD_REQUEST}
 
 # ── error-text signals ───────────────────────────────────────────────────
 # All string matching against crawler/browser error text lives here. Do not
@@ -226,13 +247,22 @@ def effective_status_of(result: dict) -> Optional[int]:
 def http_status_for(failure_classes: Iterable[Optional[str]]) -> int:
     """Request-level HTTP status for a crawl whose results all failed.
 
-    200 when the origin is responsible for all of it — MAS's retry policy then
-    treats it as terminal, which is correct. 5xx stays reserved for us.
+    200 when retrying cannot help — the origin owns it, or we do but permanently.
+    MAS's retry policy then treats it as terminal, which is correct. 5xx stays
+    reserved for failures another attempt might actually clear.
+
+    **This is the single place the mapping happens, and both render modes go
+    through it.** They did not always: static mode returned its results inside an
+    unconditional 200 while full mode ran the same classes through here, so
+    `render_error` meant "retry me 3x" or "give up" depending on which
+    `render_mode` the client happened to ask for — same class, opposite
+    behaviour, documented nowhere. MAS found it (their message 09). Do not
+    reintroduce a second mapping site; add to the vocabulary instead.
     """
     classes = [c for c in failure_classes if c and c != NONE]
     if not classes:
         return 200
-    if all(c in ORIGIN_CLASSES for c in classes):
+    if all(c in NON_RETRYABLE_CLASSES for c in classes):
         return 200
     if any(c == RENDER_TIMEOUT for c in classes):
         return 504

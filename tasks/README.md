@@ -48,7 +48,7 @@ reason — an unfiltered workspace-wide log query — is written up in forensics
 |---|------|------|----------|
 | 1 | `challenge-interstitial-resolve.md` | **phase 1 DONE 2026-08-01**; phase 2 ships with #3+#4 | **The number: a capture wait `W` gets any challenge resolving within `W + 1.22 s`; MAS's 2.0 covers 3.2 s.** One constant, 0/84 mispredictions, zero live requests. Phase 2 is a **go but S, not M** — `maybe_retry_blocked` already re-fetches every detected block with the *same* wait, so it needs a longer wait, not a new mechanism. Two negatives worth the same weight: the `page.content()` nav race cost **no** captures (42/42 identical), and an adaptive shape inherits the detector's recall, so the unmarked interstitial gets nothing. **Message 10 is now unblocked.** |
 | 2 | `render-500-window-2026-07-31.md` | none — logs only, **zero traffic** | **Diagnosed and fix designed 2026-08-01; the S half is written, not yet coded.** All 9 × 500 are our own memory guard (`crawler_pool.py:179`) at our own 85 % threshold. The 235 MB was never the container — it is the gunicorn worker's RSS, and Chrome is child processes (measured: **+2 MB worker RSS vs +139–165 MB cgroup per pooled browser**, ~130 MB of it unreclaimable `anon`), so the reading is roughly right and the memory was scarce. **All nine are on one replica that carried the burst alone for 122 s after a scale-from-zero** — not a scale-out ramp, which is what the first pass said. Real cause: **nothing bounds live browsers** (125 creates / 132 closes for 10–12 signatures). **S1 status code + S2 reading + S3 the never-used permanent browser ship with #3+#4; M1 pool cap is carved out.** MAS answers: **246 origin hits, not 255**, and the clustering is scaling lag. |
-| 3 | `cleaned-html-collapse-guard.md` | none | Second silent whole-body loss in a month; the first ran 3½ months across 406 pages at `success: true`. **A third is already reproduced offline** — `/collapse/unclosed-noscript` loses the whole body through the real production path. Enumerate through the browser, not only through libxml2 — that is what hid this one. Also fixes the `render_error` wire-status split it uncovered. **Do not deploy alone.** |
+| 3 | `cleaned-html-collapse-guard.md` | none | **Part 1 DONE 2026-08-01, landed not deployed.** Guard ships as visible-text-in vs markdown-out — **not** the `cleaned_html` ratio the file proposed, which was refuted twice by measurement (it fires on a healthy 73 KB page, and is blind to `unterminated-comment`, which keeps 74,523 B of `cleaned_html` *containing the content* and still yields no markdown). Thresholds measured against 37 stored real captures, zero live requests. `render_error` wire-status split fixed; one mapping site for both render modes. **Root cause NOT solved — the file's "probably already found" was an inference and it is wrong: four shapes, three mechanisms.** Part 2 is now three separate repairs, sequenced in the task file. **Do not deploy alone.** |
 | 4 | `detector-round3-evidence-vs-inference.md` | none | Eight hosts measured in prod: four blocks missed (every size gate is on `len(html)`; the vendor pads to 80 KB), four invented (including our own error placeholder reported as the origin blocking us). Defect A has a red test; so does the unmarked-interstitial variant. **Ships #3's image**; gates #6. |
 | 5 | `static-fallback-within-fence.md` | none — re-price, likely close | **Drop, not build**, on current evidence. MAS's probe: 0 × 504, nothing within 145 s of the 180 s fence — consistent with `done/render-retry-unbounded-hang.md` having removed the failure this was sized against. 243 fetches is not a workload, but it is the only dataset the current image has seen. |
 | 6 | `preflight-batch-endpoint.md` | #4, then MAS's go-ahead | **Do not build speculatively — their words, and now formally answered.** There is no sweep date and timing is not their driver; it runs when their system is ready. They will give real notice. |
@@ -130,6 +130,28 @@ forensics §11; the coordinator's first pass on this is superseded):
 - **The permanent browser is never used** — 0 hits in 224 pool gets, because MAS
   always sends a `browser_config`. ~130 MB of `anon` per replica, for its whole life.
 
+Found on our side 2026-08-01 (#3 part 1, offline, zero traffic):
+
+- **Four markup shapes swallow the body, not one**, by three distinct mechanisms,
+  all deterministic. `deep-nesting` is **harmless at 1.5 KB and fatal at 73 KB** —
+  enumerating unpadded misses root causes, not just thresholds. `apteam.fi`'s
+  fingerprint fits at least two of them, so the cause is still unknown; their
+  bytes are now worth asking for to pick which repair goes first.
+- **A collapse guard cannot be an HTML-byte ratio.** The healthy control padded
+  to 73 KB gives the same 0.0036 `cleaned_html` ratio as the collapsed page, and
+  `accountor.com`'s real cookie wall is 99,649 → 230. Text-to-text is the only
+  measure that separates them.
+- **`bad_request` was one line from becoming a retried 500.** Static mode attaches
+  it to a result when the egress broker refuses a redirect hop; its unconditional
+  200 was making "MAS must never retry it" true by accident. Caught before
+  shipping, now in `NON_RETRYABLE_CLASSES`.
+- **`test_the_wall_clock_fence_is_a_504_and_ours` is load-flaky** (pre-existing,
+  untouched by #3): it asserts `elapsed_s < 3` against a 1 s fence, so ~2 s of
+  pool + page + teardown overhead has to fit, and a fully-loaded suite run
+  sometimes does not. Failed once in three full runs. Not diagnosed — someone
+  should either widen the margin deliberately or measure fence latency separately
+  from harness overhead.
+
 Owed to MAS, to go out together as message 10 once #1 and #2 land:
 
 - **The 202 result — ANSWERED 2026-08-01, offline.** `W + 1.22 s` is the capture
@@ -142,8 +164,19 @@ Owed to MAS, to go out together as message 10 once #1 and #2 land:
   we do not detect, and only their stored corpus can size that class.
   Also worth telling them: `delay_before_return_html` is already
   per-request-settable, so a per-host value on their side needs no deploy from us.
-- **The wire status we will serve the collapse guard at** (decided: 200 — but
-  send it when it ships, with the `render_error` split fixed alongside).
+- **The wire status we will serve the collapse guard at — BUILT 2026-08-01.**
+  HTTP 200 + result-level `success: false` + `failure_class: render_defect`,
+  content still attached. The `render_error` split is fixed in the same change:
+  one mapping site, both render modes. Send when the image ships. Tell them the
+  new class is **ours and permanent** — the distinction the taxonomy was missing
+  is permanence, not ownership.
+- **Two things we did NOT bundle**, both agreed with them and both deliberately
+  held back: flipping envelope `success` to the aggregate (their own message 09
+  says they never read it for 2xx, and it breaks a pinned contract in an image
+  already changing static mode's wire status), and the `fodbar.fi`
+  "content was present despite the origin status" field (a new contract field
+  should arrive with a message, not inside an image about something else).
+  Propose both in message 10 and ship them together afterwards.
 - **Whether the 9 × 500 reached the origin — ANSWERED 2026-08-01: they did not.**
   The memory guard raises before the browser is created, so no navigation
   happened. **Their day cost 246 origin hits, not 255.** Under the shared-egress

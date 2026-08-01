@@ -38,9 +38,9 @@ curl http://localhost:11235/health
 pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
 # Testing (run from repo root — relative artifact paths; see TESTING.md)
-pytest test-aitosoft/            # ALL offline suites, 153 tests, ~60 s — no server, no customer site
-pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py  # pure-function subset, 130 tests, ~8 s
-pytest test-aitosoft/test_fixture_origin.py   # browser-driven, local fixture origin, 23 tests, ~50 s
+pytest test-aitosoft/            # ALL offline suites, 192 tests, ~85 s — no server, no customer site
+pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # pure-function subset, 152 tests, ~9 s
+pytest test-aitosoft/test_fixture_origin.py   # browser-driven, local fixture origin, 40 tests, ~75 s
 python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression (live server)
 python test-aitosoft/test_site.py <domain> --page <path>            # Single site (live server)
 python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic (live server)
@@ -131,7 +131,10 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 | `page.content()` / `page.evaluate()` have NO timeout | Sent to the driver with no timeout field ⇒ no timer armed; they wait on the frame's execution-context promise, which a navigation replaces forever. `page_timeout` does not cover them. Bounded in `browser_adapter.bounded_evaluate` + `_capture_html` |
 | Origin failures must never be our 5xx | Fixed 2026-07-30: `failure_class` on every result; origin-caused ⇒ HTTP 200 + `success:false`; 5xx reserved for us. `deploy/docker/aitosoft_failure_class.py`, MAS Q2 answer (a) |
 | A nested `<noscript>` deletes the whole page | `<noscript>` can't nest ⇒ outer element never closes ⇒ libxml2 swallows the rest. 312 KB → 97 B `cleaned_html` → 1 B markdown, at HTTP 200 `success:true`. 406 pages / 70 hosts. Fixed by `strip_noscript()` pre-parse |
-| An **unclosed** `<noscript>` still does, and the offline suite can't see it | libxml2 auto-closes it, so `test_noscript_body_collapse.py` reports that shape fixed. Chromium instead enters raw-text mode and serializes the rest of the document — `</body></html>` included — *inside* the element, so `strip_noscript()` correctly removes the element and takes the page with it. Same silent HTTP 200 `success:true` loss. Only visible with a browser in the loop; found by `fixture_origin` 2026-07-31, owned by `tasks/cleaned-html-collapse-guard.md` |
+| An **unclosed** `<noscript>` still does, and the offline suite can't see it | libxml2 auto-closes it, so `test_noscript_body_collapse.py` reports that shape fixed. Chromium instead enters raw-text mode and serializes the rest of the document — `</body></html>` included — *inside* the element, so `strip_noscript()` correctly removes the element and takes the page with it. Only visible with a browser in the loop; found by `fixture_origin` 2026-07-31 |
+| **Four** markup shapes swallow the body, not one | Enumerated through the browser at 73 KB, 2026-08-01: `unclosed-noscript`, `unclosed-script`, `deep-nesting` (libxml2 depth limit), `unterminated-comment`. Three distinct mechanisms, all deterministic. `deep-nesting` is **harmless at 1.5 KB and fatal at 73 KB** — enumerate padded or you will miss root causes, not just mis-size thresholds. Root cause still open (`tasks/cleaned-html-collapse-guard.md` part 2) |
+| A collapse guard must compare **text to text**, never HTML bytes | `len(html)`→`len(cleaned_html)` fires on healthy pages: the healthy control padded to 73 KB of inline CSS gives the *same* 0.0036 ratio as the collapsed page, and `accountor.com`'s real cookie wall is 99,649→230. It is also blind to `unterminated-comment`, which keeps 74,523 B of `cleaned_html` **containing the content** and still yields no markdown. Shipped guard: visible-text chars in vs markdown chars out, 500-char floors, ratio 0.10 vs a healthy minimum of 1.311 |
+| One `failure_class` must mean one wire status | `render_error` was 200 in static mode (never raises) and 500 in full mode — same class, opposite retry behaviour, decided by `render_mode`. Both modes now route through `server._crawl_response` → `http_status_for`. The missing axis was **permanence, not ownership**: `render_defect` is entirely ours *and* must not be retried (`NON_RETRYABLE_CLASSES`) |
 | Tier-2 antibot patterns never see HTTP 200 | `is_blocked` only reaches tier 2 via the 4xx/5xx branches, but challenge interstitials are served with 200 — so `Checking your browser` had never fired. Fixed by the challenge tier (2026-07-30) |
 | Per-replica render capacity is 2 (2 vCPU) | Benchmarked 2026-07-17; >2 concurrent renders degrade all requests. Enforced by RenderGate + ACA scale rule |
 
@@ -220,8 +223,8 @@ unknown fields are silently dropped; `page_timeout` is clamped. See
 | `crawl4ai/async_configs.py` | +`CrawlerRunConfig.total_timeout` (default None, server-side only) (PR upstream pending) |
 | `crawl4ai/content_scraping_strategy.py` | +`strip_noscript()` before `document_fromstring` — a nested `<noscript>` makes libxml2 swallow the whole body (PR upstream pending) |
 | `crawl4ai/antibot_detector.py` | +challenge tier (`robot-suspicion`, browser-check prose); `Access Denied` tightened to title/heading |
-| `deploy/docker/api.py` | +static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission), single-URL guard (multi-URL → 400), fence-504 warning; `failure_class` on every result, `status_code` rewritten to the final redirect hop, origin-caused exceptions return an envelope not a 500, monitor records the client's real outcome |
-| `deploy/docker/server.py` | static branch in `/crawl`; lifespan closes static client + patchright singleton; all-failed branch maps `failure_class` → 200/504/500 instead of always 500; error envelopes carry `failure_class` |
+| `deploy/docker/api.py` | +static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission), single-URL guard (multi-URL → 400), fence-504 warning; `failure_class` on every result, `status_code` rewritten to the final redirect hop, origin-caused exceptions return an envelope not a 500, monitor records the client's real outcome, collapse guard on every successful result |
+| `deploy/docker/server.py` | static branch in `/crawl`; lifespan closes static client + patchright singleton; `_crawl_response` maps `failure_class` → 200/504/500 for **both** render modes instead of always 500 (full) / always 200 (static); error envelopes carry `failure_class` |
 | `deploy/docker/schemas.py` | `CrawlRequest.render_mode` field |
 | `deploy/docker/crawler_pool.py` | MAX_PAGES enforcement + overflow keys; BUSY_SINCE stuck-slot janitor (file unchanged upstream since 0.8.6) |
 | `deploy/docker/config.yml` | Deployment config: stealth kwargs, `wall_clock_s: 180`, `total_timeout: 100000` (per-`arun` fetch budget), pool limits, render admission (`render_capacity: 2` — MUST match ACA scale rule) |
@@ -239,7 +242,8 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 | `deploy/docker/aitosoft_patchright_fallback.py` | Second-tier retry via patchright for blocked crawls |
 | `deploy/docker/aitosoft_admission.py` | RenderGate: per-replica render admission (capacity 2, bounded queue, 429 + Retry-After) |
 | `deploy/docker/aitosoft_trust.py` | Trusted-client relaxations of the untrusted-config boundary (pinned by test_mas_contract.py) |
-| `deploy/docker/aitosoft_failure_class.py` | `failure_class` taxonomy + transport mapping — the single place `net::ERR_*` / ACS-GOTO text is matched |
+| `deploy/docker/aitosoft_failure_class.py` | `failure_class` taxonomy + transport mapping — the single place `net::ERR_*` / ACS-GOTO text is matched, and the single place a class becomes a wire status (`http_status_for`) |
+| `deploy/docker/aitosoft_collapse_guard.py` | Detects a capture whose body vanished in our parse: **visible text chars in vs markdown chars out**, never an HTML-byte ratio. Thresholds measured against 37 stored real captures |
 
 ### 100% Aitosoft Code (safe to modify freely)
 - `tasks/` — task tracking

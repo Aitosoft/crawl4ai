@@ -26,11 +26,21 @@ import os
 import pytest
 
 from fixture_origin import (
+    BODY_SWALLOWING_SHAPES,
     COLLAPSE_SHAPES,
     CONTENT_MARKER,
+    CONTENT_TAIL_MARKER,
+    GUARD_BLIND_SHAPES,
     PADDED_BLOCK_TEXT,
     loopback_allowed,
 )
+
+#: apteam.fi's fingerprint: 73,970 bytes of HTML, 96 bytes of `cleaned_html`,
+#: 1 character of markdown, byte-identical across two visits forty minutes
+#: apart. The collapse guard is a **ratio**, so every shape has to be measured
+#: at a realistic size — the unpadded route serves 1.5 KB, and a 1.5 KB page
+#: that collapses is not a collapse by any threshold worth shipping.
+COLLAPSE_BYTES = 73000
 
 # Resolution delays chosen so neither case is a race against the pipeline's own
 # overhead. Measured 2026-07-31: everything between `page.goto` returning and
@@ -344,7 +354,35 @@ def test_a_benign_redirect_stays_a_success(fixture_origin, production_path):
 # ── body-swallowing markup (tasks/cleaned-html-collapse-guard.md) ────────
 
 
-@pytest.mark.parametrize("shape", sorted(set(COLLAPSE_SHAPES) - {"unclosed-noscript"}))
+def test_the_healthy_control_is_not_degenerate(fixture_origin, production_path):
+    """The control every other test leans on has to be a *healthy* page by the
+    customer's own definition, and until 2026-08-01 it was not: CONTENT_HTML
+    rendered to ~140 markdown characters, below MAS's
+    `DEGENERATE_CAPTURE_CHARS = 500`. A capture that succeeds completely while
+    tripping their degenerate floor is not a control.
+
+    It matters most here, because this task's entire output is a threshold and
+    the guard's visible-text floor is 500 characters. Sized against the old
+    control, the guard would have been tuned to fire on healthy small pages.
+
+    Note the unit on each side: 500 is **markdown characters**, and the collapse
+    ratio is markdown characters per **visible-text character**. Both are text;
+    `len(html)` is bytes and is deliberately absent from both.
+    """
+    outcome = production_path.crawl(
+        fixture_origin.url("/ok"), delay_before_return_html=SHORT_WAIT
+    )
+
+    assert outcome.success
+    assert len(outcome.markdown) > 500, (
+        f"the healthy control renders {len(outcome.markdown)} markdown chars, "
+        "which MAS would record as a degenerate capture"
+    )
+    assert CONTENT_MARKER in outcome.markdown
+    assert CONTENT_TAIL_MARKER in outcome.markdown
+
+
+@pytest.mark.parametrize("shape", sorted(set(COLLAPSE_SHAPES) - BODY_SWALLOWING_SHAPES))
 def test_no_markup_shape_swallows_the_body(shape, fixture_origin, production_path):
     """test_noscript_body_collapse.py pins the scraping strategy in isolation;
     this pins the whole path, which is where the loss was actually observed —
@@ -352,53 +390,79 @@ def test_no_markup_shape_swallows_the_body(shape, fixture_origin, production_pat
     70 hosts over 3.5 months.
 
     Parameterised over the shape family so the next member is a dict entry.
+    Served at `apteam.fi`'s size, because a shape that is harmless at 1.5 KB can
+    still cross a size-dependent limit at 73 KB — `deep-nesting` does exactly
+    that.
     """
     outcome = production_path.crawl(
-        fixture_origin.url(f"/collapse/{shape}"), delay_before_return_html=SHORT_WAIT
+        fixture_origin.url(f"/collapse/{shape}", bytes=COLLAPSE_BYTES),
+        delay_before_return_html=SHORT_WAIT,
     )
 
     assert outcome.success, outcome.error_message
     assert CONTENT_MARKER in outcome.markdown, f"{shape}: body swallowed"
-    assert "Referenssit" in outcome.markdown, f"{shape}: trailing content lost"
+    assert CONTENT_TAIL_MARKER in outcome.markdown, f"{shape}: trailing content lost"
 
 
-def test_an_unclosed_noscript_still_swallows_the_body(fixture_origin, production_path):
-    """FOUND BY THIS FIXTURE, 2026-07-31. Pinned as today's behaviour.
+@pytest.mark.parametrize("shape", sorted(BODY_SWALLOWING_SHAPES - GUARD_BLIND_SHAPES))
+def test_a_swallowed_body_is_reported_as_a_defect(
+    shape, fixture_origin, production_path
+):
+    """The guard, end to end through the real path. THIS TEST WAS INVERTED on
+    2026-08-01 — it used to assert the loss was silent.
 
-    `strip_noscript()` fixed the *nested* shape, and
-    test_noscript_body_collapse.py reports the unclosed shape fixed too — but
-    that suite feeds the raw string to libxml2, which auto-closes the element,
-    so the body survives and the test passes. Chromium does the opposite: an
-    unclosed `<noscript>` puts the parser into raw-text mode, so the rest of the
-    document — `</body></html>` included — is serialized *inside* the element.
-    `strip_noscript()` then correctly removes the element and takes the page
-    with it.
+    The root cause is not fixed: these shapes still lose their bodies. What
+    changed is that the loss is no longer reported as a success. A capture that
+    arrived with 1,135 characters of visible text and produced zero markdown now
+    comes back `success: false` with `failure_class: render_defect`.
 
-    Result: the body in, `<html><head><title>…</title></head></html>` out, one
-    newline of markdown, at HTTP 200 `success: true`. The same silent whole-body
-    loss that ran 3.5 months, surviving its own fix through a parser difference
-    that only a browser in the loop can show.
-
-    This route serves ~309 bytes by default — the *shape*, not the size. Pass
-    `?bytes=73000` to reproduce `apteam.fi`'s 73,970-byte fingerprint; the
-    collapse guard's thresholds are ratios and must be sized against the padded
-    form, never against this one.
-
-    This belongs to tasks/cleaned-html-collapse-guard.md (#2), which is gated on
-    this fixture precisely so it can be worked offline. Invert this test when
-    the guard ships.
+    On the wire it is **HTTP 200**, and that is the load-bearing half. MAS's
+    retry branch is `retryableStatuses.includes(response.status)`, evaluated
+    before the body is parsed (their message 09), so 200 costs zero retries —
+    which is right, because all four shapes are deterministic and a second
+    render would collapse identically. 500 would have bought three of them.
     """
     outcome = production_path.crawl(
-        fixture_origin.url("/collapse/unclosed-noscript"),
+        fixture_origin.url(f"/collapse/{shape}", bytes=COLLAPSE_BYTES),
         delay_before_return_html=SHORT_WAIT,
     )
 
     assert (
-        "<noscript>" in outcome.html and CONTENT_MARKER in outcome.html
-    ), "the browser did serve us the content; the loss is downstream"
+        CONTENT_MARKER in outcome.html
+    ), f"{shape}: the browser did serve us the content; the loss is downstream"
+    assert (
+        CONTENT_MARKER not in outcome.markdown
+    ), f"{shape}: no longer collapses — move it out of BODY_SWALLOWING_SHAPES"
+
+    assert not outcome.success, f"{shape}: the loss is silent again"
+    assert outcome.failure_class == "render_defect"
+    assert outcome.http_status == 200, "a permanent defect must not be retried"
+    assert "collapsed" in outcome.error_message
+
+
+@pytest.mark.parametrize("shape", sorted(GUARD_BLIND_SHAPES))
+def test_a_body_swallowed_into_a_script_is_still_silent(
+    shape, fixture_origin, production_path
+):
+    """TODAY'S BEHAVIOUR, pinned so the blind spot is recorded rather than
+    forgotten.
+
+    `unclosed-script` puts the entire document inside a `<script>` element, and
+    the guard's visible-text measure strips script blocks — it has to, since
+    real pages carry hundreds of KB of inline JS and counting it would collapse
+    the ratio that makes the guard safe. So this capture is indistinguishable
+    from a legitimately empty page, and comes back green.
+
+    This is the pre-parse repair's job, not the guard's. Invert this test when
+    that lands (tasks/cleaned-html-collapse-guard.md part 2).
+    """
+    outcome = production_path.crawl(
+        fixture_origin.url(f"/collapse/{shape}", bytes=COLLAPSE_BYTES),
+        delay_before_return_html=SHORT_WAIT,
+    )
+
     assert CONTENT_MARKER not in outcome.markdown
-    assert outcome.markdown.strip() == "", "TODAY'S BEHAVIOUR — whole body lost"
-    assert outcome.success, "and silently: HTTP 200, success:true, no error"
+    assert outcome.success, "TODAY'S BEHAVIOUR — the guard cannot see this one"
     assert outcome.failure_class == "none"
 
 

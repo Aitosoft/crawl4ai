@@ -26,8 +26,10 @@ from crawl4ai import (
     LLMConfig
 )
 from crawl4ai.async_configs import Provenance, UntrustedConfigError
+from aitosoft_collapse_guard import guard_result
 from aitosoft_failure_class import (
     ORIGIN_CLASSES,
+    RENDER_DEFECT,
     RENDER_ERROR,
     classify_exception,
     classify_result,
@@ -898,10 +900,28 @@ async def handle_crawl_request(
                 if _eff_status is not None:
                     result_dict["status_code"] = _eff_status
 
+                # Aitosoft: catch a capture whose body vanished in our own parse.
+                # Twice a markup shape has reduced a full page to ~nothing while
+                # every signal stayed green — the <noscript> case ran 3.5 months
+                # across 406 pages at success:true. The guard measures the
+                # consequence (visible text in, markdown out) rather than the
+                # cause, because the causes are unbounded.
+                # See aitosoft_collapse_guard.py.
+                _collapse = guard_result(result_dict)
+
                 # Aitosoft: `failure_class` on every result, successes included
                 # ("none"), so a missing field means an old build rather than a
                 # success. See aitosoft_failure_class.py.
                 result_dict["failure_class"] = classify_result(result_dict)
+
+                if _collapse:
+                    # The guard is a better witness than classify_result, which
+                    # only sees the error text the guard itself just wrote.
+                    # Permanent and ours: 200 on the wire, no retries.
+                    result_dict["failure_class"] = RENDER_DEFECT
+                    logger.error(
+                        "RENDER DEFECT: url=%s %s", result_dict.get("url"), _collapse
+                    )
 
                 processed_results.append(result_dict)
             except Exception as e:

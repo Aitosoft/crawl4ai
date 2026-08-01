@@ -141,10 +141,27 @@ behaviour we have not, and `pytest test-aitosoft/` must stay fast, so name them
 `experiment_*.py` — that keeps them out of collection without another
 `collect_ignore` entry.
 
-One known gap in the fixture: `CONTENT_HTML` renders to ~149 markdown characters,
-*below* MAS's `DEGENERATE_CAPTURE_CHARS = 500`, so a successful fixture capture is
-degenerate by their floor. Anything measuring a degenerate-capture threshold must
-grow the content page first.
+**That gap is closed (2026-08-01).** `CONTENT_HTML` used to render to ~140
+markdown characters — *below* MAS's `DEGENERATE_CAPTURE_CHARS = 500` — so a
+completely successful fixture capture was degenerate by the customer's own floor.
+It now renders **1,227 markdown characters over 1,135 of visible text**, above 500
+on both sides of the unit boundary, and
+`test_fixture_origin.py::test_the_healthy_control_is_not_degenerate` fails if
+anyone trims it back. Keep it that way: the collapse guard's thresholds are sized
+against this page, and a healthy control that trips the customer's floor is not a
+control.
+
+Two fixture habits that came out of sizing that guard, both of which cost a root
+cause when ignored:
+
+- **Pad to a realistic size before drawing conclusions.** `/collapse/*` serves
+  ~1.5 KB by default; `?bytes=73000` reproduces `apteam.fi`'s fingerprint.
+  `deep-nesting` does **not** collapse at 1.5 KB and does at 73 KB, so an
+  unpadded enumeration misses a whole mechanism — not merely a threshold.
+- **Name the unit every time.** MAS's 500 is **markdown characters**; our collapse
+  ratio is markdown characters per **visible-text character**; `len(html)` and
+  `len(cleaned_html)` are **HTML bytes** and appear nowhere in the guard, because
+  they are dominated by inline CSS/JS that cleaning strips by design.
 
 The fixture runs on loopback, which `egress_broker` exists to refuse. It is not
 weakened: `loopback_allowed()` flips the two flags

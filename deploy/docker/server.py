@@ -896,6 +896,44 @@ async def metrics():
     return RedirectResponse(config["observability"]["prometheus"]["endpoint"])
 
 
+def _crawl_response(results: dict) -> JSONResponse:
+    """Aitosoft: the one place a crawl envelope becomes a wire status.
+
+    Upstream raised 500 here unconditionally whenever every result failed, and
+    our security handler then stripped the detail — so under the single-URL
+    contract EVERY full-mode failure reached MAS as an opaque
+    {"error": "Internal server error"} with no status_code, no
+    redirected_status_code, no error_message and no crawl_stats. MAS retries 500
+    three times, so a permanently blocked or broken origin cost four browser
+    renders to learn nothing.
+
+    MAS answered Q2 (a) on 2026-07-30: origin-caused => HTTP 200 +
+    success:false + failure_class + the origin's real final status; 5xx reserved
+    for our own faults. Their message 09 sharpened it: the wire status is the
+    *whole* contract, because their retry branch is
+    `retryableStatuses.includes(response.status)`, evaluated before the body is
+    parsed. `failure_class` is received, logged and unread.
+
+    Both render modes share this function so that one class cannot mean two
+    things — see the note at the static short-circuit.
+    See tasks/origin-vs-crawler-failure-classification.md and
+    tasks/cleaned-html-collapse-guard.md.
+    """
+    from aitosoft_failure_class import http_status_for
+
+    if any(result["success"] for result in results["results"]):
+        return JSONResponse(results)
+
+    _status = http_status_for(r.get("failure_class") for r in results["results"])
+    if _status == 200:
+        return JSONResponse(results)
+    if _status == 504:
+        raise HTTPException(504, "Crawl exceeded the time limit")
+    raise HTTPException(
+        500, f"Crawl request failed: {results['results'][0]['error_message']}"
+    )
+
+
 @app.post("/crawl")
 @limiter.limit(config["rate_limiting"]["default_limit"])
 @mcp_tool("crawl")
@@ -914,10 +952,22 @@ async def crawl(
     if crawl_request.hooks and not HOOKS_ENABLED:
         raise HTTPException(403, "Hooks are disabled. Set CRAWL4AI_HOOKS_ENABLED=true to enable.")
 
-    # Aitosoft: static-mode is non-streaming by definition and returns
-    # HTTP 200 even when the inner result is a failure — so short-circuit
-    # before the stream check and before the all-failures → 500 rewrite.
-    # crawler_config/browser_config are ignored by the static path.
+    # Aitosoft: static-mode is non-streaming by definition, so short-circuit
+    # before the stream check. crawler_config/browser_config are ignored by the
+    # static path.
+    #
+    # It used to short-circuit the status mapping too, returning an
+    # unconditional 200. That is what made `render_error` mean two different
+    # things: static mode's own broken path came back inside a 200 (terminal)
+    # while full mode's identical class went out at 500 (retried 3x), decided by
+    # whichever `render_mode` the client happened to ask for. MAS found it and
+    # were right to call it out (their message 09). The class now decides the
+    # status in one place for both modes — `http_status_for`.
+    #
+    # Static mode's actual contract is unchanged and is not what was broken:
+    # network failures still never raise, because they classify as origin
+    # classes and origin classes map to 200. Only a genuine fault in our own
+    # static path changes, and it changes to the truth.
     if crawl_request.render_mode == "static":
         results = await handle_crawl_request(
             urls=crawl_request.urls,
@@ -928,7 +978,7 @@ async def crawl(
             crawler_configs=crawl_request.crawler_configs,
             render_mode="static",
         )
-        return JSONResponse(results)
+        return _crawl_response(results)
 
     # Check whether it is a redirection for a streaming request
     try:
@@ -956,32 +1006,7 @@ async def crawl(
         hooks_config=hooks_config,
         crawler_configs=crawl_request.crawler_configs,
     )
-    # check if all of the results are not successful
-    if all(not result["success"] for result in results["results"]):
-        # Aitosoft: upstream raises 500 here unconditionally, and our security
-        # handler above then strips the detail — so under the single-URL
-        # contract EVERY full-mode failure reached MAS as an opaque
-        # {"error": "Internal server error"} with no status_code, no
-        # redirected_status_code, no error_message and no crawl_stats. MAS
-        # retries 500 three times, so a permanently blocked or broken origin
-        # cost four browser renders to learn nothing.
-        #
-        # MAS answered Q2 (a) on 2026-07-30: origin-caused => HTTP 200 +
-        # success:false + failure_class + the origin's real final status; 5xx
-        # reserved for our own faults. Return the envelope when the origin owns
-        # the failure; keep 500/504 when we do.
-        # See tasks/origin-vs-crawler-failure-classification.md.
-        from aitosoft_failure_class import http_status_for
-
-        _status = http_status_for(
-            r.get("failure_class") for r in results["results"]
-        )
-        if _status == 200:
-            return JSONResponse(results)
-        if _status == 504:
-            raise HTTPException(504, "Crawl exceeded the time limit")
-        raise HTTPException(500, f"Crawl request failed: {results['results'][0]['error_message']}")
-    return JSONResponse(results)
+    return _crawl_response(results)
 
 
 @app.post("/crawl/stream")

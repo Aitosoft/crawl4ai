@@ -129,20 +129,28 @@ measurable in one deploy.
   `redirected_status_code` with that caveat stated, so neither side branches on
   `status == 200` meaning success. See `tasks/challenge-interstitial-resolve.md`
   for what we think it *is*.
-- **Flip envelope `success` to the aggregate.** We asked; MAS answered: flip it,
-  **on the condition that the HTTP wire status stays 200** — if the flip ever
-  moved the wire status their client would route a permanent origin failure into
-  its 5xx retry path. `aitosoft_failure_class.http_status_for` already returns 200
-  for all-origin-class failures, so the condition holds by construction today.
-  Pin that with a test rather than a comment, because it is the load-bearing half.
-  Static mode must get the same treatment so the two render modes still agree.
-- **A field saying content was present despite the origin's status** — MAS asked
-  for this by name (message 09 §5) and it is the whole of what they want out of
-  `fodbar.fi`. It is smaller than a reclassification: keep reporting the origin's
-  403, keep `origin_blocked`, and add one boolean-or-count field so *they* can
-  decide. The decision belongs on their side, where 117,000 stored pages are to
-  compare against, and it means we never have to overrule an origin. Name the
-  unit if it is a count — markdown characters, not HTML bytes.
+- ~~**Flip envelope `success` to the aggregate.**~~ **DEFERRED out of this image,
+  coordinator decision 2026-08-01.** The collapse-guard session argued against
+  bundling it and the argument holds: MAS's message 09 says the envelope's
+  `success` **is never read on 2xx** — they take `results[0]` — so the flip buys
+  no behaviour, while breaking a pinned contract (`test_static_mode.py:257`) in
+  an image that already changes static mode's wire-status mapping. Two contract
+  changes in one deploy is how a measurement gets spent for nothing. It stays
+  agreed with MAS and stays worth doing; do it in its own change, where a
+  surprise is attributable. **Do not implement it here.**
+- **A field saying content was present despite the origin's status — KEEP, with
+  one condition.** MAS asked for this by name (message 09 §5) and it is the whole
+  of what they want out of `fodbar.fi`. It is smaller than a reclassification:
+  keep reporting the origin's 403, keep `origin_blocked`, add one field so *they*
+  can decide, where 117,000 stored pages are to compare against. The
+  collapse-guard session wanted this deferred too, on the grounds that a new
+  field should not arrive unannounced — that concern is right and is met by
+  **shipping it only if message 10 describes it**. If message 10 has not gone out
+  when this image is ready, drop the field rather than delay the image; it is
+  additive and can follow. The measurement already exists in
+  `aitosoft_collapse_guard` (visible text vs markdown), so this is a naming and
+  plumbing job, not a new computation. Name the unit if it is a count — markdown
+  characters, not HTML bytes.
 
 ## Verification
 
@@ -173,8 +181,14 @@ measurable in one deploy.
 possibly the memory-guard fix from `render-500-window-2026-07-31.md`. Land all of
 it first, then one deploy:
 
-1. Full offline suite green (`pytest test-aitosoft/`), including the inverted
-   red tests rather than deleted ones.
+1. Full offline suite green (`pytest test-aitosoft/`) — **192 tests as of
+   2026-08-01**, including the inverted red tests rather than deleted ones.
+   **One known flaky test:** `test_fixture_origin.py::test_the_wall_clock_fence_is_a_504_and_ours`
+   failed 1 of 3 full runs during the collapse-guard session and passed 192/192
+   in the coordinator's check. It is load-sensitive, pre-existing, and untouched
+   by that diff. Re-run before believing it, and do **not** treat a single red
+   there as this image's regression — but do not wave through a *second* failure
+   in the same file either, since that is where the browser-driven coverage is.
 2. Tier 1 regression 4/4 — `python test-aitosoft/test_regression.py --tier 1
    --version <label>` — **before** the deploy, not after.
 3. `./azure-deployment/deploy-image.sh <tag>`. Never set env vars during a

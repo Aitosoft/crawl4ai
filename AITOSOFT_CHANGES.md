@@ -39,6 +39,124 @@ Keeping this log helps when syncing with upstream updates.
 
 ---
 
+## Collapse guard + one wire status per failure class (2026-08-01)
+
+Part 1 of `tasks/cleaned-html-collapse-guard.md`. **Landed, not deployed** — it
+ships in one image with `detector-round3-evidence-vs-inference.md`.
+
+New: `deploy/docker/aitosoft_collapse_guard.py`,
+`test-aitosoft/test_collapse_guard.py` (22 offline tests).
+Modified: `aitosoft_failure_class.py`, `api.py`, `server.py`,
+`test-aitosoft/fixture_origin.py`, `test-aitosoft/test_fixture_origin.py`.
+
+### The guard
+
+Twice a markup shape has reduced a whole page to nothing while every signal we
+report stayed green — the `<noscript>` case ran **3.5 months across 406 pages and
+70 hosts** at HTTP 200 / `success: true` / one character of markdown, and we
+learned about it only because MAS eventually noticed. The causes are unbounded
+(every WordPress plugin can mint another), so the guard detects the
+**consequence**.
+
+**It is not the `html` → `cleaned_html` ratio the task file proposed**, and both
+reasons are measurements:
+
+- That ratio fires on healthy pages. `len(html)` is dominated by inline CSS/JS,
+  which cleaning strips by design. The fixture's *healthy* control padded to
+  73 KB gives 261 bytes of `cleaned_html` — ratio 0.0036, **byte-identical to the
+  collapsed page's**. Real captures agree: `accountor.com`'s cookie wall is
+  99,649 → 230 → 125 and is not a defect.
+- It is blind to a whole mechanism. `/collapse/unterminated-comment` returns
+  **74,523 bytes of `cleaned_html` containing the contact details** and still
+  produces zero markdown.
+
+So the guard compares **visible text characters in the rendered HTML** against
+**markdown characters out** — text on both sides, the same unit MAS's
+`DEGENERATE_CAPTURE_CHARS = 500` is written in. The unit hazard that runs through
+this whole area (HTML *bytes* vs markdown *characters*) is handled by never
+crossing it. Whitespace is normalised first: `monidor.com`'s interstitial
+measures 506 raw "visible" characters and 58 collapsed, and counting raw would
+have fired on a challenge screen.
+
+Thresholds measured against **37 distinct real captures** stored under
+`test-aitosoft/artifacts/` — zero live requests:
+
+| population | n | visible chars | markdown/visible |
+|---|---:|---:|---:|
+| healthy content pages | 31 | 739–34,172 | **1.311–2.400** |
+| cookie-wall / JS shells | 5 | 0 | *nothing to lose* |
+| challenge interstitial | 1 | 58 | 1.000 |
+| collapsed (fixture, 4 shapes) | 4 | 1,135–1,138 | **0.000** |
+
+`MIN_VISIBLE_TEXT_CHARS = 500`, `MAX_MARKDOWN_CHARS = 500` (MAS's own floor — the
+guard can only fire on captures they already discard), and
+`MAX_MARKDOWN_TO_VISIBLE_RATIO = 0.10`, which is 13× below the lowest healthy
+page ever measured. `test_thresholds_clear_every_real_capture` re-derives the
+corpus on every run so the constants cannot drift from the evidence. The markdown
+test runs first and screens out every healthy page, so the 9 ms visible-text pass
+never runs on the path that matters.
+
+A detected collapse is **HTTP 200 + result-level `success: false` +
+`failure_class: render_defect`**, content still attached.
+
+### The root cause is NOT solved, and the file said it probably was
+
+That was an inference from one fixture. Enumerated through the browser at
+`?bytes=73000`, twice each: **four shapes lose the body, by three mechanisms**,
+all deterministic. `unclosed-noscript` and `unclosed-script` (Chromium
+re-serializes the document inside the unclosed raw-text element), `deep-nesting`
+(libxml2's depth limit — **harmless at 1.5 KB, fatal at 73 KB**, so an unpadded
+enumeration would have missed it), and `unterminated-comment` (loss is in
+markdown generation, `cleaned_html` intact). `apteam.fi`'s fingerprint is
+consistent with at least two of them, so which one it is remains unknown.
+Recorded in `fixture_origin.BODY_SWALLOWING_SHAPES`.
+
+`unclosed-script` is a **known blind spot**: it puts the document inside a
+`<script>`, and the guard's visible-text measure strips script blocks (it must —
+real pages carry hundreds of KB of inline JS). Pinned by
+`test_a_body_swallowed_into_a_script_is_still_silent` rather than forgotten.
+
+### One class, one wire status
+
+MAS found that `render_error` was served at two statuses: static mode returned it
+inside an unconditional 200 while full mode mapped it to 500, decided by
+`render_mode` and documented nowhere. `server.py` now routes **both** modes
+through one `_crawl_response`, so `http_status_for` is the single mapping site.
+Static mode's actual contract is unchanged — network failures still never raise,
+because they classify as origin classes and origin classes map to 200.
+
+The taxonomy was missing **permanence, not ownership**: `render_defect` is
+entirely our fault and still must not be retried. Hence `NON_RETRYABLE_CLASSES`
+alongside `ORIGIN_CLASSES`.
+
+**A defect this fix would otherwise have shipped:** static mode attaches
+`bad_request` to a *result* when the egress broker refuses a redirect hop, and
+that call site's own comment says "MAS must never retry it". Routing it through
+`http_status_for` turns it into a **500, retried 3×** — its old unconditional 200
+had been making the comment true by accident. `bad_request` is now in
+`NON_RETRYABLE_CLASSES`, pinned by `test_an_ssrf_refusal_is_not_retryable`. Found
+by reading every class static mode can emit, not by the 151 tests that passed.
+
+### Instrument fix (test-only, and load-bearing)
+
+`fixture_origin.CONTENT_HTML` — the healthy control every route serves as its
+success case — rendered to ~140 markdown characters, *below* MAS's
+`DEGENERATE_CAPTURE_CHARS = 500`. A capture that succeeds completely while
+tripping the customer's own floor is not a control, and this task's whole output
+is a threshold. Grown to **1,227 markdown characters over 1,135 of visible
+text**; pinned by `test_the_healthy_control_is_not_degenerate`.
+
+### Tests
+
+192 total, zero live requests: 152 offline (`pytest test-aitosoft/`
+minus the browser suite) + 40 browser-driven `test_fixture_origin.py`.
+`test_an_unclosed_noscript_still_swallows_the_body` **inverted** into
+`test_a_swallowed_body_is_reported_as_a_defect`. Tier 1 regression is **not** run
+— it needs a live server and four live requests, and belongs to the shared
+image's deploy, not to this landing.
+
+---
+
 ## Local fixture origin (2026-07-31)
 
 Closes `tasks/done/fixture-origin.md`. **Test-only — no production file
