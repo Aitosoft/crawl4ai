@@ -23,15 +23,22 @@ golden rule 0. **Tasks #1–#3 were each drafted with live hits and each now nee
 zero**; every one of them already has routes and, in two cases, a red test
 waiting to be inverted. Add a route before you add a request.
 
-**The order below is the session order.** #1–#4 are four sessions: two
+**The order below is the session order.** #1–#4 were four sessions: two
 investigations that produce numbers and no code, then two code tasks that ship in
 **one image**. That grouping is load-bearing in both directions — #2's fix, if
-small, joins #3+#4's deploy, and after that image ships the option is gone; and
-#1+#2 together are what message 10 to MAS is waiting on.
+small, joins #3+#4's deploy, and after that image ships the option is gone.
+
+**Updated 2026-08-01: #1's investigation half is done and its code half shrank to
+S**, so the image is now #1-phase-2 + #2 + #3 + #4, not #3 + #4. Message 10 is no
+longer waiting on #1 — only on #2, and #2's cause is already found. Both
+investigations produced a decisive **negative** alongside their number (#1: the
+`page.content()` nav race costs no captures; #2: the 500s never reached the
+origin), which is worth as much to MAS as the positives and should be sent with
+the same confidence.
 
 | # | Task | Gate | Why here |
 |---|------|------|----------|
-| 1 | `challenge-interstitial-resolve.md` | none — **experiment first, no code** | 202 turns out to be the challenge layer's code, and it serves both the interstitial and the real page. If we are capturing the interstitial, 23 of the 31 blocked hosts may come back for free and the proxy question shrinks to 4. The fixture already pins both halves (interstitial at a 0.1 s wait, real page at 2.0 s, same 202); phase 1 owes the curve between them. **First because MAS is holding their capture-timing design for it** — it is the only open item blocking another team. |
+| 1 | `challenge-interstitial-resolve.md` | **phase 1 DONE 2026-08-01**; phase 2 ships with #3+#4 | **The number: a capture wait `W` gets any challenge resolving within `W + 1.22 s`; MAS's 2.0 covers 3.2 s.** One constant, 0/84 mispredictions, zero live requests. Phase 2 is a **go but S, not M** — `maybe_retry_blocked` already re-fetches every detected block with the *same* wait, so it needs a longer wait, not a new mechanism. Two negatives worth the same weight: the `page.content()` nav race cost **no** captures (42/42 identical), and an adaptive shape inherits the detector's recall, so the unmarked interstitial gets nothing. **Message 10 is now unblocked.** |
 | 2 | `render-500-window-2026-07-31.md` | none — logs only, **zero traffic** | **Cause found 2026-08-01, fix not designed.** All 9 × 500 are our own memory guard (`crawler_pool.py:179`) refusing to create a browser at our own 85 % threshold — while the process held 235 MB on a 4 GiB replica. Every one landed on a scale-out step (2→4 replicas, then 4→6), which is what the sweep does continuously, and it arrives as the one status MAS retries 3×. Both of MAS's questions are answered by it: **the 9 never reached the origin (246 hits, not 255)** and **the clustering is the ramp**. |
 | 3 | `cleaned-html-collapse-guard.md` | none | Second silent whole-body loss in a month; the first ran 3½ months across 406 pages at `success: true`. **A third is already reproduced offline** — `/collapse/unclosed-noscript` loses the whole body through the real production path. Enumerate through the browser, not only through libxml2 — that is what hid this one. Also fixes the `render_error` wire-status split it uncovered. **Do not deploy alone.** |
 | 4 | `detector-round3-evidence-vs-inference.md` | none | Eight hosts measured in prod: four blocks missed (every size gate is on `len(html)`; the vendor pads to 80 KB), four invented (including our own error placeholder reported as the origin blocking us). Defect A has a red test; so does the unmarked-interstitial variant. **Ships #3's image**; gates #6. |
@@ -39,7 +46,7 @@ small, joins #3+#4's deploy, and after that image ships the option is gone; and
 | 6 | `preflight-batch-endpoint.md` | #4, then MAS's go-ahead | **Do not build speculatively — their words, and now formally answered.** There is no sweep date and timing is not their driver; it runs when their system is ready. They will give real notice. |
 | 7 | `blocked-host-retry-economy.md` | none | Still real, but smaller: MAS no longer retries origin-class failures, so a blocked host costs ~4 page loads, not ~12–16. Our half is now **measured, not inferred**: exactly 2 document loads per request (first-tier render + patchright retry), via `FixtureOrigin.hits_for()` against `/block/varnish-403`. Its classifier is still #9's trigger. |
 | 8 | `base-config-boolean-defaults-never-applied.md` | none | `simulate_user` has never taken effect and the next boolean won't either. Small. Decide whether the setting should exist at all rather than restoring an intent nobody measured. |
-| 9 | `residential-egress-retry-path.md` | **#1's outcome, then Tero** | On hold. The population is 31, not 3 — an order of magnitude more than we told Tero on 2026-07-30. But ≤8 of those may survive #1, and no one on either side has evidence a residential IP gets through. We can now test that for free: the dev container egresses from a Finnish consumer ISP. |
+| 9 | `residential-egress-retry-path.md` | **#1 phase 2, then MAS's next sweep, then Tero** | On hold, and the population is now derived rather than asserted: **floor 6, ceiling 29** (4 of the 33 verdicts are our own false positives and belong to #4; 4 are a hard 403 template no wait can fix; 23 are undetermined until #1 phase 2 ships). Phase 1 did **not** shrink it — it made the 23 measurable for free. Still no evidence on either side that a residential IP gets through; the dev container's Finnish consumer ISP egress can test that when the count is real. |
 | 10 | `static-mode-tls-impersonation.md` | #1, #9 | Hardens the path #5 makes everything fall back to. IP has dominated fingerprint in every case measured so far; #1 and #9 are what would change that. |
 | 11 | `pool-browser-retains-last-page.md` | none | One document's memory pinned per browser. Was "low impact"; **#2 makes it worth re-reading** — a memory guard now demonstrably refuses work, the pool created 125 browsers for ~252 requests, and this is why our memory numbers have never been readable. Do not merge it into #2, but read it there. |
 | — | `antibot-minimal-text-false-positive.md` | — | **Merged into #4** — the latent defect was observed live (`norex.com`). Close it when #4 ships. |
@@ -102,9 +109,16 @@ Found on our side 2026-08-01 (coordinator pass, logs only — see #2):
 
 Owed to MAS, to go out together as message 10 once #1 and #2 land:
 
-- **The 202 result, either way** — they are holding their capture-timing design
-  for it and have explicitly not shipped a global wait. **The only one still
-  genuinely unknown**, and the reason message 10 waits at all.
+- **The 202 result — ANSWERED 2026-08-01, offline.** `W + 1.22 s` is the capture
+  budget; their 2.0 covers a 3.2 s challenge, which confirms the bottom of their
+  own 3–5 s `raw://` figure and refutes the top. **Tell them not to raise it
+  globally**: at ~120,000 fetches, 2.0 → 10.0 is 267 render-hours, and a blocked
+  host pays the raise *twice* because our patchright retry re-fetches with the
+  same config. We do the targeted version server-side for 8–36 render-hours and
+  zero extra page loads. Caveat to send with it: it cannot rescue interstitials
+  we do not detect, and only their stored corpus can size that class.
+  Also worth telling them: `delay_before_return_html` is already
+  per-request-settable, so a per-host value on their side needs no deploy from us.
 - **The wire status we will serve the collapse guard at** (decided: 200 — but
   send it when it ships, with the `render_error` split fixed alongside).
 - **Whether the 9 × 500 reached the origin — ANSWERED 2026-08-01: they did not.**

@@ -625,6 +625,43 @@ block, which would make 23 of the 31 free to recover.
 → `tasks/challenge-interstitial-resolve.md`, which must produce a number before
 anything is built on it.
 
+> **ANSWERED 2026-08-01, offline, zero live requests.** Phase 1 of that task ran
+> ~140 crawls against the fixture origin through the full production path
+> (`test-aitosoft/experiment_challenge_capture.py`). The number:
+>
+> **A capture wait `W` captures any challenge resolving within `W + 1.22 s` of
+> `domcontentloaded`, and stores the interstitial for anything slower.** One
+> constant predicts all 84 cells of the resolve-delay × capture-wait grid with
+> zero exceptions; the 1.22 s is our own post-`goto` pipeline, measured
+> independently on `/ok` at 1.21–1.24 s across six waits. **MAS's
+> `delay_before_return_html: 2.0` therefore covers a 3.2 s challenge** — the
+> bottom of their own 3–5 s `raw://` estimate, not the top.
+>
+> So 10c's read was right as a *mechanism* and wrong as a *defect*: we do store
+> interstitials instead of the pages they become, but only when the challenge
+> outlasts the wait. Three consequences worth keeping:
+>
+> - **§1's `page.content()` race costs no captures.** `/challenge/resolve-by-nav`
+>   (a top-level navigation replacing the execution context) and
+>   `/challenge/resolve-after` (DOM rewrite) produced **identical grids across all
+>   42 paired cells**. The `_capture_html` settle-and-retry shipped 2026-07-30
+>   covers it. Any future argument of the form "a navigation loses the capture"
+>   needs new evidence; this grid is against it.
+> - **A raised wait is paid twice on a wall.** A blocked result costs exactly 2
+>   document loads (32/32 blocked cells), because `maybe_retry_blocked` hands
+>   patchright the *same* `CrawlerRunConfig`. `/challenge/never` cost 6.47 s at
+>   W=2.0 and 25.22 s at W=10. A global raise is most expensive on the hosts it
+>   cannot help.
+> - **The unmarked interstitial is still stored as a page** — `success: true`,
+>   `failure_class: none`, 54 markdown characters. Anything triggered by the
+>   detector inherits the detector's recall, which is 10d's problem, not this one.
+>
+> Phase 2 is a **go, re-scoped from M to S**: the retry we already run is the
+> re-capture, so it needs a longer wait rather than a new mechanism. Not
+> established, and deliberately not tested: whether the real vendor's challenge
+> resolves for us at all. MAS's next sweep after phase 2 ships measures that for
+> free.
+
 ### 10d. Two measured defects in the detector, in opposite directions
 
 Both from MAS's own run, both now tasked as

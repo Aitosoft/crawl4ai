@@ -131,6 +131,21 @@ markup shape, plus `?stall=` (server-side sleep) and `?status=` on every route.
 **A new failure class should be a new argument or one short route, never a new
 website.** Existing routes are listed in the module docstring.
 
+**Measuring rather than pinning.** When the question is a number we do not yet
+have — a curve, a threshold, a cost — write an *experiment* next to the fixture,
+not a test. `test-aitosoft/experiment_challenge_capture.py` is the worked example
+(~140 crawls, ~20 min, no assertions, CSV + tables out); it produced the
+`W + 1.22 s` capture budget in `tasks/challenge-interstitial-resolve.md` for zero
+live requests. Tests pin behaviour we have decided on; experiments measure
+behaviour we have not, and `pytest test-aitosoft/` must stay fast, so name them
+`experiment_*.py` — that keeps them out of collection without another
+`collect_ignore` entry.
+
+One known gap in the fixture: `CONTENT_HTML` renders to ~149 markdown characters,
+*below* MAS's `DEGENERATE_CAPTURE_CHARS = 500`, so a successful fixture capture is
+degenerate by their floor. Anything measuring a degenerate-capture threshold must
+grow the content page first.
+
 The fixture runs on loopback, which `egress_broker` exists to refuse. It is not
 weakened: `loopback_allowed()` flips the two flags
 `CRAWL4AI_ALLOW_INTERNAL_URLS` sets, scoped to a `with` block around each crawl,

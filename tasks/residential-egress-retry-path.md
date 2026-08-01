@@ -6,6 +6,37 @@ evaporated. Approved in principle by Tero 2026-07-30 for *framing* only —
 provider choice and spend authorisation still to come. **Do not sign a
 contract or commit credentials without Tero's explicit go-ahead.**
 
+> **UPDATE 2026-08-01 — the population, derived rather than asserted.**
+> `challenge-interstitial-resolve.md` phase 1 is done, and it does **not** hand
+> this task a smaller number yet. What it settles is the *mechanism*; what it
+> leaves open is whether the vendor these hosts sit behind resolves for us at all.
+> Both previous statements of the population were wrong in the same way — a
+> conditional outcome quoted as a count.
+>
+> The 33 `origin_blocked` verdicts in MAS's re-scrape decompose as (§10b, §10d):
+>
+> | | n | belongs to |
+> |---|---:|---|
+> | our own false positives | 4 | `detector-round3-evidence-vs-inference.md` (#4) — never ours to route |
+> | `robot-suspicion` challenge, cloudfront `d1rozh26tys225` | 23 | undetermined until phase 2 ships and MAS re-scrapes |
+> | 80,671-byte `403 - Forbidden` template | 4 | **this task, unconditionally** — a Block action, no wait resolves it |
+> | unclassified | ~2 | this task |
+>
+> **So: the floor is 6 and the ceiling is 29.** Not "31", not "4", and not
+> "three" — which is what Tero was last told and is below even the floor. Quote
+> the floor with its condition attached, never a bare number.
+>
+> **The 23 are now measurable for free.** Phase 2 gives our existing patchright
+> retry a longer capture wait (S, ships with #3+#4's image); MAS re-scrapes these
+> hosts naturally, so their next sweep converts the 23 to a real count at zero
+> marginal traffic and zero spend. **That measurement comes before any residential
+> probe, which comes before any spend.** Do not reorder those.
+>
+> One thing phase 1 does settle for this task: `/challenge/never` — a wall that
+> never lifts — cost 25.22 s at a 10 s wait and still returned the interstitial.
+> Waiting is not a substitute for egress, and the 4 hard-403 hosts are exactly
+> that case.
+
 > **UPDATE 2026-07-31 — the re-count landed and the number is 31, not 3.**
 > MAS re-scraped all 171 challenge hosts (forensics §10b): 133 return real
 > content, **31 are `origin_blocked`**. §8d's *direction* was right and its
