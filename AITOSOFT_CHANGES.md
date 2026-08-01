@@ -7,7 +7,13 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-08-01
+**Last Updated**: 2026-08-02
+
+> **`main` is ahead of production.** The `pool.max_browsers` cap (`8e69c3a`,
+> merged 2026-08-02) is on `main`, offline-green, and **not deployed** — it needs
+> two small fixes first (`tasks/pool-residency-unbounded.md` §"Before this
+> deploys"). Read the deployed image tag below, not `git log`, when you need to
+> know what is running.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)

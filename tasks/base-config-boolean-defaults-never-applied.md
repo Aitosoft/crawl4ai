@@ -1,5 +1,12 @@
 # `config.yml` `base_config` silently drops every boolean setting
 
+> **PARKED 2026-08-02 by the coordinator scope cut — do not pick this up unasked.**
+> `simulate_user` has never taken effect and nothing has missed it. "Delete the line from config.yml" is the likely right answer and costs nothing to defer. **What un-parks it: someone actually wanting a boolean in `base_config` to work.**
+> The reasoning is in `tasks/README.md` "The scope cut" and CLAUDE.md principle 7;
+> the analysis below is preserved and still believed correct — it is the
+> *priority* that changed, not the diagnosis. If you think it should be un-parked,
+> say why in this file rather than just starting.
+
 **Status:** Open — diagnosed and proven, fix deliberately NOT bundled with the
 2026-07-30 deploy (see "Why not now").
 **Priority:** Medium. Nothing is broken today; one setting we believe is on has

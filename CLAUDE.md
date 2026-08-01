@@ -184,6 +184,48 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
      asserting *which branch fired*, not that some verdict came back.
    - Disagreement between two sessions is the signal, not a problem to smooth
      over. Write down which one measurement settled it.
+7. **Reach for the cheapest lever before the cleverest one.** Our characteristic
+   failure is not sloppiness — it is *elaboration*: a real defect gets found,
+   the investigation is genuinely interesting, and three task files later nobody
+   has asked whether a config change would have deleted the problem.
+
+   The case that named this rule: `tasks/done/overnight-intervention-log-2026-04-14.md`
+   recorded in **April** that `--memory 8.0Gi` "doubles headroom at zero cost
+   (MS credits)". It was never tried. Between then and 2026-08-02 we produced
+   three task files apportioning the 4 GiB, a regression on 68 log lines, and a
+   coordinator review disputing its slope — all to divide a budget we could
+   likely have doubled with one command. **Buying headroom, deleting a feature,
+   raising a limit and doing nothing are all legitimate answers**, and they beat
+   a correct implementation of the wrong question.
+
+   Before an M-or-larger task: what would make this problem not exist?
+8. **Run a second-opinion pass before committing to a plan, and again before
+   calling it done.** A separate agent with a clean context, asked exactly three
+   questions:
+   - **What did we miss?**
+   - **Is there a simpler solution?**
+   - **Do we already have something we could use?**
+
+   These are the questions that break work loops, and none of them can be asked
+   honestly by the session that wrote the plan. Question 3 has paid out
+   repeatedly: `monidor.com` — a live instance of a defect we were designing a
+   synthetic fixture for — was sitting in `test-aitosoft/artifacts/` for weeks;
+   `fixture_origin.py` now removes most reasons to touch a customer's site;
+   upstream's `fallback_fetch_function` hook already existed. **Check the corpus
+   and the code we already hold before building or before crawling.**
+9. **When you write instructions, you are writing to yourself.** The next
+   session has this same repo, the same tools and the same capabilities. It is a
+   peer with a clean context, not a subordinate — and the clean context is the
+   *point*, because it is what lets them catch what we missed.
+
+   So: give principles, reasoning and evidence, and let them draw the
+   conclusion. Do not write narrow, rigid rules — a rule without its reason
+   cannot be re-derived, cannot be safely broken when the situation differs, and
+   silently becomes wrong when the code moves under it. Say what you measured,
+   what you assumed, and what you are unsure of. **Name the things you suspect
+   are wrong in your own work**; that is the most useful paragraph in any task
+   file we have written. Where a task file and this index disagree, the task
+   file wins and the index is stale.
 
 ---
 

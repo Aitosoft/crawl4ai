@@ -1,5 +1,12 @@
 # ~59 % of every replica is memory we cannot account for
 
+> **PARKED 2026-08-02 by the coordinator scope cut — do not pick this up unasked.**
+> The 59 % may be an artefact of a metric that changed on 2026-08-01 (see "Why the fit is not settled" below), and a replica resize would make the whole question moot. **Do not start this before Tero answers on the resize.** **What un-parks it: Tero declining the resize, or the memory guard still firing after it.**
+> The reasoning is in `tasks/README.md` "The scope cut" and CLAUDE.md principle 7;
+> the analysis below is preserved and still believed correct — it is the
+> *priority* that changed, not the diagnosis. If you think it should be un-parked,
+> say why in this file rather than just starting.
+
 **Status:** Open, not started. Opened 2026-08-02 by the session that built
 `pool-residency-unbounded.md`, because that task's measurements produced this
 one and it is worth more than the cap that was built.

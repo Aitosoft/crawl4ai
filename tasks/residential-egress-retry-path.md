@@ -1,5 +1,12 @@
 # Residential/ISP egress on the retry path (reputation-blocked hosts)
 
+> **PARKED 2026-08-02 by the coordinator scope cut — do not pick this up unasked.**
+> The population is floor 6 / ceiling 29, the 23 undetermined resolve for free in MAS's next sweep, and this is the only item on the list that costs money. **What un-parks it: a real count, then Tero.**
+> The reasoning is in `tasks/README.md` "The scope cut" and CLAUDE.md principle 7;
+> the analysis below is preserved and still believed correct — it is the
+> *priority* that changed, not the diagnosis. If you think it should be un-parked,
+> say why in this file rather than just starting.
+
 **Status:** Open, but **on hold pending a re-count** (2026-07-30 evening). The
 mechanism below is sound; the population it was sized for may have largely
 evaporated. Approved in principle by Tero 2026-07-30 for *framing* only —

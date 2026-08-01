@@ -1,5 +1,12 @@
 # Batch preflight endpoint (MAS Q3: "yes, and batch")
 
+> **PARKED 2026-08-02 by the coordinator scope cut — do not pick this up unasked.**
+> MAS asked us in writing not to build this speculatively; there is no sweep date and timing is not their driver. **What un-parks it: MAS asking.**
+> The reasoning is in `tasks/README.md` "The scope cut" and CLAUDE.md principle 7;
+> the analysis below is preserved and still believed correct — it is the
+> *priority* that changed, not the diagnosis. If you think it should be un-parked,
+> say why in this file rather than just starting.
+
 **Status:** Open — unblocked by MAS's answer 2026-07-30, but **sequenced behind
 `tasks/detector-round3-evidence-vs-inference.md`** (2026-07-31 — the
 challenge-blindspot task it originally waited on has shipped, and round 3

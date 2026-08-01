@@ -1,5 +1,12 @@
 # Degrade to static inside the request instead of returning a 504
 
+> **PARKED 2026-08-02 by the coordinator scope cut — do not pick this up unasked.**
+> 0 × 504 in the only workload we have, and the hang this was sized against was fixed in `done/render-retry-unbounded-hang.md`. **What un-parks it: a real 504 population in MAS's sweep.**
+> The reasoning is in `tasks/README.md` "The scope cut" and CLAUDE.md principle 7;
+> the analysis below is preserved and still believed correct — it is the
+> *priority* that changed, not the diagnosis. If you think it should be un-parked,
+> say why in this file rather than just starting.
+
 **Re-price before building (2026-07-31).** This was sized when the untimed
 `page.content()` / `page.evaluate()` hang was live and a wedged render burned the
 whole 180 s fence. `done/render-retry-unbounded-hang.md` shipped on 2026-07-30

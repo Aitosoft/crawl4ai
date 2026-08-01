@@ -235,6 +235,35 @@ count flat at 43. Memory bounded by construction, which was the point.
 
 ---
 
+## Before this deploys — two fixes, both small (coordinator, 2026-08-02)
+
+Neither is a defect in what was built; both fall out of the review in
+`replica-memory-baseline-unexplained.md` §"Why the fit is not settled", which
+disputes the slope this file derived its numbers from.
+
+**(a) The guard refuses before eviction can run, and the shed path is now gone.**
+`get_crawler` checks `mem_pct >= MEM_LIMIT` and raises *before* reaching
+`_evict_for_capacity`. Combined with removing the pressure-driven TTL, a replica
+over 85 % now holds its idle browsers for the full constant `idle_ttl_sec: 300`
+instead of shedding in ~30 s. Removing the adaptive TTL was right — it *thrashed*
+— but nothing replaced its one useful behaviour.
+
+Make the memory guard **evict idle LRU browsers, re-read, then refuse**. That is
+the targeted version of what the TTL was attempting: same intent, LRU and
+idle-only instead of a global TTL collapse, and no launch-while-tight loop. If
+the slope is 2.65 %/browser this barely matters; if it is 3.42 % it is a real
+regression on exactly the cold-burst path this work exists to fix. Cheap enough
+that it is not worth settling the slope first.
+
+**(b) Strip the disputed regression out of the `config.yml` comment.** The cap's
+derivation there is written entirely in terms of `59.3 + 2.65 × browsers`, and a
+future session will read that as settled fact — config comments are the most-read
+and least-reviewed documentation we have. **The cap's real justification does not
+need memory at all:** `user_agent_mode: "random"` is allowlisted and recommended
+by our own client doc, and under it every request launches a browser. Lead with
+that, keep 6 = 3 × `render_capacity` as the sizing rationale, and point at the
+task file for the memory argument with its dispute attached.
+
 ## Still open, and now the more important question
 
 **What is the 59.3 %?** It is ~2.4 GB of a 4 GiB replica, it appears with
@@ -245,10 +274,19 @@ over a 700 KB document); the patchright singleton; page cache the working-set
 correction does not subtract (`active_file`).
 
 This is now the highest-value open question about replica memory, and it is
-worth more than the cap that was built. It needs its own task file. Do not size
-it from this one — measure the in-render peak, which
-`experiment_pool_memory.py` currently cannot see because it only samples
-*between* crawls.
+worth more than the cap that was built. It has its own task file
+(`replica-memory-baseline-unexplained.md`). Do not size it from this one —
+measure the in-render peak, which `experiment_pool_memory.py` currently cannot
+see because it only samples *between* crawls.
+
+> **PARKED 2026-08-02, and read why before restarting it.** Two things happened
+> after this was written. First, the fit itself is disputed on three counts (that
+> file's §"Why the fit is not settled") — most sharply, the 68 samples predate
+> `13fcecb`, which changed what `get_container_memory_percent` measures, so the
+> intercept is in a metric that no longer exists. Second, and larger: **an April
+> note recorded that doubling replica memory is near-free on MS credits and it
+> was never tried.** If the replica gets more headroom the question may not need
+> answering at all. Tero decides the resize first.
 
 **Adjacent, unchanged:** `minReplicas: 1` still removes the scale-from-zero
 trigger and is still Tero's call; it is a scale setting, not `--set-env-vars`,

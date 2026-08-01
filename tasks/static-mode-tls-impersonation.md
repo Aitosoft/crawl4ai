@@ -1,5 +1,12 @@
 # Static mode: replace httpx with a browser-TLS-impersonating client
 
+> **PARKED 2026-08-02 by the coordinator scope cut — do not pick this up unasked.**
+> It hardens a fallback path that nothing currently falls back to, since `static-fallback-within-fence` is itself parked. **What un-parks it: `residential-egress-retry-path` moving.**
+> The reasoning is in `tasks/README.md` "The scope cut" and CLAUDE.md principle 7;
+> the analysis below is preserved and still believed correct — it is the
+> *priority* that changed, not the diagnosis. If you think it should be un-parked,
+> say why in this file rather than just starting.
+
 **Status:** Open — ready to implement, no external input needed
 **Priority:** Medium. Not a fix for any observed incident; it hardens the path
 that everything else is about to start falling back to.

@@ -1,5 +1,12 @@
 # Hard-blocked hosts cost ~12 page loads per company
 
+> **PARKED 2026-08-02 by the coordinator scope cut — do not pick this up unasked.**
+> A cost optimisation, not a defect — a blocked host now costs ~4 page loads once, terminally. And lever 1 would now also skip the slow-hydration rescue the patchright retry gained on 2026-08-01. **What un-parks it: the sweep showing blocked-host cost actually hurts.**
+> The reasoning is in `tasks/README.md` "The scope cut" and CLAUDE.md principle 7;
+> the analysis below is preserved and still believed correct — it is the
+> *priority* that changed, not the diagnosis. If you think it should be un-parked,
+> say why in this file rather than just starting.
+
 **Priority lowered 2026-07-31.** The "~12–16 page loads per company" figure below
 assumed MAS retries our failures three times. Since `failure_class` shipped they
 receive origin-class failures as HTTP 200 + `success: false`, which their retry

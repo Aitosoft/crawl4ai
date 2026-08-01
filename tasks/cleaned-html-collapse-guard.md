@@ -317,6 +317,30 @@ Sequence them; do not bundle. Each one gets its shape out of
 `BODY_SWALLOWING_SHAPES` and its case into `test_no_markup_shape_swallows_the_body`,
 and the guard stays as the net underneath.
 
+> **Scope cut, coordinator 2026-08-02: do repair 1. Repairs 2 and 3 are parked.**
+>
+> Repair 1 earns its place on two grounds that the others do not share. It is a
+> **genuine upstream bug** and the strongest of our four pending PRs — an
+> unclosed raw-text element making Chromium serialize the rest of the document
+> inside it is not specific to us. And `unclosed-script` is the one shape the
+> shipped guard is **structurally blind to**: `_visible_text` strips script
+> blocks (correctly), so it measures 0 visible characters and no text-ratio guard
+> can ever fire on it. For that shape the root-cause fix is the only instrument
+> we have, which is not true of the other three.
+>
+> Repairs 2 (`deep-nesting`, libxml2 depth limit) and 3 (`unterminated-comment`)
+> are parked because **the guard already catches both and tells MAS the truth**:
+> HTTP 200, `success: false`, `failure_class: render_defect`, content attached.
+> They keep their previous capture, do not retry, do not delete. That costs
+> accuracy on an unknown-sized population — it does not cost data, which is the
+> thing that made this task urgent in the first place. Repair 3's own text
+> already said it may not be worth doing.
+>
+> **What un-parks them:** MAS's residual empty-capture count (asked for in
+> message 10 §7.3) showing the population is large, or `apteam.fi`'s bytes
+> landing on repair 2's mechanism specifically. Both arrive for free from their
+> side; neither is worth a request from ours.
+
 **`apteam.fi`'s bytes are still worth having, and the reason changed.** The old
 plan said fetch them only if the enumeration came up empty. It came up *over*-full
 instead: 73,970 / 96 / 1 is consistent with at least two rows of the table, so
