@@ -133,6 +133,32 @@ Candidate 4 below spots that `active_file` is still not subtracted; it misses
 that in *this data* neither was. A chunk of "59 % nobody can account for" may be
 a term the current build already removes.
 
+### 4. Part of the intercept is now explained — and already removed
+
+**Coordinator, 2026-08-02, after the pool-cap deploy.** The boot browser was an
+omitted constant, and an omitted constant lands entirely in the intercept.
+
+The `📊 Pool:` line during the probe (`8f04734`) logged `hot=`, `cold=` and
+`permanent=yes/no` — **no combined count**, so the regression's x-variable was
+`hot + cold` and **excluded the permanent browser**. That browser is created at
+boot, is unreachable by construction, and during the probe was **never closed**:
+`permanent_unused_ttl_sec` did not exist until 2026-08-01, after the probe.
+
+So it sat in every one of the 68 samples contributing a constant to `mem%` and
+**zero to the regressor**. The deploy measured what closing it is worth on a live
+replica: **~196 MB anon, ~5.0 points**. That is ~5 of the 59.3 points, explained,
+and **already gone from the running build** (`permanent_unused_ttl_sec: 120`).
+
+Two things follow:
+
+- The current build's intercept should be **~5 points lower** than the disputed
+  fit. Any re-derivation must be done on post-`--0000033` data or it re-measures
+  a browser we no longer keep.
+- **~196 MB exceeds both offline per-browser figures** (129.6 / 141.3 MB anon),
+  which is independent support for the review above: the offline instrument is a
+  *floor*, and 109 MB/browser is too low. Three instruments now point the same
+  way and only the disputed fit points the other.
+
 ### What follows
 
 - **The cap still ships.** It is correct under 2.65, under 3.42, and under the

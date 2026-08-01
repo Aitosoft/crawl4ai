@@ -48,6 +48,15 @@ deployed image tag against `azure-deployment/` rather than the commit history.
    which points at candidate 1 (in-render transient memory) and away from
    candidates 3 and 4 in `replica-memory-baseline-unexplained.md`.
 
+3. **Part of the disputed 59 % intercept is now explained — and already removed.**
+   The probe's `📊 Pool:` line logged `hot=`/`cold=` and `permanent=yes/no` but
+   **no combined count**, so the regression's x-variable excluded the permanent
+   browser — which was resident in all 68 samples and never closed (its unused
+   TTL did not exist until after the probe). An omitted constant lands entirely
+   in the intercept. Closing it is worth **~5.0 points**, so the current build's
+   intercept should be that much lower, and **any re-derivation must use
+   post-`--0000033` data**. See `replica-memory-baseline-unexplained.md` §4.
+
 **Read those lines correctly or they mislead:** within a single `📊 Pool:` line
 the `mem=` figure is sampled up to 60 s *before* the counts beside it (the
 janitor samples before its sleep, logs after the cleanup). Treat each `mem=` as
@@ -55,17 +64,29 @@ belonging to the previous tick.
 
 ## The scope cut, 2026-08-02
 
-Tero asked whether we were over-engineering. We were, and the evidence is
-specific: `tasks/done/overnight-intervention-log-2026-04-14.md` recorded in
-**April** that `az containerapp update --memory 8.0Gi` "doubles headroom at zero
-cost (MS credits)". It was never tried. Between then and now we produced three
-task files apportioning the 4 GiB, a regression over 68 log lines, and a
-coordinator review disputing its slope — to divide a budget we may be able to
-double with one command.
+Tero asked whether we were over-engineering. We were. **The cut stands; the
+example I first gave for it does not** — see the resize section below. I told him
+an April note showed we could have doubled replica memory with one command and
+never tried it. Azure rejected that command: 2 vCPU / 4 GiB is the maximum this
+environment offers, and the April note was never valid. **A vivid example that
+turns out to be fiction is worse than a dull one that holds**, and a coordinator
+arguing "we over-complicate" by reaching for the most striking available story is
+committing the error it is naming. Recorded rather than quietly deleted, because
+the reasoning is the reusable part.
+
+The cut rests on three things that are still true:
+
+- **MAS has had no production traffic since 2026-07-30 and there is no sweep
+  date.** Everything shipped since then is validated against fixtures, our own
+  stored captures, and one probe run against the *previous* image. We are
+  building against a workload nobody has run.
+- **MAS asked us in writing not to build ahead of them.** Two parked items are
+  parked on their instruction.
+- **Several open questions can only be answered by their corpus**, so more work
+  on our side cannot resolve them — it can only guess at their size.
 
 **So the open list is cut from nine items to three.** What was dropped was not
-wrong, it was *unasked for*: work sized against a sweep that has no date, for a
-customer who explicitly said do not build ahead of them.
+wrong, it was *unasked for*.
 
 **Do not re-expand this list without a reason that arrives from outside** — a
 MAS message, a production failure, or a measurement. "There is a session free"

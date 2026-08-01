@@ -189,14 +189,17 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
    the investigation is genuinely interesting, and three task files later nobody
    has asked whether a config change would have deleted the problem.
 
-   The case that named this rule: `tasks/done/overnight-intervention-log-2026-04-14.md`
-   recorded in **April** that `--memory 8.0Gi` "doubles headroom at zero cost
-   (MS credits)". It was never tried. Between then and 2026-08-02 we produced
-   three task files apportioning the 4 GiB, a regression on 68 log lines, and a
-   coordinator review disputing its slope — all to divide a budget we could
-   likely have doubled with one command. **Buying headroom, deleting a feature,
-   raising a limit and doing nothing are all legitimate answers**, and they beat
-   a correct implementation of the wrong question.
+   The case that named this rule, **including how it went wrong**: an April note
+   recorded that `--memory 8.0Gi` "doubles headroom at zero cost (MS credits)".
+   It was never tried, and meanwhile three task files went into apportioning the
+   4 GiB. The coordinator cited that as proof we over-complicate — then Azure
+   **rejected the command**: 2 vCPU / 4 GiB is this environment's maximum and the
+   note was never valid. So the rule earned itself twice. Reach for the cheap
+   lever first — **and verify the cheap lever exists before building an argument
+   on it.** One `az` call would have settled it in either direction.
+   **Buying headroom, deleting a feature, raising a limit and doing nothing are
+   all legitimate answers**, and they beat a correct implementation of the wrong
+   question.
 
    Before an M-or-larger task: what would make this problem not exist?
 8. **Run a second-opinion pass before committing to a plan, and again before
