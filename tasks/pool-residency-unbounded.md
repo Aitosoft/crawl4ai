@@ -3,8 +3,11 @@
 **Status:** BUILT 2026-08-02, offline-verified, **not deployed**. Tier 1 not yet
 run. Ships with `pool-browser-retains-last-page.md`, which this session **closed
 as refuted** — see below.
-**Priority:** was High as "the cause of the 9 × 500". **It is not the cause.**
-Still worth shipping, for a different and smaller reason, stated below.
+**Priority:** was High as "the cause of the 9 × 500". **It is at most a
+contributor** — the old arithmetic behind that claim was wrong, but the
+replacement measurement is disputed too (see the box in §2). Still worth
+shipping, for a reason that does not depend on memory at all: `browser_config`
+cardinality.
 **Effort:** M as predicted, but the design was the easy half; the measurements
 rewrote the problem.
 **Risk:** medium — admission path for every render. The no-wedge argument is in
@@ -76,6 +79,24 @@ prevent the next ones.** The guard fires on the 59.3 % nobody has accounted for.
 Anyone citing this task as "the observed cause of MAS's 9 × 500" — including
 `tasks/README.md` before today — is citing a claim that measurement does not
 support.
+
+> **WITHDRAWN AS STATED — coordinator re-check, 2026-08-02.** The refutation of
+> the *old* arithmetic (9 × 165 MB ≈ 36 %, not "the whole budget") stands and is
+> the durable finding here. The *replacement* does not: the fit above has three
+> independent problems, all biasing browsers downward, set out in
+> `replica-memory-baseline-unexplained.md` §"Why the fit is not settled".
+> Briefly — this file's own binned table regresses to **3.42 %/browser (140 MB)**,
+> matching the offline instrument, not 2.65; the slope was fitted straight
+> through a live control loop (the adaptive TTL closed browsers *because* memory
+> was high, which is also why the 82.3 %-at-4 / 73.6 %-at-8 anecdote proves less
+> than it appears to); and the 68 samples predate `13fcecb`, which changed what
+> `get_container_memory_percent` measures.
+>
+> The supportable claim is **"the cap would have prevented some of the nine, and
+> the fraction turns on a slope we have not settled"** — at the bottom of the
+> 85.1–95.6 % range it clears the guard under both slopes. **Do not quote 59.3,
+> 2.65 or 109 MB as settled.** The cap ships regardless: it is correct under
+> every candidate slope, and its real justification is cardinality.
 
 ### 3. "The fixture page is a few hundred bytes, so the figure is a floor" — true, and it barely matters
 
@@ -302,7 +323,7 @@ executed. It deserves its own one-line change where a surprise is attributable.
 ## Verification
 
 Offline, zero live requests. `pytest test-aitosoft/test_crawler_pool.py` (24
-tests) and the full suite (242, green). `experiment_pool_memory.py --route
+tests) and the full suite (244, green). `experiment_pool_memory.py --route
 /heavy [-n N] [--blank]` for the figures. Assert eviction behaviour and browser
 counts, **never absolute MB** — those are machine- and page-dependent, which is
 why every number above is either a ratio, a slope, or a production reading.
