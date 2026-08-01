@@ -92,7 +92,21 @@ refute the top — 3.2 s, not 5. A 5 s paint needs W ≈ 5.
 | 5.0 | 6.22 s | 12.50 s |
 | 10.0 | **11.24 s** | **25.22 s** |
 
-¹ two single-sample outliers; every other cell is within 0.03 s of the model.
+¹ two single-sample outliers.
+
+> **Footnote scope corrected, coordinator pass 2026-08-01.** "Within 0.03 s of
+> the model" holds for the `/ok` column, where every non-outlier cell matches
+> `W + 1.22` to 0.01–0.02 s. It does **not** hold for the wall column against
+> `2 × (W + 1.22)`: W=1.0 is 0.22 s over (4.66 vs 4.44) and **W=10 is 2.78 s
+> over (25.22 vs 22.44)**. The rest fit within 0.06 s.
+>
+> This does not touch any conclusion — every cost figure above is subtraction of
+> *measured* values, not model output (the +18.8 s is 25.22 − 6.47). But the one
+> cell that misfits is the largest wait on a wall, which is the closest analogue
+> to what phase 2 actually does: raise the wait **on the retry**. Something costs
+> extra there beyond a doubled budget — patchright startup is the obvious
+> candidate and was not isolated. **Phase 2 should measure the retry leg
+> directly rather than assume `2 ×`**, since that leg is the whole of its cost.
 
 Healthy pages are exactly `W + 1.22`. **A wall is `2 × (W + 1.22)`** — because
 `maybe_retry_blocked` re-runs the whole fetch through patchright, and

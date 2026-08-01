@@ -143,6 +143,20 @@ Pinned by `test_fixture_origin.py::test_an_unclosed_noscript_still_swallows_the_
 > guard that fires on small healthy pages — the exact failure this file warns
 > about two sections up.
 
+> **A second instrument gap, found by phase 1 of `challenge-interstitial-resolve.md`
+> and landed here because this is the task it blocks.** `fixture_origin.CONTENT_HTML`
+> — the "healthy page" every route serves as its success case — renders to about
+> **149 markdown characters**, which is *below* MAS's
+> `DEGENERATE_CAPTURE_CHARS = 500`. So a fixture capture that is completely
+> successful is already degenerate by the floor this guard has to agree with.
+>
+> **Grow the content page before measuring any threshold.** It cost phase 1
+> nothing (it only ever asked "interstitial or content?"), but this task's whole
+> output is a threshold, and a healthy control that trips the customer's own floor
+> is not a control. Note the unit while you are there: 500 is **markdown
+> characters**, and the collapse ratio is **HTML bytes** — the two live one line
+> apart in this file. Also recorded in TESTING.md.
+
 The mechanism corrects this section's plan, so read it before enumerating:
 
 > `test_noscript_body_collapse.py` reports the `UNCLOSED` shape **fixed**, and it
