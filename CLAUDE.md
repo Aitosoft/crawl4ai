@@ -373,8 +373,8 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 ## Azure Deployment
 
 - **Endpoint:** `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
-- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-failure-class`
-- **Resources:** 2 vCPU / 4 GiB per replica, 0-30 replicas (scales to zero; explicit `http-renders` scale rule at 2 concurrent/replica — MUST match `render_capacity` in config.yml)
+- **Image:** `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-pool-cap` (revision `--0000033`, deployed 2026-08-02). This line goes stale — **`AITOSOFT_CHANGES.md` "Current State" is authoritative**, and `az containerapp revision list` beats both.
+- **Resources:** 2 vCPU / 4 GiB per replica, 0-30 replicas (scales to zero; explicit `http-renders` scale rule at 2 concurrent/replica — MUST match `render_capacity` in config.yml). **2 vCPU / 4 GiB is this environment's hard maximum** — it is a legacy Consumption-only managed environment and Azure rejects anything larger; more memory needs an environment migration with a different billing model, not a resize (2026-08-02, tested).
 - **Auth:** Bearer token via `CRAWL4AI_API_TOKEN` env var
 - See `DEPLOYMENT_INFO.md` for full details
 

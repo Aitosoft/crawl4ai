@@ -1,23 +1,34 @@
 # Crawl4AI Production Deployment
 
-**Last Updated**: 2026-07-30
+**Last Updated**: 2026-08-02
 **Location**: West Europe (co-located with MAS)
-**Status**: ✅ Running v0.9.2-failure-class (deployed 2026-07-30 18:24 UTC,
-revision `crawl4ai-service--0000031`, digest `sha256:afd98e31...`;
-failure classification + `<noscript>` body loss + challenge detection +
-redirect-aware block detection + bounded render calls — see AITOSOFT_CHANGES.md
-"Failure classification + noscript body loss + challenge detection")
+**Status**: ✅ Running `0.9.2-pool-cap` (deployed 2026-08-02, revision
+`crawl4ai-service--0000033`) — browser cap + LRU eviction, memory guard sheds
+before refusing, boot browser closed after 120 s unused. **`AITOSOFT_CHANGES.md`
+"Current State" is the authoritative record**; this file is the runbook and its
+version line drifts. Two revisions since 2026-07-30: `--0000032`
+(`0.9.2-detector-round3`) and `--0000033`.
 
-**Contract note for this revision**: `status_code` on a full-mode result is now
-the origin's FINAL redirect hop (it was the first), and every result carries
-`failure_class`. Origin-caused failures return HTTP 200 with `success: false`;
-5xx is reserved for our own faults. Rolling back reverts that contract, so
-coordinate with MAS before doing it — their retry policy is being changed to
-match.
+**Sizing is at its ceiling.** 2 vCPU / 4 GiB is the maximum this managed
+environment offers — it is legacy Consumption-only (`workloadProfiles: null`),
+and `az containerapp update --memory 8.0Gi` is **rejected** (tested 2026-08-02).
+More memory requires converting the environment to workload profiles: an
+infrastructure migration with a different billing model that would end
+`minReplicas: 0` economics on a dedicated profile. Not a resize. Do not plan
+around headroom that cannot be bought.
+
+**Contract note carried forward from `--0000031`**, still true: `status_code` on
+a full-mode result is the origin's FINAL redirect hop (it was the first), and
+every result carries `failure_class`. Origin-caused failures return HTTP 200 with
+`success: false`; 5xx is reserved for our own faults.
+
+Rolling back past `--0000031` reverts that contract, so coordinate with MAS
+before doing it — their retry branch reads the wire status, not the body.
 
 **Rollback (last known good)**: `az containerapp update --name crawl4ai-service
 --resource-group aitosoft-prod --image
-aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-fence-obs` (image only —
+aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-detector-round3` (revision
+`--0000032`, deployed 2026-08-01, Tier 1 4/4 and prod-smoked; image only —
 NEVER set env vars during rollback).
 
 **v0.9.2-render-gate deployment notes (capacity/scaling redesign):**

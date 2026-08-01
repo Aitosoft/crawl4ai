@@ -1,10 +1,14 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-02 by the coordinator, after a deliberate scope cut from
-nine open items to three. Read "The scope cut" below before picking anything up
-— several files still on disk are **parked on purpose**, not waiting for a free
-session. Row numbers are not stable across revisions; cross-references name the
-task file, never the number.
+**Updated:** 2026-08-02 by the coordinator, after the browser cap deployed and
+**message 11 went to MAS asking them to re-scrape**. If you are the session
+holding their reply, jump to **"START HERE if you are the session that has MAS's
+reply"** — it maps every answer to what it changes, so you do not have to
+re-derive it.
+
+Read "The scope cut" before picking anything else up: several task files on disk
+are **parked on purpose**, not waiting for a free session. Row numbers are not
+stable across revisions; cross-references name the task file, never the number.
 
 **This file holds ordering, gating and current state.** The reasoning lives in
 each task file, the evidence in `waa-eval-2026-07-30-forensics.md`. If a task
@@ -13,8 +17,8 @@ fix it.
 
 ## Where we actually are
 
-**The service works.** Production is `0.9.2-detector-round3`, revision
-`--0000032`, 2 vCPU / 4 GiB, `minReplicas: 0`, health 200. On MAS's 243-host
+**The service works.** Production is `0.9.2-pool-cap`, revision `--0000033`,
+2 vCPU / 4 GiB, `minReplicas: 0`, health 200, verified 2026-08-02. On MAS's 243-host
 probe — the only real workload the current generation has seen — roughly **15 of
 243 failures were ours** (9 memory refusals, 4 detector false positives, ~2 parse
 collapses). About 6 %, and **13 of those 15 are already fixed and deployed**.
@@ -137,7 +141,51 @@ Still open and still Tero's: **`minReplicas: 1` for the sweep window only**
 removes the scale-from-zero burst behind every 500 we have seen. It is a scale
 setting, **not** `--set-env-vars`, so it does not carry the token risk.
 
-## The three open items
+## START HERE if you are the session that has MAS's reply
+
+**Message 11 was sent 2026-08-02** —
+`tmp/mas-repo-messages/11-to-mas-please-re-scrape-and-what-to-report.md`
+(gitignored; read it, it states what we asked and why). It asks MAS to re-scrape
+their 243 hosts **against a cold service** and report eight things, lettered
+(a)–(h). Their reply is the input to this session.
+
+**Save their reply as `tmp/mas-repo-messages/12-from-mas-*.md` before acting on
+it**, so the transcript stays complete.
+
+**Then read their numbers adversarially before believing them.** This is not
+distrust — it is the same rule that has caught five consecutive task files
+(CLAUDE.md principle 6). Their 243-host probe is the *entire* dataset our current
+generation has been shaped by, and we have already built and unbuilt priorities
+on it. Specifically: ask what their number counts, whether it predates any change
+on either side, and whether anything in the data-generating process moved while
+they measured. We got all three of those wrong ourselves on the memory
+regression.
+
+### What each answer changes — act on this, do not re-derive it
+
+| Answer | If it says… | Then |
+|---|---|---|
+| **(a)** wire-status histogram | few or no 429s on a cold run | The cap + boot-browser change worked. **`minReplicas: 1` becomes optional rather than needed** — tell Tero, it is his spend |
+| | a burst of 429s again | The cold-start problem survives our three levers. Un-park `replica-memory-baseline-unexplained.md` and re-derive on **post-`--0000033`** data only |
+| | any 500s | Read them first — a 500 is now supposed to be *ours and transient only*. Any other cause is a taxonomy bug and outranks everything on this list |
+| **(b)** the four padded-403 hosts | now `origin_blocked` | Detector defect A confirmed in production. Record it in the forensics file and close the loop; nothing to build |
+| | still returning content | The new block-notice tier does not fire on the real page. That is a **real defect** and jumps to the top — and note the fixture was already unfaithful once on exactly this axis |
+| **(c)** `norex.com` / `jarvenkylamaatila.fi` retry cost | just these two, cost small | Accept it. It is the price of not calling a healthy host permanently blocked |
+| | a larger population | **Do not change the wire status.** Make the *inference tier* less eager instead — the class is right, the trigger is too broad. New task file |
+| **(d)** the 23 challenge hosts | mostly return content | The 10 s retry wait works. `residential-egress-retry-path.md`'s population collapses toward its floor of 6 — likely **not worth spending money on**, which is the outcome we want |
+| | mostly still blocked | Population is near the ceiling of 29. **Then, and only then**, the dev container's Finnish consumer-ISP egress probe is worth running — one hit per host, logged. Still no spend without Tero |
+| **(e)** `render_defect` sightings + one raw `html` | any at all | First production evidence for the collapse guard. **The `html` is the prize**: run it through `fixture_origin`'s four shapes to identify which mechanism `apteam.fi` actually hits — that is what repair sequencing has been waiting on |
+| **(f)** empty-capture residual | small | **Leave repairs 2 and 3 parked permanently** and say so in the task file, so it stops being re-litigated |
+| | large | Un-park whichever repair (e)'s `html` points at. One repair, not both |
+| **(g)** unmarked-interstitial count | small | Write it down and close the question. We deliberately do not catch this class; a number lets us stop wondering |
+| | large | Reopen the design — but remember any rule that catches it is the same inference we removed in `detector-round3`. It needs evidence, not a low-text gate |
+| **(h)** the sweep's shape | any answer | Feeds the `minReplicas` decision and tells us whether `render_capacity: 2` per replica is enough at their concurrency. **Tero's call, not ours** |
+
+**If their reply does not arrive or is thin:** items 2 and 3 below are
+self-contained and need nobody. Do those. Do **not** un-park anything to fill
+time — see "The scope cut".
+
+## The open items — one done, two left, both self-contained
 
 | # | Task | State | What to know |
 |---|------|-------|--------------|
@@ -224,13 +272,24 @@ gitignored `tmp/mas-repo-messages/`, numbered and direction-labelled, relayed by
 Tero both ways. Durable conclusions get copied into the forensics record; the
 messages are the transcript, not the source of truth.
 
-**Status as of 2026-08-02: the ball is with them.** Message 10 (ours) was relayed
-2026-08-01 and answered every open item. We are waiting on four things, of which
-**only one changes what we build** — the sweep's shape (waves, concurrency,
-per-host spacing), which is the input to the `minReplicas` / resize decision. The
-other three (naming the `fodbar.fi` field, the residual empty-capture count, a
-count for the unmarked-interstitial class) are small or informational. **Nothing
-on our side is blocked on any of them.** No reply is owed by us.
+**Status as of 2026-08-02: the ball is with them, and message 11 is why.**
+
+- **Message 10** (relayed 2026-08-01) answered every item they had raised and
+  asked four things back. Three are still outstanding and were rolled into
+  message 11 as (f), (g) and (h).
+- **Message 11** (sent 2026-08-02,
+  `tmp/mas-repo-messages/11-to-mas-please-re-scrape-and-what-to-report.md`) asks
+  for a **cold-start re-scrape of the same 243 hosts** and eight lettered
+  reports. See "START HERE if you are the session that has MAS's reply" above for
+  what each answer changes — that mapping is the handover, do not re-derive it.
+- **Why we asked rather than built:** five behavioural changes have shipped since
+  their probe and **none has been observed on real traffic**. We have no traffic
+  of our own. Three of the open questions are only answerable from their corpus.
+- **The `fodbar.fi` field** is still unbuilt and still theirs to name — it was
+  deliberately *not* re-asked in message 11, to keep that message about one
+  thing. Ship it when they name it.
+- **Nothing on our side is blocked on any of it**, and message 11 says so
+  explicitly. No reply is owed by us.
 
 **Two agreed changes are unblocked and unshipped**, both additive, both waiting
 only on a reason to open an image: the `fodbar.fi` "content was present despite
