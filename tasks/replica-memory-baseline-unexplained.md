@@ -82,6 +82,76 @@ change, not code. That is worth knowing before the sweep, because it is also the
 cheapest thing on the list to get wrong: `render_capacity` **must** match the
 scale rule (`config.yml`, and the invariant check in `deploy-image.sh`).
 
+## Why the fit is not settled — coordinator re-check, 2026-08-02
+
+**Read this before quoting 59.3, 2.65, 109 MB, or "the cap would not have
+helped".** The regression is the load-bearing claim of the whole session and it
+has three independent problems. **All three bias browsers downward**, which is
+the direction that produced the headline.
+
+### 1. The published binned table does not fit the published line
+
+Weighted OLS over this file's own four bins (n = 45 of the 68):
+
+```
+slope 3.42 %/browser   intercept 55.4 %      vs the fitted 2.65 / 59.3
+3.42 % of 4096 MB = 140 MB per browser
+```
+
+**140 MB is the offline instrument's answer** (142.8 MB `/ok`, 170.0 MB
+`/heavy`), measured this same session on a path with no confounder in it. Two
+instruments agreeing and the third disagreeing makes the third the suspect.
+Binned means are not the raw data and this is not proof — it is a reason the
+23 unshown points need looking at, because they are doing all the flattening.
+
+### 2. The slope was fitted through a live control loop
+
+The adaptive TTL — **removed by this very session** — collapsed `cold_ttl` to
+30 s above 80 % memory, *closing browsers when memory was high*. That is a
+feedback path from memory to browser count, active throughout the probe. An
+observational slope fitted across it estimates the controller, not the cost:
+high-memory samples systematically carry fewer browsers, flattening the slope
+and inflating the intercept.
+
+This file's own headline anecdote — *"the same replica read 82.3 % holding 4
+browsers and 73.6 % holding 8"* — is the signature of that loop, not evidence
+against browsers. It is what a janitor shedding under pressure produces.
+
+### 3. The metric changed between the data and today
+
+The 68 lines are from rev `--0000031` (2026-07-31). `get_container_memory_percent`
+began subtracting `inactive_file` in `13fcecb`, deployed **2026-08-01**. So the
+intercept is in **raw `memory.current`** — reclaimable page cache included.
+Candidate 4 below spots that `active_file` is still not subtracted; it misses
+that in *this data* neither was. A chunk of "59 % nobody can account for" may be
+a term the current build already removes.
+
+### What follows
+
+- **The cap still ships.** It is correct under 2.65, under 3.42, and under the
+  cardinality argument, which does not depend on memory at all. Nothing here
+  blocks the deploy.
+- **"`max_browsers` would not have prevented the nine 500s" is withdrawn as
+  stated.** The nine readings were 85.1–95.6 %. Capping 9–10 browsers to 6:
+  at 85.1 % it clears the guard under *both* slopes (77.1 % / 74.8 %); at
+  95.6 % it is marginal under 2.65 and clears under 3.42. The supportable claim
+  is **"it would have prevented some of them, and the fraction turns on a slope
+  we have not settled"** — which is still a real correction to the old record,
+  just a smaller one.
+- **Removing pressure-driven shedding was decided by the disputed number.** With
+  the adaptive TTL gone and the memory guard refusing *before* `_evict_for_capacity`
+  runs, a replica over 85 % now holds its idle browsers for the constant
+  `idle_ttl_sec: 300` instead of shedding in ~30 s. That is fine if a browser is
+  2.65 %; it is a regression on the cold-burst path if it is 3.42 %. Same number,
+  second decision — which is why re-deriving it is worth more than it looks.
+- **The 68 raw points are not in the repo.** A load-bearing number with no stored
+  data cannot be re-checked by the next session. Store them under
+  `test-aitosoft/artifacts/` with the query and the metric's build date.
+
+**Re-derive first, then test the candidates below.** Fit on data drawn with the
+TTL loop gone (the current build), or restrict to samples where browser count
+was not falling; and state which metric definition each sample used.
+
 ## What NOT to conclude
 
 - **Not "the browser cap was pointless".** It bounds a real term by construction
