@@ -220,3 +220,105 @@ def test_handle_crawl_request_maps_to_429():
             adm.set_render_gate(None)
 
     run(main())
+
+
+# ── memory pressure answers 429 too (render-500-window, S1) ──────────────
+#
+# tasks/render-500-window-2026-07-31.md. All nine HTTP 500s in MAS's
+# 2026-07-31 probe came from `crawler_pool.get_crawler`'s memory guard, which
+# raised MemoryError and reached MAS as `{"failure_class": "render_error"}` at
+# **500** — the one status they retry, three times, with 1s/2s/4s backoff. So
+# the service answered memory pressure by quadrupling its own load, on a single
+# cold replica that was carrying the whole opening burst alone.
+#
+# "We are full" already had a correct answer in this file. It now has only one.
+
+
+def test_memory_pressure_is_a_429_not_a_500(monkeypatch):
+    """The regression that cost MAS 27 wasted renders in 19 minutes."""
+    import aitosoft_admission as adm
+    from fastapi import HTTPException
+
+    async def main():
+        import api
+        import crawler_pool
+
+        # A gate with room, so the ONLY thing that can refuse is the pool.
+        gate = RenderGate(capacity=2, max_queue=0, max_wait_s=0.1)
+        adm.set_render_gate(gate)
+        monkeypatch.setattr(crawler_pool, "get_container_memory_percent", lambda: 95.6)
+        monkeypatch.setattr(crawler_pool, "MEM_LIMIT", 85.0)
+        monkeypatch.setattr(crawler_pool, "LOCK", asyncio.Lock())
+        monkeypatch.setattr(crawler_pool, "PERMANENT", None)
+        monkeypatch.setattr(crawler_pool, "HOT_POOL", {})
+        monkeypatch.setattr(crawler_pool, "COLD_POOL", {})
+        try:
+            with pytest.raises(HTTPException) as exc_info:
+                await api.handle_crawl_request(
+                    urls=["https://example.com"],
+                    browser_config={},
+                    crawler_config={},
+                    config={
+                        "crawler": {
+                            "base_config": {},
+                            "memory_threshold_percent": 85.0,
+                            "rate_limiter": {"enabled": False, "base_delay": [1, 2]},
+                        },
+                        "limits": {"wall_clock_s": 180},
+                    },
+                )
+            assert (
+                exc_info.value.status_code == 429
+            ), "a full replica must never answer the status MAS retries"
+            assert "Retry-After" in (exc_info.value.headers or {})
+            assert "memory" in str(exc_info.value.detail).lower()
+        finally:
+            adm.set_render_gate(None)
+
+    run(main())
+
+
+def test_the_capacity_slot_is_released_when_the_pool_refuses(monkeypatch):
+    """The 429 is raised *after* the render gate was acquired, so the gate has
+    to give the slot back — otherwise a burst of memory refusals would wedge
+    admission and turn a transient condition into a permanent one."""
+    import aitosoft_admission as adm
+    from fastapi import HTTPException
+
+    async def main():
+        import api
+        import crawler_pool
+
+        gate = RenderGate(capacity=1, max_queue=0, max_wait_s=0.1)
+        adm.set_render_gate(gate)
+        monkeypatch.setattr(crawler_pool, "get_container_memory_percent", lambda: 99.0)
+        monkeypatch.setattr(crawler_pool, "MEM_LIMIT", 85.0)
+        monkeypatch.setattr(crawler_pool, "LOCK", asyncio.Lock())
+        monkeypatch.setattr(crawler_pool, "PERMANENT", None)
+        monkeypatch.setattr(crawler_pool, "HOT_POOL", {})
+        monkeypatch.setattr(crawler_pool, "COLD_POOL", {})
+        config = {
+            "crawler": {
+                "base_config": {},
+                "memory_threshold_percent": 85.0,
+                "rate_limiter": {"enabled": False, "base_delay": [1, 2]},
+            },
+            "limits": {"wall_clock_s": 180},
+        }
+        try:
+            for _ in range(3):
+                with pytest.raises(HTTPException) as exc_info:
+                    await api.handle_crawl_request(
+                        urls=["https://example.com"],
+                        browser_config={},
+                        crawler_config={},
+                        config=config,
+                    )
+                assert exc_info.value.status_code == 429
+            assert gate.snapshot()["in_use"] == 0, (
+                "capacity leaked on a memory refusal: " f"{gate.snapshot()}"
+            )
+        finally:
+            adm.set_render_gate(None)
+
+    run(main())

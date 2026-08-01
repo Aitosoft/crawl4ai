@@ -1,7 +1,76 @@
 # Detector round 3: it misses blocks and it invents them, both measured in prod
 
-**Status:** Open — ready to implement. All eight cases below are MAS's
-measurements against `0.9.2-failure-class`, not hypotheses.
+**Status: DONE 2026-08-01.** Both defects implemented and shipped in one image
+with `cleaned-html-collapse-guard.md`, `challenge-interstitial-resolve.md`
+phase 2 and `render-500-window-2026-07-31.md`'s S half.
+
+**Three things this file specified were wrong, and one of them was half the
+fix.** Read this section before trusting anything below it.
+
+1. **"The four caught hosts prove the pattern side already works"** — the
+   sentence the whole design rested on, and it is false. Measured: **no tier-1,
+   tier-2 or challenge pattern matches that body at all.** The four *caught*
+   hosts were caught by the 403/503 branch's fallthrough (`HTTP 403 with HTML
+   content`), which is a status rule. So "gating the prose-pattern tiers on
+   visible text closes the class" closes nothing — there was no pattern to gate.
+   The fix needed a **new block-notice tier** as well as the gate change.
+2. **Gating on visible text alone re-opens MAS's worst false-positive family.**
+   ~15 of their 22 `Access Denied` corpus hits were healthy Shopify storefronts
+   with an `/pages/access-denied` menu link, and our fixture for that family has
+   **247** characters of visible text — *under* any sane text gate. The tier
+   therefore requires the notice to be in a `<title>`/`<h1>`-`<h3>` **or** to
+   cover ≥50 % of the page's text. Without that discriminator this task would
+   have re-shipped the defect it cites.
+3. **Tier 3 must NOT move onto visible text**, which "every size gate in the
+   module is on `len(html)`" implies. Tier 3 is the *inference* tier that
+   defect B demotes; loosening it would make every padded page with no
+   recognisable notice a blocked verdict on shape alone. The evidence gates
+   moved; the inference gates deliberately did not.
+
+**And the fixture was unfaithful on the axis that decides the fix.**
+`/block/padded-403` served its notice in a bare `<div>` — zero content elements,
+so tier 3 scored **two** structural signals and needed only the size gate to
+move. The real page has an `<h1>` and a `<p>`: **two** content elements, **one**
+signal, still undetected after a gate change. A fix validated against the old
+fixture would have looked complete and closed none of the four hosts. Both
+shapes are now served (`?shape=heading` default, `?shape=bare`).
+
+**One thing this file asked for is deliberately NOT done: the unmarked
+interstitial.** It carries no evidence of any kind, so the only rule that could
+catch it is "a page with little text is a block" — inference, i.e. defect B
+aimed at every small page in a 117,000-page corpus. The received diagnosis was
+also incomplete: the page misses `minimal_text` by one character (50 visible,
+signal needs `< 50`), so it scores *zero* signals, not one, and no
+content-element adjustment would have caught it either. Pinned as today's
+behaviour with the reasoning, in
+`test_an_unmarked_interstitial_is_stored_as_content`.
+
+**A second real instance of defect A was found in our own artifacts directory.**
+`monidor.com` — a stored capture we have held for weeks, returned to MAS at
+`success: true` — is an 11,515-byte interstitial with **58** characters of text
+and the title `One moment, please...`, sitting just over the old 10 KB challenge
+gate. It is better evidence than the synthetic fixture and it needed two new
+patterns, again because the gate change alone catches nothing.
+
+**What shipped**
+
+| | |
+|---|---|
+| `crawl4ai/antibot_detector.py` | challenge tier's byte gate → visible text; new block-notice tier (any status, any size, two discriminators); two patterns from `monidor.com`; `_prose_snippet` shared by three tiers; an explicit evidence/inference boundary in the module docstring |
+| `deploy/docker/aitosoft_failure_class.py` | `_INFERRED_BLOCK_RE` — inference reasons no longer mean `origin_blocked`. Discarding the reason does **not** discard the status: 403/503 still block, other 4xx/5xx → `origin_http_error`, no status → `render_error` |
+| `test-aitosoft/fixture_origin.py` | `/block/padded-403?shape=heading\|bare`, faithful to MAS's stored markdown |
+| tests | 2 red tests inverted; +9 detector cases, +7 classification cases, incl. a sweep asserting every reason `is_blocked` can produce lands on exactly one side of the evidence line, and a false-positive check over all 58 stored real captures |
+
+**The status-evidence branch was added because an existing test caught its
+absence.** The first version of defect B threw the origin's status away along
+with the reason, turning an empty-bodied 503 into `origin_http_error`.
+`test_origin_5xx_is_an_http_error_even_when_the_body_reads_as_blocked` failed and
+was right to.
+
+---
+
+**Original task text follows.** All eight cases below are MAS's measurements
+against `0.9.2-failure-class`, not hypotheses.
 **Priority:** High, and it **gates `preflight-batch-endpoint.md`** — a preflight
 whose `blocked_suspect` lies is worse than none, and both defects below make it
 lie.

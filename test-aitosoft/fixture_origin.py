@@ -202,8 +202,26 @@ VARNISH_403 = (
 #: antibot_detector (tier 2 at 10 KB, tier 3 at 50 KB) carrying a block notice
 #: no longer than a real one. This is the shape behind
 #: tasks/detector-round3-evidence-vs-inference.md defect A.
+#:
+#: **The default shape was wrong until 2026-08-01, on the axis that decides the
+#: fix.** It served the notice in a bare `<div>`, which gives the page **zero**
+#: content elements — so tier 3's `no_content_elements` signal fired and the
+#: page needed only the size gate to move. The page MAS actually measured
+#: renders to `# 403 - Forbidden` + `Access to this page is forbidden.`, i.e. an
+#: `<h1>` and a `<p>`: **two** content elements, one structural signal, and
+#: therefore still undetected after a size-gate change. A fix validated against
+#: the old fixture would have looked complete and closed none of the four hosts.
+#:
+#: Both shapes are kept, because both are real and they exercise the two
+#: discriminators of the block-notice tier (heading placement vs. the notice
+#: being the whole page). `?shape=heading` (default) | `?shape=bare`.
 PADDED_BLOCK_BYTES = 80_000
-PADDED_BLOCK_TEXT = "Access to this page has been denied."
+PADDED_BLOCK_HEADING = "403 - Forbidden"
+PADDED_BLOCK_TEXT = "Access to this page is forbidden."
+
+#: The bare-`<div>` variant: no heading, so only "the notice is the whole page"
+#: can catch it. Vendors do serve this shape.
+PADDED_BLOCK_BARE_TEXT = "Access to this page has been denied."
 
 #: Markup shapes that can make the document swallow its own body. Each is
 #: injected ahead of CONTENT_HTML by `/collapse/{shape}`, so "did the page
@@ -400,15 +418,27 @@ def _block_padded(_m, query):
     """A block page padded past every `len(html)` gate in the detector.
 
     Defaults to HTTP 202 — the status the challenge layer actually uses — so
-    none of the status branches fire either. Today this comes back
-    `success: true, failure_class: none`; after
-    tasks/detector-round3-evidence-vs-inference.md it must not."""
+    none of the status branches fire either. This came back
+    `success: true, failure_class: none` until the block-notice tier shipped
+    (tasks/detector-round3-evidence-vs-inference.md, 2026-08-01).
+
+    `?shape=heading` (default) reproduces the four hosts MAS measured: the
+    notice in an `<h1>` with a `<p>` under it. `?shape=bare` puts the same text
+    in a `<div>`, which has no heading for the detector to key on and can only
+    be caught by the notice covering the whole page. `?text=` overrides the
+    sentence in either shape; `?bytes=` the padding; `?status=` the code.
+    """
     nbytes = int(_one(query, "bytes", PADDED_BLOCK_BYTES))
-    text = _one(query, "text", PADDED_BLOCK_TEXT)
+    shape = _one(query, "shape", "heading")
+    if shape == "bare":
+        body = f"<div>{_one(query, 'text', PADDED_BLOCK_BARE_TEXT)}</div>"
+    else:
+        heading = _one(query, "heading", PADDED_BLOCK_HEADING)
+        body = f"<h1>{heading}</h1><p>{_one(query, 'text', PADDED_BLOCK_TEXT)}</p>"
     return Reply(
         CHALLENGE_STATUS,
         "<!DOCTYPE html><html><head><title>Attention Required</title>"
-        f"{_padding(nbytes)}</head><body><div>{text}</div></body></html>",
+        f"{_padding(nbytes)}</head><body>{body}</body></html>",
     )
 
 

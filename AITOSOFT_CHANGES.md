@@ -39,6 +39,201 @@ Keeping this log helps when syncing with upstream updates.
 
 ---
 
+## Detector round 3, phase-2 capture wait, memory-guard 429 (2026-08-01)
+
+Four items in one image, deliberately: **the two detector defects pull in
+opposite directions and their net effect is only measurable in a single deploy.**
+Shipping either alone spends the measurement for nothing.
+
+### Defect A — an 80 KB body whose entire content is "403 - Forbidden" passed
+
+Four hosts (`talpa.fi`, `dining.fi`, `cisa.fi`, `jjsteel.fi`) returned 80,671
+bytes rendering to `# 403 - Forbidden / Access to this page is forbidden.` at
+origin status **202**, `success: true`, `failure_class: "none"`. The identical
+bytes at status **403** were classified correctly on four other hosts. Every
+size gate in `antibot_detector` read `len(html)`, and this vendor pads its block
+page to 80 KB.
+
+Fixed by two changes that are only useful together:
+
+1. **The evidence gates moved off `len(html)` onto visible text.** The challenge
+   tier's `html_len < 10000` is gone; the gate is now
+   `_CHALLENGE_MAX_VISIBLE_TEXT` alone, and prose is matched against a
+   script/style-stripped snippet so 80 KB of inline CSS cannot hide two lines.
+2. **A new block-notice tier**, at any status and any size: a page whose whole
+   visible text is a refusal *is* a refusal.
+
+**Correction to the task file, which specified this work.** It stated that "the
+four caught hosts prove the pattern side already works", so moving the gates
+would be enough. Measured 2026-08-01: **no tier-1, tier-2 or challenge pattern
+matches that body at all** — the four caught hosts were caught by the 403/503
+branch's fallthrough, a status rule. A gate change alone closes nothing. Half
+the fix was missing from the specification.
+
+**Two false-positive hazards the tier is shaped around, both from measurement:**
+
+- MAS's corpus scan found ~15 of 22 `Access Denied` hits were healthy Shopify
+  storefronts carrying an `/pages/access-denied` navigation link, and our own
+  fixture for that family measures **247** characters of visible text — *under*
+  the new 500-character gate. "The words appear on a low-text page" would have
+  re-opened it verbatim. A notice therefore counts only when the origin put it
+  in the `<title>`/`<h1>`-`<h3>` (the idiom the tier-2 pattern already uses) or
+  the matched text is ≥50 % of everything the page says.
+- The 500-character gate is measured, not picked: the smallest healthy content
+  page in our 58 stored real captures carries **739** characters, and everything
+  below is a cookie wall (0) or an interstitial (58). It is also
+  `aitosoft_collapse_guard.MIN_VISIBLE_TEXT_CHARS`, so the detector and the
+  guard meet on one boundary instead of overlapping or leaving a gap.
+
+**A second instance found in our own artifacts directory.** `monidor.com` — a
+real stored capture, returned to MAS at `success: true` — is an 11,515-byte
+interstitial with **58** characters of text and the title `One moment,
+please...`. It sat over the old 10 KB challenge gate. Two patterns were added
+from its body; the gate change alone would not have caught it either.
+
+### Defect B — four `origin_blocked` verdicts that were not blocks
+
+`is_blocked` returns one verdict for two kinds of finding, and
+`aitosoft_failure_class` mapped both to `origin_blocked`:
+
+| evidence | example reason | what it establishes |
+|---|---|---|
+| the origin said so | `HTTP 403 with HTML content`, a vendor marker | the origin blocked us |
+| we inferred it from shape | `Structural: minimal_text…`, `Near-empty content…` | *we* came back with nothing |
+
+The second is `render_error`'s definition. 4 of MAS's 33 `origin_blocked`
+verdicts were this, and the expensive one was **`norex.com`**, where the body
+was **our own** `Crawl4AI Error: This page is not fully supported` placeholder
+in 15 bytes of HTML — our pipeline's failure reported to the customer as the
+origin blocking them. This module's documented bias ("unrecognised failures are
+`render_error` and never an origin class, precisely so that a healthy site is
+never reported permanently broken") was running backwards.
+
+`_INFERRED_BLOCK_RE` now recognises the inference reasons and lets them fall
+through. **Discarding the reason does not discard the status**: 403/503 still
+mean blocked (Incapsula and Varnish serve blocks with 503), any other 4xx/5xx
+becomes `origin_http_error` — which is where `snuup.fi`'s ordinary 404 lands —
+and a result with no origin status at all reaches `RENDER_ERROR`. That last
+branch was added after an existing test caught the first version throwing the
+status away with the reason.
+
+`fodbar.fi` is **unchanged by decision** (MAS message 09 §5): the origin said
+403, so we report 403. Overruling a status because the body looks like content
+is the same shape as the `norex.com` invention pointed the other way.
+
+**The cost, stated because it is not free:** `norex.com` and
+`jarvenkylamaatila.fi` move from `origin_blocked` (200, terminal) to
+`render_error` (500, retried 3×), so we buy back three renders per occurrence.
+That is the correct direction for a transient failure of ours, and `snuup.fi`
+gets strictly cheaper.
+
+### How A and B compose, which is the reason for one image
+
+The same block page under the 50 KB gate used to be caught by **tier 3** —
+`Structural: minimal_text, no_content_elements`, an inference. Defect B stops
+that meaning `origin_blocked`. Without defect A it would now report
+`render_error`: a real block, reported as our own bug. The block-notice tier
+catches it first, as evidence, so it stays `origin_blocked`.
+`test_the_padding_is_no_longer_the_difference` is that assertion.
+
+### The fixture was wrong on the axis that decides the fix
+
+`/block/padded-403` served its notice in a bare `<div>` — **zero** content
+elements, so tier 3 scored two structural signals and needed only the size gate
+to move. The page MAS actually measured has an `<h1>` and a `<p>`: **two**
+content elements, one signal, still undetected after a gate change. A fix
+validated against the old fixture would have looked complete and closed none of
+the four hosts. Both shapes are now served (`?shape=heading` default, `?shape=bare`)
+and both are parameterised into the tests, because they exercise the two
+discriminators separately.
+
+### Phase 2: the patchright retry gets its own capture wait
+
+`maybe_retry_blocked` had always handed patchright **the same
+`CrawlerRunConfig`** — hence the same `delay_before_return_html` — so the second
+attempt differed only in engine and could not, by construction, resolve a
+challenge the first attempt had already outlasted. It now gets
+`crawler.retry_capture_wait_s` (10.0), clamped to never lower a client's own
+higher value.
+
+Measured offline over an 84-cell grid: a capture wait `W` gets any challenge
+resolving within **`W + 1.22 s`**. MAS's production 2.0 covers ≤ 3.2 s; 10.0
+covers ≤ 11.2 s. Zero extra page loads (that second fetch already happens for
+every detected block), zero cost on the happy path, and it runs inside the
+existing wall-clock fence.
+
+**Do not get the same effect by raising the global `delay_before_return_html`:**
+at MAS's ~120,000-fetch sweep that is ~267 render-hours, and blocked hosts pay
+it twice. Targeted, it is 8–36.
+
+**The measurement phase 1's footnote asked for.** Phase 1 modelled a wall as
+`2 × (W + 1.22)` and found W=10 misfitting by 2.78 s, warning that the retry leg
+had to be measured rather than assumed. Measured through the real path: the
+retry's fetch takes **11.26 s** at W=10, i.e. `W + 1.22` to within 0.04 s. The
+retry leg is not where the extra cost lives; patchright singleton startup is the
+remaining candidate and is a one-off per process.
+
+**What it cannot do:** rescue an interstitial we never detected. The trigger is
+the detector, which is why defect A ships in the same image — detection is the
+ceiling on this recovery.
+
+### Memory pressure answers 429, not 500
+
+All nine HTTP 500s in MAS's 2026-07-31 probe were `crawler_pool.py`'s memory
+guard raising `MemoryError`, which `api.py`'s generic `except Exception` turned
+into a **500** with `failure_class: render_error`. MAS retries 500 three times
+with 1s/2s/4s backoff, so the service answered memory pressure by **quadrupling
+its own load**, on a single cold replica carrying the whole opening burst alone.
+
+"We are full" already had a correct shape here — RenderGate's 429 +
+`Retry-After` — so the guard now raises `RenderCapacityExceeded` and both paths
+map through one helper. Same defect shape as the `render_error` split above: one
+condition, two wire statuses, and the expensive one was not chosen deliberately.
+
+**This is a symptom fix and is labelled as one.** The cause is that nothing
+bounds how many browsers the pool holds — `render_capacity` bounds renders,
+`max_pages` bounds pages, and residency is governed by idle TTL alone, so 8
+browsers were held to do 2 renders' worth of work at ~139–165 MB each. That is
+`tasks/pool-residency-unbounded.md`, carved out deliberately.
+
+Two smaller items ride along:
+
+- **`get_container_memory_percent()` reports the working set**, subtracting
+  `inactive_file` (reclaimable page cache). Correct on its own terms and worth
+  most on a cold replica, but a bounded offset — 1 % of pool growth warm, 16 %
+  cold — not the explanation for that incident. Shipped because it is right. A
+  bogus `inactive_file` larger than usage is ignored, so a bad stat read can
+  never *hide* pressure.
+- **The permanent browser is closed when nothing has ever used it.** `Using
+  permanent browser` fired **0 times in 224 pool gets**: MAS always sends a
+  `browser_config`, so `_sig` never equals `DEFAULT_CONFIG_SIG` and the boot
+  browser held ~139–165 MB for the replica's whole life. `get_crawler` already
+  re-creates it lazily.
+
+### Deliberately NOT in this image
+
+- **Flipping envelope `success` to the aggregate.** Agreed with MAS, but their
+  message 09 says the envelope `success` is **never read** on 2xx — they take
+  `results[0]` — so the flip buys no behaviour while breaking a pinned contract
+  (`test_static_mode.py:257`) in an image that already changes static mode's
+  wire-status mapping. Coordinator decision 2026-08-01.
+- **The `fodbar.fi` "content was present despite the origin status" field.**
+  Conditional on message 10 describing it first; message 10 has not gone out
+  (`tmp/mas-repo-messages/` ends at 09), so per that condition the field is
+  dropped rather than delaying the image. It is additive and can follow.
+- **The unmarked interstitial.** The task file asked for it in this pass. It
+  carries **no evidence** — no marker, no interstitial prose, no refusal notice
+  — so the only rule that could catch it is "a page with little text is a
+  block", which is inference, and this image exists partly to stop inference
+  claiming `origin_blocked`. Inventing that rule here would re-create defect B
+  aimed at every small real page in a 117,000-page corpus. Recorded in
+  `test_an_unmarked_interstitial_is_stored_as_content`, not papered over.
+  (The received diagnosis was also incomplete: the page misses `minimal_text`
+  by one character — 50 visible, signal needs `< 50` — so it scores *zero*
+  signals, not one, and no content-element adjustment would have caught it.)
+
+---
+
 ## Collapse guard + one wire status per failure class (2026-08-01)
 
 Part 1 of `tasks/cleaned-html-collapse-guard.md`. **Landed, not deployed** — it
@@ -291,6 +486,21 @@ hop under that name, so the two render modes disagreed on a shared field; and a
 redirect-to-block host was labelled `301`. `redirected_status_code` is untouched
 and is now documented, as MAS requested — it was absent from their
 `CrawlResult` interface entirely.
+
+> **`status_code` may be 202, and 202 is not a success signal.** Added
+> 2026-08-01. In MAS's 243-host re-scrape, **36 of 243** responses carried
+> origin status 202, 100 % of them from the challenge families — and the *same*
+> 202 served interstitials, block pages, real content and empty bodies. It is an
+> anti-bot layer's code, not a page status.
+>
+> Neither side may branch on `status == 200` meaning success, or on
+> `status_code >= 400` meaning failure. The fields that carry the outcome are
+> the result-level `success` and `failure_class`; `status_code` reports what the
+> origin said and nothing more. Two consequences we have already paid for: the
+> detector's status branches (403/503, `>= 400`) can never fire on this family,
+> which is why the block-notice and challenge tiers are status-independent; and
+> a block page served at 202 looked exactly like a healthy page until 2026-08-01.
+> See `tasks/challenge-interstitial-resolve.md` for what we think the layer is.
 
 **Classification bias is deliberate:** anything unrecognised is `render_error`
 (ours, 500, retryable), never an origin class, and an unknown `net::ERR_*` logs

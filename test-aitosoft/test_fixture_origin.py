@@ -31,7 +31,6 @@ from fixture_origin import (
     CONTENT_MARKER,
     CONTENT_TAIL_MARKER,
     GUARD_BLIND_SHAPES,
-    PADDED_BLOCK_TEXT,
     loopback_allowed,
 )
 
@@ -128,27 +127,98 @@ def test_a_healthy_page_is_a_clean_capture(fixture_origin, production_path):
 
 
 @pytest.mark.parametrize("route", ["resolve-after", "resolve-by-nav"])
-def test_an_interstitial_captured_too_early_is_the_result_we_keep(
+def test_a_challenge_that_outlasts_the_first_capture_is_rescued_by_the_retry(
     route, fixture_origin, production_path
 ):
-    """The shape MAS observed: HTTP 202, the challenge screen stored as the page.
+    """PHASE 2, inverted 2026-08-01. This used to assert the opposite.
 
-    This is the whole of task #1's premise, offline. Note the status: 202 is the
-    challenge layer's own code, not an error, so no status branch in the
-    detector fires — the interstitial is caught by its vendor marker alone.
+    It was `test_an_interstitial_captured_too_early_is_the_result_we_keep`, and
+    it pinned MAS's observed shape: HTTP 202 with the challenge screen stored as
+    the page. A 5 s challenge outlasts a 0.1 s capture wait, the interstitial is
+    what we kept, and the patchright retry could not help because it was handed
+    the **same** `CrawlerRunConfig` — a different engine on an identical budget.
+
+    tasks/challenge-interstitial-resolve.md phase 2 gives that retry its own,
+    longer capture wait (10 s, so `W + 1.22` covers challenges up to 11.2 s).
+    The rescue costs zero extra page loads, because the second fetch already
+    happened for every detected block.
+
+    Note what the first attempt still has to do: **detect**. The recovery is
+    triggered by the detector, so it can only ever reach challenges we already
+    call blocked. `/challenge/never?marker=none` is the family this cannot
+    touch, and it is pinned separately.
     """
+    fixture_origin.reset_hits()
     outcome = production_path.crawl(
         fixture_origin.url(f"/challenge/{route}/{LATE_S}"),
         delay_before_return_html=SHORT_WAIT,
     )
 
-    assert not outcome.success
-    assert outcome.status_code == 202
+    assert outcome.success, outcome.error_message
+    assert outcome.status_code == 202, "202 serves the real page too, not just the wall"
+    assert outcome.failure_class == "none"
+    assert CONTENT_MARKER in outcome.markdown
+    assert "robot-suspicion" not in outcome.html
+
+    # The rescue came from the retry we already pay for, not from a third fetch.
+    assert fixture_origin.hits_for(f"/challenge/{route}") == 2
+
+
+def test_the_retry_leg_costs_the_raised_wait_and_no_more(
+    fixture_origin, production_path
+):
+    """The measurement phase 1's block-B footnote explicitly asked for.
+
+    Phase 1 modelled a wall as `2 x (W + 1.22)` and found one cell that misfits:
+    W=10 measured 25.22 s against 22.44 s predicted. That cell is the closest
+    analogue to what phase 2 does — raise the wait on the retry — so the leg had
+    to be measured directly rather than assumed.
+
+    Measured here: the retry's own fetch takes `retry_wait + 1.22 s`, the same
+    constant as any other capture. So the retry leg is NOT where the extra
+    2.78 s lives (patchright singleton startup is the remaining candidate, and
+    it is a one-off per process, not per request). The bound below is loose on
+    purpose — it is a fence check, not a benchmark.
+    """
+    from aitosoft_patchright_fallback import _retry_capture_wait_s
+
+    retry_wait = _retry_capture_wait_s()
+    outcome = production_path.crawl(
+        fixture_origin.url("/challenge/never"), delay_before_return_html=SHORT_WAIT
+    )
+
+    assert not outcome.success, "a wall stays a wall however long we wait"
     assert outcome.failure_class == "origin_blocked"
-    assert "robot-suspicion" in outcome.html
-    assert CONTENT_MARKER not in outcome.markdown
-    # Origin-caused, so MAS must see 200 + success:false and stop retrying.
-    assert outcome.http_status == 200
+    # first capture (~SHORT_WAIT + 1.22) + retry (~retry_wait + 1.22) + startup.
+    assert (
+        outcome.elapsed_s > retry_wait
+    ), f"the retry did not get the longer wait: {outcome.elapsed_s:.1f}s"
+    assert outcome.elapsed_s < retry_wait + 15, (
+        f"the retry leg cost more than the raised wait explains: "
+        f"{outcome.elapsed_s:.1f}s for a {retry_wait}s wait"
+    )
+
+
+def test_the_happy_path_never_pays_for_the_retry(fixture_origin, production_path):
+    """The other half of phase 2's cost argument, asserted rather than reasoned.
+
+    A page that captures cleanly must be fetched exactly once and must not wait
+    the retry's budget. If this ever fails, the raised wait has leaked onto the
+    population it was specifically designed to avoid — which is what makes a
+    global `delay_before_return_html: 10.0` cost ~267 render-hours per sweep.
+    """
+    from aitosoft_patchright_fallback import _retry_capture_wait_s
+
+    fixture_origin.reset_hits()
+    outcome = production_path.crawl(
+        fixture_origin.url("/ok"), delay_before_return_html=MAS_WAIT
+    )
+
+    assert outcome.success
+    assert fixture_origin.hits_for("/ok") == 1, "the happy path re-fetched"
+    assert (
+        outcome.elapsed_s < _retry_capture_wait_s()
+    ), f"a clean capture waited the retry's budget: {outcome.elapsed_s:.1f}s"
 
 
 @pytest.mark.parametrize("route", ["resolve-after", "resolve-by-nav"])
@@ -188,19 +258,34 @@ def test_an_interstitial_that_never_resolves_stays_blocked(
 
 
 def test_an_unmarked_interstitial_is_stored_as_content(fixture_origin, production_path):
-    """The silent case, pinned as today's behaviour.
+    """The silent case, still pinned as today's behaviour — deliberately.
 
     Strip the vendor marker and the "Just a moment" title and one sentence of
-    Finnish prose is enough to clear every tier: 53 characters of markdown come
-    back at `success: true, failure_class: none`. Tier 3 does not fire because
-    the page has an <h1> and a <p> in it, which is all "has content elements"
-    means.
+    Finnish prose is enough to clear every tier: ~50 characters of markdown come
+    back at `success: true, failure_class: none`.
 
-    This is why "how many interstitials are we storing as pages?" has never had
-    an answer: we can only count the ones we recognise. It is the same failure
-    as the padded block below, reached by a different route — and the reason
-    tasks/detector-round3-evidence-vs-inference.md is about evidence rather than
-    about adding patterns.
+    **Re-measured 2026-08-01, and the received diagnosis was incomplete.** The
+    story was "tier 3 does not fire because the page has an <h1> and a <p> in
+    it, which is all `has content elements` means". True, but it also misses
+    `minimal_text` by one character: the visible text is exactly 50 and the
+    signal needs `< 50`. So the page scores **zero** signals, not one, and no
+    adjustment to the content-element rule alone would have caught it.
+
+    tasks/detector-round3-evidence-vs-inference.md asked for this to be fixed in
+    the same pass as the padded block. It is not, and the reason is that same
+    task's other half. This page carries **no evidence** — no vendor marker, no
+    interstitial prose, no refusal notice, nothing but "Odota hetki" and a
+    Finnish sentence. The only rule that could catch it is "a page with very
+    little text is a block", which is inference, and this image exists partly to
+    stop inference claiming `origin_blocked` — it cost MAS a healthy host
+    (`norex.com`). Inventing the rule here would re-create that defect pointed
+    at every small real page in a 117,000-page corpus.
+
+    So the honest state is: we cannot detect this family, and we cannot count
+    it either. That is the ceiling
+    tasks/challenge-interstitial-resolve.md's block C already identified, and
+    only MAS's stored corpus can size it. Recorded here rather than papered
+    over with a threshold.
     """
     outcome = production_path.crawl(
         fixture_origin.url("/challenge/never", marker="none"),
@@ -216,42 +301,82 @@ def test_an_unmarked_interstitial_is_stored_as_content(fixture_origin, productio
 # ── padded blocks (tasks/detector-round3-evidence-vs-inference.md) ───────
 
 
-def test_a_padded_block_page_is_not_detected_today(fixture_origin, production_path):
-    """DEFECT A, pinned deliberately.
+@pytest.mark.parametrize("shape", ["heading", "bare"])
+def test_a_padded_block_page_is_detected(fixture_origin, production_path, shape):
+    """DEFECT A, **inverted 2026-08-01**. This asserted today's defect until the
+    block-notice tier shipped; it now proves the fix fires.
 
-    Every size gate in antibot_detector is on `len(html)`: tier 2 at 10 KB, tier
-    3 at 50 KB. The vendor pads the block page to ~80 KB, so a page with 36
-    characters on it sails through as content — at `success: true`,
-    `failure_class: none`, which is the "green counter" failure mode MAS called
-    the most expensive thing that happened to them this month.
+    Every size gate in antibot_detector used to be on `len(html)` — tier 2 at
+    10 KB, tier 3 at 50 KB — and the vendor pads its block page to ~80 KB, so a
+    page with 48 characters on it sailed through as content at `success: true`,
+    `failure_class: none`. That is the "green counter" failure mode MAS called
+    the most expensive thing that happened to them this month, and it happened
+    on four of the eight hosts they measured in prod.
 
-    Four such blocks were missed in the eight hosts MAS measured in prod.
-    tasks/detector-round3-evidence-vs-inference.md moves the gates onto visible
-    text; when it ships, this test must be inverted, not deleted — its job then
-    is to prove the fix fires.
+    Both shapes are parameterised because they fail differently and only one of
+    them is what production served. `heading` is the real page (an `<h1>` and a
+    `<p>`, from MAS's stored markdown); `bare` is a `<div>`. Moving the size
+    gate alone would have "fixed" `bare` — a bare div has no content elements,
+    so tier 3 scores two signals — while leaving `heading`, which scores one,
+    exactly as broken. The fixture served `bare` by default until today.
+
+    Note the class: `origin_blocked`, not `render_defect` or `render_error`.
+    The origin's own bytes state the refusal, so this is evidence, and evidence
+    outranks the inference tiers — which the same image just stopped letting
+    claim `origin_blocked` at all. The two halves have to agree here or one of
+    them is wrong.
     """
     outcome = production_path.crawl(
-        fixture_origin.url("/block/padded-403"), delay_before_return_html=SHORT_WAIT
+        fixture_origin.url("/block/padded-403", shape=shape),
+        delay_before_return_html=SHORT_WAIT,
     )
 
     assert len(outcome.html) > 50_000, "the padding is the mechanism"
-    assert PADDED_BLOCK_TEXT in outcome.markdown
-    assert len(outcome.markdown.strip()) < 100, "36 characters of block notice"
+    assert len(outcome.markdown.strip()) < 200, "a block notice, not a page"
 
-    assert outcome.success, "TODAY'S BEHAVIOUR — invert when defect A is fixed"
-    assert outcome.failure_class == "none"
+    assert not outcome.success
+    assert outcome.failure_class == "origin_blocked"
+    assert outcome.status_code == 202, "the origin's real status rides along"
+    assert outcome.http_status == 200, "5xx is reserved for our own faults"
 
 
-def test_the_padding_is_the_only_difference(fixture_origin, production_path):
-    """The same block notice under the 50 KB gate IS detected. Isolates the
-    defect to the size gate rather than to anything about the body."""
+@pytest.mark.parametrize("shape", ["heading", "bare"])
+def test_the_padding_is_no_longer_the_difference(
+    fixture_origin, production_path, shape
+):
+    """The same notice with the padding removed must reach the same verdict.
+
+    Before the fix this passed for a different reason than it does now, and the
+    difference is the whole of defect B. Unpadded, the `bare` shape was caught
+    by **tier 3** — `Structural: minimal_text, no_content_elements` — which is
+    us inferring a block from an empty-looking page, not the origin telling us
+    anything. This image stops such reasons meaning `origin_blocked`, so if the
+    block-notice tier did not catch these first, this assertion would now read
+    `render_error`. It passing is the two defects composing correctly.
+    """
     outcome = production_path.crawl(
-        fixture_origin.url("/block/padded-403", bytes=0),
+        fixture_origin.url("/block/padded-403", bytes=0, shape=shape),
         delay_before_return_html=SHORT_WAIT,
     )
 
     assert not outcome.success
     assert outcome.failure_class == "origin_blocked"
+
+
+def test_a_healthy_page_is_never_a_block_notice(fixture_origin, production_path):
+    """The false-positive tripwire for the tier above, through the real path.
+
+    The block-notice tier fires at any status and any size, so the only thing
+    keeping it honest is that a real page has text. This is the same page every
+    other route uses as its success control.
+    """
+    outcome = production_path.crawl(
+        fixture_origin.url("/ok"), delay_before_return_html=SHORT_WAIT
+    )
+
+    assert outcome.success
+    assert outcome.failure_class == "none"
+    assert CONTENT_MARKER in outcome.markdown
 
 
 # ── edge blocks (tasks/blocked-host-retry-economy.md) ────────────────────
@@ -291,20 +416,61 @@ def test_a_blocked_host_costs_two_page_loads(fixture_origin, production_path):
 # ── hydration races (MAS's revisol.fi class) ─────────────────────────────
 
 
-def test_a_shell_captured_before_it_paints_is_a_degenerate_capture(
+def test_a_shell_that_paints_inside_the_retry_budget_is_rescued(
     fixture_origin, production_path
 ):
-    """Not a block — nobody refused us — but indistinguishable from one in the
-    result today. Keeping the two classes separable is why this route exists."""
+    """An unplanned dividend of phase 2, found by this test going green.
+
+    This asserted `not outcome.success`: a shell captured 0.1 s in, before its
+    5 s hydration, came back degenerate. Nobody refused us — it is not a block —
+    but tier 3 calls a near-empty page blocked, and that verdict is what arms
+    the patchright retry. With the retry now waiting 10 s, the page has painted
+    by the time it is captured.
+
+    This is **MAS's `revisol.fi` class**: they measured 361,900 / 242 / 1 at
+    `delay_before_return_html: 2.0` and 598,937 / 101,091 / 21,921 at 10 — a
+    capture-timing failure on their side of the split, which we now absorb
+    server-side for the population that already costs two page loads. Their
+    half of tasks/cleaned-html-collapse-guard.md gets smaller for free.
+    """
+    fixture_origin.reset_hits()
     outcome = production_path.crawl(
         fixture_origin.url(f"/hydrate-after/{LATE_S}"),
         delay_before_return_html=SHORT_WAIT,
     )
 
-    assert not outcome.success
+    assert outcome.success, outcome.error_message
     assert outcome.status_code == 200
+    assert CONTENT_MARKER in outcome.markdown
+    assert fixture_origin.hits_for("/hydrate-after") == 2, "rescued by the retry"
+
+
+def test_a_shell_that_never_paints_is_ours_and_retryable(
+    fixture_origin, production_path
+):
+    """The other side, and the cost of defect B stated as an assertion.
+
+    A shell that outlasts the retry's budget too is still degenerate. Its only
+    verdict is tier 3's `Structural: minimal_text` — *inference*, not the origin
+    refusing us — so this image stops it claiming `origin_blocked` and it lands
+    on `render_error`: **HTTP 500, which MAS retries three times.**
+
+    That is a real cost and it is the intended direction: a capture that came
+    back with nothing is ours, and it is transient, which is what a retry is
+    for. Note what it is not — before this change MAS was told a healthy site
+    was blocked, which is the failure mode they called the most expensive thing
+    that happened to them this month.
+    """
+    outcome = production_path.crawl(
+        fixture_origin.url("/hydrate-after/60"),
+        delay_before_return_html=SHORT_WAIT,
+    )
+
+    assert not outcome.success
     assert len(outcome.markdown.strip()) < 500, "MAS's DEGENERATE_CAPTURE_CHARS floor"
     assert CONTENT_MARKER not in outcome.markdown
+    assert outcome.failure_class == "render_error", "ours, not the origin's"
+    assert outcome.http_status == 500, "retryable, deliberately"
 
 
 def test_a_shell_captured_after_it_paints_is_the_real_page(

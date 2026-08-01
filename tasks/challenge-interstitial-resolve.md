@@ -1,8 +1,39 @@
 # The challenge family is a capture-timing effect, and the fix is not a global wait
 
-**Status:** **Phase 1 done 2026-08-01 — the number is in.** Phase 2 is a **GO,
-re-scoped from M to S** (§Go/no-go). Nothing deployed; phase 1 touched no
-production code and made zero live requests.
+**Status: DONE 2026-08-01 — phase 1 and phase 2 both.** Phase 2 shipped in the
+`detector-round3` + `collapse-guard` image: one config value
+(`crawler.retry_capture_wait_s: 10.0`) and one config-clone in
+`aitosoft_patchright_fallback._config_for_retry`, exactly the shape §Go/no-go
+predicted. Zero live requests across both phases.
+
+**The footnote's open question is answered.** §Block B warned that the model
+`2 x (W + 1.22)` misfits at W=10 by 2.78 s, that this cell is the closest
+analogue to what phase 2 does, and that **the retry leg had to be measured
+rather than assumed**. Measured through the real production path: the retry's
+own fetch takes **11.26 s** at W=10 — `W + 1.22` to within 0.04 s, the same
+constant as any other capture. The retry leg is *not* where the extra cost
+lives; patchright singleton startup is the remaining candidate and is a one-off
+per process, not per request. Pinned by
+`test_the_retry_leg_costs_the_raised_wait_and_no_more`.
+
+**One dividend nobody priced, found by a test going green on its own.** The
+retry's longer wait also rescues **slow-hydrating shells**, not just challenges:
+tier 3 calls a near-empty page blocked, that verdict arms the retry, and by 11.2
+s the page has painted. That is MAS's `revisol.fi` class — the half of
+`cleaned-html-collapse-guard.md` they had attributed to their own capture
+timing — now absorbed server-side for a population that already costs two page
+loads. Pinned by `test_a_shell_that_paints_inside_the_retry_budget_is_rescued`.
+
+**The reach limit in §Block C held exactly as stated:** phase 2 rescues only
+what the detector already calls blocked. That is why it shipped in the same
+image as `detector-round3-evidence-vs-inference.md`, which widened detection —
+and the unmarked family still gets nothing, because there is no evidence to
+detect it by.
+
+---
+
+**Phase 1 status when written:** phase 1 done, the number in; phase 2 a **GO,
+re-scoped from M to S** (§Go/no-go).
 **Priority:** was highest of the open work; the investigation half is now spent.
 Phase 2 is small enough to ride an existing image.
 **Effort:** S (phase 1, done), **S** (phase 2 — was M; the recovery vehicle turned

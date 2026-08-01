@@ -3,7 +3,7 @@ import asyncio, json, hashlib, time
 from contextlib import suppress
 from typing import Dict, Optional
 from crawl4ai import AsyncWebCrawler, BrowserConfig
-from utils import load_config, get_container_memory_percent
+from utils import load_config, get_container_memory_percent, get_memory_breakdown
 import logging
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,32 @@ STUCK_BUSY_TIMEOUT_S = (
 # active_requests returns to 0 via release_crawler. Keyed by id(crawler) because
 # release_crawler only has the object reference, not the pool key.
 BUSY_SINCE: Dict[int, float] = {}
+
+# Aitosoft 2026-08-01: how long the permanent browser may sit unused before the
+# janitor closes it. `Using permanent browser` fired **0 times in 224 pool gets**
+# during MAS's 2026-07-31 probe, because they always send a `browser_config` and
+# so `_sig` never equals DEFAULT_CONFIG_SIG — the boot browser served nothing
+# while holding ~139-165 MB for the replica's whole life. `get_crawler` already
+# lazily re-creates it, so closing it is free to be wrong.
+PERMANENT_UNUSED_TTL_S = (
+    CONFIG.get("crawler", {}).get("pool", {}).get("permanent_unused_ttl_sec", 600)
+)
+
+
+def memory_breakdown() -> str:
+    """One-line anon/file/inactive_file split for a log message.
+
+    Aitosoft: this question — "is the memory pressure real, or is the reading
+    counting page cache?" — cost an offline probe and a session to answer once.
+    Logging the split makes it answerable from Log Analytics forever.
+    """
+    parts = get_memory_breakdown()
+    if not parts:
+        return "cgroup stats unavailable"
+    return (
+        f"anon={parts['anon']:.0f}MB file={parts['file']:.0f}MB "
+        f"inactive_file={parts['inactive_file']:.0f}MB"
+    )
 
 
 def get_pool_snapshot() -> dict:
@@ -172,11 +198,39 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
                 logger.info(f"♻️  Using overflow cold browser (key={key[:16]}, active={crawler.active_requests})")
                 return crawler
 
-        # Memory check before creating new
+        # Memory check before creating new.
+        #
+        # Aitosoft 2026-08-01: this used to raise MemoryError, which api.py's
+        # generic `except Exception` turned into a **500** with
+        # `failure_class: render_error`. MAS retries 500 three times with
+        # 1s/2s/4s backoff, so the service answered memory pressure by
+        # multiplying its own load by four, at the exact moment capacity was
+        # tightest. All nine 500s in their 2026-07-31 probe were this line.
+        #
+        # "We are full" already has a correct shape in this codebase: RenderGate
+        # answers 429 + Retry-After, which MAS backs off on. Same condition,
+        # same answer — so raise the same exception rather than inventing a
+        # second vocabulary for it. See tasks/render-500-window-2026-07-31.md S1.
+        #
+        # This is a symptom fix and is labelled as one: the cause is that
+        # nothing bounds how many browsers the pool holds (residency is governed
+        # by idle TTL alone, so 8 browsers were held to do 2 renders' worth of
+        # work at ~139-165 MB each). That is tasks/pool-residency-unbounded.md,
+        # carved out deliberately. The 429 makes the symptom cheap; it does not
+        # remove the cause.
         mem_pct = get_container_memory_percent()
         if mem_pct >= MEM_LIMIT:
-            logger.error(f"💥 Memory pressure: {mem_pct:.1f}% >= {MEM_LIMIT}%")
-            raise MemoryError(f"Memory at {mem_pct:.1f}%, refusing new browser")
+            from aitosoft_admission import RenderCapacityExceeded
+
+            logger.error(
+                f"💥 Memory pressure: {mem_pct:.1f}% >= {MEM_LIMIT}% "
+                f"({memory_breakdown()}) — refusing new browser, "
+                f"hot={len(HOT_POOL)}, cold={len(COLD_POOL)}, "
+                f"permanent={'yes' if PERMANENT else 'no'}"
+            )
+            raise RenderCapacityExceeded(
+                f"memory at {mem_pct:.1f}% (limit {MEM_LIMIT}%), refusing new browser"
+            )
 
         # Create new browser (either no match in pool, or existing ones at capacity)
         global OVERFLOW_SEQ
@@ -389,6 +443,72 @@ async def janitor():
             # because regular idle cleanup skips anything with active > 0.
             await _force_close_stuck(now)
 
-            # Log pool stats
+            # Aitosoft: close the permanent browser if nothing has ever used it.
+            await _close_unused_permanent(now)
+
+            # Log pool stats. Aitosoft: the memory split rides along — the
+            # `mem=` figure alone could not distinguish "we are holding 1.3 GB
+            # of browsers" from "the kernel is holding page cache", and that
+            # ambiguity is what made the 2026-07-31 diagnosis expensive.
+            #
+            # CAVEAT for whoever reads these lines: `mem_pct` is sampled BEFORE
+            # the sleep at the top of this loop and logged AFTER the cleanup
+            # below it, so it is up to `interval` seconds staler than the
+            # hot/cold counts printed beside it. Do not pair them as
+            # simultaneous.
             if mem_pct > 60:
-                logger.info(f"📊 Pool: hot={len(HOT_POOL)}, cold={len(COLD_POOL)}, mem={mem_pct:.1f}%")
+                logger.info(
+                    f"📊 Pool: hot={len(HOT_POOL)}, cold={len(COLD_POOL)}, "
+                    f"permanent={'yes' if PERMANENT else 'no'}, "
+                    f"mem={mem_pct:.1f}%, {memory_breakdown()}"
+                )
+
+
+async def _close_unused_permanent(now: float) -> None:
+    """Close the permanent browser when nothing has ever used it.
+
+    Caller MUST hold LOCK. `USAGE_COUNT[DEFAULT_CONFIG_SIG]` is initialised to 0
+    by `init_permanent` and incremented only by a default-config pool hit, so a
+    count still at zero after the TTL means literally no request has matched it.
+
+    MAS always sends a per-company `browser_config`, so in production that is
+    every request: 0 permanent hits against 224 pool gets on 2026-07-31, while
+    the browser held ~139-165 MB for the replica's whole life. Recovering that
+    is a saving, not a defect fix, and it is safe because `get_crawler` already
+    lazily re-creates the permanent browser when a default-config request does
+    turn up (the path `test_crawler_pool.py::test_permanent_reinit_after_stuck_
+    force_close` already covers).
+    """
+    global PERMANENT
+    if PERMANENT is None or not DEFAULT_CONFIG_SIG:
+        return
+    if USAGE_COUNT.get(DEFAULT_CONFIG_SIG, 0) > 0:
+        return  # it is earning its memory
+    if getattr(PERMANENT, "active_requests", 0) > 0:
+        return  # cannot be unused and busy, but never close a browser mid-work
+    idle_for = now - LAST_USED.get(DEFAULT_CONFIG_SIG, now)
+    if idle_for <= PERMANENT_UNUSED_TTL_S:
+        return
+
+    logger.info(
+        f"🧹 Closing permanent browser — never used in {idle_for:.0f}s "
+        f"(every request carries its own browser_config). "
+        f"It re-creates lazily if a default-config request arrives."
+    )
+    crawler, PERMANENT = PERMANENT, None
+    with suppress(Exception):
+        await crawler.close()
+    BUSY_SINCE.pop(id(crawler), None)
+    LAST_USED.pop(DEFAULT_CONFIG_SIG, None)
+    USAGE_COUNT.pop(DEFAULT_CONFIG_SIG, None)
+
+    try:
+        from monitor import get_monitor
+
+        await get_monitor().track_janitor_event(
+            "close_unused_permanent",
+            DEFAULT_CONFIG_SIG,
+            {"idle_seconds": int(idle_for)},
+        )
+    except Exception:
+        pass

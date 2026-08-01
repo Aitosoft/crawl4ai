@@ -1,8 +1,17 @@
 # A second markup family collapses the body — and nothing detects a collapse
 
-**Status:** **Part 1 (the guard) is DONE, 2026-08-01. Part 2 (root cause) is
-open and is bigger than this file said.** Landed, not deployed — it ships in one
-image with `detector-round3-evidence-vs-inference.md`.
+**Status:** **Part 1 (the guard) is DONE and DEPLOYED, 2026-08-01. Part 2 (root
+cause) is open and is bigger than this file said.** It shipped in one image with
+`detector-round3-evidence-vs-inference.md`, `challenge-interstitial-resolve.md`
+phase 2 and `render-500-window-2026-07-31.md`'s S half.
+
+**MAS's half of this task got smaller in the same image, by accident.** Phase 2
+of `challenge-interstitial-resolve.md` gives the patchright retry a 10 s capture
+wait, and tier 3 already marks a near-empty page blocked — so a shell that
+paints within ~11.2 s is now rescued on the retry we already pay for. That is
+the `revisol.fi` class (their 361,900/242/1 at wait 2.0 vs 598,937/101,091/21,921
+at 10). It does nothing for `apteam.fi` and `flvi.fi`, which are byte-identical
+across visits and are part 2's business.
 
 Two things this file asserted turned out to be wrong, and both were load-bearing:
 

@@ -265,3 +265,170 @@ def test_cloudflare_and_incapsula_tier1_unchanged():
 
 def test_json_api_response_not_blocked():
     assert not is_blocked(200, '{"contacts": [{"email": "a@b.fi"}]}')[0]
+
+
+# ── padded blocks: every size gate was on len(html) (round 3, 2026-08-01) ──
+#
+# tasks/detector-round3-evidence-vs-inference.md defect A. Four hosts returned
+# an 80,671-byte body rendering to `# 403 - Forbidden / Access to this page is
+# forbidden.` at origin status **202**, `success: true`. The identical bytes at
+# status 403 were classified correctly on four other hosts.
+
+import glob  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+
+from crawl4ai.antibot_detector import (  # noqa: E402
+    _BLOCK_NOTICE_MAX_VISIBLE_TEXT,
+    _normalized_visible_text,
+)
+
+ARTIFACTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "artifacts")
+
+#: Inline CSS: adds bytes, adds no text. The way a real vendor pads.
+_PAD = "<style>/* %s */</style>" % ("padding " * 10000)
+
+#: The four hosts, as MAS's stored markdown describes them: the notice in an
+#: <h1> with a sentence under it.
+PADDED_403_REAL = (
+    "<!DOCTYPE html><html><head><title>403 - Forbidden</title>"
+    f"{_PAD}</head><body><h1>403 - Forbidden</h1>"
+    "<p>Access to this page is forbidden.</p></body></html>"
+)
+
+#: Same notice with no heading — the shape that has only "the notice is the
+#: whole page" to give it away.
+PADDED_403_BARE = (
+    "<!DOCTYPE html><html><head><title>Attention Required</title>"
+    f"{_PAD}</head><body><div>Access to this page has been denied.</div>"
+    "</body></html>"
+)
+
+
+@pytest.mark.parametrize(
+    "label,html", [("with a heading", PADDED_403_REAL), ("bare div", PADDED_403_BARE)]
+)
+@pytest.mark.parametrize("status", [202, 200, 301, None])
+def test_a_padded_block_notice_is_detected_at_any_status(label, html, status):
+    """The defect and its generalisation in one assertion.
+
+    202 is what production served. The others are there because the tier must
+    not acquire a hidden status dependency — the whole point is that the page's
+    own text is the evidence.
+    """
+    assert len(html) > 80_000, "the padding is the mechanism"
+    blocked, reason = is_blocked(status, html)
+    assert blocked, f"{label} at {status}: 80 KB of padding still hides the notice"
+    assert "Block notice" in reason
+
+
+def test_the_padding_is_not_what_the_verdict_depends_on():
+    """Same notice, no padding. Both sizes must reach the same verdict, or the
+    tier is still measuring bytes."""
+    for html in (PADDED_403_REAL, PADDED_403_BARE):
+        unpadded = html.replace(_PAD, "")
+        assert len(unpadded) < 500
+        assert is_blocked(202, unpadded)[0]
+        assert is_blocked(202, html)[0]
+
+
+def test_the_shopify_false_positive_survives_a_text_gate():
+    """The tripwire that shapes the block-notice tier, and the reason it needs
+    discriminators rather than just a smaller gate.
+
+    ~15 of MAS's 22 corpus hits were healthy Shopify storefronts carrying an
+    `/pages/access-denied` navigation link. This fixture measures **247**
+    characters of visible text — comfortably *under* the block-notice tier's
+    500-character gate — so "the words appear on a low-text page" would condemn
+    it verbatim. It is saved by the notice being neither in a heading nor
+    anything like the whole page.
+    """
+    visible = _normalized_visible_text(SHOPIFY_STOREFRONT)
+    assert len(visible) < _BLOCK_NOTICE_MAX_VISIBLE_TEXT, (
+        "premise of this test: the storefront is under the text gate, so the "
+        "gate is not what saves it"
+    )
+    assert "Access Denied" in visible
+
+    for status in (200, 202, 301, 404):
+        blocked, reason = is_blocked(status, SHOPIFY_STOREFRONT)
+        assert not blocked, f"healthy storefront condemned at {status}: {reason}"
+
+
+def test_a_notice_in_a_heading_beats_a_notice_in_a_link():
+    """Isolates discriminator (1): placement is the signal, not the words."""
+    words = "Access Denied"
+    in_heading = (
+        f"<html><head><title>Kauppa</title></head><body><h1>{words}</h1>"
+        "<p>Ei paasya.</p></body></html>"
+    )
+    in_a_link = (
+        "<html><head><title>Kauppa</title></head><body>"
+        f'<h1>Tervetuloa</h1><a href="/x">{words}</a>'
+        "<p>Myymme kasintehtyja tuotteita. Ota yhteytta: myynti@example.fi, "
+        "puhelin 010 123 4567. Toimitamme tilaukset kahdessa arkipaivassa ja "
+        "palautusoikeus on 14 vuorokautta.</p></body></html>"
+    )
+    assert is_blocked(200, in_heading)[0]
+    assert not is_blocked(200, in_a_link)[0]
+
+
+# ── the challenge tier's byte gate, measured on a real stored capture ─────
+
+
+def test_monidor_interstitial_is_detected():
+    """A real capture, not a synthetic one: `monidor.com` sits in our own
+    artifacts directory, was returned to MAS at `success: true`, and is
+    11,515 bytes of HTML over **58** characters of text.
+
+    It is the challenge tier's own instance of defect A — the tier was gated on
+    `len(html) < 10000` and this page is 11.5 KB — and it is why the gate is now
+    on text. Two patterns were added from its body ("One moment, please",
+    "your request is being verified"); the gate alone would not have caught it,
+    because nothing in the list matched.
+    """
+    path = os.path.join(
+        ARTIFACTS, "mas-comparison", "monidor-com-fi-fi-yritys-yritys--minimal.json"
+    )
+    if not os.path.exists(path):  # pragma: no cover - corpus is committed
+        pytest.skip("stored capture not present")
+    with open(path) as fh:
+        html = json.load(fh)["html"]
+
+    assert len(html) > 10_000, "premise: over the old byte gate"
+    assert len(_normalized_visible_text(html)) < 100, "premise: no text on it"
+
+    blocked, reason = is_blocked(200, html)
+    assert blocked, "an interstitial we have held on disk for weeks"
+    assert "Challenge interstitial" in reason
+
+
+def test_no_stored_real_capture_is_condemned():
+    """The false-positive check that costs nothing and would have caught this
+    class of mistake in either direction: every capture of a real customer site
+    we hold, judged by the status it actually arrived with.
+
+    `monidor.com` is excluded because it is a genuine interstitial — see the
+    test above. Everything else is a page MAS is using.
+    """
+    checked = 0
+    for path in sorted(
+        glob.glob(os.path.join(ARTIFACTS, "**", "*.json"), recursive=True)
+    ):
+        if "monidor" in path:
+            continue
+        try:
+            with open(path) as fh:
+                data = json.load(fh)
+        except Exception:
+            continue
+        if not (isinstance(data, dict) and data.get("html")):
+            continue
+        status = data.get("redirected_status_code") or data.get("status_code") or 200
+        blocked, reason = is_blocked(status, data["html"])
+        assert (
+            not blocked
+        ), f"{os.path.relpath(path, ARTIFACTS)} (HTTP {status}) condemned: {reason}"
+        checked += 1
+
+    assert checked >= 30, f"expected the stored corpus, found {checked} captures"

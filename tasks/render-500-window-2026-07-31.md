@@ -1,7 +1,16 @@
 # 9 renders failed inside one 4½-minute window, and the sweep is a burst
 
-**Status:** Open — **cause confirmed and re-diagnosed 2026-08-01 (second pass);
-the fix is designed and split.** The coordinator's pass found the right line of
+**Status: S half DONE 2026-08-01**, shipped in the `detector-round3` +
+`collapse-guard` image. M1 remains open as `tasks/pool-residency-unbounded.md`.
+
+| | what shipped |
+|---|---|
+| **S1** | `crawler_pool` raises `RenderCapacityExceeded` instead of `MemoryError`; `api.py` maps it through one `_capacity_429` helper on both the `/crawl` and streaming paths → **429 + `Retry-After`**. Pinned by `test_memory_pressure_is_a_429_not_a_500` and by `test_the_capacity_slot_is_released_when_the_pool_refuses` — the 429 is raised *after* the render gate was acquired, so a burst of refusals must not wedge admission. |
+| **S2** | `get_container_memory_percent()` subtracts `inactive_file` (working set), with a guard so a bogus stat larger than usage can never *hide* pressure. `get_memory_breakdown()` + `memory_breakdown()` log anon/file/inactive_file in the guard's error and the janitor's `📊 Pool:` line, so the question that cost an offline probe is answerable from logs forever. Four tests, all faking the cgroup reads — the dev container's `memory.max` is the literal string `max`, so the cgroup path is **not** exercised locally. |
+| **S3** | `_close_unused_permanent()` closes the permanent browser when `USAGE_COUNT[DEFAULT_CONFIG_SIG]` is still 0 after `permanent_unused_ttl_sec` (600). Four tests, including that lazy re-init still works and that one real hit keeps it. |
+
+**Original status when written:** cause confirmed and re-diagnosed 2026-08-01
+(second pass); the fix designed and split. The coordinator's pass found the right line of
 code and two of its three surrounding claims were wrong. A verification session
 the same day re-ran every query with an app filter, added four the coordinator
 did not run, and measured the memory question offline through the real

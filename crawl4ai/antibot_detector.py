@@ -11,9 +11,55 @@ Err on the side of detection.
 Detection is layered:
 - HTTP 403/503 with HTML content → always blocked (these are never desired content)
 - Tier 1 patterns (structural markers) trigger on any page size
-- Challenge patterns (interstitial prose) trigger on short pages at any status
+- Challenge patterns (interstitial prose) trigger on low-text pages at any status
 - Tier 2 patterns (generic terms) trigger on short pages or any error status
+- Block-notice tier: the page's whole text is a refusal, at any status/size
 - Tier 3 structural integrity catches silent blocks and empty shells
+
+Evidence vs inference — Aitosoft 2026-08-01
+-------------------------------------------
+The tiers above are not interchangeable, and one distinction now runs through
+the whole module:
+
+    evidence   the origin's own bytes say it refused us — a vendor marker, an
+               interstitial, a refusal notice, a 4xx/5xx status.
+    inference  we came back with nothing and concluded "blocked" from the
+               *shape* of what we got (tier 3, and near-empty at HTTP 200).
+
+Both return ``True``, but they do not establish the same fact, and
+``deploy/docker/aitosoft_failure_class.py`` now classifies them differently:
+inference verdicts are *ours* (``render_error``), not the origin's
+(``origin_blocked``). Four of MAS's 33 ``origin_blocked`` verdicts in the
+2026-07-31 re-scrape were inference misfiring — one of them was our own
+"page not fully supported" placeholder reported to the customer as the origin
+blocking us. Reason strings are the seam that carries the distinction, so
+**every reason produced by an inference tier must keep its ``Structural:`` /
+``Near-empty content`` prefix**; ``test_failure_classification.py`` pins it.
+
+Which gate moved, and which deliberately did not
+------------------------------------------------
+LOOSENED — the evidence gates are now on **visible text**, not ``len(html)``.
+Four hosts served an 80,671-byte body whose entire content was
+``403 - Forbidden`` at origin status 202 and passed as content, because every
+size gate here read ``len(html)`` and the vendor pads to 80 KB. Our own stored
+capture of ``monidor.com`` is the same defect independently: an 11,515-byte
+interstitial with **58 characters** of text, over the old 10 KB challenge gate.
+Padding is not evidence of content; text is.
+
+TIGHTENED — nothing here, and that is the point: the *inference* gates
+(``_STRUCTURAL_MAX_SIZE``, the near-empty-200 check) keep their ``len(html)``
+bounds. Moving those onto visible text too would have made every padded page
+with no recognisable notice a blocked verdict on shape alone — which is exactly
+the defect above, pointed the other way. Inference was tightened where it
+matters, in what the verdict is allowed to *mean*.
+
+CORRECTION to tasks/detector-round3-evidence-vs-inference.md, which planned
+this work: it stated that "the four caught hosts prove the pattern side already
+works", so that moving the gates would be sufficient. It does not. Measured
+2026-08-01: **no tier-1, tier-2 or challenge pattern matches that body at all**
+— the four hosts that *were* caught were caught by the 403/503 status branch's
+fallthrough, which is a status rule, not a pattern. A gate change alone closes
+nothing; the block-notice tier below is the missing half.
 """
 
 import re
@@ -99,6 +145,17 @@ _CHALLENGE_PATTERNS = [
      "Challenge interstitial (checking your browser)"),
     (re.compile(r"<title>\s*Just\s+a\s+moment", re.IGNORECASE),
      "Challenge interstitial (Just a moment)"),
+    # Aitosoft 2026-08-01, from our own stored capture of `monidor.com`
+    # (test-aitosoft/artifacts/mas-comparison/): title "One moment, please...",
+    # body "Please wait while your request is being verified...". 11,515 bytes
+    # of HTML over **58 characters** of text, returned to MAS as a successful
+    # capture. It is the same class as the padded 403 below — the old gate read
+    # `len(html) < 10000` and this page is 11.5 KB — and it is real rather than
+    # synthetic, which is why it is worth two more patterns.
+    (re.compile(r"<title>\s*One\s+moment,?\s*please", re.IGNORECASE),
+     "Challenge interstitial (One moment, please)"),
+    (re.compile(r"your\s+request\s+is\s+being\s+verified", re.IGNORECASE),
+     "Challenge interstitial (request being verified)"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -145,7 +202,91 @@ _TIER2_MAX_SIZE = 10000  # Only check tier 2 patterns on pages under 10KB
 # Challenge tier: a real interstitial carries a heading, a sentence and a ray
 # ID — a few hundred characters. 1500 leaves generous headroom for a wordy
 # vendor while staying far below any page with actual content on it.
+#
+# Aitosoft 2026-08-01: this is now the tier's ONLY size gate. It used to sit
+# behind `len(html) < _TIER2_MAX_SIZE`, which is what hid `monidor.com`'s
+# 11,515-byte / 58-character interstitial.
 _CHALLENGE_MAX_VISIBLE_TEXT = 1500
+
+# ---------------------------------------------------------------------------
+# Block-notice tier (Aitosoft 2026-08-01): the page's entire text is a refusal.
+#
+# The defect this closes: four hosts returned 80,671 bytes rendering to
+# `# 403 - Forbidden / Access to this page is forbidden.` at origin status
+# **202**, `success: true`. The identical bytes at status 403 were classified
+# correctly on four other hosts — by the status branch, not by any pattern.
+# So neither the size gates nor the pattern list could have caught it: the
+# gates were on `len(html)` and no pattern matched a bare HTTP refusal notice.
+#
+# The generalisable statement is: *a page whose whole visible text is a refusal
+# is a refusal, whatever status it was served at and however much padding
+# surrounds it.* Origin evidence, not inference — the origin's own bytes say so
+# — which is why this maps to `origin_blocked` and tier 3 no longer does.
+#
+# The two discriminators below are the whole safety of this tier, and they are
+# not optional. MAS's corpus scan found ~15 of 22 "Access Denied" hits were
+# healthy Shopify storefronts carrying an `/pages/access-denied` navigation
+# link, and such a storefront can easily sit under the text gate — our own
+# fixture for that false positive measures **247** characters of visible text.
+# Matching "these words appear somewhere" would re-open that family verbatim.
+# So a notice counts only when the origin either
+#   (1) put it where a page puts its subject — the <title> or an <h1>-<h3>,
+#       the idiom the tier-2 `Access Denied` pattern already uses, or
+#   (2) had nothing else to say: the matched text is most of the page.
+# ---------------------------------------------------------------------------
+_BLOCK_NOTICE_PATTERNS = [
+    # "Access to this page has been denied." / "Access to this page is
+    # forbidden." / "Access Denied" — the refusal written out.
+    (re.compile(
+        r"\baccess\b[^.!?]{0,60}?\b(?:denied|forbidden|blocked)\b", re.IGNORECASE),
+     "Access refused"),
+    # "403 - Forbidden", "Error 403 Forbidden", "HTTP 401 Unauthorized".
+    # 404 and 5xx are deliberately absent: a missing page or a broken origin is
+    # `origin_http_error`, and calling it a block is the `snuup.fi` defect.
+    (re.compile(
+        r"\b(?:401|403|429|451)\b[\s\-–—:|]*"
+        r"(?:forbidden|unauthori[sz]ed|denied|blocked|too\s+many\s+requests)",
+        re.IGNORECASE),
+     "HTTP refusal status"),
+    (re.compile(
+        r"\b(?:forbidden|unauthori[sz]ed)\b[\s\-–—:|]*\b(?:401|403)\b",
+        re.IGNORECASE),
+     "HTTP refusal status"),
+    # "You have been blocked", "Your request was blocked", "This IP is blocked".
+    (re.compile(
+        r"\b(?:you|your\s+(?:request|ip|access|connection)|this\s+(?:request|ip))\b"
+        r"[^.!?]{0,40}?\bblocked\b", re.IGNORECASE),
+     "Request blocked"),
+]
+
+#: A refusal notice is a heading and a sentence. 500 is measured, not picked:
+#: the smallest healthy content page in our 58 stored real captures carries
+#: **739** characters of text, and everything below that in the corpus is a
+#: cookie wall (0) or an interstitial (58). It is also
+#: `aitosoft_collapse_guard.MIN_VISIBLE_TEXT_CHARS`, deliberately — that guard
+#: declares pages under 500 characters "the detector's business", so the two
+#: modules meet exactly here instead of overlapping or leaving a gap.
+_BLOCK_NOTICE_MAX_VISIBLE_TEXT = 500
+
+#: Discriminator (2): how much of the page the notice has to *be*. The Shopify
+#: false-positive fixture measures 0.11 (13 characters of link text in 247);
+#: a real notice measures 0.94-1.00.
+_BLOCK_NOTICE_MIN_COVERAGE = 0.5
+
+#: Where a page states its subject. Same idiom as the tier-2 `Access Denied`
+#: pattern, which is what made that one safe against MAS's corpus.
+_HEADING_RE = re.compile(
+    r"<(?:title|h[1-3])\b[^>]*>(.*?)</(?:title|h[1-3])\s*>", re.IGNORECASE | re.DOTALL
+)
+
+_WHITESPACE_RE = re.compile(r"\s+")
+
+# How much of a large document to strip and scan for prose. Stripping is what
+# makes an 80 KB padded page readable — the padding is inline CSS — so the
+# tier-1 deep scan, the challenge tier and the block-notice tier all share it
+# rather than each re-deriving it.
+_PROSE_SCAN_LIMIT = 500000
+_PROSE_SNIPPET_CHARS = 30000
 
 # ---------------------------------------------------------------------------
 # Tier 3: Structural integrity — catches silent blocks, anti-bot redirects,
@@ -194,6 +335,79 @@ def _visible_text(html: str) -> str:
     stripped = _SCRIPT_BLOCK_RE.sub('', body_content)
     stripped = _STYLE_TAG_RE.sub('', stripped)
     return _TAG_RE.sub('', stripped).strip()
+
+
+def _normalized_visible_text(html: str) -> str:
+    """``_visible_text`` with runs of whitespace collapsed.
+
+    Normalising is not cosmetic, and it is what makes a *text* gate mean the
+    same thing everywhere: `monidor.com`'s interstitial measures 506 raw
+    "visible" characters and **58** once collapsed — the other 448 are markup
+    indentation. ``aitosoft_collapse_guard`` normalises the same way for the
+    same reason, so the two modules agree about what counts as text on a page.
+    """
+    return _WHITESPACE_RE.sub(" ", _visible_text(html)).strip()
+
+
+def _prose_snippet(html: str) -> str:
+    """The head of the document with ``<script>`` and ``<style>`` blocks gone.
+
+    Modern block and challenge pages bury a two-line notice under 80-180 KB of
+    inline CSS, so the raw first-15 KB window can hold nothing but padding.
+    """
+    stripped = _SCRIPT_BLOCK_RE.sub('', html[:_PROSE_SCAN_LIMIT])
+    stripped = _STYLE_TAG_RE.sub('', stripped)
+    return stripped[:_PROSE_SNIPPET_CHARS]
+
+
+def _covered_chars(spans) -> int:
+    """Total length of a set of possibly-overlapping ``(start, end)`` spans."""
+    total = 0
+    reach = -1
+    for start, end in sorted(spans):
+        if end <= reach:
+            continue
+        total += end - max(start, reach)
+        reach = end
+    return total
+
+
+def _block_notice_check(prose: str, visible: str) -> Tuple[bool, str]:
+    """Is this page's own text a refusal notice, and nothing else?
+
+    ``prose`` is the script/style-stripped markup (so headings survive);
+    ``visible`` is the normalised body text. See ``_BLOCK_NOTICE_PATTERNS`` for
+    why both discriminators are needed and what happens without them.
+    """
+    if not visible or len(visible) > _BLOCK_NOTICE_MAX_VISIBLE_TEXT:
+        return False, ""
+
+    spans = []
+    label = ""
+    for pattern, reason in _BLOCK_NOTICE_PATTERNS:
+        for match in pattern.finditer(visible):
+            spans.append(match.span())
+            label = label or reason
+    if not spans:
+        return False, ""
+
+    # (1) the origin put the notice where a page puts its subject
+    headings = _WHITESPACE_RE.sub(
+        " ", " ".join(_TAG_RE.sub(" ", h) for h in _HEADING_RE.findall(prose))
+    )
+    in_heading = any(p.search(headings) for p, _ in _BLOCK_NOTICE_PATTERNS)
+
+    # (2) …or the notice is all the page has to say
+    coverage = _covered_chars(spans) / len(visible)
+
+    if not in_heading and coverage < _BLOCK_NOTICE_MIN_COVERAGE:
+        return False, ""
+
+    where = "in the page heading" if in_heading else f"{coverage:.0%} of the page text"
+    return True, (
+        f"Block notice is the page: {label} ({where}, "
+        f"{len(visible)} chars visible): {visible[:120]}"
+    )
 
 
 def _structural_integrity_check(html: str) -> Tuple[bool, str]:
@@ -312,33 +526,45 @@ def is_blocked(
                 return True, reason
 
     # Large-page deep scan: strip scripts/styles and re-check tier 1
+    _prose = _prose_snippet(html) if html_len > 15000 else snippet
     if html_len > 15000:
-        _stripped_for_t1 = _SCRIPT_BLOCK_RE.sub('', html[:500000])
-        _stripped_for_t1 = _STYLE_TAG_RE.sub('', _stripped_for_t1)
-        _deep_snippet = _stripped_for_t1[:30000]
         for pattern, reason in _TIER1_PATTERNS:
-            if pattern.search(_deep_snippet):
+            if pattern.search(_prose):
                 return True, reason
 
-    # --- Challenge interstitials on a small page, at ANY status ---
+    # Everything below judges the page by how much *text* it has, not how many
+    # bytes it weighs, so compute it once. (Aitosoft 2026-08-01 — the gates
+    # used to be on `len(html)`, and a vendor that pads its block page to 80 KB
+    # walked through all of them.)
+    #
+    # Cost, measured so nobody has to wonder: this makes `is_blocked` **6.6 ms**
+    # mean across our 58 stored real captures (median page 178 KB) and 16.5 ms
+    # on the largest we hold (720 KB), against 6.8 ms for that page before. A
+    # render is 2-4 s, so it is under 0.5 % of a crawl. It was left exact rather
+    # than short-circuited on a bounded prefix: this is the most
+    # safety-critical module in the service and a few ms is not worth a
+    # semantic subtlety in it.
+    _is_data = _looks_like_data(html)
+    _visible = "" if _is_data else _normalized_visible_text(html)
+    _visible_len = len(_visible)
+
+    # --- Challenge interstitials on a low-text page, at ANY status ---
     # Challenge screens are normally served with HTTP 200, which the tier-2
     # path below never reaches. See _CHALLENGE_PATTERNS.
-    if html_len < _TIER2_MAX_SIZE and not _looks_like_data(html):
+    #
+    # A challenge screen is a few hundred characters of prose. An article
+    # *about* bot challenges quotes the same wording and is thousands. Size in
+    # bytes does not separate them — an 8 KB page is under the old gate yet
+    # holds ~6 KB of real text, and an 11.5 KB interstitial is over it while
+    # holding 58 — so the gate is the text itself. Without it, one Finnish blog
+    # post on bot protection would be classified as a block.
+    if not _is_data and _visible_len < _CHALLENGE_MAX_VISIBLE_TEXT:
         for pattern, reason in _CHALLENGE_PATTERNS:
-            if pattern.search(snippet):
-                # A challenge screen is a few hundred characters of prose. An
-                # article *about* bot challenges quotes the same wording and is
-                # thousands. Size alone does not separate them — an 8 KB page
-                # is under the tier-2 gate yet holds ~6 KB of real text — so
-                # require the page to be as empty as an interstitial actually
-                # is. Without this, one Finnish blog post on bot protection
-                # would be classified as a block.
-                _visible_len = len(_visible_text(html))
-                if _visible_len < _CHALLENGE_MAX_VISIBLE_TEXT:
-                    return True, (
-                        f"{reason} (HTTP {status_code}, {html_len} bytes, "
-                        f"{_visible_len} chars visible)"
-                    )
+            if pattern.search(_prose):
+                return True, (
+                    f"{reason} (HTTP {status_code}, {html_len} bytes, "
+                    f"{_visible_len} chars visible)"
+                )
 
     # --- HTTP 403/503 — always blocked for non-data HTML responses ---
     # Rationale: 403/503 are never the content the user wants. Modern block pages
@@ -352,12 +578,7 @@ def is_blocked(
         # For large pages, strip scripts/styles to find block text in the
         # actual content (Reddit hides it under 180KB of inline CSS).
         # Check tier 2 patterns regardless of page size.
-        if html_len > _TIER2_MAX_SIZE:
-            _stripped = _SCRIPT_BLOCK_RE.sub('', html[:500000])
-            _stripped = _STYLE_TAG_RE.sub('', _stripped)
-            _check_snippet = _stripped[:30000]
-        else:
-            _check_snippet = snippet
+        _check_snippet = _prose_snippet(html) if html_len > _TIER2_MAX_SIZE else snippet
         for pattern, reason in _TIER2_PATTERNS:
             if pattern.search(_check_snippet):
                 return True, f"{reason} (HTTP {status_code}, {html_len} bytes)"
@@ -371,10 +592,36 @@ def is_blocked(
             if pattern.search(snippet):
                 return True, f"{reason} (HTTP {status_code}, {html_len} bytes)"
 
+    # --- The page's whole text is a refusal notice, at ANY status or size ---
+    # The last of the evidence tiers, and the one that does not need a status
+    # to work: the four hosts this was written for served their block page at
+    # 202. It sits *after* the status branches so a 403 keeps its existing,
+    # more specific reason, and *before* the two inference checks below so that
+    # origin evidence always outranks a verdict derived from shape.
+    if not _is_data:
+        _blocked, _reason = _block_notice_check(_prose, _visible)
+        if _blocked:
+            return True, f"{_reason} (HTTP {status_code}, {html_len} bytes)"
+
+    # ---------------------------------------------------------------------
+    # INFERENCE from here down. Nothing below is the origin telling us it
+    # refused us — it is us observing that we came back with nothing. The
+    # reason strings must keep their `Near-empty content` / `Structural:`
+    # prefixes: aitosoft_failure_class.py reads them to decide that these are
+    # OUR failures (`render_error`) and not the origin's (`origin_blocked`).
+    # Reporting a healthy site as permanently blocked is the expensive
+    # direction, and these tiers are where that used to happen.
+    #
+    # Their `len(html)` bounds stay exactly where they were, on purpose. See
+    # the module docstring: moving them onto visible text would turn every
+    # padded page with no recognisable notice into a blocked verdict on shape
+    # alone, which is the defect above wearing the other hat.
+    # ---------------------------------------------------------------------
+
     # --- HTTP 200 + near-empty content (JS-rendered empty page) ---
     if status_code == 200:
         stripped = html.strip()
-        if len(stripped) < _EMPTY_CONTENT_THRESHOLD and not _looks_like_data(html):
+        if len(stripped) < _EMPTY_CONTENT_THRESHOLD and not _is_data:
             return True, f"Near-empty content ({len(stripped)} bytes) with HTTP 200"
 
     # --- Tier 3: Structural integrity (catches silent blocks, redirects, incomplete renders) ---

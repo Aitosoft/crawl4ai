@@ -232,10 +232,37 @@ def test_benign_redirect_does_not_arm_the_patchright_tier():
 
 
 # ---------------------------------------------------------------------------
-# The detector itself is unchanged — only what we feed it
+# What the detector does with a 3xx — updated 2026-08-01
 # ---------------------------------------------------------------------------
 
 
-def test_detector_semantics_unchanged():
-    assert is_blocked(301, VARNISH_403)[0] is False  # a 3xx never matched
+def test_a_block_body_is_now_caught_even_at_the_wrong_status():
+    """This assertion was inverted on 2026-08-01, and the inversion is the fix.
+
+    It used to read `is_blocked(301, VARNISH_403)[0] is False`, pinning that no
+    status rule can fire on a 3xx — which is *why* `effective_status` had to
+    exist. That is still true of the status rules, but it is no longer true of
+    the detector: the block-notice tier added by
+    tasks/detector-round3-evidence-vs-inference.md judges the page's own text
+    and needs no status at all, so `<h1>Error 403 Forbidden</h1>` is now
+    evidence wherever it arrives.
+
+    That makes this case belt-and-braces rather than a single point of failure,
+    but it does **not** retire `effective_status`: a block page with no
+    recognisable notice — a bare JS shell at 403 — still has nothing but its
+    status to give away, and MAS reads `status_code` regardless. Both tests
+    below stay.
+    """
+    blocked, reason = is_blocked(301, VARNISH_403)
+    assert blocked, "the body says 403 Forbidden in an <h1>; the status is irrelevant"
+    assert "Block notice" in reason
+
     assert is_blocked(403, VARNISH_403)[0] is True
+
+
+def test_a_benign_page_is_still_not_blocked_at_any_status():
+    """The tripwire for the assertion above: a status-independent tier must not
+    become a status-independent false positive."""
+    for status in (200, 301, 302, 404):
+        blocked, reason = is_blocked(status, BENIGN_PAGE)
+        assert not blocked, f"benign page condemned at {status}: {reason}"

@@ -758,11 +758,18 @@ async def handle_crawl_request(
         from aitosoft_admission import get_render_gate, RenderCapacityExceeded
 
         _gate = get_render_gate()
-        try:
-            _gate_weight = await _gate.acquire(
-                weight=len(urls), label=urls[0] if urls else None
-            )
-        except RenderCapacityExceeded as e:
+
+        async def _capacity_429(e: RenderCapacityExceeded) -> HTTPException:
+            """One shape for every "this replica is full" answer.
+
+            Aitosoft 2026-08-01: there were two. RenderGate said 429 +
+            Retry-After, and the pool's memory guard said 500 — which MAS
+            retries 3x with 1s/2s/4s backoff, so memory pressure multiplied its
+            own load by four at the worst possible moment. All nine 500s in
+            their 2026-07-31 probe were that guard. Same defect shape as the
+            `render_error` split: one condition, two wire statuses, and the
+            expensive one was not chosen deliberately.
+            """
             try:
                 from monitor import get_monitor
                 await get_monitor().track_request_end(
@@ -770,11 +777,18 @@ async def handle_crawl_request(
                 )
             except:
                 pass
-            raise HTTPException(
+            return HTTPException(
                 status_code=429,
                 detail=f"Replica at render capacity: {e.reason}. Retry with backoff.",
                 headers={"Retry-After": str(e.retry_after_s)},
             )
+
+        try:
+            _gate_weight = await _gate.acquire(
+                weight=len(urls), label=urls[0] if urls else None
+            )
+        except RenderCapacityExceeded as e:
+            raise await _capacity_429(e)
 
         dispatcher = MemoryAdaptiveDispatcher(
             memory_threshold_percent=config["crawler"]["memory_threshold_percent"],
@@ -784,8 +798,15 @@ async def handle_crawl_request(
         )
         
         from crawler_pool import get_crawler, release_crawler
-        crawler = await get_crawler(browser_config)
-        
+        try:
+            crawler = await get_crawler(browser_config)
+        except RenderCapacityExceeded as e:
+            # The pool's memory guard refused to launch a browser. That is the
+            # same fact as a full render gate — this replica cannot take the
+            # work — so it gets the same answer, not a retryable 500. The gate
+            # acquired above is released by the `finally` at the end.
+            raise await _capacity_429(e)
+
         # Attach declarative hooks if provided
         hooks_status = {}
         if hooks_config:
@@ -1110,8 +1131,19 @@ async def handle_stream_crawl_request(
                 ),
             )
 
+        from aitosoft_admission import RenderCapacityExceeded
         from crawler_pool import get_crawler, release_crawler
-        crawler = await get_crawler(browser_config)
+        try:
+            crawler = await get_crawler(browser_config)
+        except RenderCapacityExceeded as e:
+            # Aitosoft: same mapping as /crawl. MAS does not use the streaming
+            # path, but a full replica must not answer 500 on any endpoint —
+            # that is the amplification this image removes.
+            raise HTTPException(
+                status_code=429,
+                detail=f"Replica at render capacity: {e.reason}. Retry with backoff.",
+                headers={"Retry-After": str(e.retry_after_s)},
+            )
 
         # Attach declarative hooks if provided
         if hooks_config:

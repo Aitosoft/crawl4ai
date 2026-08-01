@@ -428,3 +428,201 @@ def test_our_own_crash_still_raises_500(monkeypatch):
             )
         )
     assert exc.value.status_code == 500
+
+
+# ── evidence vs inference (detector round 3, 2026-08-01) ─────────────────
+#
+# `is_blocked` returns one verdict for two kinds of finding, and this module
+# used to map both to ORIGIN_BLOCKED. MAS measured the cost on 2026-07-31: 4 of
+# their 33 `origin_blocked` verdicts were not blocks, and the expensive one was
+# our own pipeline's placeholder reported to a customer as the origin blocking
+# them. See tasks/detector-round3-evidence-vs-inference.md defect B.
+
+#: MAS's four wrong verdicts, verbatim in shape. `fodbar.fi` is settled and
+#: stays exactly as it is (their message 09 §5) — the origin said 403, so we
+#: report 403, and the decision about whether the body looks like content is
+#: theirs to make with 117,000 stored pages to compare against.
+MAS_DEFECT_B_CASES = [
+    (
+        "norex.com — our own 'not fully supported' placeholder, 15 bytes at 200",
+        {
+            "success": False,
+            "status_code": 200,
+            "error_message": (
+                "Blocked by anti-bot protection: "
+                "Near-empty content (15 bytes) with HTTP 200"
+            ),
+        },
+        RENDER_ERROR,
+    ),
+    (
+        "jarvenkylamaatila.fi — a 1-character body",
+        {
+            "success": False,
+            "status_code": 200,
+            "error_message": (
+                "Blocked by anti-bot protection: "
+                "Near-empty content (1 bytes) with HTTP 200"
+            ),
+        },
+        RENDER_ERROR,
+    ),
+    (
+        "snuup.fi — an ordinary 404 page",
+        {
+            "success": False,
+            "status_code": 404,
+            "error_message": (
+                "Blocked by anti-bot protection: Structural: minimal_text, "
+                "no_content_elements (900 bytes, 20 chars visible)"
+            ),
+        },
+        ORIGIN_HTTP_ERROR,
+    ),
+    (
+        "fodbar.fi — real content at origin 403, SETTLED: leave it alone",
+        {
+            "success": False,
+            "status_code": 403,
+            "error_message": (
+                "Blocked by anti-bot protection: "
+                "HTTP 403 with HTML content (3962 bytes)"
+            ),
+        },
+        ORIGIN_BLOCKED,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "label,result,expected",
+    MAS_DEFECT_B_CASES,
+    ids=[c[0][:24] for c in MAS_DEFECT_B_CASES],
+)
+def test_mas_measured_misclassifications(label, result, expected):
+    assert classify_result(result) == expected, label
+
+
+def test_an_inferred_block_is_never_an_origin_class():
+    """The guarantee this module's docstring already claimed and did not keep:
+    an unrecognised failure is ours, never a verdict about the customer's site.
+    """
+    for _label, result, expected in MAS_DEFECT_B_CASES:
+        if (
+            "Structural:" in result["error_message"]
+            or "Near-empty" in result["error_message"]
+        ):
+            assert expected is not ORIGIN_BLOCKED
+
+
+def test_evidence_reasons_still_classify_as_origin_blocked():
+    """The other direction. Loosening the detector's size gates widens the
+    "origin said so" side; narrowing inference must not narrow this one too.
+    Every reason below is the origin's own bytes saying it refused us."""
+    evidence = [
+        "Cloudflare firewall block",
+        "Akamai block (Reference #)",
+        "Unidentified challenge (robot-suspicion asset)",
+        "Challenge interstitial (One moment, please) "
+        "(HTTP 200, 11515 bytes, 58 chars visible)",
+        "Block notice is the page: HTTP refusal status "
+        "(in the page heading, 48 chars visible): 403 - Forbidden "
+        "(HTTP 202, 80671 bytes)",
+        "HTTP 403 with HTML content (80671 bytes)",
+        "HTTP 429 Too Many Requests",
+    ]
+    for reason in evidence:
+        result = {
+            "success": False,
+            "status_code": 202,
+            "error_message": f"Blocked by anti-bot protection: {reason}",
+        }
+        assert classify_result(result) == ORIGIN_BLOCKED, reason
+
+
+def test_every_reason_the_detector_can_produce_lands_on_one_side():
+    """The seam is a reason-string prefix, so it has to be swept, not trusted.
+
+    This drives `is_blocked` with a body for every tier and asserts that each
+    verdict it returns is classified as *either* the origin's or ours — never
+    left to whichever branch happens to catch it. A new tier whose reason
+    matches neither convention fails here rather than silently telling MAS a
+    healthy host is permanently blocked, which is how defect B shipped.
+    """
+    from crawl4ai.antibot_detector import is_blocked
+
+    # (label, status, html, is this the origin telling us, or us inferring?)
+    corpus = [
+        (
+            "tier 1 vendor marker",
+            200,
+            '<html><body><span class="cf-error-code">1020</span></body></html>',
+            True,
+        ),
+        (
+            "challenge interstitial",
+            200,
+            "<html><head><title>Just a moment...</title></head><body>"
+            "<h1>Checking your browser</h1></body></html>",
+            True,
+        ),
+        (
+            "challenge, padded past the old byte gate",
+            200,
+            "<html><head><title>One moment, please...</title>"
+            "<style>" + "a{color:red}" * 1200 + "</style></head>"
+            "<body><p>Please wait while your request is being verified...</p>"
+            "</body></html>",
+            True,
+        ),
+        (
+            "HTTP 403 with a body",
+            403,
+            "<html><body><h1>Forbidden</h1><p>No.</p></body></html>",
+            True,
+        ),
+        (
+            "block notice at a non-error status",
+            202,
+            "<html><head><title>Attention</title>"
+            "<style>" + "a{color:red}" * 6000 + "</style></head>"
+            "<body><h1>403 - Forbidden</h1>"
+            "<p>Access to this page is forbidden.</p></body></html>",
+            True,
+        ),
+        ("HTTP 429", 429, "<html><body>slow down</body></html>", True),
+        ("near-empty at 200", 200, "<html></html>", False),
+        (
+            "tier 3 structural",
+            200,
+            "<html><body><div></div><script>var a=1;</script></body></html>",
+            False,
+        ),
+    ]
+
+    for label, status, html, origin_said_so in corpus:
+        blocked, reason = is_blocked(status, html)
+        assert blocked, f"{label}: expected a verdict, got none"
+        verdict = classify_result(
+            {
+                "success": False,
+                "status_code": status,
+                "error_message": f"Blocked by anti-bot protection: {reason}",
+            }
+        )
+        if origin_said_so:
+            assert verdict == ORIGIN_BLOCKED, f"{label}: {reason} -> {verdict}"
+        else:
+            assert verdict not in ORIGIN_CLASSES, (
+                f"{label}: inference reported as the origin's fault "
+                f"({reason} -> {verdict})"
+            )
+
+
+def test_the_wire_status_follows_the_reclassification():
+    """What MAS actually branches on. An inferred block moves from a terminal
+    200 to a retryable 500 — we are asking for the retry back, deliberately —
+    while a real block stays terminal."""
+    assert http_status_for([RENDER_ERROR]) == 500
+    assert http_status_for([ORIGIN_BLOCKED]) == 200
+    assert http_status_for([ORIGIN_HTTP_ERROR]) == 200

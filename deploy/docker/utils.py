@@ -408,8 +408,73 @@ def verify_email_domain(email: str) -> bool:
     except Exception as e:
         return False
 
+def _read_memory_stat() -> Dict[str, int]:
+    """Parse the cgroup's ``memory.stat`` into a dict, or {} if unreadable."""
+    for path in (
+        Path("/sys/fs/cgroup/memory.stat"),  # v2
+        Path("/sys/fs/cgroup/memory/memory.stat"),  # v1
+    ):
+        try:
+            stats = {}
+            for line in path.read_text().splitlines():
+                key, _, value = line.partition(" ")
+                if key and value.strip().isdigit():
+                    stats[key] = int(value)
+            if stats:
+                return stats
+        except Exception:
+            continue
+    return {}
+
+
+def get_memory_breakdown() -> Optional[Dict[str, float]]:
+    """Container memory in MB, split into the terms that behave differently.
+
+    Aitosoft 2026-08-01. ``anon`` is the memory the kernel cannot reclaim and is
+    what actually scales with pool size — measured on the real production path
+    at a stable **~130 MB per pooled browser** across a cold and a warm run.
+    ``file`` is page cache; it looked per-browser (27 MB) on a cold container and
+    was **1.8 MB** once warm, i.e. a one-time fill of Chromium's binary and
+    libraries, not a scaling term.
+
+    Returns None when the cgroup files are not readable — which includes this
+    dev container, whose ``memory.max`` is the literal string ``max``. Do not
+    infer this function's production behaviour from a local run; fake the file
+    reads instead. See tasks/render-500-window-2026-07-31.md S2.
+    """
+    stats = _read_memory_stat()
+    if not stats:
+        return None
+    mb = 1024 * 1024
+    inactive_file = stats.get("inactive_file", stats.get("total_inactive_file", 0))
+    return {
+        "anon": stats.get("anon", stats.get("total_rss", 0)) / mb,
+        "file": stats.get("file", stats.get("total_cache", 0)) / mb,
+        "inactive_file": inactive_file / mb,
+    }
+
+
 def get_container_memory_percent() -> float:
-    """Get actual container memory usage vs limit (cgroup v1/v2 aware)."""
+    """Container **working set** as a percentage of the container's limit.
+
+    Working set, not raw usage: ``inactive_file`` is page cache the kernel will
+    reclaim on demand rather than OOM, so counting it against the limit charges
+    us for memory we are not really holding. This is the standard working-set
+    definition (the same one cAdvisor and `kubectl top` report) and it matters
+    most on exactly the replica that failed on 2026-07-31 — a cold,
+    scaled-from-zero one, which pays a one-time cache fill of a few hundred MB.
+
+    Sizing note, so nobody reads more into this than it does: on a warm
+    container `inactive_file` was **1 %** of pool growth and on a cold one 16 %.
+    It is a bounded offset, not the explanation for that incident. The reading
+    was already roughly right — `server_peak_memory_mb` (the gunicorn worker's
+    RSS, ~235 MB) and this figure were never measuring the same memory, because
+    Playwright runs Chromium as ~7 child processes that no worker RSS can see.
+    Ship this because it is correct, not because it fixes anything.
+
+    Falls back to raw usage, then to host memory, so a kernel that exposes
+    neither still gets a number. cgroup v1/v2 aware.
+    """
     try:
         # Try cgroup v2 first
         usage_path = Path("/sys/fs/cgroup/memory.current")
@@ -426,6 +491,14 @@ def get_container_memory_percent() -> float:
         if limit > 1e18:
             import psutil
             limit = psutil.virtual_memory().total
+
+        # Working set = usage - reclaimable page cache. Never let a bad stat
+        # read make the number *smaller than the truth* in a way that hides
+        # pressure: clamp at zero and ignore a value larger than usage.
+        stats = _read_memory_stat()
+        inactive_file = stats.get("inactive_file", stats.get("total_inactive_file", 0))
+        if 0 < inactive_file < usage:
+            usage -= inactive_file
 
         return (usage / limit) * 100
     except:

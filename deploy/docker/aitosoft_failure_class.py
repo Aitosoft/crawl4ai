@@ -138,6 +138,43 @@ _BLOCKED_RE = re.compile(
     r"Blocked by anti-bot protection|\[patchright\] STILL blocked", re.IGNORECASE
 )
 
+# Aitosoft 2026-08-01 — the evidence/inference split.
+#
+# `is_blocked` returns one verdict for two different kinds of finding, and
+# `_BLOCKED_RE` above used to map both to ORIGIN_BLOCKED:
+#
+#   the origin said so       a vendor marker, an interstitial, a refusal notice,
+#                            HTTP 403 with an HTML body   -> the origin blocked us
+#   we inferred it from shape "Structural: minimal_text…", "Near-empty content…"
+#                            -> *we* came back with nothing
+#
+# The second is RENDER_ERROR's definition, not ORIGIN_BLOCKED's. MAS measured
+# the consequence on 2026-07-31: 4 of their 33 `origin_blocked` verdicts were
+# this, and the expensive one was `norex.com`, where the body was **our own**
+# `Crawl4AI Error: This page is not fully supported` placeholder in 15 bytes of
+# HTML — our pipeline's failure reported to the customer as the origin blocking
+# them. This module's documented bias (see "Classification bias" above) is that
+# an unrecognised failure is ours and never an origin class, "precisely so that
+# a healthy site is never reported permanently broken". This was that guarantee
+# running backwards.
+#
+# Matching reason text is done HERE rather than at the call site because that is
+# this module's whole job — no other file matches on crawler error strings. The
+# seam is the reason *prefix*, which antibot_detector's inference tiers are
+# required to keep; `test_failure_classification.py` walks every reason
+# `is_blocked` can produce and fails if one lands on neither side of this line.
+#
+# What this changes for MAS, stated plainly because it is not free: these
+# results move from `origin_blocked` (HTTP 200, terminal) to `render_error`
+# (HTTP 500, retried 3x), so we buy back three renders per occurrence. That is
+# the correct direction — a transient failure of ours is exactly what a retry
+# is for — but it is a cost, and `snuup.fi`'s ordinary 404 is the case that
+# gets strictly cheaper: it falls through to ORIGIN_HTTP_ERROR, still 200.
+_INFERRED_BLOCK_RE = re.compile(
+    r"Blocked by anti-bot protection:\s*(?:Structural:|Near-empty content)",
+    re.IGNORECASE,
+)
+
 # Playwright's own per-operation timeouts, and our fence. Both are ours: we ran
 # out of time, which is a thing MAS should retry.
 _TIMEOUT_RE = re.compile(
@@ -162,7 +199,10 @@ def classify_error_text(
     if not text:
         return None
 
-    if _BLOCKED_RE.search(text):
+    _says_blocked = bool(_BLOCKED_RE.search(text))
+    _inferred = _says_blocked and bool(_INFERRED_BLOCK_RE.search(text))
+
+    if _says_blocked and not _inferred:
         # The block detector judges the *body*, and a 5xx body with nothing in
         # it trips its structural check — so an origin's own broken 500 came
         # back labelled "blocked". Both verdicts are origin-caused and both map
@@ -173,6 +213,26 @@ def classify_error_text(
         if status and status >= 500 and status != 503:
             return ORIGIN_HTTP_ERROR
         return ORIGIN_BLOCKED
+
+    if _inferred:
+        # Discarding the *reason* must not discard the *status*. The reason is
+        # ours — we observed an empty-looking page — but the origin may have
+        # said something anyway, and 403/503 are block statuses in their own
+        # right (`is_blocked`'s own status branch treats them that way, and
+        # Incapsula and Varnish really do serve blocks with 503). Judge on what
+        # is left rather than on what we just threw away:
+        #
+        #   403 / 503        the origin refused          -> ORIGIN_BLOCKED
+        #   any other 4xx/5xx  the origin errored        -> ORIGIN_HTTP_ERROR
+        #                      (`snuup.fi`'s ordinary 404 lands here)
+        #   no origin status   nothing but our own shape -> None, and
+        #                      `classify_result` calls it RENDER_ERROR
+        #                      (`norex.com`, `jarvenkylamaatila.fi`)
+        if status in (403, 503):
+            return ORIGIN_BLOCKED
+        if status and status >= 400:
+            return ORIGIN_HTTP_ERROR
+        return None
 
     net = _NET_ERR_RE.search(text)
     if net:

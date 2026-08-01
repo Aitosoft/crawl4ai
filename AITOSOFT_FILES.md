@@ -43,10 +43,16 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
 - `aitosoft_static_mode.py` - `render_mode: "static"` implementation (httpx + html2text;
   per-hop SSRF redirect validation via egress_broker, bounded fan-out;
   test_static_mode.py pins it)
-- `aitosoft_patchright_fallback.py` - Second-tier retry via patchright for blocked crawls
+- `aitosoft_patchright_fallback.py` - Second-tier retry via patchright for blocked
+  crawls, with its own longer capture wait (`_config_for_retry`) — before
+  2026-08-01 it was handed the first tier's config verbatim, so it differed only
+  in engine and could not resolve a challenge the first attempt had outlasted
 - `aitosoft_failure_class.py` - `failure_class` taxonomy + transport mapping. The ONLY
   place `net::ERR_*` / ACS-GOTO error text is matched; origin-caused => HTTP 200,
-  5xx reserved for our own faults (test_failure_classification.py pins it)
+  5xx reserved for our own faults (test_failure_classification.py pins it).
+  Also the evidence/inference split (`_INFERRED_BLOCK_RE`, 2026-08-01): a block
+  verdict derived from an empty-looking page is `render_error`, not
+  `origin_blocked` — discarding the reason does not discard the status
 
 ### Deployment
 - `azure-deployment/` - `deploy-image.sh` (THE deploy path), `batch-scale.sh`
@@ -94,10 +100,15 @@ lifespan shutdown closes static httpx client + patchright singleton.
 ### deploy/docker/schemas.py (+14/−1)
 `CrawlRequest.render_mode: Literal["full","static"] = "full"`.
 
-### deploy/docker/crawler_pool.py (+210/−36)
+### deploy/docker/crawler_pool.py (+330/−36)
 MAX_PAGES enforcement + overflow browser keys; BUSY_SINCE stuck-slot
 force-close in janitor; lazy PERMANENT re-init after a stuck force-close
-(test_crawler_pool.py pins it). De-noised 2026-07-17: every hunk vs upstream
+(test_crawler_pool.py pins it). 2026-08-01: the memory guard raises
+`RenderCapacityExceeded` (→ 429 + Retry-After) instead of `MemoryError`
+(→ the 500 MAS retries 3x); `_close_unused_permanent()` closes the permanent
+browser when nothing has ever used it (0 hits in 224 pool gets in production);
+`memory_breakdown()` logs the anon/file/inactive_file split in the guard's error
+and the janitor's pool line. De-noised 2026-07-17: every hunk vs upstream
 is now a real change (cosmetic churn restored to upstream bytes, dead
 HOT_POOL overflow scan removed). File is unchanged upstream since 0.8.6, so
 this carries no merge risk.
@@ -105,7 +116,10 @@ this carries no merge risk.
 ### deploy/docker/config.yml (+45/−10)
 Deployment config (always ours): stealth browser kwargs, real-Chrome channel,
 `limits.wall_clock_s: 180`, `pool.max_pages: 5`, `stuck_busy_timeout_sec: 600`,
-`memory_threshold_percent: 85`, `static_fetch_timeout_s: 15` (per-URL httpx
+`memory_threshold_percent: 85`, `retry_capture_wait_s: 10.0` (capture wait for
+the patchright retry ONLY — never raise the global `delay_before_return_html`
+to get the same effect: ~267 render-hours per MAS sweep),
+`static_fetch_timeout_s: 15` (per-URL httpx
 timeout for static mode), `crawler.base_config.total_timeout: 100000` (per-`arun`
 fetch budget; must stay under `wall_clock_s` and above the largest client
 `page_timeout`), render admission (`render_capacity: 2` —
@@ -119,13 +133,27 @@ gunicorn target `aitosoft_entry:app`.
 `_build_browser_args`: GPU flags gated on `enable_stealth` (keeps WebGL in
 stealth mode). Still broken upstream — PR tracked in `tasks/file-upstream-prs.md`.
 
-### crawl4ai/antibot_detector.py (+28/−0 upstream PR; +66/−4 ours)
+### crawl4ai/antibot_detector.py (+28/−0 upstream PR; +290/−30 ours)
 1. `effective_status(status_code, redirected_status_code)` — block detection must
    judge the FINAL hop of a redirect chain, not the first. PR upstream pending
    (#2112).
 2. Challenge tier (`robot-suspicion`, the challenge asset host, browser-check
    prose) and a tightened `Access Denied`. NOT filed upstream: the pattern set is
    where our Finnish-market knowledge lives and it will keep diverging.
+3. **Evidence gates read visible text, not `len(html)`** (2026-08-01). The
+   challenge tier's `html_len < 10000` is gone; prose is matched against a
+   script/style-stripped snippet (`_prose_snippet`) so 80 KB of inline CSS cannot
+   hide two lines. The *inference* gates (tier 3, near-empty-200) keep their byte
+   bounds deliberately — see the module docstring, which states which gate moved
+   and which did not.
+4. **Block-notice tier** (2026-08-01): a page whose whole visible text is a
+   refusal is a refusal, at any status and any size. Gated at 500 visible
+   characters (measured: smallest healthy capture in our corpus is 739) and
+   guarded by two discriminators — the notice must be in a `<title>`/`<h1>`-`<h3>`
+   or cover >=50% of the page's text — without which it would re-open MAS's
+   Shopify `/pages/access-denied` false-positive family.
+5. `_normalized_visible_text` — whitespace-collapsed, so this module and
+   `aitosoft_collapse_guard` agree about what counts as text on a page.
 
 ### crawl4ai/content_scraping_strategy.py (+39/−0)
 `strip_noscript()` before `document_fromstring`. `<noscript>` cannot nest, so a

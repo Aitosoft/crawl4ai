@@ -1,64 +1,75 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-01, after the #2 verification session (which corrected the
-coordinator pass that preceded it — see #2 and forensics §11e).
+**Updated:** 2026-08-01, after the four-item image shipped (#1 phase 2, #2's S
+half, #3 part 1, #4). Items 1-4 are **done or reduced**; the table below is
+re-ordered around what is left.
+
+**What that image taught, and it is the fourth session in a row to teach it:**
+the task file was materially wrong about something load-bearing. #4's file said
+"the four caught hosts prove the pattern side already works", so moving the
+size gates would be enough — measured, **no pattern matched that body at all**;
+they were caught by a status rule, and half the fix was missing from the
+specification. Its fixture was also unfaithful on the one axis that decided the
+answer. **Verify the diagnosis, not just the plan**: for a detector claim that
+means asserting *which branch fired*, not that a verdict was returned.
 **This file holds ordering and gating only** — the reasoning lives in each task
 file, the evidence in `waa-eval-2026-07-30-forensics.md`. If they disagree, the
 task file wins and this index is stale; fix it.
 
-Production is current (`0.9.2-failure-class`, rev `--0000031`). Nothing below is
-a deploy blocker.
-
-**The re-scrape re-ordered this list.** Three items moved down because the fixes
-that shipped on 2026-07-30 took most of their value, and three new items moved to
-the top because MAS measured defects we did not know about. Read §10 before
-trusting any priority written before 2026-07-31. The old #0 (`fixture-origin.md`)
-shipped the same day and is in `done/`; #1–#3 are what it was for.
-
-**Standing rule as of 2026-07-31: live traffic is the last instrument, not the
+**Standing rule since 2026-07-31: live traffic is the last instrument, not the
 first.** Every failure class since 2026-04 was diagnosed against a customer's
-website, all of it leaving from one shared Azure address that is not contractually
-ours, and MAS's requests and our test requests are the same egress. The fixture
-origin (`done/fixture-origin.md`) removed the reason — it is now TESTING.md
-golden rule 0. **Tasks #1–#3 were each drafted with live hits and each now needs
-zero**; every one of them already has routes and, in two cases, a red test
-waiting to be inverted. Add a route before you add a request.
+website, all of it leaving from one shared Azure address that is not
+contractually ours, and MAS's requests and our test requests are the same
+egress. The fixture origin (`done/fixture-origin.md`) removed the reason — it is
+now TESTING.md golden rule 0. **The four items in the image below cost zero live
+requests between them**, investigation and implementation alike; the only live
+traffic was the Tier 1 regression that gates the deploy. Add a route before you
+add a request — and check `test-aitosoft/artifacts/` before you add a route,
+since the second instance of the detector defect was already sitting there.
 
-**The order below is the session order.** #1–#4 were four sessions: two
-investigations that produce numbers and no code, then two code tasks that ship in
-**one image**. That grouping is load-bearing in both directions — #2's fix, if
-small, joins #3+#4's deploy, and after that image ships the option is gone.
+## Shipped 2026-08-01 — one image, four items
 
-**Updated 2026-08-01: #1's investigation half is done and its code half shrank to
-S**, so the image is now #1-phase-2 + #2 + #3 + #4, not #3 + #4. Both
-investigations produced a decisive **negative** alongside their number (#1: the
-`page.content()` nav race costs no captures; #2: the 500s never reached the
-origin), which is worth as much to MAS as the positives and should be sent with
-the same confidence.
+`0.9.2-detector-round3`. Closed: `challenge-interstitial-resolve.md` (both
+phases), `detector-round3-evidence-vs-inference.md`,
+`antibot-minimal-text-false-positive.md`, and the S half of
+`render-500-window-2026-07-31.md`. `cleaned-html-collapse-guard.md` part 1 is
+deployed; **part 2 (root cause, three separate repairs) stays open** and is #1
+below.
 
-**Updated 2026-08-01 (later): #2 is diagnosed and split.** Its S half (wire
-status, reading, the never-used permanent browser) ships in that image; its M
-half is the new #11. **Message 10 is unblocked** — both MAS answers are final,
-but one of them changed between passes, so send the version in #2 and not the
-coordinator's. That two of three coordinator claims on #2 were wrong for one
-reason — an unfiltered workspace-wide log query — is written up in forensics
-§11e; it is the reusable part.
+Four results worth carrying forward:
+
+- **Detection widened and invention narrowed, in the same deploy, on purpose.**
+  A block page padded to 80 KB at status 202 is now caught as *evidence*
+  (`origin_blocked`); a verdict derived from an empty-looking page is now
+  *ours* (`render_error`). The unpadded form of the same page proves they
+  compose: without the new tier it would have flipped from `origin_blocked` to
+  `render_error` — a real block reported as our bug.
+- **A real second instance was sitting in `test-aitosoft/artifacts/`.**
+  `monidor.com`, a stored capture returned to MAS at `success: true`, is an
+  11,515-byte interstitial with 58 characters of text. We had the evidence for
+  weeks. **Check the corpus we already hold before designing against a fixture.**
+- **Phase 2 rescues slow-hydrating shells, not just challenges** — MAS's
+  `revisol.fi` class, absorbed server-side at zero extra page loads. Nobody
+  predicted this; a test went green on its own and the reason was worth having.
+- **The cost of #4 defect B, stated:** two of MAS's four cases move from a
+  terminal 200 to a retried 500. Correct direction, real cost. Watch it in the
+  next sweep.
 
 | # | Task | Gate | Why here |
 |---|------|------|----------|
-| 1 | `challenge-interstitial-resolve.md` | **phase 1 DONE 2026-08-01**; phase 2 ships with #3+#4 | **The number: a capture wait `W` gets any challenge resolving within `W + 1.22 s`; MAS's 2.0 covers 3.2 s.** One constant, 0/84 mispredictions, zero live requests. Phase 2 is a **go but S, not M** — `maybe_retry_blocked` already re-fetches every detected block with the *same* wait, so it needs a longer wait, not a new mechanism. Two negatives worth the same weight: the `page.content()` nav race cost **no** captures (42/42 identical), and an adaptive shape inherits the detector's recall, so the unmarked interstitial gets nothing. **Message 10 is now unblocked.** |
-| 2 | `render-500-window-2026-07-31.md` | none — logs only, **zero traffic** | **Diagnosed and fix designed 2026-08-01; the S half is written, not yet coded.** All 9 × 500 are our own memory guard (`crawler_pool.py:179`) at our own 85 % threshold. The 235 MB was never the container — it is the gunicorn worker's RSS, and Chrome is child processes (measured: **+2 MB worker RSS vs +139–165 MB cgroup per pooled browser**, ~130 MB of it unreclaimable `anon`), so the reading is roughly right and the memory was scarce. **All nine are on one replica that carried the burst alone for 122 s after a scale-from-zero** — not a scale-out ramp, which is what the first pass said. Real cause: **nothing bounds live browsers** (125 creates / 132 closes for 10–12 signatures). **S1 status code + S2 reading + S3 the never-used permanent browser ship with #3+#4; M1 pool cap is carved out.** MAS answers: **246 origin hits, not 255**, and the clustering is scaling lag. |
-| 3 | `cleaned-html-collapse-guard.md` | none | **Part 1 DONE 2026-08-01, landed not deployed.** Guard ships as visible-text-in vs markdown-out — **not** the `cleaned_html` ratio the file proposed, which was refuted twice by measurement (it fires on a healthy 73 KB page, and is blind to `unterminated-comment`, which keeps 74,523 B of `cleaned_html` *containing the content* and still yields no markdown). Thresholds measured against 37 stored real captures, zero live requests. `render_error` wire-status split fixed; one mapping site for both render modes. **Root cause NOT solved — the file's "probably already found" was an inference and it is wrong: four shapes, three mechanisms.** Part 2 is now three separate repairs, sequenced in the task file. **Do not deploy alone.** |
-| 4 | `detector-round3-evidence-vs-inference.md` | none | Eight hosts measured in prod: four blocks missed (every size gate is on `len(html)`; the vendor pads to 80 KB), four invented (including our own error placeholder reported as the origin blocking us). Defect A has a red test; so does the unmarked-interstitial variant. **Ships #3's image**; gates #6. |
-| 5 | `static-fallback-within-fence.md` | none — re-price, likely close | **Drop, not build**, on current evidence. MAS's probe: 0 × 504, nothing within 145 s of the 180 s fence — consistent with `done/render-retry-unbounded-hang.md` having removed the failure this was sized against. 243 fetches is not a workload, but it is the only dataset the current image has seen. |
-| 6 | `preflight-batch-endpoint.md` | #4, then MAS's go-ahead | **Do not build speculatively — their words, and now formally answered.** There is no sweep date and timing is not their driver; it runs when their system is ready. They will give real notice. |
-| 7 | `blocked-host-retry-economy.md` | none | Still real, but smaller: MAS no longer retries origin-class failures, so a blocked host costs ~4 page loads, not ~12–16. Our half is now **measured, not inferred**: exactly 2 document loads per request (first-tier render + patchright retry), via `FixtureOrigin.hits_for()` against `/block/varnish-403`. Its classifier is still #9's trigger. |
-| 8 | `base-config-boolean-defaults-never-applied.md` | none | `simulate_user` has never taken effect and the next boolean won't either. Small. Decide whether the setting should exist at all rather than restoring an intent nobody measured. |
-| 9 | `residential-egress-retry-path.md` | **#1 phase 2, then MAS's next sweep, then Tero** | On hold, and the population is now derived rather than asserted: **floor 6, ceiling 29** (4 of the 33 verdicts are our own false positives and belong to #4; 4 are a hard 403 template no wait can fix; 23 are undetermined until #1 phase 2 ships). Phase 1 did **not** shrink it — it made the 23 measurable for free. Still no evidence on either side that a residential IP gets through; the dev container's Finnish consumer ISP egress can test that when the count is real. |
-| 10 | `static-mode-tls-impersonation.md` | #1, #9 | Hardens the path #5 makes everything fall back to. IP has dominated fingerprint in every case measured so far; #1 and #9 are what would change that. |
-| 11 | `pool-residency-unbounded.md` | none — but design with #12 | **New 2026-08-01, the M half carved out of #2.** `render_capacity` bounds renders and `max_pages` bounds pages; **nothing bounds live browsers**, so 8 were held to do 2 renders' worth of work at a measured 139–165 MB each (~130 MB of it unreclaimable `anon`). The janitor's adaptive TTL then thrashes it — 125 creates and 132 closes for 10–12 signatures — by launching browsers precisely when memory is tight. Needs a `max_browsers` cap with LRU eviction, priced together with #12. |
-| 12 | `pool-browser-retains-last-page.md` | none | One document's memory pinned per browser. Was "low impact"; **#2 and #11 make it worth re-reading** — per-browser cost is now measured (139–165 MB cgroup, of which a stable 130 MB is `anon`) and this is a term in it. It sets the right cap in #11, so price the two together. |
-| — | `antibot-minimal-text-false-positive.md` | — | **Merged into #4** — the latent defect was observed live (`norex.com`). Close it when #4 ships. |
+| 1 | `cleaned-html-collapse-guard.md` **part 2** | none | **Part 1 DONE and DEPLOYED 2026-08-01.** Guard ships as visible-text-in vs markdown-out — **not** the `cleaned_html` ratio the file proposed, refuted twice by measurement. `render_error` wire-status split fixed; one mapping site for both render modes. **Root cause NOT solved: four shapes, three mechanisms**, and `apteam.fi`'s fingerprint fits at least two — part 2 is three separate repairs, sequenced in the task file. Their `revisol.fi` half shrank for free when #1's phase 2 shipped. |
+| 2 | `static-fallback-within-fence.md` | none — re-price, likely close | **Drop, not build**, on current evidence. MAS's probe: 0 × 504, nothing within 145 s of the 180 s fence — consistent with `done/render-retry-unbounded-hang.md` having removed the failure this was sized against. 243 fetches is not a workload, but it is the only dataset the current image has seen. |
+| 3 | `preflight-batch-endpoint.md` | **#4 is done — MAS's go-ahead is now the only gate** | **Do not build speculatively — their words, and now formally answered.** There is no sweep date and timing is not their driver; it runs when their system is ready. They will give real notice. |
+| 4 | `blocked-host-retry-economy.md` | none | Still real, but smaller: MAS no longer retries origin-class failures, so a blocked host costs ~4 page loads, not ~12–16. Our half is now **measured, not inferred**: exactly 2 document loads per request (first-tier render + patchright retry), via `FixtureOrigin.hits_for()` against `/block/varnish-403`. Its classifier is still #8's trigger. |
+| 5 | `base-config-boolean-defaults-never-applied.md` | none | `simulate_user` has never taken effect and the next boolean won't either. Small. Decide whether the setting should exist at all rather than restoring an intent nobody measured. |
+| 6 | `pool-residency-unbounded.md` | none — but design with #7 | **New 2026-08-01, the M half carved out of #2.** `render_capacity` bounds renders and `max_pages` bounds pages; **nothing bounds live browsers**, so 8 were held to do 2 renders' worth of work at a measured 139–165 MB each (~130 MB of it unreclaimable `anon`). The janitor's adaptive TTL then thrashes it — 125 creates and 132 closes for 10–12 signatures — by launching browsers precisely when memory is tight. Needs a `max_browsers` cap with LRU eviction, priced together with #7. |
+| 7 | `pool-browser-retains-last-page.md` | none | One document's memory pinned per browser. Was "low impact"; **the memory work makes it worth re-reading** — per-browser cost is now measured (139–165 MB cgroup, of which a stable 130 MB is `anon`) and this is a term in it. It sets the right cap in #6, so price the two together. |
+| 8 | `residential-egress-retry-path.md` | **phase 2 has shipped — MAS's next sweep, then Tero** | On hold, and the population is now derived rather than asserted: **floor 6, ceiling 29** (4 of the 33 verdicts are our own false positives and belong to #4; 4 are a hard 403 template no wait can fix; 23 are undetermined until #1 phase 2 ships). Phase 1 did **not** shrink it — it made the 23 measurable for free. Still no evidence on either side that a residential IP gets through; the dev container's Finnish consumer ISP egress can test that when the count is real. |
+| 9 | `static-mode-tls-impersonation.md` | #8 | Hardens the path #2 makes everything fall back to. IP has dominated fingerprint in every case measured so far; #8 is what would change that. |
+| — | `challenge-interstitial-resolve.md` | **DONE 2026-08-01, both phases** | Phase 1's number — a capture wait `W` gets any challenge resolving within **`W + 1.22 s`** — turned out to be the whole design. Phase 2 is one config value: the patchright retry (which already runs for every detected block) now waits 10 s instead of inheriting the request's 2.0. Zero extra page loads. **Retry leg measured at 11.26 s = `W + 1.22`**, answering phase 1's own footnote. Unpriced dividend: it also rescues slow-hydrating shells, i.e. MAS's `revisol.fi` class. It cannot reach interstitials we do not detect — which is why #4 shipped beside it. |
+| — | `render-500-window-2026-07-31.md` | **S half DONE 2026-08-01**; M1 is #6 | All 9 × 500 were our own memory guard at our own 85 % threshold, on **one replica carrying the burst alone for 122 s after a scale-from-zero**. Shipped: S1 the refusal is now **429 + `Retry-After`**, not the 500 MAS retries 3× (memory pressure was quadrupling its own load); S2 the reading is the working set and the anon/file split is logged; S3 the permanent browser — **0 hits in 224 pool gets** — is closed when unused. MAS answers for message 10: **246 origin hits, not 255**, and the clustering is scaling lag, not a scale-out ramp. |
+| — | `detector-round3-evidence-vs-inference.md` | **DONE 2026-08-01** | Eight hosts measured in prod: four blocks missed, four invented. **Its own file was wrong about the fix** — no pattern matched the missed body at all, so moving the size gates closed nothing and a new block-notice tier was needed; and a naive text gate would have re-opened MAS's Shopify false-positive family, whose fixture has 247 visible chars. Both defects shipped together because they cancel otherwise: the unpadded block page would have flipped from `origin_blocked` to `render_error`. |
+| — | `antibot-minimal-text-false-positive.md` | — | **CLOSED 2026-08-01** — the latent defect was observed live (`norex.com`: our own placeholder reported as the origin blocking a customer) and is fixed by #4 defect B. Moved to `done/`. |
 | — | `file-upstream-prs.md` | upstream | Standing tracker, four PRs open. Small `fix(docker):` PRs merge in 1–5 days; core behavioural changes sit for months — expect no movement. |
 | — | `waa-eval-2026-07-30-forensics.md` | — | Reference, not a task. Never close it; task files cite it instead of re-deriving. |
 
@@ -152,7 +163,8 @@ Found on our side 2026-08-01 (#3 part 1, offline, zero traffic):
   should either widen the margin deliberately or measure fence latency separately
   from harness overhead.
 
-Owed to MAS, to go out together as message 10 once #1 and #2 land:
+Owed to MAS as message 10. **#1 and #2 have now landed and the image has
+shipped, so nothing gates this message any more** — every item below is final:
 
 - **The 202 result — ANSWERED 2026-08-01, offline.** `W + 1.22 s` is the capture
   budget; their 2.0 covers a 3.2 s challenge, which confirms the bottom of their
@@ -174,9 +186,33 @@ Owed to MAS, to go out together as message 10 once #1 and #2 land:
   held back: flipping envelope `success` to the aggregate (their own message 09
   says they never read it for 2xx, and it breaks a pinned contract in an image
   already changing static mode's wire status), and the `fodbar.fi`
-  "content was present despite the origin status" field (a new contract field
-  should arrive with a message, not inside an image about something else).
-  Propose both in message 10 and ship them together afterwards.
+  "content was present despite the origin status" field. The field was
+  conditional on message 10 describing it first; message 10 had not gone out
+  when the image was ready, so per that condition it was dropped rather than
+  delaying the deploy. Both are additive. Propose them in message 10 and ship
+  them together afterwards, in their own change where a surprise is attributable.
+- **The detector now catches two classes it used to store as content, and
+  invents one class fewer** (shipped 2026-08-01). Tell them:
+  (a) a block page padded past our size gates — their four 202 hosts — is now
+  `origin_blocked`; (b) four of their 33 `origin_blocked` verdicts were our
+  inference, not the origin, and two of those (`norex.com`,
+  `jarvenkylamaatila.fi`) now arrive as **`render_error` at HTTP 500, which they
+  retry 3x** — a real cost we chose deliberately, because the alternative was
+  telling them a healthy host is permanently blocked; (c) `snuup.fi` is now
+  `origin_http_error`, still terminal; (d) `fodbar.fi` is unchanged, as agreed.
+- **Ask them to count the silent family.** We still cannot detect an
+  interstitial that carries no marker, no interstitial prose and no refusal
+  notice, and we cannot count it either — any rule that caught it would be the
+  same inference we just removed. Their stored corpus can: a page under ~500
+  markdown characters whose HTML carries a challenge asset. That number sizes
+  the remaining gap for both sides and is the one thing we cannot produce.
+- **Memory-pressure refusals now arrive as 429 + `Retry-After`, not 500.**
+  Their client already backs off correctly, so nothing breaks, but on a cold
+  first wave a single replica can answer a burst of them. That is right
+  behaviour and still looks like a stall from their side. Send it with the
+  scale-from-zero finding — the two are the same event seen from either end —
+  and say plainly that the 429 makes the symptom cheap without removing the
+  cause.
 - **Whether the 9 × 500 reached the origin — ANSWERED 2026-08-01: they did not.**
   The memory guard raises before the browser is created, so no navigation
   happened. **Their day cost 246 origin hits, not 255.** Under the shared-egress
@@ -199,4 +235,4 @@ Owed to MAS, to go out together as message 10 once #1 and #2 land:
   replica can answer a burst of them, which is right behaviour and still looks
   like a stall from their side. Send it with the scale-from-zero finding, since
   the two are the same event seen from either end, and say plainly that the 429
-  makes the symptom cheap without removing the cause (#11 is the cause).
+  makes the symptom cheap without removing the cause (`pool-residency-unbounded.md` is the cause).

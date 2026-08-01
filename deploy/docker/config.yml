@@ -92,6 +92,16 @@ crawler:
     # Applied by api.py's base_config pass; not client-settable (absent from
     # UNTRUSTED_FIELD_ALLOWLIST, so a client-sent value is dropped).
     total_timeout: 100000
+  # Aitosoft 2026-08-01: capture wait for the patchright retry only
+  # (tasks/challenge-interstitial-resolve.md phase 2). Measured offline over an
+  # 84-cell grid: a capture wait W gets any challenge resolving within
+  # W + 1.22 s, so MAS's production 2.0 covers ≤ 3.2 s and 10.0 covers ≤ 11.2 s.
+  # Applied ONLY on the second-tier retry, which already runs for every detected
+  # block — so it adds zero page loads, costs nothing on the happy path, and
+  # runs inside the wall_clock_s fence. Do NOT raise the global
+  # delay_before_return_html to get the same effect: at MAS's ~120,000-fetch
+  # sweep that is ~267 render-hours, and blocked hosts pay it twice.
+  retry_capture_wait_s: 10.0
   memory_threshold_percent: 85.0  # Aitosoft: was 95 — leave headroom on 4 GiB replicas
   rate_limiter:
     enabled: true

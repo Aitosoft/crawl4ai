@@ -25,6 +25,11 @@ Design:
 - If the retry still fails (either block or error), we keep the ORIGINAL
   blocked result so the caller sees the first-attempt diagnostic, not a
   duplicated "both failed" message.
+- The retry gets a LONGER capture wait than the first attempt (2026-08-01).
+  Until then it was handed the first tier's CrawlerRunConfig verbatim, so it
+  differed only in engine and could not resolve a challenge the first attempt
+  had already outlasted. See `_config_for_retry` for the measured exchange rate
+  and why the wait is raised here rather than globally.
 
 This file is Aitosoft-only. It is imported from api.py after the first-tier
 crawl completes. It does NOT modify crawl4ai core.
@@ -76,6 +81,83 @@ _UNDETECTED_RECYCLE_USES = 100
 _UNDETECTED_USES = 0
 
 _BLOCK_MARKER = "Blocked by anti-bot protection:"
+
+# ── the retry's capture wait (tasks/challenge-interstitial-resolve.md phase 2)
+#
+# Phase 1 measured the exchange rate exactly, offline, over 84 cells of a
+# crossover grid with zero mispredictions: **a capture wait W captures any
+# challenge that resolves within `W + 1.22 s`** of domcontentloaded. The 1.22 s
+# is our own post-`goto` pipeline (consent-popup removal, the image pass, the
+# settle steps) and is free budget the challenge gets anyway. So MAS's
+# production `delay_before_return_html: 2.0` covers a challenge resolving in
+# ≤ 3.2 s, and stores the interstitial for anything slower.
+#
+# Why this lands on the retry and not on the request:
+#
+#   * We already re-fetch every detected block. `maybe_retry_blocked` has always
+#     handed patchright **the same CrawlerRunConfig** — hence the same capture
+#     wait — so the second attempt could not, by construction, resolve anything
+#     the first one could not. It was a different *engine* given an identical
+#     *budget*. This is the mechanism phase 2 was drafted to build; it existed.
+#   * The population that gets the longer wait is exactly the population already
+#     paying two page loads, so this costs **zero extra page loads**.
+#   * It costs nothing on the happy path: a page that captures first time never
+#     reaches here.
+#   * It is already fenced. api.py runs this inside `asyncio.wait_for(_deadline)`
+#     (the 180 s wall clock), so a longer wait cannot push a request past it.
+#
+# Why 10.0 and not something else — read off block A's grid rather than picked:
+# a retry at W=10 buys resolves up to 11.2 s, which covers the R=8.0 s row that
+# W=5.0 fails. Raising the *global* wait to 10.0 instead would cost ~267 render
+# hours across MAS's ~120,000-fetch sweep (+8 s on every page) and is paid twice
+# on blocked hosts, which are the ones it cannot help. Targeted, it is 8-36
+# render-hours.
+#
+# What this cannot do: rescue an interstitial we never detected. The trigger is
+# the detector, so this only ever reaches challenges we already call blocked —
+# phase 1's block C. Detection is the ceiling, which is why
+# tasks/detector-round3-evidence-vs-inference.md ships in the same image.
+_DEFAULT_RETRY_CAPTURE_WAIT_S = 10.0
+
+
+def _retry_capture_wait_s() -> float:
+    """Capture wait for the patchright retry, from config.yml.
+
+    Read per call rather than cached at import so a test can move it without
+    reloading the module; it is one dict lookup on a path that has already
+    decided to launch a browser.
+    """
+    try:
+        from utils import load_config
+
+        value = (
+            load_config()
+            .get("crawler", {})
+            .get("retry_capture_wait_s", _DEFAULT_RETRY_CAPTURE_WAIT_S)
+        )
+        return float(value)
+    except Exception:
+        return _DEFAULT_RETRY_CAPTURE_WAIT_S
+
+
+def _config_for_retry(crawler_config: CrawlerRunConfig) -> CrawlerRunConfig:
+    """The first-tier config with a longer capture wait, never a shorter one.
+
+    `max()` rather than assignment: `delay_before_return_html` is in
+    `UNTRUSTED_FIELD_ALLOWLIST`, so MAS can already send a per-host value today,
+    and a client that has deliberately raised it above ours must not be quietly
+    lowered on the retry. Cloned rather than mutated — the caller's config is
+    the one the first tier used and api.py still holds a reference to it.
+    """
+    wait = _retry_capture_wait_s()
+    current = getattr(crawler_config, "delay_before_return_html", 0.0) or 0.0
+    if wait <= current:
+        return crawler_config
+    try:
+        return crawler_config.clone(delay_before_return_html=wait)
+    except Exception as e:  # a clone failure must not cost us the retry itself
+        logger.warning(f"[patchright] could not raise the capture wait: {e}")
+        return crawler_config
 
 
 def _is_blocked(result: Any) -> bool:
@@ -164,9 +246,15 @@ async def maybe_retry_blocked(
     if not blocked_indices:
         return results
 
+    # A different engine AND a longer capture budget. Passing the first tier's
+    # config unchanged made the retry unable to resolve anything the first
+    # attempt could not — see _config_for_retry.
+    retry_config = _config_for_retry(crawler_config)
+
     logger.info(
         f"[patchright] {len(blocked_indices)}/{len(results)} "
-        f"result(s) blocked, retrying"
+        f"result(s) blocked, retrying (capture wait "
+        f"{getattr(retry_config, 'delay_before_return_html', '?')}s)"
     )
 
     global _UNDETECTED_USES, _UNDETECTED_IN_FLIGHT
@@ -205,7 +293,7 @@ async def maybe_retry_blocked(
                     except Exception as e:
                         logger.warning(f"[patchright] crawler startup failed: {e}")
                         return results
-                    raw: Any = await undetected.arun(url=url, config=crawler_config)
+                    raw: Any = await undetected.arun(url=url, config=retry_config)
                 finally:
                     _UNDETECTED_IN_FLIGHT -= 1
             _UNDETECTED_USES += 1
