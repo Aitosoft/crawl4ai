@@ -20,7 +20,7 @@ are ours, reproducible, and fixable.
 
 | Fact | Value | How measured |
 |---|---|---|
-| Egress IP | `172.199.49.233` (Azure, West Europe) | 3× `render_mode: static` GET of `api.ipify.org`, stable across calls |
+| Egress IP | Azure West Europe, shared SNAT (address in `PRIVATE.md`) | 3× `render_mode: static` GET of `api.ipify.org`, stable across calls |
 | VNet integration | **none** (`vnetConfiguration: null`) | `az containerapp env show -n aitosoft-aca` |
 | Egress IP stability | not contractual — no VNet/NAT Gateway means Azure's shared SNAT pool | same |
 | AAAA records | none for `www.maitokolmio.fi`, `konecranes.com`, `www.konecranes.com` | Google DoH |

@@ -343,9 +343,9 @@ into a deploy.
 ## Verification
 
 - Zero live requests. Log Analytics + the local fixture origin. Workspace
-  `workspace-aitosoftprodnCsc`, customer ID
-  `be17d63b-1807-49da-9846-82091ac8971d` (`az monitor log-analytics workspace
-  list`); `az account show` was authenticated on 2026-08-01.
+  `workspace-aitosoftprodnCsc`; export `$LAW_ID` from `PRIVATE.md` (or re-derive
+  it with `az monitor log-analytics workspace list`). `az account show` was
+  already authenticated on 2026-08-01.
 
   **Every console query needs `ContainerGroupName_s startswith 'crawl4ai'`** —
   the table is workspace-wide and `aitosoft-edge` logs into it too. That omission

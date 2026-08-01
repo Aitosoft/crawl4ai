@@ -19,7 +19,9 @@ service" / similar, read this file and use `ScheduleWakeup` to loop.
 - Memory alert: `crawl4ai-memory-high` (85%, sustained 5 min, severity 2).
   **Email delivery is DISABLED** (receiver removed 2026-04-17) — the alert
   only surfaces via the `monitorCondition` query below; nobody gets paged.
-- Log Analytics workspace ID: `be17d63b-1807-49da-9846-82091ac8971d`.
+- Log Analytics workspace `workspace-aitosoftprodnCsc`. The queries below use
+  `$LAW_ID`; export it from `PRIVATE.md`, or re-derive it with
+  `az monitor log-analytics workspace list --query "[?name=='workspace-aitosoftprodnCsc'].customerId | [0]" -o tsv`.
 - Capacity model (since 2026-07-17, image `0.9.2-render-gate`): each replica
   admits 2 concurrent full renders (RenderGate), queues ≤4 for ≤15s, then
   429 + Retry-After: 5. ACA scale rule `http-renders` (2 concurrent/replica)
@@ -32,7 +34,7 @@ service" / similar, read this file and use `ScheduleWakeup` to loop.
 curl -s -o /dev/null -w "%{http_code}\n" $CRAWL4AI_API_URL/health
 az monitor metrics alert show --name crawl4ai-memory-high --resource-group aitosoft-prod --query "{cond:monitorCondition, enabled:enabled}" -o json
 az containerapp replica list --name crawl4ai-service --resource-group aitosoft-prod -o table
-az monitor log-analytics query -w be17d63b-1807-49da-9846-82091ac8971d --analytics-query '<kusto>'
+az monitor log-analytics query -w "$LAW_ID" --analytics-query '<kusto>'
 ```
 
 Kusto signal summary (20-min window), categorize by `case()`:

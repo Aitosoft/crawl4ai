@@ -55,16 +55,19 @@ contract or commit credentials without Tero's explicit go-ahead.**
 >    done offline**, so it goes last and stays small — see
 >    `tasks/done/fixture-origin.md` for why that ordering is now the rule rather
 >    than an exception.
->    It is free of *spend*, not of traffic: the dev container egresses from
->    `109.204.176.244` — Valoo Oy, a Finnish consumer ISP in Lappeenranta, not a
->    datacentre. We can run our exact code from a residential IP without buying
+>    It is free of *spend*, not of traffic: the dev container egresses through a
+>    **Finnish consumer ISP, not a datacentre** (the address and provider are in
+>    the gitignored `PRIVATE.md`, because it is the owner's own home connection).
+>    We can run our exact code from a residential IP without buying
 >    anything. That is the discriminator the cost table below has been waiting
 >    for, and it also answers `static-mode-tls-impersonation.md`: run static
 >    (httpx TLS) and full (Chrome TLS) from the same residential IP and see
 >    whether the fingerprint or the IP is doing the work.
->    Site-safety: these are MAS-classified blocked hosts and the standing rule in
->    `TEST_SITES_REGISTRY.md` applies; bound it to one hit per host per cell and
->    log it. Burning Tero's own connection is a worse outcome than not knowing.
+>    Site-safety, and it is **stricter here than anywhere else**: these are
+>    MAS-classified blocked hosts, the standing rule in `TEST_SITES_REGISTRY.md`
+>    applies, and the egress is a home connection rather than a cloud resource we
+>    can re-provision. One hit per host per cell, logged. Burning the owner's own
+>    connection is a worse outcome than not knowing.
 >
 > **Read also: `waa-eval-2026-07-30-forensics.md` §8d.**
 > This task was sized on "171 of MAS's 243 affected hosts are egress
@@ -95,8 +98,9 @@ the egress path that carries our SSRF guarantee.
 engines — plain httpx, real Chrome + playwright-stealth, and patchright's
 undetected-chromium — with byte-identical results. Two different browser
 engines cannot agree unless the decision is made before fingerprinting matters.
-It is IP/ASN reputation. Our egress is `172.199.49.233`, an Azure West Europe
-address in a shared SNAT pool (the environment has no VNet integration).
+It is IP/ASN reputation. Our egress is a single Azure West Europe address in a
+shared SNAT pool (the environment has no VNet integration; the address is in
+`PRIVATE.md`).
 
 Therefore: no stealth work, no TLS impersonation, no header shaping and no
 Azure-region move changes anything for this class of host. Only a non-datacentre

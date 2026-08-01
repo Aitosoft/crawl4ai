@@ -169,6 +169,17 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 - Always use `os.getenv("CRAWL4AI_API_TOKEN")` in code
 - If a token is leaked: rotate immediately via `az containerapp update --set-env-vars`, update `.env`, notify MAS team
 
+**`PRIVATE.md` (gitignored) holds infrastructure identifiers** — Log Analytics
+workspace ID, egress addresses, the dev container's home-ISP connection. Read it
+when you need one; tracked files point at it rather than inlining it.
+
+The line, so it does not get re-decided every session: **identifiers that let
+someone act** go in `PRIVATE.md`; **facts and reasoning stay public**. Crawled
+hostnames, measurements, failure classes, costs and architecture all stay in the
+tracked files — scrubbing those would cost more in future sessions than the
+exposure is worth. One deliberate exception: the production endpoint URL stays
+tracked, because it is fail-closed behind the token and is live tooling config.
+
 **Before every commit, this must return exit 1 (no output):**
 
 ```bash

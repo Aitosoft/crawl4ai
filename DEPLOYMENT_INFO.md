@@ -235,7 +235,7 @@ misbehaves:
 
 Watch scaling during a batch:
 ```bash
-az monitor log-analytics query -w be17d63b-1807-49da-9846-82091ac8971d \
+az monitor log-analytics query -w "$LAW_ID" \
   --analytics-query "ContainerAppSystemLogs_CL | where TimeGenerated > ago(1h) \
   | where ContainerAppName_s == 'crawl4ai-service' \
   | where Reason_s in ('SuccessfulRescale','AssigningReplica') \
@@ -257,9 +257,9 @@ curl -s -X POST "$CRAWL4AI_API_URL/crawl" -H "Authorization: Bearer $CRAWL4AI_AP
 
 Swap the URL for any host to answer "can the crawler reach this, and what does
 it get?" — status, timing and `error_message` all come back inside a 200.
-Verified 2026-07-30: egress is `172.199.49.233` (West Europe; the environment
-has **no VNet integration**, so that address comes from Azure's shared SNAT pool
-and is not contractually stable).
+Verified 2026-07-30: egress is a single Azure West Europe address (the address
+itself is in `PRIVATE.md`; the environment has **no VNet integration**, so it
+comes from Azure's shared SNAT pool and is not contractually stable).
 
 If you do need a real shell, `az containerapp exec` has two traps: it needs a
 pty (wrap it in `script -qec "…" /dev/null`), and the command is carried **in

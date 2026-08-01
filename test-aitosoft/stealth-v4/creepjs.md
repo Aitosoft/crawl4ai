@@ -6,7 +6,7 @@ host connection:
 candidate:4261542759 1 udp 2113937151 38eca35a-fea2-4ed2-a4d9-27307842589a.local 47370 typ host generation 0 ufrag kvg4 network-cost 999
 foundation/ip:
 type & base ip: 4261542759
-ip: 172.199.49.233
+ip: <redacted — PRIVATE.md>
 sdp capabilities:  979f41d7 ×
 **audio/opus**
 Clock Rates: 48000
@@ -123,7 +123,7 @@ urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id
 urn:ietf:params:rtp-hdrext:ssrc-audio-level
 urn:ietf:params:rtp-hdrext:toffset
 stun connection:
-candidate:1228448401 1 udp 1677729535 172.199.49.233 3805 typ srflx raddr 0.0.0.0 rport 0 generation 0 ufrag kvg4 network-cost 999
+candidate:1228448401 1 udp 1677729535 <redacted — PRIVATE.md> 3805 typ srflx raddr 0.0.0.0 rport 0 generation 0 ufrag kvg4 network-cost 999
 devices (0):
 blocked
 9.70ms **Timezone** aeaa9c59
