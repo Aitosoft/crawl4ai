@@ -654,3 +654,48 @@ def test_the_wall_clock_fence_is_a_504_and_ours(fixture_origin, production_path)
     assert outcome.http_status == 504
     assert outcome.envelope is None
     assert outcome.elapsed_s < 3, "the fence must fire before the origin answers"
+
+
+# ── the realistic-page instrument (tasks/pool-residency-unbounded.md) ─────
+
+
+def test_the_heavy_route_has_the_shape_of_a_real_page(fixture_origin):
+    """`/heavy` exists to price a pool browser against a page like the ones we
+    actually crawl, because the 139-165 MB per-browser figure — the input to
+    the `max_browsers` cap — was measured against `/ok`, which is 1.5 KB of
+    markup with no images.
+
+    Pinned because an instrument that drifts silently changes a capacity
+    number nobody re-measures. The targets are the median of 62 stored real
+    captures under `test-aitosoft/artifacts/`: 236 KB, 17 `<img>`, 876 tags.
+    Bands are wide — this asserts "still the right order of magnitude", not a
+    byte count.
+
+    The decoded-image term is the part `/ok` cannot show at all: a solid-colour
+    PNG costs a few KB on the wire and `w*h*4` bytes in the renderer, and
+    `config.yml` sets `text_mode: false` so production really does decode them.
+    """
+    import re
+    import urllib.request
+
+    html = urllib.request.urlopen(fixture_origin.url("/heavy")).read().decode()
+
+    assert 150_000 < len(html) < 400_000, f"heavy page is {len(html)} bytes"
+    assert len(re.findall(r"<img", html)) == 17
+    assert 600 < len(re.findall(r"<[a-zA-Z]", html)) < 1500
+
+    png = urllib.request.urlopen(fixture_origin.base_url + "/img/1920x1080.png").read()
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(png) < 100_000, "wire bytes must stay small; the decode is the cost"
+
+
+def test_the_heavy_page_captures_successfully(fixture_origin, production_path):
+    """It has to be a *healthy* page, or a memory figure taken against it is a
+    figure for a failed capture. Same contract as the `/ok` control."""
+    outcome = production_path.crawl(
+        fixture_origin.url("/heavy"), delay_before_return_html=SHORT_WAIT
+    )
+
+    assert outcome.success, outcome.failure_class
+    assert CONTENT_MARKER in outcome.markdown
+    assert CONTENT_TAIL_MARKER in outcome.markdown, "the tail was swallowed"

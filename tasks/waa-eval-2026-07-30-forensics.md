@@ -755,28 +755,64 @@ for the sweep than the original reading, not better: every wave that starts from
 an idle service reproduces it exactly, and no amount of scale rule fixes the first
 two minutes.
 
-### 11d. The actual cause: nothing bounds pool residency
+### 11d. Nothing bounds pool residency — real, but NOT "the actual cause"
+
+> **Superseded in part, 2026-08-02.** This section was headed "the actual
+> cause". It is not the cause; the measurements are in
+> `tasks/pool-residency-unbounded.md`. Corrections inline below — the section is
+> kept rather than rewritten, because *how* it was wrong is the lesson.
 
 `render_capacity: 2` bounds concurrent renders; `max_pages: 5` bounds pages per
 browser; **nothing bounds the number of live browsers.** Residency is governed by
 idle TTL, so the browser count tracks distinct configs seen in the last TTL
-window, not concurrency — btv4v held 8 browsers to do 2 renders' worth of work,
-which at 165 MB each is the 4 GiB.
+window, not concurrency. ~~btv4v held 8 browsers to do 2 renders' worth of work,
+which at 165 MB each is the 4 GiB.~~
+
+**Corrected.** The 8 came from one `📊 Pool:` line — emitted *after* that
+janitor iteration's closes, and only while `mem_pct > 60`. Counted properly
+(cumulative create/close over 276 log events) the peak is **9 on btv4v, 10 on
+5hbkd**. And the arithmetic never closed: 9 × 165 MB is ~36 % of a 4 GiB
+replica, not "the 4 GiB". Regressing all 68 pool-stats lines gives
+
+```
+mem% = 59.3 + 2.65 × browsers      n = 68, r² = 0.216
+```
+
+so a resident browser is ~109 MB, browser count explains **22 %** of the
+variance, and **~59 % of the replica is baseline that no eviction policy can
+reach and that nobody has explained**. Sizing that baseline is now the open
+question; it is worth more than the cap that was built for this section.
 
 It thrashes on top of that: **125 creates, 132 closes, for 10–12 distinct
 signatures per replica.** Under pressure the janitor drops `cold_ttl` to 30 s,
 closes browsers, and the next request for the same config must launch a fresh one
-— allocating while memory is tight, which is what trips the guard.
+— allocating while memory is tight. (Removed 2026-08-02. Note it was aimed at the
+22 % term and could never relieve the 59 % it was reacting to.)
 
-Two corrections to earlier assumptions fall out of the same numbers:
+Two corrections to earlier assumptions fall out of the same numbers — **and both
+have since been corrected again:**
 
 - **MAS's per-company `browser_config` does not defeat pooling.** 243 hosts
-  produced 10–12 distinct signatures per replica, not one per company. The
-  "15,000 companies is 15,000 signatures" worry is unfounded.
+  produced 10–12 distinct signatures per replica, not one per company. ~~The
+  "15,000 companies is 15,000 signatures" worry is unfounded.~~ **Weaker than
+  stated:** the `dcount` was **per replica** over ~5 replicas, so it cannot bound
+  global cardinality, and nobody ran it without the `by`. Structurally it is
+  probably bounded (the persona reference is 11 personas → 10 distinct payloads)
+  but we cannot show MAS runs that file — and `user_agent_mode: "random"`, which
+  is allowlisted and which our own shipped client doc recommends, would make it
+  one signature per request.
 - **The permanent browser is never used.** `Using permanent browser` fired 0
-  times against 224 pool gets, because MAS always sends a `browser_config` and
-  `_sig` never equals `DEFAULT_CONFIG_SIG`. Every replica launches a browser at
-  boot that serves nothing and holds ~165 MB for its whole life.
+  times against 224 pool gets. ~~because MAS always sends a `browser_config` and
+  `_sig` never equals `DEFAULT_CONFIG_SIG`~~ **Wrong reason.** `server.py` builds
+  its config without `enforce_egress`, which every request path applies and which
+  flips `ignore_https_errors` True → False, so the signatures differ in a field
+  no client controls (boot `5e3e8048e7be` vs request `b318c5753575`). It is
+  unreachable **by construction**: a request sending `browser_config: {}` misses
+  too. Every replica launches a browser at boot that serves nothing and holds
+  ~165 MB for its whole life.
+- Also note **224 is hand arithmetic** (125 creates + 53 cold + 46 hot reuses),
+  not a queried figure, and it undercounts: a cold-pool hit that trips promotion
+  returns without logging any `Using …` line.
 
 ### 11e. Method note — this one is worth keeping
 

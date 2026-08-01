@@ -193,11 +193,94 @@ its own load**, on a single cold replica carrying the whole opening burst alone.
 map through one helper. Same defect shape as the `render_error` split above: one
 condition, two wire statuses, and the expensive one was not chosen deliberately.
 
-**This is a symptom fix and is labelled as one.** The cause is that nothing
-bounds how many browsers the pool holds — `render_capacity` bounds renders,
-`max_pages` bounds pages, and residency is governed by idle TTL alone, so 8
-browsers were held to do 2 renders' worth of work at ~139–165 MB each. That is
-`tasks/pool-residency-unbounded.md`, carved out deliberately.
+**This is a symptom fix and is labelled as one.** The cause it named — nothing
+bounds how many browsers the pool holds — is real, but **it is not what made the
+guard fire**; see the 2026-08-02 entry below, which measured it and corrected
+this paragraph.
+
+---
+
+## 2026-08-02 — a cap on live browsers, and the diagnosis it was built on
+
+### `pool.max_browsers` + LRU eviction of idle browsers (`crawler_pool.py`)
+
+`render_capacity` bounded concurrent renders and `max_pages` bounded pages per
+browser; **nothing bounded live browsers**, so residency tracked *distinct
+configs seen in the last TTL window* rather than concurrency. Now capped at
+`pool.max_browsers` (6), enforced in `get_crawler` by evicting the
+least-recently-used **idle** browser.
+
+Verified end to end through `ProductionPath` with real Chromium, 12 crawls with
+distinct `browser_config`s: browsers 1–6 grow the pool, and from #7 every create
+evicts one and the cgroup **flatlines** — +15 MB over six more browsers, against
++168 MB each before the cap.
+
+**The design rule is "never wait", and it is the whole safety argument.**
+`release_crawler` takes the same `LOCK` to decrement `active_requests`, so any
+wait inside `get_crawler` while holding it waits on code that needs the lock the
+waiter holds — a total pool deadlock with no 504, no 429, and no janitor
+recovery. `get_crawler` therefore evicts or refuses, never blocks; the refusal is
+`RenderCapacityExceeded`, the only type `api.py` maps to 429 + `Retry-After`.
+Evicted browsers are closed in a **detached, timeout-bounded task** because
+`close()` carries no timeout of its own and a wedged Chromium closed inline would
+hold the pool lock forever. Unreachable in MAS's traffic anyway: the gate admits
+2 concurrent renders against a cap of 6.
+
+Also removed: the janitor's **memory-adaptive TTL collapse** (`cold_ttl` → 30 s
+above 80 %). It closed browsers exactly when memory was tight so the next request
+had to launch a fresh one — 136 launches for a working set of 10–12 signatures.
+The poll *interval* stays adaptive. The `📊 Pool:` line is now logged
+unconditionally and carries `resident=N/cap`; its old `mem_pct > 60` gate meant
+pool composition was only observable where it was already high, which is what
+made the measurement below cost a Log Analytics regression.
+
+### What the measurements corrected, and this is the important part
+
+- **Peak residency was 9–10 browsers per replica, not 8.** The 8 came from one
+  post-cleanup janitor line plus an inferred permanent browser; counted properly
+  (cumulative create/close over 276 log events) the peak is 9 on `btv4v` and 10
+  on `5hbkd`.
+- **Browsers are not where the memory was.** Regressing all 68 pool-stats lines
+  of the 2026-07-31 probe: `mem% = 59.3 + 2.65 × browsers` (n=68, r² = 0.22).
+  A resident browser costs ~109 MB of a 4096 MB replica, and **~59 % of the
+  replica is baseline no eviction can reach** and nobody has explained. 9 × 165
+  MB is ~36 % of the replica — the record's "that is the whole 4 GiB budget"
+  never closed arithmetically. **So this cap would not have prevented the nine
+  500s and will not prevent the next ones.**
+- **The realistic-page worry was real but small.** A new `/heavy` fixture route
+  (median of 62 stored captures: 236 KB, 17 images, ~900 tags) costs +170.0 MB
+  cgroup per browser against `/ok`'s +142.8 MB — **+19 %**. A pooled browser's
+  cost is the Chromium process, not the page.
+- **`pool-browser-retains-last-page.md` is closed as refuted.** Every pool
+  browser really does keep its last page open (now reported directly by the
+  experiment). But navigating it to `about:blank` returns **0.5 MB of anon per
+  browser even when the page holds a fully-committed 100 MB JS heap** — and the
+  same run proves the instrument is not blind, since loading that heap raised the
+  per-browser cost by exactly +100.5 MB. Per-browser cost is a **ratchet** set by
+  the heaviest page a browser ever loaded, and only closing the browser resets
+  it. That makes eviction the only reclamation mechanism the pool has.
+- **The permanent browser is unreachable by construction, not by contract.**
+  `server.py` builds its config without `enforce_egress`, which every request
+  path applies and which flips `ignore_https_errors` True → False, so the
+  signatures differ in a field no client controls (boot `5e3e8048e7be` vs request
+  `b318c5753575`). The previously recorded reason ("MAS always sends a
+  `browser_config`") is wrong; a request sending `{}` would miss too.
+- **Signature cardinality is *observed* small, not *bounded* small.** The
+  "10–12 per replica, so the 15,000 worry is unfounded" refutation used a
+  `dcount` **per replica** across ~5 replicas, which cannot bound the global
+  count. And `user_agent_mode: "random"` is in `UNTRUSTED_FIELD_ALLOWLIST` and
+  regenerates the UA per construction — one signature per request, a write-only
+  pool — and our own shipped client doc recommends it. The cap is correct under
+  both models, which is now its main justification.
+
+**Not fixed, found in passing:** `monitor_routes.py:273-284` calls
+`init_permanent` inside `async with LOCK`, and `init_permanent` acquires the same
+non-reentrant lock — a self-deadlock that kills the replica permanently.
+Admin-gated, off the traffic path, and it deserves its own attributable change.
+
+Config: `crawler.pool.max_browsers: 6`, `crawler.pool.evict_close_timeout_sec: 30`.
+Tests: `test_crawler_pool.py` 4 → 24, including four that exist specifically to
+turn a deadlock into a failing test rather than a hung suite.
 
 Two smaller items ride along:
 

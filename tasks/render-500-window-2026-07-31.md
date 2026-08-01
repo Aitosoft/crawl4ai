@@ -135,12 +135,26 @@ log facts say the memory was genuinely scarce:
   the 4 GiB was therefore reclaimable, which is consistent with a cold
   container's one-time cache fill; an all-anon cgroup pinned at `memory.max`
   OOM-kills.
-- **The browsers account for it.** At the peak the janitor logged `hot=5,
-  cold=2` plus the permanent = **8 live browsers**. At the measured 165 MB that
-  is ~1.3 GB over baseline; on the unreclaimable `anon` term alone it is still
-  ~1.0 GB. Both are **floors** — the fixture page is a few hundred bytes and
-  each pooled browser retains its last document
-  (`pool-browser-retains-last-page.md`).
+- ~~**The browsers account for it.**~~ **REFUTED 2026-08-02 — this bullet is
+  the load-bearing error in this file.** It read: "at the peak the janitor
+  logged `hot=5, cold=2` plus the permanent = 8 live browsers. At the measured
+  165 MB that is ~1.3 GB over baseline." **1.3 GB over a 336 MB baseline is
+  ~40 % of a 4 GiB replica, against an observed 100 %.** The arithmetic never
+  closed and the gap — ~2.4 GB, the majority of what the bullet claims to
+  explain — was never noticed.
+
+  Measured since: the peak is **9 browsers on btv4v (10 on 5hbkd)**, counted by
+  cumulative create/close over 276 log events rather than from one
+  post-cleanup janitor line; and regressing all 68 pool-stats lines gives
+  `mem% = 59.3 + 2.65 × browsers` (n=68, r²=0.216) — ~109 MB per resident
+  browser, **22 % of the variance**, against a **59.3 % baseline no eviction can
+  reach**. The same replica read 82.3 % holding 4 browsers and 73.6 % holding 8.
+
+  The "these are floors" hedge was also checked and does not rescue it: a
+  browser holding the *median real page* costs +170.0 MB against `/ok`'s
+  +142.8 MB (**+19 %**), and the retained document returns 0.5 MB of anon when
+  navigated away even at 100 MB of retained heap. See
+  `tasks/pool-residency-unbounded.md`.
 
 ### Both of MAS's questions are answered, and the second one is answered differently
 
@@ -179,8 +193,11 @@ log facts say the memory was genuinely scarce:
 `render_capacity: 2` bounds concurrent **renders**. `max_pages: 5` bounds pages
 **per browser**. Nothing bounds the **number of live browsers** — pool residency
 is governed by idle TTL, so the browser count tracks *distinct configs seen in
-the last TTL window*, not concurrency. btv4v held 8 browsers to do 2 renders'
-worth of work, and at 165 MB each that is the 4 GiB.
+the last TTL window*, not concurrency. ~~btv4v held 8 browsers to do 2 renders'
+worth of work, and at 165 MB each that is the 4 GiB.~~ **Corrected 2026-08-02:
+the peak was 9 (10 elsewhere), and at ~109 MB measured that is ~24 % of the
+replica, not "the 4 GiB". Residency being unbounded is real; it is not what
+tripped the guard.** Capped at `max_browsers: 6` anyway.
 
 The pool then thrashes on top of that. Across the run, all replicas:
 

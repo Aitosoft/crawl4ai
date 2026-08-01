@@ -24,6 +24,27 @@ BASE_IDLE_TTL = CONFIG.get("crawler", {}).get("pool", {}).get("idle_ttl_sec", 30
 MAX_PAGES = CONFIG.get("crawler", {}).get("pool", {}).get("max_pages", 5)
 DEFAULT_CONFIG_SIG = None  # Cached sig for default config
 
+# Aitosoft 2026-08-02 (tasks/pool-residency-unbounded.md): the number of live
+# pool browsers, which nothing bounded before. `render_capacity` bounds
+# concurrent renders and `max_pages` bounds pages per browser; residency was
+# governed by idle TTL alone, so the browser count tracked *distinct configs
+# seen in the last TTL window* rather than concurrency.
+#
+# Read as a module global on every call so tests can monkeypatch it — do NOT
+# capture it into a default argument or a local at import.
+MAX_BROWSERS = CONFIG.get("crawler", {}).get("pool", {}).get("max_browsers", 6)
+
+# How long to let an evicted browser's close() run before giving up on it. The
+# close happens OFF the pool lock (see _close_detached), so this bounds a
+# background task, never the admission path.
+EVICT_CLOSE_TIMEOUT_S = (
+    CONFIG.get("crawler", {}).get("pool", {}).get("evict_close_timeout_sec", 30)
+)
+
+# Strong references to in-flight detached closes. Without this the task is only
+# referenced by the event loop and CPython may collect it mid-close.
+_CLOSING: set = set()
+
 # Aitosoft: force-close browsers that have been stuck busy for too long.
 # If active_requests has stayed > 0 for longer than this, the in-flight pages
 # are almost certainly leaked (e.g. upstream timed out at Azure ingress but
@@ -41,10 +62,21 @@ BUSY_SINCE: Dict[int, float] = {}
 
 # Aitosoft 2026-08-01: how long the permanent browser may sit unused before the
 # janitor closes it. `Using permanent browser` fired **0 times in 224 pool gets**
-# during MAS's 2026-07-31 probe, because they always send a `browser_config` and
-# so `_sig` never equals DEFAULT_CONFIG_SIG — the boot browser served nothing
-# while holding ~139-165 MB for the replica's whole life. `get_crawler` already
-# lazily re-creates it, so closing it is free to be wrong.
+# during MAS's 2026-07-31 probe, while the boot browser held ~139-165 MB for the
+# replica's whole life. `get_crawler` already lazily re-creates it, so closing it
+# is free to be wrong.
+#
+# **The reason recorded here was wrong** (corrected 2026-08-02). It said "because
+# they always send a browser_config". They do, but that is not why: `server.py`
+# builds this browser's config WITHOUT `enforce_egress`, which every request path
+# applies, and `enforce_egress` flips `ignore_https_errors` True -> False. The
+# signatures therefore differ in a field no client controls:
+#     boot sig 5e3e8048e7be  vs  request sig b318c5753575
+# So a request sending `browser_config: {}` misses too, as does every internal
+# /html, /screenshot and /pdf call. The permanent browser is unreachable **by
+# construction**, this TTL always fires, and the lazy re-create branch in
+# get_crawler is dead code in production. Left as-is deliberately: "fixing" it
+# would revive a browser nothing wants.
 PERMANENT_UNUSED_TTL_S = (
     CONFIG.get("crawler", {}).get("pool", {}).get("permanent_unused_ttl_sec", 600)
 )
@@ -111,6 +143,112 @@ def _incr_active(crawler: AsyncWebCrawler) -> int:
     if crawler.active_requests == 1:
         BUSY_SINCE[id(crawler)] = time.time()
     return crawler.active_requests
+
+def resident_browsers() -> int:
+    """Live browsers this pool is holding, counting the permanent one.
+
+    Counts POOL KEYS, not signatures. `_ovf_` keys are separate live browsers
+    under the same signature, so a signature-based count understates residency
+    by exactly the amount that matters under concurrency.
+    """
+    return len(HOT_POOL) + len(COLD_POOL) + (1 if PERMANENT else 0)
+
+
+def _lru_idle_key() -> Optional[str]:
+    """The least-recently-used pool key with no pages in flight, or None.
+
+    `active_requests > 0` is the eviction veto and it is absolute: a browser
+    serving a request is never a candidate, which is what makes this safe to
+    run on the admission path. The stuck-slot case (a browser whose
+    `active_requests` never comes back down) belongs to `_force_close_stuck`
+    and is deliberately NOT duplicated here — two mechanisms force-closing the
+    same browser is how a double-close race gets written.
+
+    PERMANENT is never a candidate: `_close_unused_permanent` owns its
+    lifecycle, and it is not in either pool dict anyway.
+    """
+    best_key, best_used = None, None
+    for pool in (COLD_POOL, HOT_POOL):
+        for key, crawler in pool.items():
+            if _active(crawler) > 0:
+                continue
+            used = LAST_USED.get(key, 0.0)
+            if best_used is None or used < best_used:
+                best_key, best_used = key, used
+    return best_key
+
+
+def _close_detached(crawler: AsyncWebCrawler, key: str, reason: str) -> None:
+    """Close a browser that has ALREADY been removed from the pool, off-lock.
+
+    Why not `await crawler.close()` inline: this runs from `get_crawler`, which
+    holds LOCK, and `close()` carries no timeout of its own — a wedged Chromium
+    would hold the pool lock indefinitely, and `release_crawler` needs that same
+    lock to bring `active_requests` back down. That is a total-pool deadlock
+    reachable from the admission path of every render, which is strictly worse
+    than the 429 this whole change exists to avoid. `tasks/render-retry-
+    unbounded-hang.md` paid for this lesson once already.
+
+    The browser is unreachable from the pool before this is called, so the task
+    needs no lock and nothing waits on it.
+    """
+
+    async def _run() -> None:
+        try:
+            await asyncio.wait_for(crawler.close(), EVICT_CLOSE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"⏱️  Evicted browser did not close within "
+                f"{EVICT_CLOSE_TIMEOUT_S}s (key={key[:16]}, {reason}) — "
+                f"leaked to the OS; the pool no longer references it"
+            )
+        except Exception as exc:  # noqa: BLE001 - teardown must never propagate
+            logger.warning(f"Evicted browser close failed (key={key[:16]}): {exc}")
+
+    task = asyncio.create_task(_run())
+    _CLOSING.add(task)
+    task.add_done_callback(_CLOSING.discard)
+
+
+def _evict_for_capacity(headroom: int = 1) -> int:
+    """Make room for `headroom` more browsers by evicting idle LRU ones.
+
+    Caller MUST hold LOCK. Returns how many were evicted. **Never awaits and
+    never blocks** — that is the whole safety argument. If no idle browser
+    exists it returns having freed less than asked, and the caller decides;
+    it does not wait for one to appear.
+
+    The alternative design — wait for a browser to go idle — is what makes a
+    capped pool deadlock. `release_crawler` takes the same LOCK to decrement
+    `active_requests`, so waiting here while holding it means waiting for an
+    event that can only be produced by code that needs the lock we are holding.
+    Even releasing the lock to wait is unsafe on this path: `get_crawler` sits
+    in the UNFENCED gap between render admission and the 180 s wall-clock fence
+    (api.py acquires the gate, then gets a crawler, then starts the fence), and
+    the budget from there to Azure ingress's 240 s is ~40 s, most of which a
+    browser launch can already consume.
+    """
+    evicted = 0
+    while resident_browsers() + headroom > MAX_BROWSERS:
+        key = _lru_idle_key()
+        if key is None:
+            break
+        pool = HOT_POOL if key in HOT_POOL else COLD_POOL
+        crawler = pool.pop(key, None)
+        idle_for = time.time() - LAST_USED.get(key, time.time())
+        LAST_USED.pop(key, None)
+        USAGE_COUNT.pop(key, None)
+        if crawler is None:
+            continue
+        BUSY_SINCE.pop(id(crawler), None)
+        logger.info(
+            f"♻️  Evicting LRU idle browser (key={key[:16]}, idle={idle_for:.0f}s, "
+            f"resident={resident_browsers()}/{MAX_BROWSERS})"
+        )
+        _close_detached(crawler, key, "max_browsers cap")
+        evicted += 1
+    return evicted
+
 
 async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
     """Get crawler from pool with tiered strategy.
@@ -212,12 +350,18 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
         # same answer — so raise the same exception rather than inventing a
         # second vocabulary for it. See tasks/render-500-window-2026-07-31.md S1.
         #
-        # This is a symptom fix and is labelled as one: the cause is that
-        # nothing bounds how many browsers the pool holds (residency is governed
-        # by idle TTL alone, so 8 browsers were held to do 2 renders' worth of
-        # work at ~139-165 MB each). That is tasks/pool-residency-unbounded.md,
-        # carved out deliberately. The 429 makes the symptom cheap; it does not
-        # remove the cause.
+        # This is a symptom fix and was labelled as one. **The cause it named
+        # was wrong**, corrected 2026-08-02: residency being unbounded is real
+        # (measured peak 9-10 browsers per replica, not the 8 the record said),
+        # but it does not explain the pressure. Regressing the 68 pool-stats
+        # lines of that probe gives
+        #     mem% = 59.3 + 2.65 * browsers        (n=68, r^2=0.22)
+        # so a resident browser costs ~109 MB of a 4096 MB replica and browser
+        # count explains 22 % of the variance. ~59 % of the replica is baseline
+        # that no eviction can reach and that nobody has accounted for.
+        # MAX_BROWSERS now bounds residency by construction, but **this guard
+        # will still fire on the 59.3 %** — sizing that term is the open work
+        # (tasks/pool-residency-unbounded.md, "Still open").
         mem_pct = get_container_memory_percent()
         if mem_pct >= MEM_LIMIT:
             from aitosoft_admission import RenderCapacityExceeded
@@ -231,6 +375,42 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
             raise RenderCapacityExceeded(
                 f"memory at {mem_pct:.1f}% (limit {MEM_LIMIT}%), refusing new browser"
             )
+
+        # Aitosoft 2026-08-02: bound residency by construction, not by a
+        # threshold on a reading (tasks/pool-residency-unbounded.md).
+        #
+        # Evict LRU idle browsers to make room. If nothing is idle we refuse
+        # rather than wait — see _evict_for_capacity for why waiting here is a
+        # deadlock. Refusal reuses RenderCapacityExceeded because that is the
+        # ONLY exception api.py maps to 429 + Retry-After; a new exception type
+        # would fall into the generic `except Exception` and become the 500 MAS
+        # retries three times, which is the regression this file already carries
+        # a comment about above.
+        #
+        # In MAS's traffic this refusal is unreachable: the render gate admits
+        # at most `render_capacity` (2) concurrent renders, each holding exactly
+        # one pool browser, so at a cap of 6 there are always >= 3 idle
+        # candidates. It is reachable only from the ungated endpoints (/md,
+        # /html, /screenshot, /pdf, streaming), which MAS does not use.
+        if resident_browsers() >= MAX_BROWSERS:
+            _evict_for_capacity(headroom=1)
+            if resident_browsers() >= MAX_BROWSERS:
+                from aitosoft_admission import RenderCapacityExceeded
+
+                busy = sum(
+                    1
+                    for c in list(HOT_POOL.values()) + list(COLD_POOL.values())
+                    if _active(c) > 0
+                )
+                logger.error(
+                    f"🚧 Browser cap reached and nothing is idle: "
+                    f"resident={resident_browsers()}/{MAX_BROWSERS}, busy={busy}, "
+                    f"hot={len(HOT_POOL)}, cold={len(COLD_POOL)} — refusing"
+                )
+                raise RenderCapacityExceeded(
+                    f"browser pool at capacity ({resident_browsers()}/"
+                    f"{MAX_BROWSERS}, {busy} busy), refusing new browser"
+                )
 
         # Create new browser (either no match in pool, or existing ones at capacity)
         global OVERFLOW_SEQ
@@ -381,13 +561,27 @@ async def janitor():
     while True:
         mem_pct = get_container_memory_percent()
 
-        # Adaptive intervals and TTLs
-        if mem_pct > 80:
-            interval, cold_ttl, hot_ttl = 10, 30, 120
-        elif mem_pct > 60:
-            interval, cold_ttl, hot_ttl = 30, 60, 300
-        else:
-            interval, cold_ttl, hot_ttl = 60, BASE_IDLE_TTL, BASE_IDLE_TTL * 2
+        # Aitosoft 2026-08-02: the POLL RATE stays adaptive; the TTLs no longer
+        # are (tasks/pool-residency-unbounded.md).
+        #
+        # This used to collapse cold_ttl to 30 s and hot_ttl to 120 s above 80 %
+        # memory. That is the thrash engine: it closed browsers precisely when
+        # memory was tight, and the next request for that same config had to
+        # launch a fresh one — allocating while allocation was the problem. Over
+        # MAS's 2026-07-31 probe it produced 136 launches for a working set of
+        # 10-12 signatures per replica.
+        #
+        # It was also aimed at the wrong term. Regressing the 68 pool-stats lines
+        # from that probe gives `mem% = 59.3 + 2.65 * browsers` (r^2 = 0.22): a
+        # resident browser costs ~109 MB of a 4096 MB replica, and ~59 % of the
+        # replica is baseline that no eviction policy can reach. Shedding
+        # browsers to relieve that baseline could not work, and did not.
+        #
+        # `MAX_BROWSERS` now bounds residency by construction, so the TTL's only
+        # remaining job is reclaiming genuinely idle browsers on a quiet replica
+        # — which is a constant-time policy, not a pressure-driven one.
+        interval = 10 if mem_pct > 80 else (30 if mem_pct > 60 else 60)
+        cold_ttl, hot_ttl = BASE_IDLE_TTL, BASE_IDLE_TTL * 2
 
         await asyncio.sleep(interval)
 
@@ -456,12 +650,19 @@ async def janitor():
             # below it, so it is up to `interval` seconds staler than the
             # hot/cold counts printed beside it. Do not pair them as
             # simultaneous.
-            if mem_pct > 60:
-                logger.info(
-                    f"📊 Pool: hot={len(HOT_POOL)}, cold={len(COLD_POOL)}, "
-                    f"permanent={'yes' if PERMANENT else 'no'}, "
-                    f"mem={mem_pct:.1f}%, {memory_breakdown()}"
-                )
+            # Aitosoft 2026-08-02: logged unconditionally now, and it carries
+            # `resident=`. The `mem_pct > 60` gate meant pool composition was
+            # only observable while memory was already high — so the one
+            # question this line exists to answer ("does the browser count
+            # explain the memory?") could only be asked on the half of the
+            # data where it does not. Answering it cost a Log Analytics
+            # regression that a full-coverage log line would have made free.
+            logger.info(
+                f"📊 Pool: hot={len(HOT_POOL)}, cold={len(COLD_POOL)}, "
+                f"permanent={'yes' if PERMANENT else 'no'}, "
+                f"resident={resident_browsers()}/{MAX_BROWSERS}, "
+                f"mem={mem_pct:.1f}%, {memory_breakdown()}"
+            )
 
 
 async def _close_unused_permanent(now: float) -> None:

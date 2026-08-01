@@ -4,7 +4,17 @@
 table was re-ordered around the sweep window. Row numbers are **not stable
 across revisions** — cross-references name the task file, never the number.
 
-**What that image taught, and it is the fourth session in a row to teach it:**
+**Fifth session in a row, 2026-08-02, and the biggest one yet:**
+`pool-residency-unbounded.md` said 8 browsers at 139–165 MB each "is the whole
+4 GiB budget" and was therefore the cause of MAS's nine 500s. Measured: peak was
+9–10 browsers (counted properly, by cumulative create/close from the logs, not
+from one post-cleanup janitor line), and the memory regression says browsers are
+**~22 % of the variance** against a **59.3 % baseline nobody has explained**.
+The arithmetic in the record never closed — 9 × 165 MB is ~36 % of the replica,
+not "the whole budget" — and no session had checked it. **Check the arithmetic
+in a diagnosis, not just its logic.**
+
+**What the 2026-08-01 image taught, and it was the fourth session in a row to teach it:**
 the task file was materially wrong about something load-bearing.
 `detector-round3-evidence-vs-inference.md` said
 "the four caught hosts prove the pattern side already works", so moving the
@@ -81,6 +91,13 @@ reason is a window, not a re-rating of the task:
   their word.
 - The 429 makes the symptom cheap. It does not make it rare.
 
+  **Amended 2026-08-02, after building it:** the urgency argument above stands
+  on "it is the observed cause", and **that turned out to be false** — the cap
+  bounds ~22 % of the variance in the memory reading, not the thing that fires
+  the guard. It was built anyway (cheap, safe, and the only reclamation the pool
+  has), but the deadline pressure belongs to
+  `replica-memory-baseline-unexplained.md` now, not here.
+
 **One thing that is not code and may matter more than either:** `minReplicas: 1`
 removes the scale-from-zero condition outright. Framed as standing spend in
 `render-500-window-2026-07-31.md` — but it does not have to be standing. It can
@@ -91,12 +108,13 @@ into an operational step. Tero's call either way; price it before the sweep.
 
 | # | Task | Gate | Why here |
 |---|------|------|----------|
-| 1 | `pool-residency-unbounded.md` + `pool-browser-retains-last-page.md` | none — **price the two together** | **Promoted 2026-08-02 (was #6/#7).** The observed cause of MAS's 9 × 500, and the only open item on the path every sweep fetch takes. `render_capacity` bounds renders and `max_pages` bounds pages; **nothing bounds live browsers**, so 8 were held to do 2 renders' worth of work at 139–165 MB each (~130 MB unreclaimable `anon`). The janitor's adaptive TTL then thrashes it — 125 creates and 132 closes for 10–12 signatures — by launching browsers precisely when memory is tight. Needs `max_browsers` + LRU eviction of *idle* browsers. **Do not pick the cap before the retained-page cost is priced**, or the cap gets chosen twice. Do this before the sweep, not during it. |
-| 2 | `cleaned-html-collapse-guard.md` **part 2** | none | **Part 1 DONE and DEPLOYED 2026-08-01.** Guard ships as visible-text-in vs markdown-out — **not** the `cleaned_html` ratio the file proposed, refuted twice by measurement. `render_error` wire-status split fixed; one mapping site for both render modes. **Root cause NOT solved: four shapes, three mechanisms**, and `apteam.fi`'s fingerprint fits at least two — part 2 is three separate repairs, sequenced in the task file. Their `revisol.fi` half shrank for free when `challenge-interstitial-resolve.md` phase 2 shipped. |
-| 3 | `flaky-fence-test-margin.md` | none — ride along in the next image | **New 2026-08-02.** `test_the_wall_clock_fence_is_a_504_and_ours` asserts `elapsed_s < 3` against a 1 s fence and fails ~1 run in 3. **Our entire pre-deploy gate is "the offline suite is green"**; a test that cries wolf trains sessions to wave through red, which is the failure mode CLAUDE.md's secret-check note already names in a different context. Smallest item on this list and it protects every other one. |
-| 4 | `blocked-host-retry-economy.md` | none — **but re-read the interaction first** | Still real, smaller: MAS no longer retries origin-class failures, so a blocked host costs ~4 page loads, not ~12–16. Our half is **measured, not inferred**: exactly 2 document loads per request, via `FixtureOrigin.hits_for()` against `/block/varnish-403`. **New cost the last image created and this file does not yet say:** the patchright retry is now *also* the slow-hydration rescue path (10 s capture wait), so lever 1 — "skip patchright on a reputation block" — now also skips the `revisol.fi`-class rescue for anything it misclassifies. Price that before narrowing the trigger. Its classifier is still `residential-egress-retry-path.md`'s trigger. |
-| 5 | `base-config-boolean-defaults-never-applied.md` | none | `simulate_user` has never taken effect and the next boolean won't either. Small. Decide whether the setting should exist at all rather than restoring an intent nobody measured — "delete the line" is a legitimate outcome. |
-| 6 | `static-fallback-within-fence.md` | none — **re-price, and the expected outcome is "close"** | **Drop, not build**, on current evidence. MAS's probe: 0 × 504, nothing within 145 s of the 180 s fence — consistent with `done/render-retry-unbounded-hang.md` having removed the failure this was sized against. 243 fetches is not a workload, but it is the only dataset the current image has seen. **Closing it is real work**: write down the number and the reasoning, or it gets re-litigated every quarter. |
+| 1 | `pool-residency-unbounded.md` + `pool-browser-retains-last-page.md` | **BUILT 2026-08-02, awaiting Tier 1 + deploy** | `max_browsers: 6` + LRU eviction of *idle* browsers shipped into `crawler_pool.py`; the memory-adaptive TTL collapse (the thrash engine) is gone; retained-page task **closed as refuted**. **Read the task file before citing this row:** the claim this task carried — "the observed cause of MAS's 9 × 500" — **is false and was measured false.** Peak residency was 9–10 browsers, not 8, but regressing the probe's 68 pool-stats lines gives `mem% = 59.3 + 2.65 × browsers` (n=68, r²=0.22): a browser costs ~109 MB and **59 % of the replica is baseline no cap can reach**. The cap bounds a real term worth ~22 % of the variance; it will not stop the guard firing. **The new #1 question is what the 59.3 % is** — now #2 below. |
+| 2 | `replica-memory-baseline-unexplained.md` | none — **coordinator to place it; the implementing session opened it** | **New 2026-08-02, and it is the term everything else has been missing.** `mem% = 59.3 + 2.65 × browsers` (n=68, r²=0.22): ~2.4 GB of a 4 GiB replica is baseline that appears with traffic (boot is 8.2 %), does not scale with residency, and is what leaves the guard only ~9.7 browsers of headroom. Every per-browser figure we have measures an **idle** pooled browser — the cost of a render *in flight* has never been measured on any instrument. Leading candidate is in-render transient memory, in which case the lever is `render_capacity` (already the ACA scale-rule knob), not the pool. First step is a Log Analytics query against data we already hold. |
+| 3 | `cleaned-html-collapse-guard.md` **part 2** | none | **Part 1 DONE and DEPLOYED 2026-08-01.** Guard ships as visible-text-in vs markdown-out — **not** the `cleaned_html` ratio the file proposed, refuted twice by measurement. `render_error` wire-status split fixed; one mapping site for both render modes. **Root cause NOT solved: four shapes, three mechanisms**, and `apteam.fi`'s fingerprint fits at least two — part 2 is three separate repairs, sequenced in the task file. Their `revisol.fi` half shrank for free when `challenge-interstitial-resolve.md` phase 2 shipped. |
+| 4 | `flaky-fence-test-margin.md` | none — ride along in the next image | **New 2026-08-02.** `test_the_wall_clock_fence_is_a_504_and_ours` asserts `elapsed_s < 3` against a 1 s fence and fails ~1 run in 3. **Our entire pre-deploy gate is "the offline suite is green"**; a test that cries wolf trains sessions to wave through red, which is the failure mode CLAUDE.md's secret-check note already names in a different context. Smallest item on this list and it protects every other one. |
+| 5 | `blocked-host-retry-economy.md` | none — **but re-read the interaction first** | Still real, smaller: MAS no longer retries origin-class failures, so a blocked host costs ~4 page loads, not ~12–16. Our half is **measured, not inferred**: exactly 2 document loads per request, via `FixtureOrigin.hits_for()` against `/block/varnish-403`. **New cost the last image created and this file does not yet say:** the patchright retry is now *also* the slow-hydration rescue path (10 s capture wait), so lever 1 — "skip patchright on a reputation block" — now also skips the `revisol.fi`-class rescue for anything it misclassifies. Price that before narrowing the trigger. Its classifier is still `residential-egress-retry-path.md`'s trigger. |
+| 6 | `base-config-boolean-defaults-never-applied.md` | none | `simulate_user` has never taken effect and the next boolean won't either. Small. Decide whether the setting should exist at all rather than restoring an intent nobody measured — "delete the line" is a legitimate outcome. |
+| 7 | `static-fallback-within-fence.md` | none — **re-price, and the expected outcome is "close"** | **Drop, not build**, on current evidence. MAS's probe: 0 × 504, nothing within 145 s of the 180 s fence — consistent with `done/render-retry-unbounded-hang.md` having removed the failure this was sized against. 243 fetches is not a workload, but it is the only dataset the current image has seen. **Closing it is real work**: write down the number and the reasoning, or it gets re-litigated every quarter. |
 | — | `preflight-batch-endpoint.md` | **held — MAS's go-ahead is the only gate** | **Do not build speculatively — their words.** No sweep date, and timing is not their driver; it runs when their system is ready and they will give real notice. Out of the numbered order on purpose: it is not "next", it is "on request". |
 | — | `residential-egress-retry-path.md` | **held — MAS's next sweep, then Tero** | Population derived rather than asserted: **floor 6, ceiling 29** (4 of the 33 verdicts were our own false positives, closed by `detector-round3`; 4 are a hard 403 template no wait can fix; 23 undetermined until MAS re-scrapes against the shipped image). Phase 1 did **not** shrink it — it made the 23 measurable for free. Still no evidence either way that a residential IP gets through; the dev container's Finnish consumer ISP egress can test that when the count is real. **Quote the floor with its condition attached, never a bare number.** |
 | — | `static-mode-tls-impersonation.md` | held behind `residential-egress` | Hardens the path a static fallback would make everything lean on. IP has dominated fingerprint in every case measured so far; the residential probe is what would change that. |
@@ -170,13 +188,24 @@ Found on our side 2026-08-01 (logs + offline probe, zero traffic — see
   04:40; all nine 500s are on the one replica that came up at 04:44:49, and the
   second replica served its first render at 04:46:54 — after eight of the nine.
 - **Nothing bounds the number of live browsers.** `render_capacity` bounds
-  renders and `max_pages` bounds pages; residency is governed by idle TTL alone,
-  so 8 browsers were held to do 2 renders' worth of work. 125 creates and 132
-  closes for **10–12 distinct signatures per replica** — so per-company
-  `browser_config` does *not* defeat pooling, and the "15,000 signatures" worry
-  is unfounded. Carved out as M1.
-- **The permanent browser is never used** — 0 hits in 224 pool gets, because MAS
-  always sends a `browser_config`. ~130 MB of `anon` per replica, for its whole life.
+  renders and `max_pages` bounds pages; residency was governed by idle TTL alone.
+  ~~so 8 browsers were held to do 2 renders' worth of work~~ **Corrected
+  2026-08-02: peak was 9–10 per replica, and browsers are not where the memory
+  is** — `mem% = 59.3 + 2.65 × browsers`, r² = 0.22. Capped at 6 anyway; the
+  59.3 % baseline is now the open question.
+- **The "15,000 signatures" refutation is weaker than it reads.** The `dcount`
+  was **per replica** over ~5 replicas, so it cannot bound global cardinality;
+  nobody ran it without the `by`. Structurally it is probably bounded (the
+  persona reference is 11 personas → 10 distinct payloads) but **we cannot show
+  MAS runs that file**, and `user_agent_mode: "random"` — allowlisted, and
+  recommended by our own shipped client docs — would make it one signature per
+  request. The cap is correct under both models; that is now its main
+  justification.
+- **The permanent browser is never used** — 0 hits in 224 pool gets. ~130 MB of
+  `anon` per replica for its whole life. ~~because MAS always sends a
+  `browser_config`~~ **Corrected 2026-08-02: because `init_permanent` skips
+  `enforce_egress`**, so its signature differs from every request's in
+  `ignore_https_errors`. It is unreachable by construction, not by contract.
 
 Found on our side 2026-08-01 (`cleaned-html-collapse-guard.md` part 1, offline,
 zero traffic):

@@ -59,6 +59,8 @@ Routes (every default is a module constant; every one is overridable):
     /hydrate-after/{s}                    near-empty body that paints after N s
     /redirect-to/{route}                  301 into any route above
     /collapse/{shape}                     large body carrying one swallowing shape
+    /heavy                                a page the SHAPE of a real SME site
+    /img/{w}x{h}.png                      a real decodable image of that size
 
     ?stall=<s>        server sleeps before responding (wall-clock fence)
     ?status=<n>       override the status code of any route
@@ -330,6 +332,11 @@ class Reply:
     body: str = ""
     content_type: str = "text/html; charset=utf-8"
     headers: Dict[str, str] = field(default_factory=dict)
+    raw: Optional[bytes] = None  # set for non-text bodies (images)
+
+    def with_bytes(self, raw: bytes) -> "Reply":
+        self.raw = raw
+        return self
 
 
 Handler = Callable[[re.Match, Dict[str, List[str]]], Reply]
@@ -495,6 +502,138 @@ def _collapse(m, query):
     )
 
 
+#: `/heavy` defaults, taken from **our own stored captures**, not from
+#: intuition: 62 real result files under `test-aitosoft/artifacts/` have a
+#: median of 236 KB of `html`, 17 `<img>` elements and 876 element tags (the
+#: solwers.com pages reach 721 KB / 2151 tags).
+#:
+#: This route exists because `pool-residency-unbounded.md` sized a browser-cost
+#: figure — and therefore a memory cap — against `/ok`, which is **1.2 KB of
+#: markup with no images at all**. A per-browser cost measured that way is a
+#: floor, and a cap derived from a floor is too generous. See
+#: `experiment_pool_memory.py --route`.
+#:
+#: The image mix is what dominates and what `/ok` cannot show: decoded image
+#: memory is `w*h*4` bytes regardless of how few bytes the PNG took on the wire,
+#: so a page whose *transfer* is 240 KB can pin tens of MB in the renderer.
+#: `config.yml` sets `text_mode: false` on purpose (blocking images is a clean
+#: fingerprint signal), so production really does decode all of them.
+#: 110 blocks x ~8 tags -> ~915 element tags; the padding takes the transfer to
+#: ~236 KB. Byte count is the LEAST load-bearing of the three terms — decoded
+#: images and DOM node count are what the renderer actually holds — but it is
+#: the one the stored captures measure directly, so it is matched anyway.
+HEAVY_BLOCKS = 110
+HEAVY_PAD_BYTES = 200_000
+HEAVY_IMAGE_MIX: Tuple[Tuple[int, int, int], ...] = (
+    (1, 1920, 1080),  # hero
+    (4, 800, 600),  # section images
+    (12, 400, 300),  # thumbnails / logos
+)  # 17 images, ~21.8 MB decoded
+
+
+def _png(width: int, height: int) -> bytes:
+    """A real, decodable PNG of exactly `width`x`height`, built by hand.
+
+    Solid colour, so zlib takes it to a few KB on the wire while the renderer
+    still allocates the full `w*h*4` decoded bitmap. That gap is the point: it
+    is what makes a 240 KB page cost tens of MB of browser memory, and it is
+    invisible to any fixture that serves markup only. No Pillow dependency —
+    the devcontainer does not have it and this is 20 lines.
+    """
+    import struct
+    import zlib
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + tag
+            + data
+            + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        )
+
+    # colour type 2 (truecolour), 8-bit; one filter byte per scanline.
+    row = b"\x00" + b"\x9a\xb4\xc8" * width
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(row * height, 6))
+        + chunk(b"IEND", b"")
+    )
+
+
+_PNG_CACHE: Dict[Tuple[int, int], bytes] = {}
+
+
+@_route(r"/img/([0-9]+)x([0-9]+)\.png")
+def _image(m, query):
+    key = (int(m.group(1)), int(m.group(2)))
+    if key not in _PNG_CACHE:
+        _PNG_CACHE[key] = _png(*key)
+    return Reply(200, "", "image/png").with_bytes(_PNG_CACHE[key])
+
+
+@_route(r"/heavy")
+def _heavy(_m, query):
+    """A page with the SHAPE of the pages MAS actually crawls.
+
+    `/ok` answers "did we capture the content"; this answers "what does holding
+    a browser for this page cost". Parameterised so a measurement can sweep it:
+    `?blocks=` element count, `?images=` how many of the mix to serve,
+    `?bytes=` extra inline CSS, `?heap_mb=` JS heap the page allocates and keeps
+    reachable (a framework's retained state, which our markup cannot imitate —
+    default 0, so it is opt-in and never silently inflates a figure).
+    """
+    blocks = int(_one(query, "blocks", HEAVY_BLOCKS))
+    want_images = int(_one(query, "images", sum(n for n, _w, _h in HEAVY_IMAGE_MIX)))
+    heap_mb = float(_one(query, "heap_mb", 0))
+
+    sizes: List[Tuple[int, int]] = []
+    for count, width, height in HEAVY_IMAGE_MIX:
+        sizes.extend([(width, height)] * count)
+    sizes = (sizes * (want_images // max(1, len(sizes)) + 1))[:want_images]
+
+    parts = [CONTENT_HTML]
+    for i in range(blocks):
+        parts.append(
+            f"<section class='b{i}'><h3>Osasto {i}</h3>"
+            f"<p>Kuvaus {i}: teollisuuden kunnossapitopalvelut, "
+            f"projektitoimitukset ja varaosalogistiikka. "
+            f"Yhteys: osasto{i}@yritys.fi.</p>"
+            f"<ul><li>Palvelu {i}a</li><li>Palvelu {i}b</li>"
+            f"<li>Palvelu {i}c</li></ul></section>"
+        )
+        if i < len(sizes):
+            width, height = sizes[i]
+            parts.append(
+                f"<img src='/img/{width}x{height}.png' width='{width}' "
+                f"height='{height}' alt='kuva {i}'>"
+            )
+    for i in range(blocks, len(sizes)):
+        width, height = sizes[i]
+        parts.append(
+            f"<img src='/img/{width}x{height}.png' width='{width}' "
+            f"height='{height}' alt='kuva {i}'>"
+        )
+
+    heap_js = ""
+    if heap_mb > 0:
+        cells = int(heap_mb * 1024 * 1024 / 8)
+        # Stride 512 Float64s = one 4 KiB page. A coarser stride leaves most of
+        # the ArrayBuffer as untouched zero pages that the kernel never commits,
+        # so `heap_mb=100` shows up as ~13 MB and the control silently lies
+        # about how much memory it put in the page. Measured 2026-08-02.
+        heap_js = (
+            "<script>window.__retained=new Float64Array(%d);"
+            "for(var i=0;i<%d;i+=512){window.__retained[i]=i;}</script>"
+            % (cells, cells)
+        )
+
+    body = (
+        "".join(parts) + _padding(int(_one(query, "bytes", HEAVY_PAD_BYTES))) + heap_js
+    )
+    return Reply(200, PAGE.format(body=body))
+
+
 class _RequestHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"  # keep-alive, so Chromium reuses the socket
 
@@ -527,7 +666,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self._send(reply)
 
     def _send(self, reply: Reply):
-        raw = reply.body.encode("utf-8")
+        raw = reply.raw if reply.raw is not None else reply.body.encode("utf-8")
         self.send_response(reply.status)
         self.send_header("Content-Type", reply.content_type)
         self.send_header("Content-Length", str(len(raw)))

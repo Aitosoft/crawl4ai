@@ -1,75 +1,79 @@
 # Every pool browser keeps its last crawled page open forever
 
-**Status:** Open — diagnosed, upstream behaviour, not bundled with the
-2026-07-30 deploy.
-**Priority:** Low-medium. A steady memory floor per browser, not a leak that
-grows. Worth fixing because it makes memory numbers unreadable, and unreadable
-memory numbers are how the 2026-04 leak hunt started.
-**Effort:** S. **Risk:** low-medium — touches page teardown, which is where
-browser-pool bugs hurt.
-**Evidence:** triaged 2026-07-30 from the WAA side-findings list.
+**Status:** CLOSED 2026-08-02 as **refuted**. The diagnosis is correct. The
+proposed fix recovers nothing, and was measured not to.
+**Priority:** was Low-medium. Now zero — do not re-open it as written; if the
+retained page ever needs to go, the mechanism is closing the browser, not
+navigating the page.
+**Evidence:** this file. Priced together with `pool-residency-unbounded.md`
+because the retained page was assumed to be a term in the per-browser cost that
+sets the cap. It is a term. It is not a recoverable one.
 
-## Problem
+## Problem — confirmed, unchanged
 
-`async_crawler_strategy.py:1283-1292`:
+`async_crawler_strategy.py:1283-1292` declines to close the last page of a
+headless browser. We are always headless, so a browser serving one request at a
+time never closes its page, and a live Chromium tab keeps holding the last
+crawled DOM. Refcounting is unaffected (`release_page_with_context` runs first,
+unconditionally), so `MAX_PAGES` was never at risk.
 
-```python
-# Close the page unless it's the last one in a headless/managed browser
-all_contexts = page.context.browser.contexts
-total_pages = sum(len(context.pages) for context in all_contexts)
-if not (total_pages <= 1 and (self.browser_config.use_managed_browser
-                              or self.browser_config.headless)):
-    await asyncio.wait_for(page.close(), PAGE_CLOSE_TIMEOUT_S)
-```
+Directly observed, not inferred: `experiment_pool_memory.py` now reports
+`retained pages across the pool`, and it is **one per browser, every run**.
 
-We are always headless. So whenever a browser is down to its last page — which
-is its steady state between requests, and always true for a browser serving one
-request at a time — **the page is not closed.** Refcounting is unaffected
-(`release_page_with_context` runs first, unconditionally), so the pool's
-accounting is correct and `MAX_PAGES` is not at risk. What stays behind is a
-live Chromium tab still holding the last crawled DOM.
+## Why the fix was dropped
 
-Upstream's intent is sound: closing the final page of a headless browser can
-take the browser with it, and the PERMANENT pool browser must outlive every
-request. The intent does not require *retaining the document*, only the tab.
+The proposal was to navigate the retained page to `about:blank` instead of
+closing it. Measured through the real path, 6–8 pooled browsers, real Chromium,
+cgroup `memory.current` and `anon` read before and after, 10 s to settle:
 
-## Consequence
+| page the browser was holding | anon returned by `about:blank`, per browser |
+|---|---:|
+| `/heavy` (236 KB, 17 images, ~900 tags) | **+1.7 MB** (i.e. it *cost* memory) |
+| `/heavy?heap_mb=100` (100 MB of retained, fully-committed JS heap) | **−0.5 MB** |
 
-One page's worth of DOM, JS heap and image cache is pinned per pool browser
-between requests, indefinitely. For the reference host measured this week that
-is a 312 KB document plus its decoded images. It is the reason
-`server_memory_delta_mb` never returns to its pre-request baseline, which in
-turn is why that metric has never been usable for spotting a real leak.
+**The instrument is not blind, and the same run proves it.** Loading the
+100 MB-heap variant raised the per-browser cost from 170.0 MB to 270.5 MB —
+`+100.5 MB`, the heap, exactly. So the harness sees page memory going in with
+1 % accuracy. It just does not come back out: V8 and Blink do not return the
+freed pages to the OS on a same-process `about:blank` navigation, within 10 s or
+at all.
 
-## Fix
+A first attempt at this control **under-committed and would have lied**: the
+allocator touched every 4096th `Float64` (one byte per 8 pages), so the kernel
+never committed 7/8 of the buffer and `heap_mb=100` showed up as ~13 MB. Fixed
+to a 512-element stride (one touch per 4 KiB page) before the number above was
+taken. Recorded because a control that silently under-delivers is worse than no
+control — it makes "no saving" look measured when it was never applied.
 
-Navigate the retained page to `about:blank` instead of closing it:
+## What the retention actually means, and it is worth carrying forward
 
-```python
-if not (total_pages <= 1 and (...)):
-    await asyncio.wait_for(page.close(), PAGE_CLOSE_TIMEOUT_S)
-else:
-    # Keep the tab (closing the last page can close a headless browser) but
-    # drop the document it is holding.
-    with contextlib.suppress(Exception):
-        await asyncio.wait_for(page.goto("about:blank"), PAGE_CLOSE_TIMEOUT_S)
-```
+Per-browser cost is a **ratchet**. A pooled browser's floor is set by the
+heaviest page it has ever crawled, and nothing lowers it again — not idleness,
+not the next crawl, not `about:blank`. The only thing that resets it is
+**closing the browser**.
 
-Bound it exactly like `page.close()` is bounded — a wedged renderer must not
-block teardown, which is the lesson `tasks/render-retry-unbounded-hang.md`
-already paid for.
+That makes the browser cap in `pool-residency-unbounded.md` the sole
+reclamation mechanism in the pool, and it is an argument for evicting on an LRU
+rather than trusting an idle TTL: a browser that once loaded a 100 MB SPA is
+holding 100 MB whether or not it is busy, and only eviction gets it back.
 
-## Verification
+It also explains the metric this file was written about: `server_memory_delta_mb`
+never returns to baseline because the page never goes. That is now understood
+rather than suspicious, and the metric can be retired instead of chased.
 
-- `test_crawler_pool.py`: after a crawl completes, the browser still has its
-  page and the pool still hands it out (no regression in the thing upstream's
-  guard protects).
-- Measure: `server_memory_delta_mb` across N sequential crawls of a large page,
-  before and after. The claim is a lower floor, not a different slope — say so
-  in the result either way.
-- Tier 1 regression 4/4.
+## What NOT to do next
+
+- **Do not close the last page instead.** Upstream's guard is there because
+  closing the final page of a headless browser can take the browser with it, and
+  the pool depends on the browser outliving the request.
+- **Do not re-measure this with a bigger page.** The 100 MB heap is already an
+  order of magnitude past any real page, and it returned 0.5 MB.
+- **Do not read the 170 MB per-browser figure as the page's cost.** `/ok`
+  (1.5 KB, no images) is 142.8 MB against `/heavy`'s 170.0 MB — the Chromium
+  process is ~85 % of a pooled browser's cost regardless of what it is holding.
 
 ## Related
 
-If this is fixed, revisit whether `server_memory_delta_mb` is worth reporting to
-MAS at all, or whether it should be replaced with a post-teardown reading.
+`server_memory_delta_mb` is not worth reporting to MAS and never was; its
+non-return is this, not a leak. If a post-teardown reading is ever wanted, take
+it after the browser closes, not after the page navigates.

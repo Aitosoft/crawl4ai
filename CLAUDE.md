@@ -38,9 +38,9 @@ curl http://localhost:11235/health
 pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
 # Testing (run from repo root — relative artifact paths; see TESTING.md)
-pytest test-aitosoft/            # ALL offline suites, 192 tests, ~85 s — no server, no customer site
-pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # pure-function subset, 152 tests, ~9 s
-pytest test-aitosoft/test_fixture_origin.py   # browser-driven, local fixture origin, 40 tests, ~75 s
+pytest test-aitosoft/            # ALL offline suites, 244 tests, ~230 s — no server, no customer site
+pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # pure-function subset, 196 tests, ~13 s
+pytest test-aitosoft/test_fixture_origin.py   # browser-driven, local fixture origin, 48 tests, ~90 s
 python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression (live server)
 python test-aitosoft/test_site.py <domain> --page <path>            # Single site (live server)
 python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic (live server)
@@ -140,6 +140,10 @@ are on CrawlerRunConfig (forwarded to Playwright `new_context()`).
 | A low-text gate re-opens the Shopify false positive | ~15 of MAS's 22 `Access Denied` hits were storefronts with an `/pages/access-denied` menu link; our fixture for it has **247** visible chars, *under* any sane text gate. A notice counts only in a title/heading **or** at ≥50 % of the page's text |
 | A fixture can be unfaithful on exactly the load-bearing axis | `/block/padded-403` served a bare `<div>` (0 content elements → 2 tier-3 signals). The real page has `<h1>`+`<p>` (2 elements → 1 signal). A fix validated on the fixture would have closed none of the four real hosts |
 | The patchright retry re-fetched with the *same* capture wait | Different engine, identical budget — it could never resolve a challenge the first attempt outlasted. Now `retry_capture_wait_s: 10.0`; measured retry leg = `W + 1.22 s`, zero extra page loads. Never raise the global wait instead: 267 render-hours per sweep |
+| **Browsers were never where the replica's memory went** | Regressing the 68 pool-stats lines of MAS's probe: `mem% = 59.3 + 2.65 × browsers` (n=68, r²=0.22). A resident browser is ~109 MB of 4096; **59 % is baseline nothing explains**. The record said 8 browsers "is the whole 4 GiB" — 9 × 165 MB is ~36 %. The arithmetic never closed and four sessions read past it. `max_browsers: 6` still ships (memory bounded by construction), but it does **not** stop the guard firing |
+| A pooled browser costs the *process*, not the *page* | `/ok` (1.5 KB, no images) +142.8 MB vs `/heavy` (236 KB, 17 images — the median of 62 stored captures) +170.0 MB. Only +19 %. Suspecting a fixture is too small is right; assuming that makes the figure badly wrong is not |
+| Per-browser memory is a **ratchet**, and `about:blank` cannot unwind it | Navigating a retained page to `about:blank` returns 0.5 MB of anon **even when it holds a fully-committed 100 MB JS heap** — while the same run shows the heap going in at +100.5 MB, so the instrument is not blind. A browser's floor is the heaviest page it ever loaded; only closing it resets it. `pool-browser-retains-last-page.md` closed as refuted |
+| A capped pool must **never wait** for a browser | `release_crawler` takes the same `LOCK`, so waiting inside `get_crawler` waits on code needing the lock the waiter holds: no 504, no 429, no janitor recovery. Evict or refuse (`RenderCapacityExceeded` → 429), and close evicted browsers in a detached bounded task — `close()` has no timeout and a wedged Chromium closed inline holds the pool lock forever |
 | "We are full" had two wire statuses | RenderGate said 429; the pool's memory guard said 500, which MAS retries 3× — memory pressure quadrupled its own load. Both now 429 + `Retry-After`. Symptom only: nothing bounds live browsers (`tasks/pool-residency-unbounded.md`) |
 | One `failure_class` must mean one wire status | `render_error` was 200 in static mode (never raises) and 500 in full mode — same class, opposite retry behaviour, decided by `render_mode`. Both modes now route through `server._crawl_response` → `http_status_for`. The missing axis was **permanence, not ownership**: `render_defect` is entirely ours *and* must not be retried (`NON_RETRYABLE_CLASSES`) |
 | Tier-2 antibot patterns never see HTTP 200 | `is_blocked` only reaches tier 2 via the 4xx/5xx branches, but challenge interstitials are served with 200 — so `Checking your browser` had never fired. Fixed by the challenge tier (2026-07-30) |
@@ -264,7 +268,7 @@ unknown fields are silently dropped; `page_timeout` is clamped. See
 | `deploy/docker/api.py` | +static-mode short-circuit, patchright retry inside wall-clock deadline, `render_mode` tagging, render-admission gate (429 when replica full; fence starts after admission), single-URL guard (multi-URL → 400), fence-504 warning; `failure_class` on every result, `status_code` rewritten to the final redirect hop, origin-caused exceptions return an envelope not a 500, monitor records the client's real outcome, collapse guard on every successful result |
 | `deploy/docker/server.py` | static branch in `/crawl`; lifespan closes static client + patchright singleton; `_crawl_response` maps `failure_class` → 200/504/500 for **both** render modes instead of always 500 (full) / always 200 (static); error envelopes carry `failure_class` |
 | `deploy/docker/schemas.py` | `CrawlRequest.render_mode` field |
-| `deploy/docker/crawler_pool.py` | MAX_PAGES enforcement + overflow keys; BUSY_SINCE stuck-slot janitor (file unchanged upstream since 0.8.6) |
+| `deploy/docker/crawler_pool.py` | MAX_PAGES enforcement + overflow keys; BUSY_SINCE stuck-slot janitor; `max_browsers` cap + LRU eviction of *idle* browsers (evict-or-refuse, **never wait** — waiting deadlocks against `release_crawler`); memory-adaptive TTL collapse removed (file unchanged upstream since 0.8.6) |
 | `deploy/docker/config.yml` | Deployment config: stealth kwargs, `wall_clock_s: 180`, `total_timeout: 100000` (per-`arun` fetch budget), pool limits, render admission (`render_capacity: 2` — MUST match ACA scale rule) |
 | `deploy/docker/supervisord.conf` | Entry point: `aitosoft_entry:app` instead of `server:app` |
 
