@@ -25,15 +25,33 @@ nothing is on fire.
 date. We are building against a workload nobody has run yet. That is the single
 biggest reason to keep scope small — see CLAUDE.md principle 7.
 
-**`main` is ahead of production by one change: the browser cap** (`8e69c3a`,
-merged 2026-08-02, **not deployed**). `max_browsers: 6` with LRU eviction, the
-memory-adaptive TTL removed, and large corrections to the record. Offline-green,
-reviewed, and it should ship — two small fixes first, listed in the table. The
-old `pool-browser-cap` branch is now identical to `main` and can be ignored.
+**`main` and production are in sync.** The browser cap **shipped 2026-08-02** as
+`0.9.2-pool-cap`, revision `--0000033`: `max_browsers: 6` with LRU eviction, the
+memory-adaptive TTL removed, the memory guard now shedding before it refuses, and
+`permanent_unused_ttl_sec` cut 600 → 120. Tier 1 4/4, offline 247 green.
 
-**So `git log` on `main` is ahead of what is running.** Before assuming a fix is
-live, check the deployed image tag against `azure-deployment/` rather than the
-commit history.
+**That habit still holds even so:** before assuming a fix is live, check the
+deployed image tag against `azure-deployment/` rather than the commit history.
+
+**Two production readings from the deploy are worth carrying forward.**
+
+1. **Closing the boot browser freed ~196 MB anon / ~5.0 points** on a live
+   replica, from a one-number config change (`permanent_unused_ttl_sec` 600 →
+   120). The two instruments agree — 5.0 % of 4096 MB ≈ the 196 MB anon drop —
+   and `file` barely moved, so the reading tracks anon, not page cache. **~196 MB
+   is above the offline per-browser figures** (129.6 / 141.3 MB anon), so the
+   offline instrument is a floor on the real path.
+2. **A serving replica read 13–22 %, not ~65 %.** This does **not** refute the
+   disputed intercept — Tier 1 is four sequential requests; the disputed 68
+   samples were a 243-host probe at concurrency — but it does show the baseline
+   is not a constant that "appears with traffic". It needs *concurrent* traffic,
+   which points at candidate 1 (in-render transient memory) and away from
+   candidates 3 and 4 in `replica-memory-baseline-unexplained.md`.
+
+**Read those lines correctly or they mislead:** within a single `📊 Pool:` line
+the `mem=` figure is sampled up to 60 s *before* the counts beside it (the
+janitor samples before its sleep, logs after the cleanup). Treat each `mem=` as
+belonging to the previous tick.
 
 ## The scope cut, 2026-08-02
 
@@ -102,9 +120,24 @@ setting, **not** `--set-env-vars`, so it does not carry the token risk.
 
 | # | Task | State | What to know |
 |---|------|-------|--------------|
-| 1 | `pool-residency-unbounded.md` — **two fixes, then ship it** | BUILT and merged to `main` (`8e69c3a`), offline-green (196 pure-function tests), **not deployed** | Ship it: it is cheap, safe, and it is the only thing standing between us and a real cliff — `user_agent_mode: "random"` is in `UNTRUSTED_FIELD_ALLOWLIST` **and recommended by our own client doc**, and it would make every request launch a new browser. **Stop justifying it with memory arithmetic.** The regression it cites (`mem% = 59.3 + 2.65 × browsers`) is disputed on three counts in `replica-memory-baseline-unexplained.md` §"Why the fit is not settled" — read that before quoting any number from it. Two things to fix before deploy, both small: (a) the memory guard refuses **before** `_evict_for_capacity` runs, and the pressure-driven TTL is gone, so a replica over 85 % now holds idle browsers for the full `idle_ttl_sec: 300` instead of shedding — make the guard **evict, re-read, then refuse**; (b) strip the disputed slope out of the `config.yml` comment and cite the cardinality argument, which does not depend on memory at all. |
+| ~~1~~ | ~~`pool-residency-unbounded.md`~~ **DONE — deployed 2026-08-02** | `0.9.2-pool-cap`, revision `--0000033`. Tier 1 4/4, offline 247 green | Both fixes shipped, but **(a) could not be done as specified** and that is the reusable lesson: "evict, **re-read**, then refuse" cannot work, because `_close_detached` schedules the close on a task that cannot start before the coroutine yields — the re-read measures the number it just read. Shipped as evict-one-idle-LRU-**then-refuse-anyway**. Doing it via the existing `_evict_for_capacity(headroom=1)` would also have been a **silent no-op below the cap**. (b) shipped as written; the cardinality argument is now verified, not asserted — 8 identical `user_agent_mode: "random"` configs give **5** distinct pool signatures, 8 fixed-UA configs give **1**. Bonus lever taken: `permanent_unused_ttl_sec` 600 → 120, because the boot browser is unreachable **by construction** and was holding ~140 MB through exactly the cold-burst window that produced all nine 500s. |
 | 2 | `cleaned-html-collapse-guard.md` **part 2, repair 1 only** | Part 1 deployed 2026-08-01 | **Do repair 1. Do not do repairs 2 and 3.** Repair 1 is the raw-text re-serialization family (`unclosed-noscript`, `unclosed-script`) — a genuine upstream bug, the strongest of our upstream PRs, and the one shape the collapse guard is structurally blind to (`unclosed-script` has 0 visible text, so no text-ratio guard can see it). Repairs 2 (libxml2 depth limit) and 3 (unterminated comment) are **parked**: the guard already catches both and reports them to MAS truthfully at HTTP 200 + `success: false`, so they cost accuracy, not data. Re-open only if MAS's residual count says the population is large. |
 | 3 | `flaky-fence-test-margin.md` | Open, ~1 hour | Our only pre-deploy gate is "the offline suite is green"; this test fails ~1 run in 3 for reasons unrelated to the code. **Diagnose before widening** — the same red can mean harness overhead *or* a fence that unwinds slowly under load, and the second is a finding about our 180 s fence against Azure's 240 s ingress limit. |
+
+**One decision left behind by the pool deploy, deliberately not taken.** The boot
+("permanent") browser is unreachable **by construction**: `server.py:199` builds
+its `BrowserConfig` inline *without* `enforce_egress`, while
+`get_default_browser_config():138` and every request path apply it, so the
+signatures differ in `ignore_https_errors` and can never match — 0 hits in 224
+production pool gets. The two fixes point **opposite ways** — delete the
+`init_permanent` call, or route it through `get_default_browser_config()` to make
+it reachable — which is exactly why it should not be bundled into someone else's
+image. The cold-burst cost was mitigated in the meantime by
+`permanent_unused_ttl_sec: 120`, so this is a decision, not a defect. Prior
+sessions considered only the second option and declined it; **nobody had proposed
+deleting it.** `monitor_routes.py:273-284`'s self-deadlock (`init_permanent`
+called *inside* `async with LOCK`, which it re-acquires) is in the same file and
+is the natural thing to fix in the same change.
 
 ## Parked on purpose — do not pick these up unasked
 

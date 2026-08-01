@@ -9,17 +9,24 @@ Keeping this log helps when syncing with upstream updates.
 
 **Last Updated**: 2026-08-02
 
-> **`main` is ahead of production.** The `pool.max_browsers` cap (`8e69c3a`,
-> merged 2026-08-02) is on `main`, offline-green, and **not deployed** — it needs
-> two small fixes first (`tasks/pool-residency-unbounded.md` §"Before this
-> deploys"). Read the deployed image tag below, not `git log`, when you need to
-> know what is running.
+> **`main` and production are in sync** as of 2026-08-02 — the `pool.max_browsers`
+> cap shipped in `0.9.2-pool-cap` (revision `--0000033`). Still: read the deployed
+> image tag below, not `git log`, when you need to know what is running.
+>
+> **There is no replica resize to be had.** Azure caps this app at **2 vCPU /
+> 4 GiB**, which is what it already runs — the environment is a *legacy
+> Consumption-only* managed environment. The April note's `--memory 8.0Gi` was
+> never a valid command and `4 vCPU / 8 GiB` belongs to a different environment
+> type. Measured 2026-08-02; see `tasks/README.md`. Do not plan against headroom
+> we cannot buy.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
-- **Production**: the above + collapse guard + one wire status per failure class + detector round 3 (padded blocks caught, inferred blocks no longer reported as the origin's) + patchright retry capture wait + memory guard 429 (deployed 2026-08-01)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-detector-round3` (revision `crawl4ai-service--0000032`, digest `sha256:41ffd880d2f3a1e28136f2e03b53bf4a83c8ce994b6447d2c90096d70ace67a9`)
-- **Previous**: `0.9.2-failure-class` (revision `--0000031`, deployed 2026-07-30)
+- **Production**: the above + browser cap with LRU eviction + memory guard that sheds before refusing + 120 s permanent-browser TTL (deployed 2026-08-02)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-pool-cap` (revision `crawl4ai-service--0000033`, digest `sha256:8f9c1eb295760cc2ebff8f27be641548af07a83991429d569889ffc1512cbf50`)
+- **Previous**: `0.9.2-detector-round3` (revision `--0000032`, deployed 2026-08-01, digest `sha256:41ffd880d2f3a1e28136f2e03b53bf4a83c8ce994b6447d2c90096d70ace67a9`)
+- **Prod smoke 2026-08-02 (pool-cap)**: health 200 ✅ (33 s cold start from zero), unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅ (`deploy-image.sh` exit 0), revision `--0000033` at 100 % traffic with `--0000032` ScaledToZero — **checked before the crawl**, per the 2026-07-30 mid-cutover lesson ✅. **Tier 1 regression 4/4** (`--version pool-cap`) ✅. Pool instrumentation live: `📊 Pool: hot=0, cold=1, permanent=yes, resident=2/6, mem=13.3%, anon=585MB file=328MB inactive_file=43MB`.
+  **Worth more than the smoke it came from:** that line is a *serving* replica reading **13.3 %**, not the ~65 % the disputed regression predicts for 2 browsers. It does not refute the intercept (Tier 1 is 4 sequential requests; the 68 disputed samples were a 243-host probe at concurrency) — but it does show the baseline is **not** a constant that "appears with traffic". It needs *concurrent* traffic, which points at candidate 1 (in-render transient memory) in `replica-memory-baseline-unexplained.md` and away from candidates 3 and 4.
 - **Prod smoke 2026-08-01 (detector-round3)**: health ✅, unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅, revision `--0000032` Running at 100 % traffic with `--0000031` deprovisioning (checked **before** the crawl — the 2026-07-30 smoke was taken mid-cutover and reported pre-fix output) ✅. `caverna.fi` → HTTP 200 / `success:true` / `failure_class:"none"` / 1210 B markdown / 4.8 s ✅ — byte-identical markdown to the pre-deploy Tier 1 run, i.e. the widened detector and the collapse guard both stayed silent on a healthy page in production.
   **Not smoke-tested in prod, deliberately:** the four padded-403 hosts. Confirming defect A against `talpa.fi` would be a live request to a host MAS has already burned, to verify a pure-Python status/body rule that 232 offline tests exercise through the real production path. MAS re-scrapes those hosts naturally, so their next sweep is the production confirmation at zero marginal traffic.
 - **Prod smoke 2026-07-30 (failure-class)**: health ✅, unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅. `caverna.fi` → 200 / `success:true` / `failure_class:"none"` / 1210 B markdown (2.8 s) ✅. **`konecranes.com` — the reported incident — → HTTP 200, `success:false`, `status_code:403` (was `301`), `redirected_status_code:403`, `failure_class:"origin_blocked"`, real `error_message`** ✅ — previously `success:true` with the Varnish block page as content, and before that an opaque retried 500. Both fixes visible in one response, which is what this image was assembled for. Caveat: the first smoke run hit revision 0000030 mid-cutover and showed pre-fix output; re-run after traffic reached 100% on 0000031.
@@ -206,7 +213,65 @@ this paragraph.
 
 ---
 
-## 2026-08-02 — a cap on live browsers, and the diagnosis it was built on
+## 2026-08-02 — DEPLOYED as `0.9.2-pool-cap` (revision `--0000033`)
+
+Three amendments were made to the section below **at deploy time**; it was
+written pre-deploy and is otherwise accurate.
+
+**1. The memory guard now sheds before it refuses.** It used to refuse *before*
+`_evict_for_capacity` could run, and removing the adaptive TTL (below) took with
+it the only path that shed under pressure — so a replica over 85 % held every
+idle browser for the full constant `idle_ttl_sec: 300`. It now evicts one idle
+LRU browser per refusal, then refuses anyway.
+
+The specified fix was "evict, **re-read**, then refuse". That is not
+implementable: `_close_detached` schedules the close on a task that cannot start
+before the coroutine yields, and there is no `await` before a re-read — so it
+would measure the number it just read, exactly. Forcing it to start does not
+help either (Chromium exit plus kernel reclaim are not synchronous, and sleeping
+for them sits inside `LOCK` on the unfenced admission path). The reclaim lands
+for the *next* arrival, which is what the 429 + `Retry-After` schedules.
+
+Implementing it via the existing `_evict_for_capacity(headroom=1)` would have
+been a **no-op below the cap** — its loop only runs when
+`resident + headroom > MAX_BROWSERS` — and would have shipped green doing
+nothing. Split out `_evict_lru_idle(reason)`, which also removed a latent
+`LOCK`-holding infinite loop in the old body.
+
+**Stated cost:** this re-arms a memory→browser-count feedback loop, the same
+confound that disqualifies the 2026-07-31 slope. Narrower (it fires on refusals,
+not on a timer) and the eviction log names `memory pressure X%` so those samples
+can be filtered — but a naive fit across this build is still biased.
+
+**2. The cap is justified on cardinality, not on memory.** `config.yml` derived 6
+entirely from `mem% = 59.3 + 2.65 × browsers`, which is disputed on three counts;
+a config comment is the most-read and least-reviewed documentation we have, and
+it read as settled fact. Replaced with an argument that needs no memory at all:
+`user_agent_mode` is in `UNTRUSTED_FIELD_ALLOWLIST` (`async_configs.py:227`),
+`"random"` regenerates the UA in `BrowserConfig.__init__` (`:901`), and **our own
+shipped client doc recommends it** (`c4ai-doc-context.md:167`). Verified: 8
+identical `user_agent_mode: "random"` configs produce **5 distinct pool
+signatures**; 8 identical fixed-UA configs produce **1**. Under that one word the
+pool becomes write-only — one Chromium launch per request. Sizing stays
+6 = 3 × `render_capacity`.
+
+Also fixed: the guard's `logger.error` evaluated `hot=`/`cold=` *after* the
+eviction, so the one line pairing a memory reading with pool composition was off
+by one browser. Snapshotted before the shed now.
+
+**3. `permanent_unused_ttl_sec` 600 → 120.** The boot browser is unreachable **by
+construction** — `server.py:199` builds its config inline *without*
+`enforce_egress`, while `get_default_browser_config():138` and every request path
+apply it, so the signatures differ in `ignore_https_errors` and can never match
+(0 hits in 224 production pool gets). At 600 s it held ~140 MB through minutes
+0–10 of a replica's life, which is exactly the window that produced all nine of
+MAS's memory refusals (replica up 04:44:49, refusals 04:46–04:50).
+**Not the real fix, deliberately not bundled:** whether that browser should exist
+at all — delete the `init_permanent` call, or route it through
+`get_default_browser_config()` to make it reachable — is a `server.py` change,
+the two options point opposite ways, and it deserves its own attributable change.
+
+Tests: `test_crawler_pool.py` 24 → **27**; full offline suite **247 green**.
 
 ### `pool.max_browsers` + LRU eviction of idle browsers (`crawler_pool.py`)
 

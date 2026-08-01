@@ -1,8 +1,13 @@
 # Nothing bounds how many browsers the pool holds
 
-**Status:** BUILT 2026-08-02, offline-verified, **not deployed**. Tier 1 not yet
-run. Ships with `pool-browser-retains-last-page.md`, which this session **closed
-as refuted** — see below.
+**Status:** **DEPLOYED 2026-08-02** as `0.9.2-pool-cap`, revision `--0000033`.
+Tier 1 regression **4/4**, offline suite 247 green, `resident=2/6` confirmed in
+production logs. Ships with `pool-browser-retains-last-page.md`, which the
+building session **closed as refuted** — see below.
+
+**This task is done.** What is NOT done and is now the live question: the resize
+that was supposed to make the memory half of this moot **does not exist** (see
+below), so the levers in this file are the only ones we hold.
 **Priority:** was High as "the cause of the 9 × 500". **It is at most a
 contributor** — the old arithmetic behind that claim was wrong, but the
 replacement measurement is disputed too (see the box in §2). Still worth
@@ -310,6 +315,41 @@ all" is **one per refusal, not per episode** (nine refusals in four minutes shed
 up to nine), and "idle-only" was never the difference from the adaptive TTL —
 that skipped busy browsers too. The real differences are LRU order, that it
 engages only while arrivals are being refused, and that a refusal never launches.
+
+### The 120 s TTL, measured in production the same day — ~200 MB, ~5 points
+
+The `:24`-phase janitor series on one replica of `--0000033`, **read correctly**:
+this file's own caveat says `mem_pct` is sampled *before* the loop's sleep and
+logged *after* the cleanup, so within a single line the percentage is up to 60 s
+older than the breakdown beside it. Treat each `mem=` as belonging to the
+**previous** tick and the series is coherent:
+
+| mem sampled | reading | pool at that sample |
+|---|---:|---|
+| 12:00:24 (boot) | 13.3 % | permanent + 0 |
+| 12:01:24 (Tier 1) | **22.1 %** | permanent + 1 |
+| 12:02:24 (after close) | **17.1 %** | 1 browser |
+| 12:03:24 | 17.0 % | 1 browser |
+
+```
+12:02:24  🧹 Closing permanent browser — never used in 120s
+12:01:24  📊 permanent=yes, resident=2/6, anon=585MB
+12:02:24  📊 permanent=no,  resident=1/6, anon=389MB
+```
+
+**−196 MB anon and −5.0 points, from deleting one line of config.** The two
+instruments agree (5.0 % of 4096 MB = 205 MB ≈ the 196 MB anon drop), which is
+also a nice cross-check that the reading tracks anon rather than page cache —
+`file` barely moved (328 → 326 MB).
+
+Two things worth carrying forward. **~196 MB is above the offline per-browser
+figures** (129.6 MB `/ok`, 141.3 MB `/heavy` anon), so the offline instrument is
+a floor on the real path, as suspected. And **a serving replica read 13–22 %, not
+~65 %** — which does *not* refute the disputed intercept, because Tier 1 is four
+sequential requests and the 68 disputed samples were a 243-host probe at
+concurrency, but it does show the baseline is not a constant that "appears with
+traffic". It needs *concurrent* traffic. That points at candidate 1 (in-render
+transient memory) and away from candidates 3 and 4.
 
 ### Cheapest lever found and taken: `permanent_unused_ttl_sec` 600 → 120
 
