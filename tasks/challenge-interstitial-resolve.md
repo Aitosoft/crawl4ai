@@ -87,22 +87,49 @@ hosts. That was wrong, and the reason it was wrong generalises: the question
 question about **our pipeline**, and it is answerable against an origin we
 control.
 
-Build the fixture origin (`tasks/fixture-origin.md`) and serve, from localhost:
+**The instrument is built. Do not build it again** — `tasks/done/fixture-origin.md`
+shipped on 2026-07-31 and `test-aitosoft/fixture_origin.py` is in the tree. The
+routes are the ones in the table at the top of this file, and the resolve delay
+is a path argument in seconds, so a sweep over waits is a loop, not new code:
 
-| Fixture | Serves | Asking |
+```python
+production_path.crawl(
+    fixture_origin.url("/challenge/resolve-after/2.5", marker="robot-suspicion"),
+    delay_before_return_html=2.0,          # MAS's current value
+)
+```
+
+`test_fixture_origin.py` already pins the two endpoints of that sweep — a 0.1 s
+wait against a late resolve stores the interstitial, and a 2.0 s wait against a
+0.5 s resolve stores the real page, both at HTTP 202. **The premise is settled;
+phase 1 owes the shape of the curve between them, and four numbers:**
+
+| Question | How | Why it decides something |
 |---|---|---|
-| `resolve-fast` | interstitial → real content after ~1 s | does a short settle already work? |
-| `resolve-slow` | interstitial → real content after ~5 s | does `domcontentloaded` + 2.0 miss it? |
-| `resolve-never` | interstitial, forever | do we still report `origin_blocked`? |
-| `resolve-by-nav` | interstitial that top-level-navigates to content | does the navigation path differ from the DOM-rewrite path? |
+| Where does the capture start winning? | Sweep resolve delay against `delay_before_return_html`; both routes | This is the number MAS is holding their design for |
+| Does `resolve-by-nav` differ from `resolve-after`? | The two parametrized routes, same grid | A top-level navigation replaces the execution context — forensics §1's `page.content()` race. If nav loses captures that DOM-rewrite keeps, a global wait cannot fix it and the adaptive shape is forced |
+| What does a wall cost? | `/challenge/never` at the candidate waits | The control. If waiting longer taxes hosts it can never rescue, that is the whole argument against a global number, in seconds |
+| Does an adaptive re-capture beat a global wait? | Detect-then-re-capture (phase 2's shape) vs a raised global value, same grid | Phase 2's go/no-go |
 
-The last one matters most and is the closest analogue to what a real challenge
-does — it is also the mechanism behind `maitokolmio.fi`'s `page.content()` race
-(forensics §1), so the two findings should be tested against the same fixture.
+Run everything through the **full production path** (`production_path.crawl` —
+`aitosoft_entry` + `api.handle_crawl_request`, MAS's V14 config) and record
+`status_code`, `failure_class`, `len(html)`, `len(cleaned_html)`,
+`len(markdown)`, elapsed. Units: `html`/`cleaned_html` are HTML **bytes**,
+`markdown` is markdown **characters** — MAS's `DEGENERATE_CAPTURE_CHARS = 500`
+is the second one, and mixing them has already cost a round trip.
 
-Run each fixture through the **full production path** (`aitosoft_entry` +
-`api.handle_crawl_request`, MAS's V14 config) and record `status_code`,
-`failure_class`, `len(html)`, `len(cleaned_html)`, `len(markdown)`, elapsed.
+**Read the result against MAS's actual position** (their message 09 §6, so the
+number lands in the frame they will read it in):
+
+- Their current `delay_before_return_html` is **2.0**. The change they refuted
+  was 2.0 → 0.1, not a raise.
+- Their own `raw://` measurement says **2.0 tolerates a paint up to roughly
+  3–5 s**. So a curve that only starts winning past ~5 s is a finding about
+  *their* config; one that wins below it is a finding about *ours*.
+- They have **not** shipped a global wait and will not until this lands either
+  way. They had already concluded the replacement must fix the 180 s hang
+  **without shortening the paint window** — so per-host or adaptive, not a bigger
+  global number. An adaptive result is the one they can use.
 
 **The result is decisive in both directions and neither branch costs a page load:**
 
@@ -110,6 +137,19 @@ Run each fixture through the **full production path** (`aitosoft_entry` +
   closes, and `residential-egress-retry-path.md` keeps its 31-host population.
 - If we capture the interstitial → that is a real defect in our capture timing,
   worth fixing whatever vendor is on the other end, and phase 2 proceeds.
+
+### Done when
+
+1. The numbers and the curve are in this file, with the grid that produced them.
+2. A **phase-2 go/no-go** is written down, with its reason — including "no" and
+   why, which is a real outcome here and closes the task.
+3. `waa-eval-2026-07-30-forensics.md` **§10c** (HTTP 202 — the code that is not a
+   page status) carries the result. That section exists; append, do not create.
+4. `residential-egress-retry-path.md`'s population is re-derived. Today it says
+   31, of which 23 are challenge hosts held on exactly this answer. Write the new
+   number into that file's update block whichever way it goes — the task is on
+   hold *for this*, and Tero was last told "three".
+5. **Nothing is deployed.** Phase 1 touches no production code.
 
 ### What phase 1 deliberately does *not* establish
 

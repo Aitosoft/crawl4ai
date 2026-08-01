@@ -4,9 +4,16 @@
 `page.content()` / `page.evaluate()` hang was live and a wedged render burned the
 whole 180 s fence. `done/render-retry-unbounded-hang.md` shipped on 2026-07-30
 and bounded exactly that, so the population this task rescues may have largely
-disappeared. **Do not spend M here until
-`post-deploy-measurement-0.9.2-failure-class.md` reports the 504 and
-`render_timeout` rate since rev `--0000031`.** If the fence now fires rarely, the
+disappeared.
+
+**The measurement this was gated on is closed, and it points at "drop".**
+`post-deploy-measurement-0.9.2-failure-class.md` is in `done/` — there was no
+production traffic to census, so MAS's 243-host probe against rev `--0000031` is
+the entire dataset the current image has seen. In it: **0 × 504, and nothing came
+within 145 s of the 180 s fence** (their message 09 §2). 243 fetches on one
+afternoon is not a workload, but it is the only evidence there is, and
+`render-500-window-2026-07-31.md` owns those logs if a firmer number is wanted.
+If the fence now fires rarely, the
 remaining value is as a fallback for `render_error` and `origin_blocked`, which is
 a different and smaller argument than the one written below — rewrite it before
 implementing rather than inheriting it.

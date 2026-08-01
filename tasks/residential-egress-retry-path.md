@@ -21,8 +21,9 @@ contract or commit credentials without Tero's explicit go-ahead.**
 >    those 23 are not an egress problem at all and this task's population is 4
 >    hosts serving a hard 403 template. **Do not spend before that number.**
 > 2. A residential probe. **This is the one step here that genuinely cannot be
->    done offline**, so it goes last and stays small — see `tasks/fixture-origin.md`
->    for why that ordering is now the rule rather than an exception.
+>    done offline**, so it goes last and stays small — see
+>    `tasks/done/fixture-origin.md` for why that ordering is now the rule rather
+>    than an exception.
 >    It is free of *spend*, not of traffic: the dev container egresses from
 >    `109.204.176.244` — Valoo Oy, a Finnish consumer ISP in Lappeenranta, not a
 >    datacentre. We can run our exact code from a residential IP without buying

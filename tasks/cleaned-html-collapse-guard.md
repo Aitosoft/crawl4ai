@@ -123,11 +123,25 @@ An earlier draft of this task opened with "one production `/crawl` per host". Tr
 the offline route first; it is likely to be faster *and* it produces a better fix.
 
 **Start from the member the fixture origin already found (2026-07-31).** Route
-`/collapse/unclosed-noscript` reproduces the target fingerprint exactly, offline:
-73 KB in, `<html><head><title>…</title></head></html>` out, one newline of
-markdown, at HTTP 200 `success: true`. Pinned by
-`test_fixture_origin.py::test_an_unclosed_noscript_still_swallows_the_body` —
-invert that test when the guard ships.
+`/collapse/unclosed-noscript` reproduces the *mechanism* offline and end to end:
+the body is swallowed, markdown comes back empty, at HTTP 200 `success: true`.
+Pinned by `test_fixture_origin.py::test_an_unclosed_noscript_still_swallows_the_body`
+— invert that test when the guard ships.
+
+> **Correction, 2026-08-01 — the size in the previous draft was wrong, and the
+> way it was wrong is a trap for the guard.** That route serves a **309-byte**
+> page by default, not 73 KB; the earlier "73 KB in" (and the test docstring's
+> "312 KB in") quoted the *production* incidents, not the fixture. The route
+> takes `?bytes=` and pads with filler that adds bytes but no visible text and no
+> content elements, so `…/collapse/unclosed-noscript?bytes=73000` is what
+> actually reproduces `apteam.fi`'s 73,970-byte fingerprint.
+>
+> This matters because the guard is a **ratio**: a 309-byte page that collapses
+> is not a collapse by any threshold worth shipping, and it must not be. Size the
+> thresholds against the padded route and against Tier 1's real ratios. A session
+> that tunes the guard until it fires on the unpadded fixture will have built a
+> guard that fires on small healthy pages — the exact failure this file warns
+> about two sections up.
 
 The mechanism corrects this section's plan, so read it before enumerating:
 
@@ -198,6 +212,12 @@ so it may already be reproduced — check that before spending the request.
   thresholds.
 - Tier 1 regression 4/4.
 - Do not re-hit `apteam.fi` or `flvi.fi` after the fixture capture.
+- **Do not deploy this on its own.** It ships in one image with
+  `detector-round3-evidence-vs-inference.md`, and possibly with the memory-guard
+  fix from `render-500-window-2026-07-31.md`. The two detector defects pull in
+  opposite directions by design and their net effect is only measurable in a
+  single deploy; a solo deploy here spends the measurement for nothing. Land the
+  work, run Tier 1, stop.
 
 ## Open with MAS
 

@@ -374,10 +374,15 @@ def test_an_unclosed_noscript_still_swallows_the_body(fixture_origin, production
     `strip_noscript()` then correctly removes the element and takes the page
     with it.
 
-    Result: 312 KB in, `<html><head><title>…</title></head></html>` out, one
-    newline of markdown, at HTTP 200 `success: true`. Byte for byte the same
-    silent whole-body loss that ran 3.5 months, surviving its own fix through a
-    parser difference that only a browser in the loop can show.
+    Result: the body in, `<html><head><title>…</title></head></html>` out, one
+    newline of markdown, at HTTP 200 `success: true`. The same silent whole-body
+    loss that ran 3.5 months, surviving its own fix through a parser difference
+    that only a browser in the loop can show.
+
+    This route serves ~309 bytes by default — the *shape*, not the size. Pass
+    `?bytes=73000` to reproduce `apteam.fi`'s 73,970-byte fingerprint; the
+    collapse guard's thresholds are ratios and must be sized against the padded
+    form, never against this one.
 
     This belongs to tasks/cleaned-html-collapse-guard.md (#2), which is gated on
     this fixture precisely so it can be worked offline. Invert this test when

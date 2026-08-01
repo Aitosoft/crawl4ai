@@ -8,11 +8,16 @@ replaced it as the gate). MAS measured four hosts where an 80,671-byte
 `blocked_suspect` computed by today's detector returns `false` for exactly those,
 which is the failure mode their hard requirement below was written to prevent.
 
-**Pacing input needed:** MAS have already adopted single-URL static mode as their
-pre-delete gate, so this endpoint is now a throughput fix rather than a
-correctness gate. Its urgency is entirely "when is the ~15,000-company sweep
-scheduled" — asked in `tmp/mas-repo-messages/08-*`. Do not build ahead of that
-answer.
+**Pacing input — ANSWERED 2026-07-31, and the answer is "not yet".** MAS have
+already adopted single-URL static mode as their pre-delete gate, so this endpoint
+is now a throughput fix rather than a correctness gate, and its urgency was
+entirely "when is the ~15,000-company sweep scheduled". Their message 09 §3, ruled
+by their owner: **there is no date and timing is not their driver** — the sweep
+runs when their system is ready, and WAA's page-cleaning design, this exchange
+and a model evaluation all run for several more workdays first. Their words:
+*"do not build the batch-preflight endpoint speculatively… we will give you real
+notice."* **So this stays unbuilt until they ask.** Do not treat the absence of a
+date as a reason to get ahead of it.
 **Priority:** Medium-high, and time-boxed by MAS's planned ~15,000-company
 re-enrichment sweep — this is the gate that stops that sweep destroying good
 captures.

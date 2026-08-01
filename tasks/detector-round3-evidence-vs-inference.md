@@ -85,8 +85,12 @@ expensive kind:
   `origin_http_error`.
 - **`jarvenkylamaatila.fi`** — a 1-character body.
 - **`fodbar.fi`** — 3,962 characters of real Finnish page content at origin 403.
-  The most arguable of the four; a 403 that still serves content is genuinely
-  ambiguous and it may be correct to leave it.
+  **Settled 2026-07-31 (MAS message 09 §5): leave the classification alone.**
+  They agree we should report the origin's status; overruling a 403 because the
+  body looks like content is the same shape as the `norex.com` invention, pointed
+  the other way, and they would rather have a conservative class they can
+  re-derive than a permissive one they cannot see through. See the next section
+  for the small thing they *did* ask for.
 
 The mechanism is one line of lost provenance. `is_blocked` returns a verdict
 regardless of *what kind of evidence produced it*, and
@@ -132,6 +136,13 @@ measurable in one deploy.
   for all-origin-class failures, so the condition holds by construction today.
   Pin that with a test rather than a comment, because it is the load-bearing half.
   Static mode must get the same treatment so the two render modes still agree.
+- **A field saying content was present despite the origin's status** — MAS asked
+  for this by name (message 09 §5) and it is the whole of what they want out of
+  `fodbar.fi`. It is smaller than a reclassification: keep reporting the origin's
+  403, keep `origin_blocked`, and add one boolean-or-count field so *they* can
+  decide. The decision belongs on their side, where 117,000 stored pages are to
+  compare against, and it means we never have to overrule an origin. Name the
+  unit if it is a count — markdown characters, not HTML bytes.
 
 ## Verification
 
@@ -140,9 +151,10 @@ measurable in one deploy.
   property that can be stated in one line. The defect is that our size gates read
   `len(html)` while the page's *visible text* is ~50 characters, so a **synthetic**
   body — 80 KB of padding, `403 - Forbidden` in a heading, served at status 202 —
-  exercises it exactly. Build it as `/block/padded-403` in
-  `tasks/fixture-origin.md` so the whole production path is covered, not just
-  `is_blocked`.
+  exercises it exactly. **That fixture is already built** and covers the whole
+  production path rather than just `is_blocked`: `/block/padded-403` in
+  `test-aitosoft/fixture_origin.py`, shipped with `tasks/done/fixture-origin.md`,
+  with `?bytes=`, `?text=` and `?status=` all overridable.
 - The real body would only add *pattern* material for identifying the vendor,
   which is `tasks/challenge-interstitial-resolve.md`'s question and is deferred
   there. If it is ever wanted, ask MAS first — they re-scrape these hosts
@@ -154,3 +166,23 @@ measurable in one deploy.
 - Assert the envelope-success flip cannot change the wire status.
 - Tier 1 regression 4/4 — none are blocked, so the detector must stay silent on
   all four. That is the false-positive check.
+
+## Deploy
+
+**This is the image that ships `cleaned-html-collapse-guard.md` too**, and
+possibly the memory-guard fix from `render-500-window-2026-07-31.md`. Land all of
+it first, then one deploy:
+
+1. Full offline suite green (`pytest test-aitosoft/`), including the inverted
+   red tests rather than deleted ones.
+2. Tier 1 regression 4/4 — `python test-aitosoft/test_regression.py --tier 1
+   --version <label>` — **before** the deploy, not after.
+3. `./azure-deployment/deploy-image.sh <tag>`. Never set env vars during a
+   deploy; that is how MAS's token has been broken before.
+4. Prod smoke, then close `tasks/antibot-minimal-text-false-positive.md`, whose
+   latent defect this ships the fix for.
+
+Message 10 to MAS goes out on its own schedule (it needs
+`challenge-interstitial-resolve.md` and `render-500-window-2026-07-31.md`, not
+this deploy) — but if this ships first, it carries the wire status the collapse
+guard is served at, which is one of the four things they are waiting for.

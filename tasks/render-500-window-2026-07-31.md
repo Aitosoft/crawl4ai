@@ -1,13 +1,19 @@
 # 9 renders failed inside one 4½-minute window, and the sweep is a burst
 
-**Status:** Open — investigation first, from logs and correlation IDs. **Zero
-live traffic.** MAS handed us the correlation IDs; the evidence is already in our
-Log Analytics.
-**Priority:** High. The failure population is small (3.6 % of one probe) but the
-*shape* — a time window rather than a per-host property — points at exactly the
-condition MAS's ~15,000-company sweep creates, and that sweep is the largest
-single event either side has planned.
-**Effort:** S-M. **Risk:** none to investigate.
+**Status:** Open — **the cause is found; the fix is not designed.** A coordinator
+pass on 2026-08-01 ran the correlation IDs and the answer came back in two
+queries, so this task is no longer an investigation into *what* happened. Read
+§"What the logs say" before planning anything; the three competing hypotheses
+this file used to open with are all refuted and are kept at the bottom for
+calibration. **Zero live traffic**, still — everything here is Log Analytics.
+**Priority:** High, and higher than when this file was written. The failure
+population looked small (3.6 % of one probe) while it read as a per-host rate.
+It is not one: **every 500 landed on a scale-out step**, and scale-out is what
+MAS's ~15,000-company sweep does continuously. The failure also arrives as the
+one wire status their client retries three times, so it is self-amplifying at
+exactly the moment capacity is tightest.
+**Effort:** S-M — the diagnosis is done, the fix is a reading and a status code.
+**Risk:** low, but it touches the pool's admission path; fixture-driven only.
 **Evidence:** `tmp/mas-repo-messages/09-from-us-taxonomy-answer-and-zero-traffic.md`
 §2 and its corrections section.
 
@@ -37,55 +43,93 @@ content**, so the origins were fine. These are our renders failing.
 | `savaterra.fi` | 2 | `3bac649a8171` | 04:47:06 |
 | `powerofsun.fi` | 2 | `e9d8eb4e344b` | 04:50:33 |
 
-## The observation that makes this a task
+## What the logs say — VERIFIED 2026-08-01, not a hypothesis
 
-MAS flagged it and deliberately declined to interpret it, which is the right call
-from where they sit:
+All nine correlation IDs resolve in `ContainerAppConsoleLogs_CL`. **Every one of
+the nine 500s is the same line, and it is our own code refusing to work:**
 
-> **5 of the 70 hosts probed between 04:46 and 04:50 hit a 500; 0 of the other
-> 173 did.**
+```
+server error 500 [cid=e7deaf4ececb]: {"error": "Memory at 95.6%, refusing new browser",
+ "server_memory_delta_mb": 1.17, "server_peak_memory_mb": 235.28}
+```
 
-A per-host property does not cluster like that. A property of *our replicas at
-that moment* does. And 04:46 is roughly 90 seconds into a burst arriving at a
-service that **scales to zero** — so the window coincides with the one condition
-we know is expensive and have never measured under load:
+That string has exactly one source: `deploy/docker/crawler_pool.py:179`, which
+raises `MemoryError` when `get_container_memory_percent()` is at or above
+`MEM_LIMIT` — **85.0**, from our own `config.yml` (`memory_threshold_percent`,
+commented "Aitosoft: was 95 — leave headroom on 4 GiB replicas").
 
-| Fact | Value | Source |
-|---|---|---|
-| scale-to-zero idle | ~5–6 min after last request | forensics §0 |
-| cold image pull | **37.6 s** (1.79 GB) | forensics §0 |
-| app boot | ~3.5 s | forensics §0 |
-| render capacity | 2 per replica, KEDA rule at 2 concurrent | `config.yml` + ACA |
+| cid | reading | | cid | reading |
+|---|---:|---|---|---:|
+| `e7deaf4ececb` | 95.6 % | | `73220db2dd23` | 89.0 % |
+| `631b86527fc3` | 90.2 % | | `7b710be5a333` | 88.0 % |
+| `4492bd99f3f7` | 90.3 % | | `3bac649a8171` | 85.1 % |
+| `c75787261894` | 92.1 % | | `e9d8eb4e344b` | 86.3 % |
+| `d0b1d722e133` | 89.3 % | | | |
 
-**Hypothesis to test, not to assume:** requests landing on a replica that is
-still starting — image pulled, app up, but the PERMANENT pool browser not yet
-initialised, or the pool re-initialising — fail in a way that classifies as
-`render_error`. If so, every scale-out step during the sweep produces a burst of
-500s, MAS retries each three times, and the cost is worst exactly when volume is
-highest.
+Every reading is just over our own 85 % line. The same log lines report
+`server_peak_memory_mb` of **204–235 MB** — on a **4 GiB** replica. Those two
+numbers cannot both describe the same memory.
 
-Competing explanations that must be excluded before believing that one:
+### Both of MAS's questions are answered by this, and one of them changes their ledger
 
-- **Concurrency, not coldness.** RenderGate rejects with 429, not 500, and the
-  7-day census showed 0 REJECTs — but that was before this probe's arrival rate.
-  Check `RenderGate ADMIT` / `REJECT` and `in_use=` around the window.
-- **A property of those five hosts after all.** Four of the five are in MAS's
-  retry list from message 07, so they were hit repeatedly — check whether the
-  500s correlate with the *repeat* attempts rather than the clock.
-- **Coincidence.** n = 5 hosts in one 19-minute run. Say so if that is where the
-  evidence lands; a negative result here is worth having written down.
+1. **The 9 × 500 never reached the origin.** The guard at `crawler_pool.py:179`
+   sits *before* `AsyncWebCrawler(...)` and `crawler.start()` — no browser was
+   created, so no navigation happened. **MAS's day cost 246 origin hits, not
+   255.** Their message 09 correction asked for exactly this number.
+2. **The clustering is real and it is a scale-out ramp, not a per-host
+   property.** Replica count across the run, from `ContainerGroupName_s`:
 
-## Also answers two questions MAS asked us
+   | window (UTC) | distinct replicas | 500s |
+   |---|---:|---:|
+   | 04:40–04:44 | 2 | 0 |
+   | 04:46 | **4** | **8** |
+   | 04:48 | 4 | 0 |
+   | 04:50 | **6** | **1** |
+   | 04:52 → 05:08 | 5–6 | 0 |
 
-Both come out of the same log query and neither needs a new instrument:
+   All nine land on the two scale-out steps (2→4, then 4→6) and none land
+   anywhere else. MAS was right to flag it and right not to read a 3.6 % per-host
+   rate into it.
 
-1. **Did the 9 × 500 reach the origin?** MAS cannot tell from outside, and it
-   changes their site-safety ledger: if `render_error` fires *after* the fetch the
-   day cost 255 origin hits, if before, 246. The correlation IDs are the join key.
-   Under the shared-egress finding this is our number to produce, not theirs.
-2. **Does the clustering mean anything?** Whatever the answer, send it — they
-   explicitly said they would rather know before reading a 3.6 % rate into
-   anything.
+### What is still open — this is the actual work
+
+The mechanism is known; **why the reading is 85–100 % is not**, and the fix
+depends on it. Leading candidate, to confirm and not to assume:
+
+- **`memory.current` includes the page cache.** `get_container_memory_percent()`
+  (`deploy/docker/utils.py:411`) is `memory.current / memory.max` on cgroup v2.
+  On v2 `memory.current` counts file cache, and a replica that has just pulled
+  and started a 1.79 GB image has a large cache component that the kernel would
+  happily reclaim under pressure. The standard correction is to subtract
+  `inactive_file` from `memory.stat`. If that is it, the guard has been refusing
+  work over memory that was never actually scarce — which is what the 235 MB
+  process peak already suggests.
+- **The create path is the common path, not the rare one.** In the same window:
+  **125 "Creating new browser" against 53 cold-pool reuses** for ~252 requests.
+  The memory check only runs when a *new* browser is needed, so a pool that
+  rarely reuses turns a rare guard into a per-request one. Worth checking whether
+  MAS's per-company `browser_config` (their contract — per-company UA, viewport,
+  headers) produces a distinct `_sig` per request and therefore defeats pooling
+  by design. If so, this compounds with the sweep: 15,000 companies is 15,000
+  signatures.
+- **The wire status is wrong regardless of the reading.** "We are full" already
+  has a correct shape in this codebase — RenderGate answers 429 + `Retry-After`,
+  which MAS backs off on. The memory guard answers 500, which MAS retries three
+  times, so the response to memory pressure is *more* load. **This is the same
+  defect shape as the `render_error` split in
+  `cleaned-html-collapse-guard.md`: one condition, two wire statuses, and the
+  expensive one is not chosen deliberately.** Fix them with the same reasoning.
+
+Do not lower or raise the 85 threshold as the fix before the reading is
+understood; a threshold on a wrong number is still wrong.
+
+### The three hypotheses this file opened with — all refuted, kept for calibration
+
+*Cold/starting replica whose pool browser is not up* — directionally right about
+scale-out, wrong about mechanism; nothing in the logs shows an uninitialised
+pool. *Concurrency (RenderGate)* — no, RenderGate answers 429 and none were
+issued. *A property of those five hosts* — no; four of the five sit in the 04:46
+bin with three other hosts' requests, and the same hosts succeeded minutes later.
 
 ## What this replaces
 
@@ -101,21 +145,62 @@ having removed the failure `static-fallback-within-fence.md` was sized against.
 243 fetches on one afternoon is not a workload, but it points the way we
 suspected — record it there.
 
-## If the hypothesis holds
+## The fix, once the reading is understood
 
-Do not design the fix in this file; the shape depends on which of the three
-explanations survives. But note what already exists to build on: the pool has a
-PERMANENT tier and a BUSY_SINCE janitor (`crawler_pool.py`), and ACA has a
-startup probe (`DEPLOYMENT_INFO.md`). A replica that is not ready to render
-should not be receiving renders, and that is a readiness-probe question before it
-is a code question.
+Do not design it before the page-cache question is settled, but the shape is
+already constrained by three things we know:
+
+1. **The reading must describe memory that is actually scarce.** If `inactive_file`
+   is the difference, correct `get_container_memory_percent()` there and say in
+   the code which number it now reports. This is `deploy/docker/utils.py`, ours
+   since the file is Aitosoft-side of the boundary — check `AITOSOFT_FILES.md`
+   before assuming.
+2. **A refusal is a 429, not a 500.** Match RenderGate: `Retry-After`, and a
+   `failure_class` that says capacity rather than `render_error`. MAS retries 500
+   three times with 1 s/2 s/4 s backoff, so today a memory-pressure event
+   multiplies its own load by four at the worst possible moment.
+3. **It is testable offline.** `test-aitosoft/test_crawler_pool.py` already owns
+   this module and `test_admission.py` owns the 429 shape. A fake
+   `get_container_memory_percent` and a fixture-origin request is the whole
+   instrument — no live traffic, no Azure.
+
+Reproducing the *reading* offline is the one part that may not be possible in the
+dev container; if not, say so and verify it from the next deploy's logs rather
+than inventing a local cgroup.
 
 ## Verification
 
-- Zero live requests. Log Analytics (`ContainerAppConsoleLogs_CL`,
-  `ContainerAppSystemLogs_CL`) and the correlation IDs above.
-- Whatever the verdict, write it into
-  `tasks/waa-eval-2026-07-30-forensics.md` §11 and answer MAS in the next message.
-- If a scale-out defect is confirmed and the fix is small, it joins the
-  `cleaned-html-collapse-guard` + `detector-round3` image rather than getting its
-  own deploy.
+- Zero live requests. Log Analytics + the correlation IDs above. The queries that
+  produced §"What the logs say", for re-running rather than re-deriving:
+
+  ```kusto
+  // the nine, with cause
+  ContainerAppConsoleLogs_CL
+  | where TimeGenerated between (datetime(2026-07-31T04:40Z) .. datetime(2026-07-31T05:10Z))
+  | where Log_s contains 'server error 500'
+  | extend cid=extract('cid=([0-9a-f]+)',1,Log_s), err=extract('"error": "([^"]*)"',1,Log_s)
+  | project TimeGenerated, cid, err | order by TimeGenerated asc
+
+  // the scale-out ramp
+  ContainerAppConsoleLogs_CL
+  | where TimeGenerated between (datetime(2026-07-31T04:40Z) .. datetime(2026-07-31T05:10Z))
+  | summarize replicas=dcount(ContainerGroupName_s) by bin(TimeGenerated, 2m)
+
+  // pool churn: creates vs reuses
+  ContainerAppConsoleLogs_CL
+  | where TimeGenerated between (datetime(2026-07-31T04:44Z) .. datetime(2026-07-31T05:05Z))
+  | summarize creates=countif(Log_s has 'Creating new browser'),
+              coldreuse=countif(Log_s has 'Using cold pool')
+  ```
+
+  Workspace `workspace-aitosoftprodnCsc`, customer ID in `DEPLOYMENT_INFO.md`;
+  `az account show` was already authenticated on 2026-08-01.
+- Write the verdict into `tasks/waa-eval-2026-07-30-forensics.md` §11 — the file
+  currently ends at §10e, so §11 is a new section.
+- Both MAS answers go into message 10: **246 origin hits, not 255**, and **the
+  clustering is the scale-out ramp**. Both are already established above; the
+  session's job is the fix, not re-confirming them.
+- If the fix is small, it joins the `cleaned-html-collapse-guard` +
+  `detector-round3` image rather than getting its own deploy. **That coupling is
+  why this task runs before those two** — after their image ships, this option is
+  gone.
