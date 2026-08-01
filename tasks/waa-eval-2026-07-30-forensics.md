@@ -686,3 +686,110 @@ Both from MAS's own run, both now tasked as
 | `blocked-host-retry-economy` | ~12–16 page loads/company | MAS no longer retries origin-class failures ⇒ ~4; the win shrank |
 | `antibot-minimal-text-false-positive` | latent, no report | **observed live** (`norex.com`); merged into detector round 3 |
 | `static-fallback-within-fence` | high | re-price first — the hang fix should have made fence-504s rare |
+
+## 11. The 9 × 500 in MAS's probe — our own memory guard, and what it really means
+
+Verified 2026-08-01 from Log Analytics plus an offline probe, zero live traffic.
+Owned by `tasks/render-500-window-2026-07-31.md`, which carries the queries. Two
+passes were needed and the second corrected the first; both are recorded here
+because the correction is the reusable lesson.
+
+### 11a. The cause
+
+All nine of MAS's HTTP 500s are one line: `crawler_pool.py:179` raising
+`MemoryError` because `get_container_memory_percent()` read 85.1–95.6 % against
+our own `memory_threshold_percent: 85.0`. The guard sits *before*
+`AsyncWebCrawler(...)` and `crawler.start()`, so **no browser was created and no
+navigation happened — MAS's day cost 246 origin hits, not 255.**
+
+`api.py`'s generic `except Exception` turns that `MemoryError` into HTTP 500 with
+`failure_class: render_error`. MAS retries 500 three times, so **a memory-pressure
+event currently multiplies its own load by four.** RenderGate already answers the
+same condition correctly — 429 + `Retry-After` — so "we are full" is served at two
+different wire statuses depending on which limiter notices. Same defect shape as
+the `render_error` split in §10, and it is fixed the same way.
+
+### 11b. The 235 MB was never the container
+
+The 500 bodies report `server_peak_memory_mb` of 204–235 MB on a 4 GiB replica,
+which reads as a contradiction with a 95.6 % cgroup reading. It is not one.
+`server_peak_memory_mb` is `psutil.Process().memory_info().rss` (`api.py:105`) —
+the single gunicorn worker. Chrome runs as descendant processes (~7 per browser)
+and has never been in it.
+
+Measured offline through the fixture origin and the real production path, one
+pooled browser per crawl with a distinct `browser_config`
+(`test-aitosoft/experiment_pool_memory.py`), run cold and again warm:
+
+| per pooled browser | cold cache | warm cache |
+|---|---:|---:|
+| worker RSS (`server_peak_memory_mb`) | **+2.0 MB** | **+2.3 MB** |
+| cgroup `memory.current` (the guard) | **+165.0 MB** | **+138.9 MB** |
+| — `anon` | +129.9 MB | **+129.4 MB** |
+| — `file` / `inactive_file` | +27.1 / +26.0 MB | +1.8 / +1.4 MB |
+
+Three things follow. **The reading is roughly right and the memory really was
+scarce** — `anon`, the term the kernel cannot reclaim, is a stable ~130 MB per
+browser across both runs. **The page-cache term is a one-time fill, not a
+per-browser cost** — 27 MB/browser cold, 1.8 MB/browser warm, i.e. Chrome's
+binary and libraries paged in once; `inactive_file` is 16 % of the growth on a
+cold container and 1 % on a warm one, so subtracting it is a bounded offset
+rather than the explanation. And **sum-of-RSS is not an instrument either**: each
+browser moved process-tree RSS by ~486 MB against the cgroup's ~139–165 MB,
+because Chrome's shared mappings are counted once by the cgroup and seven times
+by a tree walk. Corroborating from prod: btv4v read 8.2 % (≈336 MB) three seconds
+after boot with a 235 MB worker, so the cgroup path and a real ~4 GiB limit are
+live; it later reached 100.0 % with no OOM kill and no worker restart.
+
+### 11c. It was not a scale-out ramp. It was scale-from-zero.
+
+The first pass reported the nine landing on two scale-out steps (2→4, 4→6). Wrong
+in both directions. **All nine are on one replica** (`…-btv4v`), and the app was
+**scaled to zero** at 04:40. KEDA activated 0→1 at 04:44:43; MAS's probe started
+13 seconds later; the second replica admitted its first render at **04:46:54** —
+*after* eight of the nine failures. The ninth, at 04:50:25, sits inside a
+2½-minute `AssigningReplicaFailed / Waiting for infrastructure` node-pool stall.
+
+One cold replica carried the entire opening burst for 122 seconds. That is worse
+for the sweep than the original reading, not better: every wave that starts from
+an idle service reproduces it exactly, and no amount of scale rule fixes the first
+two minutes.
+
+### 11d. The actual cause: nothing bounds pool residency
+
+`render_capacity: 2` bounds concurrent renders; `max_pages: 5` bounds pages per
+browser; **nothing bounds the number of live browsers.** Residency is governed by
+idle TTL, so the browser count tracks distinct configs seen in the last TTL
+window, not concurrency — btv4v held 8 browsers to do 2 renders' worth of work,
+which at 165 MB each is the 4 GiB.
+
+It thrashes on top of that: **125 creates, 132 closes, for 10–12 distinct
+signatures per replica.** Under pressure the janitor drops `cold_ttl` to 30 s,
+closes browsers, and the next request for the same config must launch a fresh one
+— allocating while memory is tight, which is what trips the guard.
+
+Two corrections to earlier assumptions fall out of the same numbers:
+
+- **MAS's per-company `browser_config` does not defeat pooling.** 243 hosts
+  produced 10–12 distinct signatures per replica, not one per company. The
+  "15,000 companies is 15,000 signatures" worry is unfounded.
+- **The permanent browser is never used.** `Using permanent browser` fired 0
+  times against 224 pool gets, because MAS always sends a `browser_config` and
+  `_sig` never equals `DEFAULT_CONFIG_SIG`. Every replica launches a browser at
+  boot that serves nothing and holds ~165 MB for its whole life.
+
+### 11e. Method note — this one is worth keeping
+
+Both first-pass errors came from the same omission: **`ContainerAppConsoleLogs_CL`
+is workspace-wide**, and the queries had no app filter, so `aitosoft-edge`'s
+replica was counted as ours and `dcount(ContainerGroupName_s) by bin(…)` counted
+"replicas that logged in a bin" as "replicas that existed". Filter
+`ContainerGroupName_s startswith 'crawl4ai'`, take replica history from
+`ContainerAppSystemLogs_CL` which states it, and take "started serving" from the
+first `RenderGate ADMIT` rather than from container-start events. Adding `by
+ContainerGroupName_s` to a query already being run would have caught it.
+
+Second note: `janitor()` reads `mem_pct` *before* its sleep and logs it *after*
+the cleanup, so the `mem=` and the `hot=/cold=` in one `📊 Pool:` line are up to
+`interval` seconds apart. They are not a simultaneous sample and must not be
+correlated as one.

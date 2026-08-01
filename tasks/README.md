@@ -1,6 +1,7 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-01, coordinator pass before the session run.
+**Updated:** 2026-08-01, after the #2 verification session (which corrected the
+coordinator pass that preceded it — see #2 and forensics §11e).
 **This file holds ordering and gating only** — the reasoning lives in each task
 file, the evidence in `waa-eval-2026-07-30-forensics.md`. If they disagree, the
 task file wins and this index is stale; fix it.
@@ -29,17 +30,24 @@ investigations that produce numbers and no code, then two code tasks that ship i
 small, joins #3+#4's deploy, and after that image ships the option is gone.
 
 **Updated 2026-08-01: #1's investigation half is done and its code half shrank to
-S**, so the image is now #1-phase-2 + #2 + #3 + #4, not #3 + #4. Message 10 is no
-longer waiting on #1 — only on #2, and #2's cause is already found. Both
+S**, so the image is now #1-phase-2 + #2 + #3 + #4, not #3 + #4. Both
 investigations produced a decisive **negative** alongside their number (#1: the
 `page.content()` nav race costs no captures; #2: the 500s never reached the
 origin), which is worth as much to MAS as the positives and should be sent with
 the same confidence.
 
+**Updated 2026-08-01 (later): #2 is diagnosed and split.** Its S half (wire
+status, reading, the never-used permanent browser) ships in that image; its M
+half is the new #11. **Message 10 is unblocked** — both MAS answers are final,
+but one of them changed between passes, so send the version in #2 and not the
+coordinator's. That two of three coordinator claims on #2 were wrong for one
+reason — an unfiltered workspace-wide log query — is written up in forensics
+§11e; it is the reusable part.
+
 | # | Task | Gate | Why here |
 |---|------|------|----------|
 | 1 | `challenge-interstitial-resolve.md` | **phase 1 DONE 2026-08-01**; phase 2 ships with #3+#4 | **The number: a capture wait `W` gets any challenge resolving within `W + 1.22 s`; MAS's 2.0 covers 3.2 s.** One constant, 0/84 mispredictions, zero live requests. Phase 2 is a **go but S, not M** — `maybe_retry_blocked` already re-fetches every detected block with the *same* wait, so it needs a longer wait, not a new mechanism. Two negatives worth the same weight: the `page.content()` nav race cost **no** captures (42/42 identical), and an adaptive shape inherits the detector's recall, so the unmarked interstitial gets nothing. **Message 10 is now unblocked.** |
-| 2 | `render-500-window-2026-07-31.md` | none — logs only, **zero traffic** | **Cause found 2026-08-01, fix not designed.** All 9 × 500 are our own memory guard (`crawler_pool.py:179`) refusing to create a browser at our own 85 % threshold — while the process held 235 MB on a 4 GiB replica. Every one landed on a scale-out step (2→4 replicas, then 4→6), which is what the sweep does continuously, and it arrives as the one status MAS retries 3×. Both of MAS's questions are answered by it: **the 9 never reached the origin (246 hits, not 255)** and **the clustering is the ramp**. |
+| 2 | `render-500-window-2026-07-31.md` | none — logs only, **zero traffic** | **Diagnosed and fix designed 2026-08-01; the S half is written, not yet coded.** All 9 × 500 are our own memory guard (`crawler_pool.py:179`) at our own 85 % threshold. The 235 MB was never the container — it is the gunicorn worker's RSS, and Chrome is child processes (measured: **+2 MB worker RSS vs +139–165 MB cgroup per pooled browser**, ~130 MB of it unreclaimable `anon`), so the reading is roughly right and the memory was scarce. **All nine are on one replica that carried the burst alone for 122 s after a scale-from-zero** — not a scale-out ramp, which is what the first pass said. Real cause: **nothing bounds live browsers** (125 creates / 132 closes for 10–12 signatures). **S1 status code + S2 reading + S3 the never-used permanent browser ship with #3+#4; M1 pool cap is carved out.** MAS answers: **246 origin hits, not 255**, and the clustering is scaling lag. |
 | 3 | `cleaned-html-collapse-guard.md` | none | Second silent whole-body loss in a month; the first ran 3½ months across 406 pages at `success: true`. **A third is already reproduced offline** — `/collapse/unclosed-noscript` loses the whole body through the real production path. Enumerate through the browser, not only through libxml2 — that is what hid this one. Also fixes the `render_error` wire-status split it uncovered. **Do not deploy alone.** |
 | 4 | `detector-round3-evidence-vs-inference.md` | none | Eight hosts measured in prod: four blocks missed (every size gate is on `len(html)`; the vendor pads to 80 KB), four invented (including our own error placeholder reported as the origin blocking us). Defect A has a red test; so does the unmarked-interstitial variant. **Ships #3's image**; gates #6. |
 | 5 | `static-fallback-within-fence.md` | none — re-price, likely close | **Drop, not build**, on current evidence. MAS's probe: 0 × 504, nothing within 145 s of the 180 s fence — consistent with `done/render-retry-unbounded-hang.md` having removed the failure this was sized against. 243 fetches is not a workload, but it is the only dataset the current image has seen. |
@@ -48,7 +56,8 @@ the same confidence.
 | 8 | `base-config-boolean-defaults-never-applied.md` | none | `simulate_user` has never taken effect and the next boolean won't either. Small. Decide whether the setting should exist at all rather than restoring an intent nobody measured. |
 | 9 | `residential-egress-retry-path.md` | **#1 phase 2, then MAS's next sweep, then Tero** | On hold, and the population is now derived rather than asserted: **floor 6, ceiling 29** (4 of the 33 verdicts are our own false positives and belong to #4; 4 are a hard 403 template no wait can fix; 23 are undetermined until #1 phase 2 ships). Phase 1 did **not** shrink it — it made the 23 measurable for free. Still no evidence on either side that a residential IP gets through; the dev container's Finnish consumer ISP egress can test that when the count is real. |
 | 10 | `static-mode-tls-impersonation.md` | #1, #9 | Hardens the path #5 makes everything fall back to. IP has dominated fingerprint in every case measured so far; #1 and #9 are what would change that. |
-| 11 | `pool-browser-retains-last-page.md` | none | One document's memory pinned per browser. Was "low impact"; **#2 makes it worth re-reading** — a memory guard now demonstrably refuses work, the pool created 125 browsers for ~252 requests, and this is why our memory numbers have never been readable. Do not merge it into #2, but read it there. |
+| 11 | `pool-residency-unbounded.md` | none — but design with #12 | **New 2026-08-01, the M half carved out of #2.** `render_capacity` bounds renders and `max_pages` bounds pages; **nothing bounds live browsers**, so 8 were held to do 2 renders' worth of work at a measured 139–165 MB each (~130 MB of it unreclaimable `anon`). The janitor's adaptive TTL then thrashes it — 125 creates and 132 closes for 10–12 signatures — by launching browsers precisely when memory is tight. Needs a `max_browsers` cap with LRU eviction, priced together with #12. |
+| 12 | `pool-browser-retains-last-page.md` | none | One document's memory pinned per browser. Was "low impact"; **#2 and #11 make it worth re-reading** — per-browser cost is now measured (139–165 MB cgroup, of which a stable 130 MB is `anon`) and this is a term in it. It sets the right cap in #11, so price the two together. |
 | — | `antibot-minimal-text-false-positive.md` | — | **Merged into #4** — the latent defect was observed live (`norex.com`). Close it when #4 ships. |
 | — | `file-upstream-prs.md` | upstream | Standing tracker, four PRs open. Small `fix(docker):` PRs merge in 1–5 days; core behavioural changes sit for months — expect no movement. |
 | — | `waa-eval-2026-07-30-forensics.md` | — | Reference, not a task. Never close it; task files cite it instead of re-deriving. |
@@ -92,20 +101,34 @@ Settled 2026-07-31 (their message 09), and it reframes the contract:
   part-superseded and will bring us the sweep's shape — waves, concurrency,
   per-host spacing — before wave 1.
 
-Found on our side 2026-08-01 (coordinator pass, logs only — see #2):
+Found on our side 2026-08-01 (logs + offline probe, zero traffic — see #2 and
+forensics §11; the coordinator's first pass on this is superseded):
 
 - **The 9 × 500 were our memory guard, not a render failure.** `crawler_pool.py:179`
   refuses to create a browser at `memory_threshold_percent: 85.0`; the readings
-  were 85.1–95.6 % while the process held 204–235 MB on a 4 GiB replica. The
-  reading and the process cannot both be describing the same memory.
+  were 85.1–95.6 %.
+- **The 235 MB and the cgroup reading were never measuring the same memory.**
+  `server_peak_memory_mb` is the gunicorn worker's RSS (`api.py:105`) and Chrome
+  is ~7 child processes per browser. Measured on the real path: **+2.0 MB worker
+  RSS vs +139–165 MB cgroup per pooled browser**, of which a stable **130 MB is
+  `anon`**. So the reading is roughly right and the memory was scarce; the page
+  cache term is a one-time cold-container fill (27 MB/browser cold, 1.8 warm),
+  not the story.
 - **"We are full" is answered with two different wire statuses**, exactly like
   `render_error`: RenderGate says 429 + `Retry-After`, the memory guard says 500,
   and 500 is the one MAS retries three times. Memory pressure currently
   multiplies its own load by four.
-- **The pool barely reuses**: 125 browser creations against 53 cold-pool reuses
-  across ~252 requests. Worth checking whether per-company `browser_config` —
-  their contract — produces a distinct pool signature per request. At 15,000
-  companies that would be 15,000 signatures.
+- **It was scale-from-zero, not scale-out.** The app was at zero replicas at
+  04:40; all nine 500s are on the one replica that came up at 04:44:49, and the
+  second replica served its first render at 04:46:54 — after eight of the nine.
+- **Nothing bounds the number of live browsers.** `render_capacity` bounds
+  renders and `max_pages` bounds pages; residency is governed by idle TTL alone,
+  so 8 browsers were held to do 2 renders' worth of work. 125 creates and 132
+  closes for **10–12 distinct signatures per replica** — so per-company
+  `browser_config` does *not* defeat pooling, and the "15,000 signatures" worry
+  is unfounded. Carved out as M1.
+- **The permanent browser is never used** — 0 hits in 224 pool gets, because MAS
+  always sends a `browser_config`. ~130 MB of `anon` per replica, for its whole life.
 
 Owed to MAS, to go out together as message 10 once #1 and #2 land:
 
@@ -126,9 +149,21 @@ Owed to MAS, to go out together as message 10 once #1 and #2 land:
   happened. **Their day cost 246 origin hits, not 255.** Under the shared-egress
   finding this is our number to produce, and it is produced.
 - **Whether the 04:46–04:50 clustering means anything — ANSWERED: yes, and it is
-  not a per-host rate.** All nine 500s land on the two scale-out steps and none
-  anywhere else. They were right to flag it and right not to interpret it.
+  not a per-host rate.** All nine are on a single replica that absorbed the
+  opening burst alone for 122 s, because the service was scaled to zero when
+  their probe started and the second replica did not serve until 04:46:54. It is
+  scaling lag, **not** a scale-out ramp — an earlier draft of this answer said
+  the latter; do not send that version. They were right to flag it and right not
+  to interpret it.
 - **`fodbar.fi`:** they agree we should report the origin's status rather than
   overrule a 403 that serves content, and would like a small field saying *content
   was present despite the origin status* — moving the decision to their side,
   where 117,000 stored pages are. Cheap; fold into #3.
+- **A second source of 429 is coming, and they should hear it before it lands.**
+  Once #2's S half ships, memory-pressure refusals arrive as **429 +
+  `Retry-After`** instead of 500. Their client already backs off correctly on
+  429, so nothing breaks — but the *shape* changes: on a cold first wave a single
+  replica can answer a burst of them, which is right behaviour and still looks
+  like a stall from their side. Send it with the scale-from-zero finding, since
+  the two are the same event seen from either end, and say plainly that the 429
+  makes the symptom cheap without removing the cause (#11 is the cause).
