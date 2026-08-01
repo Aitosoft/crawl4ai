@@ -87,8 +87,10 @@ messages are the transcript, not the source of truth.
 Settled 2026-07-31 (their message 07):
 
 - **Envelope `success`:** flip it to the aggregate, **conditional on the HTTP
-  wire status staying 200**. That condition is the load-bearing half. Shipping in
-  #3.
+  wire status staying 200**. That condition is the load-bearing half.
+  **Deliberately NOT shipped in the 2026-08-01 image** — it buys no behaviour
+  (they never read it on 2xx) and would have been a third contract change in one
+  deploy. Proposed in message 10; ship it on its own afterwards.
 - **Their `DEGENERATE_CAPTURE_CHARS = 500` floor is 500 markdown characters**,
   not HTML bytes. The unit hazard is live — we reason in HTML bytes, they store
   markdown. Name the unit every time.
@@ -102,10 +104,11 @@ Settled 2026-07-31 (their message 09), and it reframes the contract:
   the body is parsed — `failure_class` is received, logged and unread. So a
   detected collapse goes out as **HTTP 200 + result-level `success: false`**, the
   shape `savaterra.fi` proved end to end at zero retries. Never behind 500/502/503.
-- **`render_error` is currently served at two wire statuses.** Static mode returns
-  it inside a 200 (`aitosoft_static_mode.py:316` — static never raises), full mode
-  at 500. Same class, opposite retry behaviour, decided by `render_mode`.
-  Ours to fix, in #2.
+- ~~**`render_error` is currently served at two wire statuses.**~~ **FIXED and
+  deployed 2026-08-01.** Static returned it inside a 200 (static never raises),
+  full mode at 500. Both modes now route through `server._crawl_response` →
+  `http_status_for`. The missing axis was **permanence, not ownership**:
+  `render_defect` is entirely ours *and* must not be retried.
 - **They have had zero production traffic since our deploy** — 86 WAA runs on
   2026-07-30, all before 18:24 UTC, none since. Their 243-host probe is the only
   workload the current image has seen. Do not read their silence as "seeing none".
@@ -167,8 +170,14 @@ Found on our side 2026-08-01 (#3 part 1, offline, zero traffic):
   should either widen the margin deliberately or measure fence latency separately
   from harness overhead.
 
-Owed to MAS as message 10. **#1 and #2 have now landed and the image has
-shipped, so nothing gates this message any more** — every item below is final:
+**Message 10 is DRAFTED and waiting on Tero to relay:**
+`tmp/mas-repo-messages/10-to-mas-the-202-answer-and-four-deploys-in-one-image.md`
+(coordinator, 2026-08-01, after the deploy). It carries every item below plus the
+four asks in its §7. **Until Tero confirms it has gone, treat MAS as not knowing
+any of it** — in particular they do not yet know that two of their four corrected
+verdicts now cost them retries, or that a second source of 429 exists.
+
+What it says, kept here because the message file is gitignored:
 
 - **The 202 result — ANSWERED 2026-08-01, offline.** `W + 1.22 s` is the capture
   budget; their 2.0 covers a 3.2 s challenge, which confirms the bottom of their
