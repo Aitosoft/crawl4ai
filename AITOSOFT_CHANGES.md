@@ -7,12 +7,15 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-07-30
+**Last Updated**: 2026-08-01
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
-- **Production**: v0.9.2 + render admission + static-mode hardening + single-URL contract guard + pool cleanup/re-init + patchright tidy + fence-504 observability + redirect-aware block detection + bounded render calls + `failure_class` taxonomy + `<noscript>` body-loss fix + challenge detection (deployed 2026-07-30)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-failure-class` (revision `crawl4ai-service--0000031`, digest `sha256:afd98e31...`)
+- **Production**: the above + collapse guard + one wire status per failure class + detector round 3 (padded blocks caught, inferred blocks no longer reported as the origin's) + patchright retry capture wait + memory guard 429 (deployed 2026-08-01)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-detector-round3` (revision `crawl4ai-service--0000032`, digest `sha256:41ffd880d2f3a1e28136f2e03b53bf4a83c8ce994b6447d2c90096d70ace67a9`)
+- **Previous**: `0.9.2-failure-class` (revision `--0000031`, deployed 2026-07-30)
+- **Prod smoke 2026-08-01 (detector-round3)**: health ✅, unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅, revision `--0000032` Running at 100 % traffic with `--0000031` deprovisioning (checked **before** the crawl — the 2026-07-30 smoke was taken mid-cutover and reported pre-fix output) ✅. `caverna.fi` → HTTP 200 / `success:true` / `failure_class:"none"` / 1210 B markdown / 4.8 s ✅ — byte-identical markdown to the pre-deploy Tier 1 run, i.e. the widened detector and the collapse guard both stayed silent on a healthy page in production.
+  **Not smoke-tested in prod, deliberately:** the four padded-403 hosts. Confirming defect A against `talpa.fi` would be a live request to a host MAS has already burned, to verify a pure-Python status/body rule that 232 offline tests exercise through the real production path. MAS re-scrapes those hosts naturally, so their next sweep is the production confirmation at zero marginal traffic.
 - **Prod smoke 2026-07-30 (failure-class)**: health ✅, unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅. `caverna.fi` → 200 / `success:true` / `failure_class:"none"` / 1210 B markdown (2.8 s) ✅. **`konecranes.com` — the reported incident — → HTTP 200, `success:false`, `status_code:403` (was `301`), `redirected_status_code:403`, `failure_class:"origin_blocked"`, real `error_message`** ✅ — previously `success:true` with the Varnish block page as content, and before that an opaque retried 500. Both fixes visible in one response, which is what this image was assembled for. Caveat: the first smoke run hit revision 0000030 mid-cutover and showed pre-fix output; re-run after traffic reached 100% on 0000031.
 - **Prod smoke 2026-07-17 (fence-obs)**: health ✅, authenticated render 200 (1.1s, new revision) ✅, "RenderGate ADMIT url=… waited=0.0s in_use=1/2" visible in container logs ✅ (Tier 1 4/4 was run pre-deploy vs local server, `--version fence-obs-local`)
 - **Prod smoke 2026-07-17 (single-url)**: health ✅, 2-URL request → 400 w/ contract message ✅, single-URL caverna.fi crawl ✅, Tier 1 regression 4/4 ✅

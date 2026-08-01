@@ -29,7 +29,8 @@ since the second instance of the detector defect was already sitting there.
 
 ## Shipped 2026-08-01 — one image, four items
 
-`0.9.2-detector-round3`. Closed: `challenge-interstitial-resolve.md` (both
+`0.9.2-detector-round3`, revision `--0000032`, deployed and smoke-tested
+2026-08-01. Closed: `challenge-interstitial-resolve.md` (both
 phases), `detector-round3-evidence-vs-inference.md`,
 `antibot-minimal-text-false-positive.md`, and the S half of
 `render-500-window-2026-07-31.md`. `cleaned-html-collapse-guard.md` part 1 is
