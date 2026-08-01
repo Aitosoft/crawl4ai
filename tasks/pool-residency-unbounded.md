@@ -256,6 +256,124 @@ count flat at 43. Memory bounded by construction, which was the point.
 
 ---
 
+## What the DEPLOYING session found wrong, 2026-08-02 (sixth in a row)
+
+Both prescribed fixes were done, but **fix (a) could not be implemented as
+written**, and the reason matters more than the fix.
+
+### (a) "evict, re-read, then refuse" — the re-read cannot measure anything
+
+`_close_detached` calls `asyncio.create_task`. A task created inside a coroutine
+does not start until the creating coroutine yields, and there is **no `await`**
+between the eviction and any re-read — so the close has made not "some" progress
+but *zero*. Forcing it to start (`await asyncio.sleep(0)`) does not help either:
+it immediately blocks on Playwright IO, Chromium exit plus kernel reclaim is
+100 ms–seconds, and any sleep there sits inside `LOCK` on the unfenced admission
+path — a direct breach of this file's own "never waits" invariant.
+
+So the re-read branch could never fire, and the only way to make it fire is a
+mock returning a different value the second time: a test of a scenario that
+cannot occur.
+
+**What shipped instead: evict one idle LRU browser, then refuse anyway.** The
+shed is the point (it is what replaces the removed adaptive TTL); the refusal is
+honest, because memory *is* over the limit at that instant. The reclaim lands
+for the next arrival, which is exactly what the 429 + `Retry-After` schedules.
+
+### A second defect in the same instruction, avoided by accident
+
+Implementing (a) via the existing helper — `_evict_for_capacity(headroom=1)` —
+would have been a **no-op in the common case**. Its loop is
+`while resident_browsers() + headroom > MAX_BROWSERS`, so under memory pressure
+with the pool *below* the cap it evicts nothing. It would have shipped green and
+done nothing. Split out `_evict_lru_idle(reason)` instead, which also removed a
+latent infinite loop in the old body (`LAST_USED.pop` then `continue` re-selects
+the same key at `used=0.0`, spinning while holding `LOCK`).
+
+### What fix (a) costs, stated plainly
+
+It **re-arms a memory→browser-count feedback loop** — the same confound that
+`replica-memory-baseline-unexplained.md` §2 uses to disqualify the 2026-07-31
+slope, whose instruction was "fit on data drawn with the TTL loop gone (the
+current build)". After this deploy the current build has a loop again. It is
+narrower (fires only on refusals, not on a timer) and the eviction log line names
+`memory pressure X%` so those samples can be filtered — but **a naive fit across
+this build carries the same bias.** Filter on the reason, or measure offline.
+
+Also fixed while there: the guard's `logger.error` evaluated `hot=`/`cold=`
+*after* the eviction, so the one line pairing a memory reading with pool
+composition reported one browser fewer than the pool held when the reading was
+taken. Composition is now snapshotted before the shed.
+
+Two claims in the comments were softened because they were overstated: "one, not
+all" is **one per refusal, not per episode** (nine refusals in four minutes sheds
+up to nine), and "idle-only" was never the difference from the adaptive TTL —
+that skipped busy browsers too. The real differences are LRU order, that it
+engages only while arrivals are being refused, and that a refusal never launches.
+
+### Cheapest lever found and taken: `permanent_unused_ttl_sec` 600 → 120
+
+Nobody had asked what the boot browser costs during a cold burst. It is
+unreachable **by construction** (`server.py:199` builds its config inline without
+`enforce_egress`; `get_default_browser_config():138` and every request path apply
+it), confirmed by 0 hits in 224 production pool gets. At 600 s it held ~140 MB
+through minutes 0–10 of a replica's life — precisely the window that produced all
+nine of MAS's refusals (replica up 04:44:49, refusals 04:46–04:50). 120 s is a
+one-number config change on exactly the failing path.
+
+**Not the real fix, and deliberately not bundled:** whether that boot browser
+should exist at all — delete the `init_permanent` call, or route it through
+`get_default_browser_config()` to make it reachable — is a `server.py` change,
+the two options point opposite ways, and it deserves its own attributable change.
+This file previously considered only the second and declined it; **nobody had
+proposed deleting it.**
+
+## THE RESIZE IS NOT AVAILABLE — measured 2026-08-02, and it refutes both records
+
+Tero approved the resize. Azure refused it:
+
+```
+$ az containerapp update -n crawl4ai-service -g aitosoft-prod --cpu 2.0 --memory 8.0Gi
+ERROR: (ContainerAppInvalidResourceTotal) ... must add up to one of the following
+CPU - Memory combinations: [0.25/0.5Gi] [0.5/1.0Gi] [0.75/1.5Gi] [1.0/2.0Gi]
+[1.25/2.5Gi] [1.5/3.0Gi] [1.75/3.5Gi] [2.0/4.0Gi]
+```
+
+**The list ends at 2.0 vCPU / 4.0 GiB. We are already at the maximum size this
+Container App can be.** Nothing changed — the command is atomic and sizing was
+re-read as 2 vCPU / 4 GiB afterwards.
+
+Two records are wrong, in opposite directions:
+
+- `tasks/done/overnight-intervention-log-2026-04-14.md` recorded `--memory 8.0Gi`
+  as "doubles headroom at zero cost (MS credits)". **That command does not exist
+  as a valid operation.** The scope cut of 2026-08-02 was argued largely from it.
+  The cut was still right — for its other reasons — but its headline example was
+  never available.
+- `tasks/README.md` guessed "4 vCPU / 8 GiB is the likely shape". Also
+  unavailable: the environment is a **legacy Consumption-only** managed
+  environment (`properties.workloadProfiles: null`), whose ceiling is 2/4. The
+  4 vCPU / 8 GiB ceiling belongs to the *Consumption profile inside a
+  workload-profiles environment*, which is a different environment type.
+
+**The only path to more memory is converting the managed environment** to
+workload profiles (`az containerapp env update -w <name> --workload-profile-type
+...`, flag confirmed present). That is not a resize — it is a production
+infrastructure migration with a different billing model, and it was not what was
+approved. **Escalated to Tero, not done.**
+
+Consequences that follow immediately:
+
+- **Buying headroom is off the table, so the memory work is not moot.** The
+  parked `replica-memory-baseline-unexplained.md` had "Tero declines the resize"
+  as its un-park condition; the resize being *unavailable* is functionally that.
+  Coordinator's call, but the condition is met.
+- The cap, the shed-before-refuse guard and the 120 s permanent TTL are now the
+  *only* memory levers we hold, rather than stopgaps until a resize.
+- `render_capacity: 2` is fixed at 2 vCPU and stays 2. No scale-rule change, so
+  `deploy-image.sh`'s invariant check is untouched. (Note it verifies **after**
+  the image update — it is a post-hoc alarm, not a gate.)
+
 ## Before this deploys — two fixes, both small (coordinator, 2026-08-02)
 
 Neither is a defect in what was built; both fall out of the review in

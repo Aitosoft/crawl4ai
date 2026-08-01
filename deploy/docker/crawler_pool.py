@@ -210,13 +210,12 @@ def _close_detached(crawler: AsyncWebCrawler, key: str, reason: str) -> None:
     task.add_done_callback(_CLOSING.discard)
 
 
-def _evict_for_capacity(headroom: int = 1) -> int:
-    """Make room for `headroom` more browsers by evicting idle LRU ones.
+def _evict_lru_idle(reason: str) -> Optional[str]:
+    """Evict exactly one idle LRU browser. Returns its key, or None if none idle.
 
-    Caller MUST hold LOCK. Returns how many were evicted. **Never awaits and
-    never blocks** — that is the whole safety argument. If no idle browser
-    exists it returns having freed less than asked, and the caller decides;
-    it does not wait for one to appear.
+    Caller MUST hold LOCK. **Never awaits and never blocks** — that is the whole
+    safety argument. If no idle browser exists it returns None and the caller
+    decides; it does not wait for one to appear.
 
     The alternative design — wait for a browser to go idle — is what makes a
     capped pool deadlock. `release_crawler` takes the same LOCK to decrement
@@ -228,24 +227,35 @@ def _evict_for_capacity(headroom: int = 1) -> int:
     the budget from there to Azure ingress's 240 s is ~40 s, most of which a
     browser launch can already consume.
     """
+    key = _lru_idle_key()
+    if key is None:
+        return None
+    pool = HOT_POOL if key in HOT_POOL else COLD_POOL
+    crawler = pool.pop(key, None)
+    idle_for = time.time() - LAST_USED.get(key, time.time())
+    LAST_USED.pop(key, None)
+    USAGE_COUNT.pop(key, None)
+    if crawler is None:  # defensive: _lru_idle_key only returns live pool keys
+        return None
+    BUSY_SINCE.pop(id(crawler), None)
+    logger.info(
+        f"♻️  Evicting LRU idle browser (key={key[:16]}, idle={idle_for:.0f}s, "
+        f"resident={resident_browsers()}/{MAX_BROWSERS}, {reason})"
+    )
+    _close_detached(crawler, key, reason)
+    return key
+
+
+def _evict_for_capacity(headroom: int = 1) -> int:
+    """Make room for `headroom` more browsers by evicting idle LRU ones.
+
+    Caller MUST hold LOCK. Returns how many were evicted. Never awaits — see
+    `_evict_lru_idle`, which carries the deadlock argument.
+    """
     evicted = 0
     while resident_browsers() + headroom > MAX_BROWSERS:
-        key = _lru_idle_key()
-        if key is None:
+        if _evict_lru_idle("max_browsers cap") is None:
             break
-        pool = HOT_POOL if key in HOT_POOL else COLD_POOL
-        crawler = pool.pop(key, None)
-        idle_for = time.time() - LAST_USED.get(key, time.time())
-        LAST_USED.pop(key, None)
-        USAGE_COUNT.pop(key, None)
-        if crawler is None:
-            continue
-        BUSY_SINCE.pop(id(crawler), None)
-        logger.info(
-            f"♻️  Evicting LRU idle browser (key={key[:16]}, idle={idle_for:.0f}s, "
-            f"resident={resident_browsers()}/{MAX_BROWSERS})"
-        )
-        _close_detached(crawler, key, "max_browsers cap")
         evicted += 1
     return evicted
 
@@ -353,24 +363,70 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
         # This is a symptom fix and was labelled as one. **The cause it named
         # was wrong**, corrected 2026-08-02: residency being unbounded is real
         # (measured peak 9-10 browsers per replica, not the 8 the record said),
-        # but it does not explain the pressure. Regressing the 68 pool-stats
-        # lines of that probe gives
-        #     mem% = 59.3 + 2.65 * browsers        (n=68, r^2=0.22)
-        # so a resident browser costs ~109 MB of a 4096 MB replica and browser
-        # count explains 22 % of the variance. ~59 % of the replica is baseline
-        # that no eviction can reach and that nobody has accounted for.
-        # MAX_BROWSERS now bounds residency by construction, but **this guard
-        # will still fire on the 59.3 %** — sizing that term is the open work
-        # (tasks/pool-residency-unbounded.md, "Still open").
+        # but how much of the pressure it explains is NOT settled — the
+        # replacement regression is disputed on three counts in
+        # tasks/replica-memory-baseline-unexplained.md ("Why the fit is not
+        # settled"). Do not quote a per-browser cost or an intercept from any
+        # file until it is re-derived. MAX_BROWSERS below bounds residency by
+        # construction, which is correct under every candidate slope.
+        #
+        # SHED BEFORE REFUSING (2026-08-02). Removing the memory-adaptive TTL
+        # was right — it thrashed, closing browsers exactly when memory was
+        # tight so the next request had to launch one — but it took with it the
+        # only path that shed under pressure. Without this line a replica over
+        # the limit holds every idle browser for the full constant idle_ttl_sec
+        # (300 s) while refusing every arrival. So each refusal now evicts the
+        # single LRU *idle* browser first: pressure-proportional (it stops as
+        # soon as arrivals stop being refused), LRU so the working set survives
+        # longest, never touches a busy browser, and it launches nothing.
+        #
+        # It evicts ONE PER REFUSAL, and it refuses ANYWAY. Both halves are
+        # deliberate, and the first is weaker than it sounds — say so plainly:
+        #   - One per refusal is not "one per pressure episode". MAS's
+        #     2026-07-31 replica refused nine times in ~4 minutes, which under
+        #     this policy sheds up to nine browsers. The honest difference from
+        #     the adaptive TTL is not "fewer" and not "idle-only" (the TTL
+        #     skipped busy browsers too) — it is LRU order, that it engages only
+        #     while arrivals are actually being refused, and that a refusal
+        #     never launches anything. The TTL's defect was the relaunch it
+        #     provoked, not the closing.
+        #   - Refuse anyway, rather than re-read the meter and maybe proceed:
+        #     _close_detached schedules the close on a background task that
+        #     cannot start before this coroutine yields, and there is no await
+        #     between here and a re-read — so it would measure the number it
+        #     just read, exactly. Even forced to start, Chromium exit plus
+        #     kernel reclaim is not synchronous, and sleeping for it would sit
+        #     inside LOCK on the unfenced admission path. The reclaim is for
+        #     the NEXT arrival, which the 429 + Retry-After exists to schedule.
+        #
+        # KNOWN COST, for whoever next regresses memory on browser count: this
+        # is a feedback path from memory to browser count, which is the exact
+        # confound that makes the 2026-07-31 slope unusable (see
+        # tasks/replica-memory-baseline-unexplained.md §2 — the adaptive TTL
+        # was one of these). It is narrower (it fires only on refusals, not on
+        # a timer) and the eviction log line names `memory pressure X%` so those
+        # samples can be excluded, but a naive fit across this build has the
+        # same bias. Filter on the reason, or measure offline.
         mem_pct = get_container_memory_percent()
         if mem_pct >= MEM_LIMIT:
             from aitosoft_admission import RenderCapacityExceeded
 
+            # Snapshot composition BEFORE shedding: this line is the one place
+            # a memory reading is paired with a pool composition, and pairing
+            # `mem_pct` with counts taken after an eviction would report one
+            # browser fewer than the pool held when the reading was taken. That
+            # is the same artefact class as the janitor's stale-`mem_pct`
+            # caveat below, in the more-quoted line.
+            hot_at_read, cold_at_read = len(HOT_POOL), len(COLD_POOL)
+            perm_at_read = "yes" if PERMANENT else "no"
+            shed = _evict_lru_idle(f"memory pressure {mem_pct:.1f}%")
             logger.error(
                 f"💥 Memory pressure: {mem_pct:.1f}% >= {MEM_LIMIT}% "
-                f"({memory_breakdown()}) — refusing new browser, "
-                f"hot={len(HOT_POOL)}, cold={len(COLD_POOL)}, "
-                f"permanent={'yes' if PERMANENT else 'no'}"
+                f"({memory_breakdown()}) — refusing new browser. "
+                f"At the reading: hot={hot_at_read}, cold={cold_at_read}, "
+                f"permanent={perm_at_read}; "
+                f"shed={'1 idle browser' if shed else 'nothing idle to shed'}, "
+                f"resident now {resident_browsers()}/{MAX_BROWSERS}"
             )
             raise RenderCapacityExceeded(
                 f"memory at {mem_pct:.1f}% (limit {MEM_LIMIT}%), refusing new browser"
@@ -571,15 +627,16 @@ async def janitor():
         # MAS's 2026-07-31 probe it produced 136 launches for a working set of
         # 10-12 signatures per replica.
         #
-        # It was also aimed at the wrong term. Regressing the 68 pool-stats lines
-        # from that probe gives `mem% = 59.3 + 2.65 * browsers` (r^2 = 0.22): a
-        # resident browser costs ~109 MB of a 4096 MB replica, and ~59 % of the
-        # replica is baseline that no eviction policy can reach. Shedding
-        # browsers to relieve that baseline could not work, and did not.
-        #
         # `MAX_BROWSERS` now bounds residency by construction, so the TTL's only
         # remaining job is reclaiming genuinely idle browsers on a quiet replica
         # — which is a constant-time policy, not a pressure-driven one.
+        #
+        # Shedding under pressure did not disappear with it: `get_crawler`'s
+        # memory guard evicts one idle LRU browser per refusal, which is the
+        # same intent without the launch-while-tight loop. Do NOT restore a
+        # pressure-driven TTL here on the strength of a memory regression — the
+        # one this comment used to cite is disputed on three counts (see
+        # tasks/replica-memory-baseline-unexplained.md).
         interval = 10 if mem_pct > 80 else (30 if mem_pct > 60 else 60)
         cold_ttl, hot_ttl = BASE_IDLE_TTL, BASE_IDLE_TTL * 2
 
@@ -672,9 +729,12 @@ async def _close_unused_permanent(now: float) -> None:
     by `init_permanent` and incremented only by a default-config pool hit, so a
     count still at zero after the TTL means literally no request has matched it.
 
-    MAS always sends a per-company `browser_config`, so in production that is
-    every request: 0 permanent hits against 224 pool gets on 2026-07-31, while
-    the browser held ~139-165 MB for the replica's whole life. Recovering that
+    In production that is every request: 0 permanent hits against 224 pool gets
+    on 2026-07-31, while the browser held ~139-165 MB for the replica's whole
+    life. **Not because MAS always sends a `browser_config`** — that reason was
+    recorded here and is wrong (corrected 2026-08-02); see PERMANENT_UNUSED_TTL_S
+    above, where the signature mismatch that makes it unreachable by
+    construction is spelled out. Recovering that
     is a saving, not a defect fix, and it is safe because `get_crawler` already
     lazily re-creates the permanent browser when a default-config request does
     turn up (the path `test_crawler_pool.py::test_permanent_reinit_after_stuck_

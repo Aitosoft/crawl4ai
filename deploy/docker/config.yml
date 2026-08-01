@@ -120,26 +120,63 @@ crawler:
     # BROWSERS per replica, enforced by LRU eviction of idle ones in
     # crawler_pool.get_crawler. Before this, nothing bounded residency at all —
     # max_pages bounds pages per browser and render_capacity bounds concurrent
-    # renders, but the browser count tracked distinct configs seen in the last
-    # TTL window. Measured peak on 2026-07-31: 9-10 per replica.
+    # renders, but the browser count tracked DISTINCT browser_config SIGNATURES
+    # seen in the last TTL window. Measured peak on 2026-07-31: 9-10 per replica.
     #
-    # How 6 was derived, so it can be re-derived when the inputs change.
-    # Regression over the 68 pool-stats lines of MAS's 2026-07-31 probe:
-    #     mem% = 59.3 + 2.65 * browsers      (n=68, r^2=0.22)
-    # So a resident browser costs 2.65 % of a 4 GiB replica (~109 MB) and the
-    # guard at memory_threshold_percent: 85 leaves (85-59.3)/2.65 = 9.7
-    # browsers of headroom. 6 puts the predicted mean at cap at 75.2 %, ~10
-    # points below the guard, and is 3x render_capacity so eviction always has
-    # idle candidates.
+    # WHY A CAP EXISTS AT ALL — this argument does not involve memory, which is
+    # the point. Pool residency is driven by client-supplied cardinality, and
+    # cardinality is not bounded by anything we control:
+    #   - `user_agent_mode` is in UNTRUSTED_FIELD_ALLOWLIST
+    #     (crawl4ai/async_configs.py:227), so any client may send it;
+    #   - `"random"` regenerates the UA in BrowserConfig.__init__ (:901), and
+    #     `user_agent` is part of the pool signature;
+    #   - our own shipped client doc recommends it (c4ai-doc-context.md:167).
+    # Verified: 8 identical `user_agent_mode: "random"` configs produce 5
+    # distinct pool signatures; 8 identical fixed-UA configs produce 1. Under
+    # that one word the pool becomes write-only — one Chromium launch per
+    # request, evicted by nothing. The cap is what makes that survivable.
     #
-    # READ THE INTERCEPT BEFORE RAISING THIS. 59.3 % of the replica is baseline
-    # that no cap can touch, and it is NOT explained. Browser count explains
-    # only 22 % of the variance in the memory reading. This cap bounds a real
-    # term; it is not the fix for the memory guard firing.
+    # HOW 6 WAS SIZED: 6 = 3x render_capacity. The render gate admits at most
+    # `render_capacity` concurrent renders holding one pool browser each, so at
+    # 3x there are always >= 2x render_capacity idle eviction candidates and the
+    # refusal branch is unreachable through /crawl. **Keep this ratio if
+    # render_capacity moves.** 6 is below the observed 10-12 signature working
+    # set, so it will cause extra launches (~1-3 s each, on the unfenced part of
+    # the admission path). That cost is real and accepted.
+    #
+    # The memory argument for a cap is real but NOT settled — the regression
+    # this comment used to derive 6 from is disputed on three counts, all
+    # biasing browsers down (tasks/replica-memory-baseline-unexplained.md,
+    # "Why the fit is not settled"). Do not re-derive this number from a
+    # per-browser MB figure or an intercept without reading that first. The cap
+    # bounds a real term under every candidate slope; it is not the fix for the
+    # memory guard firing.
     max_browsers: 6
     evict_close_timeout_sec: 30           # bound on an evicted browser's close(), off-lock
     idle_ttl_sec: 300                     # 30 min janitor cutoff
     stuck_busy_timeout_sec: 600           # Aitosoft: janitor force-closes browsers busy longer than this (leak safety net)
+    # Aitosoft 2026-08-02: how long the boot ("permanent") browser may sit
+    # unused before the janitor closes it. Was the code default of 600 s;
+    # lowered because that browser is unreachable BY CONSTRUCTION, not by
+    # chance: server.py:199 builds its BrowserConfig inline WITHOUT
+    # enforce_egress, while get_default_browser_config():138 and every request
+    # path apply it — so its signature differs from any request's in
+    # `ignore_https_errors` and can never be matched. Confirmed in production:
+    # 0 permanent hits in 224 pool gets (2026-07-31).
+    #
+    # At 600 s it therefore held ~140 MB through minutes 0-10 of a replica's
+    # life, which is exactly the cold-burst window that produced all nine of
+    # MAS's memory refusals (replica up 04:44:49, refusals 04:46-04:50). 120 s
+    # is a couple of janitor ticks plus margin, and costs nothing if the
+    # signature mismatch is ever fixed: get_crawler lazily re-creates the
+    # permanent browser when a default-config request actually arrives
+    # (pinned by test_permanent_reinit_after_stuck_force_close).
+    #
+    # NOT the real fix. Whether that boot browser should exist at all —
+    # delete the init_permanent call, or make it reachable by routing it
+    # through get_default_browser_config() — is a server.py change and its own
+    # decision. See tasks/pool-residency-unbounded.md.
+    permanent_unused_ttl_sec: 120
     # Aitosoft render admission (2026-07-17, kynnos.fi 504 incident). Hard cap
     # on concurrent /crawl full renders per replica; overflow queues briefly,
     # then 429s so the client retries against a scaled-out replica instead of

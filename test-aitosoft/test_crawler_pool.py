@@ -710,9 +710,18 @@ def test_memory_pressure_no_longer_collapses_the_idle_ttl(monkeypatch):
 
     Above 80 % the janitor used to drop `cold_ttl` to 30 s, closing browsers
     exactly when memory was tight so the next request had to launch a fresh
-    one. Regressing MAS's probe gives `mem% = 59.3 + 2.65 * browsers`
-    (r^2 = 0.22) — ~59 % of the replica is baseline no eviction can reach, so
-    shedding browsers could not relieve the pressure it was reacting to.
+    one — allocating while allocation was the problem. Over MAS's 2026-07-31
+    probe that produced 136 launches for a working set of 10-12 signatures.
+
+    What replaced it is NOT "nothing sheds any more": `get_crawler`'s memory
+    guard evicts one idle LRU browser per refusal (the three tests below).
+    That is the same intent without the relaunch loop, because a refusal
+    never allocates.
+
+    The regression this docstring used to cite as the reason (`mem% = 59.3 +
+    2.65 * browsers`) is disputed on three counts and must not be quoted —
+    see tasks/replica-memory-baseline-unexplained.md. The TTL removal stands
+    on the thrash argument, which does not need it.
     """
     _reset_pool(monkeypatch)
     monkeypatch.setattr(crawler_pool, "BASE_IDLE_TTL", 300)
@@ -759,5 +768,130 @@ def test_the_memory_guard_refuses_with_a_capacity_error(monkeypatch):
             await crawler_pool.get_crawler(BrowserConfig(viewport_width=1234))
         assert "95.6" in str(exc.value)
         assert exc.value.retry_after_s > 0
+
+    run(main())
+
+
+# --- The memory guard sheds before it refuses (2026-08-02) -------------------
+#
+# Removing the memory-adaptive TTL took with it the only path that shed
+# browsers under pressure, leaving a replica over the limit holding every idle
+# browser for the full constant `idle_ttl_sec` (300 s) while refusing every
+# arrival. These three pin the replacement.
+#
+# Note what is deliberately NOT asserted: that the refusal goes away after
+# eviction. `_close_detached` schedules the close on a background task and the
+# kernel reclaim is not synchronous, so re-reading the meter here would return
+# the number we just read. The guard evicts and refuses anyway; the reclaim is
+# for the next arrival, which the 429 + Retry-After exists to schedule.
+
+
+def test_memory_pressure_sheds_one_idle_browser_before_refusing(monkeypatch):
+    """One per refusal — pressure-proportional, and it stops when arrivals do.
+
+    Shedding the whole idle set instead is the thrash the adaptive TTL was
+    removed for; shedding nothing is what this fixes.
+    """
+    from aitosoft_admission import RenderCapacityExceeded
+
+    _reset_pool(monkeypatch)
+    monkeypatch.setattr(crawler_pool, "MEM_LIMIT", 85.0)
+    pressure = [10.0]
+    monkeypatch.setattr(
+        crawler_pool, "get_container_memory_percent", lambda: pressure[0]
+    )
+
+    async def main():
+        import pytest as _pytest
+
+        for i in range(3):
+            await crawler_pool.release_crawler(
+                await crawler_pool.get_crawler(_distinct(i))
+            )
+        assert crawler_pool.resident_browsers() == 3
+
+        pressure[0] = 90.0
+        with _pytest.raises(RenderCapacityExceeded):
+            await crawler_pool.get_crawler(_distinct(99))
+        assert crawler_pool.resident_browsers() == 2, "the guard shed nothing"
+
+        # A second refusal sheds a second one, and so on — not a one-shot.
+        with _pytest.raises(RenderCapacityExceeded):
+            await crawler_pool.get_crawler(_distinct(98))
+        assert crawler_pool.resident_browsers() == 1
+
+        await _drain_closes()
+
+    run(main())
+
+
+def test_memory_pressure_evicts_the_lru_and_never_a_busy_browser(monkeypatch):
+    """The eviction veto is absolute even under pressure.
+
+    A browser serving a request is never a candidate — that is what makes
+    shedding safe to run on the admission path. Here the busy one is also the
+    LRU, so a policy that only ordered by age would take it.
+    """
+    from aitosoft_admission import RenderCapacityExceeded
+
+    _reset_pool(monkeypatch)
+    monkeypatch.setattr(crawler_pool, "MEM_LIMIT", 85.0)
+    pressure = [10.0]
+    monkeypatch.setattr(
+        crawler_pool, "get_container_memory_percent", lambda: pressure[0]
+    )
+
+    async def main():
+        import pytest as _pytest
+
+        busy = await crawler_pool.get_crawler(_distinct(0))  # left active
+        idle = await crawler_pool.get_crawler(_distinct(1))
+        await crawler_pool.release_crawler(idle)
+
+        # Make the BUSY one the least-recently-used, so age alone would pick it.
+        for key in crawler_pool.COLD_POOL:
+            crawler_pool.LAST_USED[key] = time.time() - (
+                100 if crawler_pool.COLD_POOL[key] is busy else 1
+            )
+
+        pressure[0] = 90.0
+        with _pytest.raises(RenderCapacityExceeded):
+            await crawler_pool.get_crawler(_distinct(99))
+
+        await _drain_closes()
+        assert not busy.closed, "the guard evicted a browser serving a request"
+        assert idle.closed, "the guard did not evict the LRU *idle* browser"
+
+    run(main())
+
+
+def test_memory_pressure_with_nothing_idle_still_refuses_cleanly(monkeypatch):
+    """Nothing to shed must still be a 429, not a new exception type.
+
+    `RenderCapacityExceeded` is the only exception api.py maps to 429 +
+    Retry-After; anything else lands in the generic `except Exception` and
+    becomes the 500 MAS retries three times.
+    """
+    from aitosoft_admission import RenderCapacityExceeded
+
+    _reset_pool(monkeypatch)
+    monkeypatch.setattr(crawler_pool, "MEM_LIMIT", 85.0)
+    pressure = [10.0]
+    monkeypatch.setattr(
+        crawler_pool, "get_container_memory_percent", lambda: pressure[0]
+    )
+
+    async def main():
+        import pytest as _pytest
+
+        for i in range(2):
+            await crawler_pool.get_crawler(_distinct(i))  # all left active
+        assert crawler_pool.resident_browsers() == 2
+
+        pressure[0] = 90.0
+        with _pytest.raises(RenderCapacityExceeded) as exc:
+            await crawler_pool.get_crawler(_distinct(99))
+        assert exc.value.retry_after_s > 0
+        assert crawler_pool.resident_browsers() == 2, "a busy browser was evicted"
 
     run(main())

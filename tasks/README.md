@@ -53,26 +53,50 @@ customer who explicitly said do not build ahead of them.
 MAS message, a production failure, or a measurement. "There is a session free"
 is not a reason.
 
-## Decision pending with Tero — resize the replica
+## ~~Decision pending with Tero — resize the replica~~ ANSWERED BY AZURE, 2026-08-02
 
-**This is the highest-leverage open question and it is not code.** Current sizing
-is 2 vCPU / 4 GiB, `minReplicas: 0`. The environment has **no workload profiles**
-(`profiles: null` — Consumption only), so the CPU:memory ratio is constrained and
-`--memory 8.0Gi` at 2 vCPU will probably be **rejected**; 4 vCPU / 8 GiB is the
-likely shape. Ten seconds to find out, and Azure either accepts it or errors.
+**Tero approved it. Azure refused it. There is no resize to be had.**
 
-If it works it plausibly deletes most of the memory thread, and 4 vCPU would also
-let `render_capacity` rise from 2 — that number was benchmarked *as a 2-vCPU
-limit* (2026-07-17), so it is not a law of nature. **`render_capacity` MUST match
-the ACA `http-renders` scale rule**; `deploy-image.sh` has an invariant check,
-do not break it.
+```
+$ az containerapp update -n crawl4ai-service -g aitosoft-prod --cpu 2.0 --memory 8.0Gi
+ERROR: (ContainerAppInvalidResourceTotal) ... must add up to one of: [0.25/0.5Gi]
+[0.5/1.0Gi] [0.75/1.5Gi] [1.0/2.0Gi] [1.25/2.5Gi] [1.5/3.0Gi] [1.75/3.5Gi] [2.0/4.0Gi]
+```
 
-Separately: **`minReplicas: 1` for the sweep window only** removes the
-scale-from-zero burst that caused every 500 we have seen. Both are `az
-containerapp update` scale settings — **not** `--set-env-vars`, which is the
-operation that has broken MAS's token before.
+The list **ends at 2 vCPU / 4 GiB — we are already at the maximum**. This
+environment is a *legacy Consumption-only* managed environment
+(`properties.workloadProfiles: null`); the 4 vCPU / 8 GiB ceiling this file
+guessed at belongs to the Consumption **profile inside a workload-profiles
+environment**, which is a different environment type. The April note's
+`--memory 8.0Gi` was never a valid command.
 
-**Do not change production sizing without Tero's go-ahead.** Ask, then measure.
+**The scope cut above was still right, but its headline example was fiction.**
+Keep the cut; stop citing "we could have doubled memory with one command".
+
+**The only path to more memory is converting the managed environment** to
+workload profiles (`az containerapp env update -w <name> --workload-profile-type
+...`). That is a production infrastructure migration with a different billing
+model — dedicated profiles bill provisioned instances continuously, which would
+end `minReplicas: 0` scale-to-zero economics; the Consumption profile inside such
+an environment would keep them and allow 4/8. **Not done, not approved: what Tero
+approved was a resize, and this is not one.** Costed sketch for that decision:
+4 vCPU / 8 GiB is ~2× per replica-second, so unless `render_capacity` also rises
+to 4, **cost per fetch doubles for zero throughput gain**.
+
+Consequences, live now:
+
+- **`replica-memory-baseline-unexplained.md`'s un-park condition is met** (it was
+  "Tero declines the resize"; unavailable is functionally that). Coordinator's
+  call whether to un-park, but headroom cannot be bought.
+- The browser cap, the shed-before-refuse memory guard and
+  `permanent_unused_ttl_sec: 120` are the *only* memory levers we hold.
+- **`render_capacity` stays 2** — it is fixed by 2 vCPU. No scale-rule change.
+  Note `deploy-image.sh` verifies that invariant **after** updating the image, so
+  it is a post-hoc alarm, not a gate: change the ACA rule first if it ever moves.
+
+Still open and still Tero's: **`minReplicas: 1` for the sweep window only**
+removes the scale-from-zero burst behind every 500 we have seen. It is a scale
+setting, **not** `--set-env-vars`, so it does not carry the token risk.
 
 ## The three open items
 
