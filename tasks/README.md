@@ -27,6 +27,9 @@ traffic was the Tier 1 regression that gates the deploy. Add a route before you
 add a request — and check `test-aitosoft/artifacts/` before you add a route,
 since the second instance of the detector defect was already sitting there.
 
+**Production is current** (`0.9.2-detector-round3`, rev `--0000032`, deployed
+2026-08-01). Nothing below is a deploy blocker.
+
 ## Shipped 2026-08-01 — one image, four items
 
 `0.9.2-detector-round3`, revision `--0000032`, deployed and smoke-tested
