@@ -75,6 +75,10 @@ instrument, not another task file.
 
 ## The open items, in order
 
+**Before any of them: message 12 is written and needs Tero to relay it.** It is
+the only thing here with a clock on it — see "Cross-repo state". Nothing below is
+blocked on it, and it should not wait for anything below either.
+
 **Old items 1 and 2 shipped together on 2026-08-02** as `0.9.2-collapse-recovery`
 — collapse recovery and `unrenderable_content`. Both task files carry what the
 implementing session found wrong; the short version is that **three load-bearing
@@ -85,7 +89,7 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 
 | # | Task | Size | What to know |
 |---|------|------|--------------|
-| 1 | `cleaned-html-collapse-guard.md` — **price `content_source="raw_html"` before writing any repair** | ~1 h | The principle-7 question neither task file asked, found by the pre-deploy review. Upstream already has the seam; generating markdown from raw HTML would make the collapse **not happen** for the noscript and deep-nesting families rather than catching it, and probably for `unclosed-script` too. Two independent measurements say the quality cost is small (0.9988–1.0066 on 5 of 6 hosts; median 0.91× across 59 stored captures). Measurable offline against the 66 stored captures. If it holds, it deletes items 2 and 3 below. |
+| 1 | `cleaned-html-collapse-guard.md` — **price `content_source="raw_html"` before writing any repair** | ~1 h | The principle-7 question neither task file asked, found by the pre-deploy review. Upstream already has the seam; generating markdown from raw HTML would make the collapse **not happen** for the noscript and deep-nesting families rather than catching it, and probably for `unclosed-script` too. Two independent measurements say the quality cost is small (0.9988–1.0066 on 5 of 6 hosts; median 0.91× across 59 stored captures). Measurable offline against the 66 stored captures. If it holds, it deletes **item 2 below and repair 3 inside that same file** (`unterminated-comment`) — *not* items 3 and 4 here, which are about the test gate and are unaffected either way. |
 | 2 | `cleaned-html-collapse-guard.md` — **repair 1, scoped to `unclosed-script`** | M | Only if #1 does not dissolve it. Recovery closed repair 2 outright and covers `unclosed-noscript`, which leaves `unclosed-script` as the **one silent member** — `success: true`, zero markdown, guard structurally blind. That is the whole argument for repair 1, and it is still the strongest of our four upstream PRs. Recovery is now a live classifier, so the next sweep's log split (`COLLAPSE RECOVERED` vs `RENDER DEFECT … recovered 0 chars`) sizes this shape for free. |
 | 3 | `guard-corpus-is-not-in-the-repo.md` | S | Found while deploying, by checking a claim rather than by a failure: `test-aitosoft/artifacts/` is **gitignored**, so the 140 captures the collapse guard's thresholds are asserted against exist only on this machine. Three offline tests fail on a fresh clone. Our only pre-deploy gate is "the offline suite is green", and it is machine-dependent. The sizing decision — how much real customer HTML belongs in a public repo — is the task. |
 | 4 | `flaky-fence-test-margin.md` | ~1 h | Our only pre-deploy gate is "the offline suite is green", and this test fails ~1 run in 3 for reasons unrelated to the code. **Diagnose before widening**: the same red can mean harness overhead *or* a fence that unwinds slowly under load, and the second is a finding about our 180 s fence against Azure's 240 s ingress limit. It did **not** bite across the three full runs on 2026-08-02, so the 1-in-3 figure may itself be stale. |
@@ -189,9 +193,20 @@ gitignored `tmp/mas-repo-messages/`, numbered and direction-labelled, relayed by
 Tero both ways. Durable conclusions get copied into the forensics record; the
 messages are the transcript, not the source of truth.
 
-**The ball is with them.** Message 11 (sent 2026-08-02) asked for a cold-start
-re-scrape of their 243 hosts and eight lettered reports. Since then they have run
-~30 sites of real traffic instead, which answered some of it from our side.
+**The ball is with US: message 12 is written and awaiting relay.**
+`tmp/mas-repo-messages/12-to-mas-your-clean-run-was-not-clean.md` (gitignored).
+Ask Tero to relay it — it is the only thing on this list with a clock on it,
+because it should reach MAS *before* their heavier sweep, not after.
+
+It carries three things: the correction that their "clean" 2026-08-01 run lost 9
+of 328 pages and why neither side could see it; the two additive changes that
+shipped 2026-08-02 (`unrenderable_content`, collapse recovery) with the
+static-mode lever that is theirs rather than ours; and the request for the
+sweep's shape, since **concurrency is the one axis we have never tested**.
+
+Message 11 (sent 2026-08-02) asked for a cold-start re-scrape of their 243 hosts
+and eight lettered reports. They ran ~30 sites of real traffic instead, which
+answered four of the eight from our own logs.
 
 Still genuinely open, and only their corpus can answer:
 
@@ -210,8 +225,9 @@ Answered from our side on 2026-08-01/02, so do not re-ask:
 - **(d) blocked hosts** — 0 blocks and 0 patchright retries in 336 renders. Weak
   evidence, but it points away from the residential-egress spend.
 - **(e) `render_defect` sightings** — we have our own now: 9 URLs, 7 hosts. Their
-  bytes are still welcome but no longer gating, because recovery (item 1)
-  classifies the mechanism for free.
+  bytes are still welcome but no longer gating: recovery shipped 2026-08-02 and
+  classifies the mechanism for free, from the `COLLAPSE RECOVERED` /
+  `RENDER DEFECT … recovered 0 chars` split in our own logs.
 - **(h) the sweep's shape** — being handled by process instead: MAS will notify
   before heavier scraping so it can be watched live.
 
