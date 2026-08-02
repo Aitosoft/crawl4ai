@@ -18,6 +18,7 @@ while the constants drift.
 See tasks/cleaned-html-collapse-guard.md.
 """
 
+import copy
 import glob
 import json
 import os
@@ -39,7 +40,9 @@ from aitosoft_collapse_guard import (  # noqa: E402
     MIN_VISIBLE_TEXT_CHARS,
     detect_collapse,
     guard_result,
+    recover_markdown,
 )
+from crawl4ai.html2text import HTML2Text  # noqa: E402
 from aitosoft_failure_class import (  # noqa: E402
     NON_RETRYABLE_CLASSES,
     ORIGIN_CLASSES,
@@ -218,6 +221,33 @@ def test_thresholds_clear_every_real_capture():
     assert checked >= 30, f"expected the stored corpus, found {checked} captures"
 
 
+def test_no_real_capture_is_mutated_by_the_guard():
+    """`test_thresholds_clear_every_real_capture` checks the *verdict*; this
+    checks the *mutation*, which is what recovery added.
+
+    Worth its own test because recovery gave `guard_result` the power to rewrite
+    a result's markdown, and a false positive is now quiet rather than loud — it
+    would hand MAS unfiltered raw-HTML markdown under `success: true` instead of
+    a visible `render_defect`. Every stored capture of a real customer site must
+    come out of it byte-identical.
+    """
+    checked = 0
+    for name, data in _real_captures():
+        result = {
+            "success": True,
+            "url": data.get("url") or "",
+            "html": data["html"],
+            "markdown": copy.deepcopy(data.get("markdown")),
+        }
+        before = copy.deepcopy(result)
+
+        assert guard_result(result) is None, f"guard fired on real capture {name}"
+        assert result == before, f"guard mutated real capture {name}"
+        checked += 1
+
+    assert checked >= 30, f"expected the stored corpus, found {checked} captures"
+
+
 def test_the_real_corpus_still_shows_the_gap():
     """Not just "no false positives" — the healthy pages must stay far away from
     the threshold, or the guard is one unusual customer page from firing."""
@@ -245,10 +275,23 @@ def test_the_real_corpus_still_shows_the_gap():
 # ── what the guard does to the result ────────────────────────────────────
 
 
-def test_guard_result_marks_the_failure_and_keeps_the_content():
-    """ "A tag is advisory; `success: false` is structural." Content stays
-    attached so MAS can diagnose from their side — they store `cleaned_html` for
-    degenerate captures now."""
+#: A body whose text the regex visible-text measure can see but which html2text
+#: reads as a comment, so recovery comes back empty. This is the
+#: `unterminated-comment` mechanism reproduced offline: `_visible_text` strips
+#: `<!-- … >` as if it were a tag and counts everything after the first `>`,
+#: while a real HTML parser puts all of it inside the comment.
+UNREADABLE_BODY = "<!-- evaste-ilmoitus<span>" + "yhteystiedot " * 200
+
+
+def test_guard_result_recovers_a_lost_body():
+    """The point of the whole exercise: a page whose markdown vanished comes
+    back as an ordinary success carrying the recovered text.
+
+    `success: true` and not "false with the content attached", because MAS's
+    client reads `success` and would discard exactly what we just rescued. Both
+    shapes are HTTP 200, so no retry behaviour changes either way — the flag is
+    the only thing that decides whether the data is used.
+    """
     html = PAGE.format(body="<p>" + "yhteystiedot " * 200 + "</p>")
     result = {
         "success": True,
@@ -256,12 +299,218 @@ def test_guard_result_marks_the_failure_and_keeps_the_content():
         "markdown": {"raw_markdown": "\n", "fit_markdown": ""},
     }
 
-    reason = guard_result(result)
+    verdict = guard_result(result)
 
-    assert reason
+    assert verdict and verdict.recovered
+    assert verdict.recovered_chars >= MAX_MARKDOWN_CHARS
+    assert result["success"] is True
+    assert "yhteystiedot" in result["markdown"]["raw_markdown"]
+    assert result["html"] == html, "content must stay attached"
+    assert result["markdown"]["fit_markdown"] == "", (
+        "no content filter ran over a recovered page; filling fit_markdown in "
+        "would claim one had"
+    )
+
+
+def test_recovery_leaves_no_stale_markdown_variant_behind():
+    """Caught in review, and it is this project's defining failure shape one
+    field to the left.
+
+    `model_dump` emits five markdown variants. Writing only `raw_markdown` left
+    `markdown_with_citations` holding the *collapsed* parse's one character —
+    1,266 characters of recovered text and a one-character sibling, inside one
+    object, with every signal green.
+
+    Blanked rather than filled: no citation pass ran and no content filter ran,
+    so an empty field says "we did not produce one" and anything else lies.
+    `cleaned_html` and `links` are deliberately untouched — they are what our
+    parse produced, they are the evidence, and they do not contradict the
+    recovery, they explain it.
+    """
+    result = {
+        "success": True,
+        "html": PAGE.format(body="<p>" + "yhteystiedot " * 200 + "</p>"),
+        "cleaned_html": "<html></html>",
+        "markdown": {
+            "raw_markdown": "\n",
+            "fit_markdown": "",
+            "markdown_with_citations": "\n",
+            "references_markdown": "## References\n",
+        },
+    }
+
+    verdict = guard_result(result)
+
+    assert verdict and verdict.recovered
+    assert "yhteystiedot" in result["markdown"]["raw_markdown"]
+    for stale in ("fit_markdown", "markdown_with_citations", "references_markdown"):
+        assert result["markdown"][stale] == "", f"{stale} still holds the old parse"
+    assert result["cleaned_html"] == "<html></html>", "the evidence must survive"
+
+
+def test_a_result_with_no_markdown_key_gets_the_dict_shape():
+    """`CrawlResult.model_dump` emits `markdown` only when `_markdown` is set, so
+    "absent" is a real shape rather than a defensive hypothetical. It must not
+    become a bare string: MAS reads `markdown.raw_markdown` and would break on
+    one, which is the expensive direction.
+    """
+    result = {"success": True, "html": PAGE.format(body="<p>" + "yhteystiedot " * 200)}
+
+    verdict = guard_result(result)
+
+    assert verdict and verdict.recovered
+    assert isinstance(result["markdown"], dict)
+    assert "yhteystiedot" in result["markdown"]["raw_markdown"]
+
+
+def test_a_body_html2text_cannot_read_either_is_still_a_defect():
+    """Recovery is a second opinion, not a guarantee. When html2text agrees the
+    page is empty, the result keeps `success: false` / `render_defect` and MAS
+    is told the truth.
+
+    This is what makes recovery a free classifier for part 2 of the task: once
+    it ships, a capture the guard catches and recovery *fails* is the comment
+    family or something new, and the log line says which.
+    """
+    html = PAGE.format(body=UNREADABLE_BODY)
+    result = {
+        "success": True,
+        "html": html,
+        "markdown": {"raw_markdown": "", "fit_markdown": ""},
+    }
+
+    verdict = guard_result(result)
+
+    assert verdict and not verdict.recovered
+    assert verdict.recovered_chars == 0
     assert result["success"] is False
     assert "collapsed" in result["error_message"]
     assert result["html"] == html, "content must stay attached"
+
+
+def test_recovery_must_not_reuse_static_modes_pipeline():
+    """The trap, pinned. `aitosoft_static_mode` does not call html2text on the
+    HTML — it calls `_strip_hidden_decoys()` first, which `decompose()`s every
+    `noscript`. On an unclosed `<noscript>` Chromium has re-serialized the whole
+    document *inside* the element, so that step deletes the page: it reproduces
+    `strip_noscript()`'s failure by a different route.
+
+    Measured 2026-08-02, 1,265 characters -> 0. So "we already ship this
+    converter, recovery is free" is true of the converter and false of the
+    pipeline around it, and this test fails if someone later "tidies up" the
+    duplication by routing recovery through static mode.
+    """
+    from aitosoft_static_mode import _strip_hidden_decoys
+
+    html = PAGE.format(body="<noscript><p>" + "yhteystiedot " * 200 + "</p>")
+
+    assert len(recover_markdown(html)) > MAX_MARKDOWN_CHARS
+
+    h = HTML2Text(baseurl="")
+    h.body_width = 0
+    h.ignore_images = True
+    assert h.handle(_strip_hidden_decoys(html)).strip() == "", (
+        "static mode's decoy strip no longer deletes an unclosed <noscript> — "
+        "re-measure before assuming recovery can share its pipeline"
+    )
+
+
+def test_a_partial_recovery_must_not_become_a_silent_success():
+    """The defect the first draft of recovery shipped with, caught in review by
+    measurement rather than by argument.
+
+    A page whose header survives outside an unterminated comment and whose
+    41,408 characters of contacts sit inside it recovers **599** characters —
+    1.4 % of the body. Accepted on MAS's degenerate floor alone (599 > 500) that
+    page goes out green and 40,809 characters vanish with no signal on either
+    side. Recovery would have opened a *new* silent-loss channel inside the fix
+    for silent loss, and it would have broken the guard's own invariant: it can
+    only fire on captures MAS already discards.
+
+    The symmetry argument that produced the first draft — "treat a recovery
+    exactly as the normal path would treat the same output" — is wrong because
+    the two are not symmetric. Here the guard has **already proved** the
+    collapse. That evidence is the whole difference.
+    """
+    header = "<p>Yritys Oy - yhteystiedot ja aukioloajat</p>" * 20
+    buried = "<!-- evaste<span>" + "puhelin 040 123 4501, myynti@yritys.fi " * 1100
+    result = {
+        "success": True,
+        "html": PAGE.format(body=header + buried),
+        "markdown": {"raw_markdown": "", "fit_markdown": ""},
+    }
+
+    verdict = guard_result(result)
+
+    assert verdict and not verdict.recovered
+    assert MAX_MARKDOWN_CHARS <= verdict.recovered_chars < 5_000, (
+        "this fixture is meant to sit just above MAS's floor and far below the "
+        f"ratio bar; it recovered {verdict.recovered_chars} chars"
+    )
+    assert result["success"] is False
+    assert result["markdown"]["raw_markdown"] == "", (
+        "a partial recovery must not overwrite the markdown our parse produced "
+        "— that is the evidence, and MAS reads `success` and stops"
+    )
+
+
+@pytest.mark.parametrize(
+    "recovered_chars, visible_chars, expected",
+    [
+        (MAX_MARKDOWN_CHARS - 1, 1_000, False),  # under MAS's degenerate floor
+        (MAX_MARKDOWN_CHARS, 1_000, True),  # clears both
+        (MAX_MARKDOWN_CHARS + 100, 20_000, False),  # clears the floor, not the ratio
+        (3_000, 20_000, True),  # clears both, on a big page
+    ],
+)
+def test_a_recovery_must_clear_both_floors(recovered_chars, visible_chars, expected):
+    """The acceptance rule, at the corners, with no markup in the way.
+
+    Neither number is a new constant: `MAX_MARKDOWN_CHARS` is MAS's
+    `DEGENERATE_CAPTURE_CHARS` (below it they discard the capture, so flipping
+    to success would buy them nothing and cost us the `render_defect` signal),
+    and `MAX_MARKDOWN_TO_VISIBLE_RATIO` is the guard's own collapse floor.
+
+    Row 3 is the case above. Row 4 is the reason the ratio clause is safe:
+    every genuine recovery ever measured sits at 1.067-2.787, i.e. 10-28x above
+    the floor, so nothing real is rejected.
+    """
+    from aitosoft_collapse_guard import _is_a_real_recovery
+
+    assert _is_a_real_recovery(visible_chars, recovered_chars) is expected
+
+
+def test_recovery_never_runs_on_a_healthy_page(monkeypatch):
+    """Cost. The guard is documented as free on the path that matters, and
+    recovery must not change that: html2text is 3-26 ms depending on page size,
+    which is nothing on 2.7 % of renders and real on 100 % of them."""
+    import aitosoft_collapse_guard as guard
+
+    def explode(*_a, **_k):
+        raise AssertionError("recovery ran on a healthy page")
+
+    monkeypatch.setattr(guard, "recover_markdown", explode)
+
+    body_text = "Yritys Oy palvelee teollisuutta kunnossapidossa. " * 30
+    assert (
+        guard.guard_result(
+            {
+                "success": True,
+                "html": PAGE.format(body=f"<p>{body_text}</p>"),
+                "markdown": {"raw_markdown": "# Yritys Oy\n\n" + body_text},
+            }
+        )
+        is None
+    )
+
+
+def test_recovery_survives_markup_html2text_chokes_on():
+    """It runs on markup we already know is malformed. A parser edge case must
+    mean "no recovery", not a 500 — the result would then be reported as our
+    transient fault and retried three times."""
+    assert recover_markdown(None) == ""
+    assert recover_markdown("") == ""
+    assert isinstance(recover_markdown("<html><body><p>a" * 2000), str)
 
 
 def test_guard_leaves_an_already_failed_result_alone():
@@ -277,13 +526,24 @@ def test_guard_leaves_an_already_failed_result_alone():
 
 
 def test_guard_accepts_markdown_as_a_plain_string():
-    """Static mode does not always wrap markdown in a dict."""
+    """A recovery lands in the shape it found.
+
+    The old docstring here said "static mode does not always wrap markdown in a
+    dict". That was wrong twice over — static mode emits a dict on both its
+    success and error paths, **and it never calls the guard at all** (the single
+    call site is `api.py`'s full-mode result loop). Kept anyway, because
+    tolerating a string costs one branch and a result dict is not ours to
+    assume."""
     result = {
         "success": True,
         "html": PAGE.format(body="<p>" + "yhteystiedot " * 200 + "</p>"),
         "markdown": "",
     }
-    assert guard_result(result) is not None
+    verdict = guard_result(result)
+
+    assert verdict and verdict.recovered
+    assert isinstance(result["markdown"], str)
+    assert "yhteystiedot" in result["markdown"]
 
 
 # ── the wire status ──────────────────────────────────────────────────────

@@ -36,6 +36,7 @@ sys.path.insert(
 from aitosoft_failure_class import (  # noqa: E402
     BAD_REQUEST,
     CAPACITY,
+    NON_RETRYABLE_CLASSES,
     NONE,
     ORIGIN_BLOCKED,
     ORIGIN_CLASSES,
@@ -43,6 +44,8 @@ from aitosoft_failure_class import (  # noqa: E402
     ORIGIN_UNREACHABLE,
     RENDER_ERROR,
     RENDER_TIMEOUT,
+    UNRENDERABLE_CONTENT,
+    classify_error_text,
     classify_exception,
     classify_result,
     effective_status_of,
@@ -178,6 +181,91 @@ def test_page_content_race_is_ours_not_the_origins():
             )
         )
         == RENDER_ERROR
+    )
+
+
+# ── a URL that is not a page (2026-08-02) ────────────────────────────────
+# One `GetVCard` endpoint produced every HTTP 500 of MAS's 2026-08-01 run.
+# `tasks/download-navigation-is-not-a-render-error.md`.
+
+#: The three wrappers upstream puts around the same Playwright failure. Which
+#: one you get depends on `max_retries`, which MAS sets per request — so a
+#: pattern anchored to any of the prefixes would classify production and miss
+#: the fixture, or the reverse. Only `Download is starting` is common to all.
+DOWNLOAD_TEXTS = {
+    "production (max_retries >= 1)": (
+        "All proxies failed: Failed on navigating ACS-GOTO:\n"
+        "Page.goto: Download is starting\n"
+        'Call log:\n  - navigating to "https://www.grantthornton.fi/'
+        'PeopleService/GetVCard?contentGuid=x&lang=fi", waiting until '
+        '"domcontentloaded"\n'
+    ),
+    "no retries": (
+        "Unexpected error in _crawl_web at line 864 in _crawl_web "
+        "(crawl4ai/async_crawler_strategy.py):\n"
+        "Error: Failed on navigating ACS-GOTO:\n"
+        "Page.goto: Download is starting\n"
+    ),
+    "bare": "Failed on navigating ACS-GOTO: Page.goto: Download is starting",
+}
+
+
+@pytest.mark.parametrize("label", sorted(DOWNLOAD_TEXTS))
+def test_a_download_url_is_recognised_in_every_wrapper(label):
+    """The vCard endpoint, verbatim from the production log line and from the
+    two shapes the fixture origin reproduces."""
+    text = DOWNLOAD_TEXTS[label]
+    assert classify_error_text(text) == UNRENDERABLE_CONTENT
+    assert classify_result({"success": False, "error_message": text}) == (
+        UNRENDERABLE_CONTENT
+    )
+
+
+def test_a_download_url_is_not_retried_and_is_not_the_origins_fault():
+    """The decision this class exists to record, and both halves of it.
+
+    **Not retryable**, because the response is permanent: the same URL will
+    serve the same file to the same browser forever. `http_status_for` is what
+    MAS actually keys on (their message 09), so this is the whole behaviour.
+
+    **Not an origin class**, because the origin did nothing wrong. Filing it as
+    `origin_http_error` was the cheaper option and was rejected: this module's
+    documented bias is that mislabelling a healthy site as broken is the
+    expensive direction, and a working vCard export is a healthy site. It would
+    also have shipped `status_code: null` alongside `origin_http_error` —
+    upstream leaves the status unset when the navigation never commits — in the
+    one field MAS was promised holds the origin's real final status.
+    """
+    assert http_status_for([UNRENDERABLE_CONTENT]) == 200
+    assert UNRENDERABLE_CONTENT in NON_RETRYABLE_CLASSES
+    assert UNRENDERABLE_CONTENT not in ORIGIN_CLASSES
+
+
+def test_the_download_signal_does_not_weaken_the_unrecognised_default():
+    """The classification bias is about the *unrecognised* set, and this case
+    has left it. Everything still unrecognised must stay ours, loud and
+    retryable — getting that backwards is what told MAS a healthy company site
+    was permanently broken."""
+    assert classify_error_text("Something nobody has seen before") is None
+    assert classify_result({"success": False, "error_message": "??"}) == RENDER_ERROR
+    assert classify_error_text("net::ERR_CONNECTION_REFUSED") == ORIGIN_UNREACHABLE
+
+
+def test_only_playwrights_own_phrasing_counts_as_a_download():
+    """The pattern is anchored to `Page.goto:` rather than matching the bare
+    sentence, and the reason is a real if remote channel: upstream splices our
+    **own source lines** into `error_message` under `Code context:`
+    (`async_webcrawler.py`), so a comment or fixture carrying the bare phrase
+    could reach the classifier. Nothing else can — antibot reasons are fixed
+    labels plus byte counts, and every block branch returns before this check.
+
+    Anchoring costs nothing: the prefix is in all three wrappers above and in
+    the verbatim production log line.
+    """
+    assert classify_error_text("The page explains that Download is starting") is None
+    assert classify_error_text("# Download is starting when you click") is None
+    assert (
+        classify_error_text("Page.goto: Download is starting") == UNRENDERABLE_CONTENT
     )
 
 

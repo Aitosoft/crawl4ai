@@ -23,6 +23,16 @@ Contract (MAS answered Q2 (a) unreservedly, 2026-07-30):
     Only our own faults keep 5xx:   render_error -> 500, render_timeout -> 504.
     Capacity keeps                  429 + Retry-After.
 
+The axis turned out to be **permanence, not ownership** (2026-08-01), so there
+is a third bucket the original contract had no room for: failures that are not
+the origin's and still must not be retried. `render_defect` (our parse lost the
+body) and `unrenderable_content` (the URL is a download, which is nobody's
+fault) both live there, both at 200. `NON_RETRYABLE_CLASSES` is that bucket
+plus the origin's; `ORIGIN_CLASSES` stays the answer to "whose fault", which is
+a separate question and must not decide a status. Conflating the two is the
+original defect, and it re-appeared in `api.py`'s exception gate as late as
+2026-08-02.
+
 `failure_class` is present on **every** result including successes (as
 ``"none"``), so a missing field never needs interpretation — it means an old
 build, not a success. Request-scoped failures that have no result to attach to
@@ -62,6 +72,7 @@ ORIGIN_UNREACHABLE = "origin_unreachable"  # DNS / TCP / TLS never got there
 RENDER_TIMEOUT = "render_timeout"  # our wall-clock fence fired
 RENDER_ERROR = "render_error"  # our browser/pipeline broke, transiently
 RENDER_DEFECT = "render_defect"  # our parse lost the body — ours and PERMANENT
+UNRENDERABLE_CONTENT = "unrenderable_content"  # served fine; it is not a page
 
 # Normally envelope-level (no result exists to carry them).
 CAPACITY = "capacity"  # render gate rejected -> 429
@@ -89,7 +100,15 @@ ORIGIN_CLASSES = frozenset({ORIGIN_HTTP_ERROR, ORIGIN_BLOCKED, ORIGIN_UNREACHABL
 #:
 #: Ownership still lives in the class *name*, which is what we debug from and
 #: what they may eventually branch on. It just no longer decides the status.
-NON_RETRYABLE_CLASSES = ORIGIN_CLASSES | {RENDER_DEFECT, BAD_REQUEST}
+#:
+#: `UNRENDERABLE_CONTENT` is the third thing that is neither: nobody's fault at
+#: all. The origin answered correctly with a file, we behaved correctly, and a
+#: browser will refuse that navigation on every future attempt.
+NON_RETRYABLE_CLASSES = ORIGIN_CLASSES | {
+    RENDER_DEFECT,
+    BAD_REQUEST,
+    UNRENDERABLE_CONTENT,
+}
 
 # ── error-text signals ───────────────────────────────────────────────────
 # All string matching against crawler/browser error text lives here. Do not
@@ -175,6 +194,42 @@ _INFERRED_BLOCK_RE = re.compile(
     re.IGNORECASE,
 )
 
+# The URL is a download, not a page. Chromium will not commit a navigation to a
+# response it is going to save to disk, so `page.goto` raises before anything is
+# rendered — and the text carries no `net::ERR_*`, no status and no block marker,
+# so it used to fall through to RENDER_ERROR at 500 and buy MAS three retries of
+# a URL that will do exactly the same thing forever. One `GetVCard` endpoint
+# produced every 500 of the 2026-08-01 run, four renders for one URL.
+#
+# This is NOT a weakening of the documented classification bias below. That bias
+# is about the *unrecognised* set, and "Download is starting" has left it: it is
+# a complete, unambiguous statement of what the URL is. The axis is the one the
+# taxonomy learned on 2026-08-01 — **permanence, not ownership**. Nobody is at
+# fault here; the origin served a file correctly and we behaved correctly.
+#
+# Matched on the Playwright phrase alone, not on the surrounding wrapper, because
+# the wrapper differs: the fixture reproduction arrives as "Unexpected error in
+# _crawl_web … Failed on navigating ACS-GOTO: Page.goto: Download is starting"
+# and production's proxied path as "All proxies failed: Failed on navigating
+# ACS-GOTO: Page.goto: Download is starting". Both are failed *results*, not
+# escaped exceptions — see the note in `classify_exception`.
+#
+# The header is NOT the trigger — that was the first guess and it was wrong.
+# `Content-Disposition: attachment`, an inline `application/pdf` and an
+# `application/octet-stream` all produce the byte-identical failure, measured
+# through the browser against `fixture_origin` `/download/{kind}` on 2026-08-02.
+# The rule is "Chromium will not render this inline", so this class is a shape of
+# MAS's corpus (contact and people pages are where vCard exports and PDF
+# brochures live) and not one odd URL.
+# Anchored to Playwright's own `Page.goto:` prefix, which is present in all three
+# wrappers and in the verbatim production line, and which costs nothing. The one
+# way page text could ever reach this function is upstream's `Code context:`
+# splice, which pastes OUR OWN source lines into `error_message` — so a comment
+# or a test fixture containing the bare phrase is a real, if remote, channel.
+# Nothing else can: antibot reasons are fixed labels plus byte counts, and every
+# block branch returns before reaching here.
+_DOWNLOAD_RE = re.compile(r"Page\.goto:\s*Download is starting", re.IGNORECASE)
+
 # Playwright's own per-operation timeouts, and our fence. Both are ours: we ran
 # out of time, which is a thing MAS should retry.
 _TIMEOUT_RE = re.compile(
@@ -234,6 +289,13 @@ def classify_error_text(
             return ORIGIN_HTTP_ERROR
         return None
 
+    if _DOWNLOAD_RE.search(text):
+        # Checked before the `net::` table on purpose: Chromium also reports
+        # ERR_ABORTED for some download navigations, and "we aborted because it
+        # was a download" is a far more useful verdict than an unclassified
+        # net:: code blamed on us.
+        return UNRENDERABLE_CONTENT
+
     net = _NET_ERR_RE.search(text)
     if net:
         code = net.group(1)
@@ -261,9 +323,27 @@ def classify_error_text(
 
 def classify_exception(exc: BaseException) -> str:
     """Verdict for an exception that escaped the crawl instead of producing a
-    result. This is the ACS-GOTO path: upstream re-raises a navigation failure
-    when there is a single proxy and ``max_retries <= 1``, so the origin's own
-    5xx arrives here rather than as a failed result."""
+    result — pool acquisition, browser launch, serialization.
+
+    **CORRECTED 2026-08-02, because this docstring was wrong and two task files
+    inherited it.** It used to say "this is the ACS-GOTO path: upstream re-raises
+    a navigation failure when there is a single proxy and ``max_retries <= 1``".
+    Measured: ``arun`` wraps its entire body in ``try:``
+    (``async_webcrawler.py:256``) and returns a failed ``CrawlResult`` at
+    ``:742`` instead of re-raising, so **the whole ACS-GOTO family reaches
+    ``classify_result``, not this function** — including the
+    ``net::ERR_HTTP_RESPONSE_CODE_FAILURE`` case this docstring was written for.
+
+    The verdict is identical either way (both funnel through
+    ``classify_error_text``, which is why the mistake was invisible for weeks),
+    so the pattern table remains the single place to add a signal. What is *not*
+    identical is the status mapping: ``api.py``'s exception handler decides
+    200-vs-500 for this function's output, while ``server._crawl_response``
+    decides it for ``classify_result``'s. If you are reasoning about which status
+    a class produces, establish which of the two paths the failure actually takes
+    before anything else.
+    See ``tasks/done/download-navigation-is-not-a-render-error.md``.
+    """
     import asyncio
 
     if isinstance(exc, asyncio.TimeoutError):

@@ -30,7 +30,9 @@ from fixture_origin import (
     COLLAPSE_SHAPES,
     CONTENT_MARKER,
     CONTENT_TAIL_MARKER,
+    DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER,
     GUARD_BLIND_SHAPES,
+    RECOVERABLE_SHAPES,
     loopback_allowed,
 )
 
@@ -51,6 +53,12 @@ EARLY_S = 0.5  # inside a 2.0 s capture wait: the content is what we get
 
 SHORT_WAIT = 0.1  # `delay_before_return_html` — capture as soon as possible
 MAS_WAIT = 2.0  # what MAS sends in production
+
+#: What MAS sends in production (CLAUDE.md's per-request customization block).
+#: It is not a default — `DEFAULT_CRAWLER_CONFIG` omits it, so upstream uses 0 —
+#: and it changes the *error text* a navigation failure produces, not only the
+#: cost. Any test that asserts on error text must say which it ran with.
+MAS_MAX_RETRIES = 2
 
 
 # ── the egress seam: the guarantee this module could have broken ─────────
@@ -570,17 +578,50 @@ def test_no_markup_shape_swallows_the_body(shape, fixture_origin, production_pat
     assert CONTENT_TAIL_MARKER in outcome.markdown, f"{shape}: trailing content lost"
 
 
-@pytest.mark.parametrize("shape", sorted(BODY_SWALLOWING_SHAPES - GUARD_BLIND_SHAPES))
-def test_a_swallowed_body_is_reported_as_a_defect(
+@pytest.mark.parametrize("shape", sorted(RECOVERABLE_SHAPES))
+def test_a_swallowed_body_is_recovered(shape, fixture_origin, production_path):
+    """The body comes back. This is the only test in the file that returns
+    customer data rather than describing its loss.
+
+    Our parse still drops these pages — that root cause is untouched — but the
+    guard now takes a second opinion from html2text over the *same* rendered
+    HTML, and for these two shapes it returns the content. The capture is served
+    as an ordinary success, because MAS's client reads `success` and would
+    discard content attached to a failure.
+
+    Asserting the **tail** marker matters as much as the first: a recovery that
+    returned the heading and stopped would look identical on `CONTENT_MARKER`
+    alone, and that is exactly how the `<noscript>` loss hid for 3.5 months.
+    """
+    outcome = production_path.crawl(
+        fixture_origin.url(f"/collapse/{shape}", bytes=COLLAPSE_BYTES),
+        delay_before_return_html=SHORT_WAIT,
+    )
+
+    assert outcome.success, f"{shape}: {outcome.failure_class} {outcome.error_message}"
+    assert outcome.http_status == 200
+    assert outcome.failure_class == "none"
+    assert CONTENT_MARKER in outcome.markdown, f"{shape}: recovery lost the body"
+    assert CONTENT_TAIL_MARKER in outcome.markdown, f"{shape}: recovery lost the tail"
+    assert len(outcome.markdown) > 500, (
+        f"{shape}: recovered {len(outcome.markdown)} chars, under MAS's "
+        "DEGENERATE_CAPTURE_CHARS — it should not have been accepted at all"
+    )
+
+
+@pytest.mark.parametrize(
+    "shape", sorted(BODY_SWALLOWING_SHAPES - GUARD_BLIND_SHAPES - RECOVERABLE_SHAPES)
+)
+def test_an_unrecoverable_collapse_is_reported_as_a_defect(
     shape, fixture_origin, production_path
 ):
-    """The guard, end to end through the real path. THIS TEST WAS INVERTED on
-    2026-08-01 — it used to assert the loss was silent.
+    """The net underneath recovery. THIS TEST WAS INVERTED on 2026-08-01 — it
+    used to assert the loss was silent — and **narrowed on 2026-08-02**, when
+    recovery took two of its three shapes away.
 
-    The root cause is not fixed: these shapes still lose their bodies. What
-    changed is that the loss is no longer reported as a success. A capture that
-    arrived with 1,135 characters of visible text and produced zero markdown now
-    comes back `success: false` with `failure_class: render_defect`.
+    What is left is the case where html2text agrees the page is empty. The loss
+    is real and permanent, so it is reported: `success: false`,
+    `failure_class: render_defect`, content still attached.
 
     On the wire it is **HTTP 200**, and that is the load-bearing half. MAS's
     retry branch is `retryableStatuses.includes(response.status)`, evaluated
@@ -598,7 +639,7 @@ def test_a_swallowed_body_is_reported_as_a_defect(
     ), f"{shape}: the browser did serve us the content; the loss is downstream"
     assert (
         CONTENT_MARKER not in outcome.markdown
-    ), f"{shape}: no longer collapses — move it out of BODY_SWALLOWING_SHAPES"
+    ), f"{shape}: recovery now reads this shape — move it into RECOVERABLE_SHAPES"
 
     assert not outcome.success, f"{shape}: the loss is silent again"
     assert outcome.failure_class == "render_defect"
@@ -630,6 +671,73 @@ def test_a_body_swallowed_into_a_script_is_still_silent(
     assert CONTENT_MARKER not in outcome.markdown
     assert outcome.success, "TODAY'S BEHAVIOUR — the guard cannot see this one"
     assert outcome.failure_class == "none"
+
+
+# ── URLs that are not pages (download-navigation-is-not-a-render-error.md) ──
+
+
+@pytest.mark.parametrize("kind", sorted(DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER))
+def test_a_download_is_not_a_retryable_server_error(
+    kind, fixture_origin, production_path
+):
+    """A `GetVCard` endpoint produced **every** HTTP 500 of MAS's 2026-08-01
+    run: Chromium refuses to commit a navigation to a download, the error text
+    matched nothing in the taxonomy, and `render_error` at 500 bought three
+    retries of a URL that will do exactly the same thing forever.
+
+    `unrenderable_content` is the honest name — the origin answered correctly
+    and we behaved correctly; the response is simply not a page. The wire status
+    is the whole contract (MAS's message 09) and 200 is what stops the retries.
+
+    Parameterised over five kinds because the first draft of this fixture
+    assumed `Content-Disposition: attachment` was the trigger. It is not: an
+    inline `text/vcard`, an inline `application/pdf` and an
+    `application/octet-stream` all fail identically. That answers the task
+    file's open question — the class is a shape of MAS's corpus, not one URL.
+
+    `max_retries` is MAS's production value on purpose: at the default of 0 the
+    error text reads `Unexpected error in _crawl_web …` and at 1 or more it
+    reads `All proxies failed: …`. Only `Download is starting` is common to
+    both, which is why the pattern matches on that alone.
+    """
+    outcome = production_path.crawl(
+        fixture_origin.url(f"/download/{kind}"),
+        delay_before_return_html=SHORT_WAIT,
+        max_retries=MAS_MAX_RETRIES,
+    )
+
+    assert outcome.http_status == 200, "a permanent failure must not be retried"
+    assert not outcome.success
+    assert outcome.failure_class == "unrenderable_content", (
+        f"{kind}: {outcome.error_message[:200]!r} — if this now succeeds, the "
+        "browser build renders it inline and the kind should leave "
+        "DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER"
+    )
+    assert "Download is starting" in outcome.error_message
+
+
+def test_a_download_costs_a_page_load_per_retry_round(fixture_origin, production_path):
+    """The multiplier, measured rather than inferred.
+
+    The task file priced this at "4 hits = one attempt plus MAS's three
+    retries". That undercounts by upstream's own attempt loop: `arun` retries on
+    **any** exception, not only on a detected block, so one client request at
+    `max_retries: 2` is three navigations. Four client requests were 8-12 page
+    loads, not 4 — which makes the fix worth more, not less.
+
+    Pinned here because it is the number that justifies an XS task, and because
+    it is checkable with zero live traffic: `crawl_stats.attempts` already ships
+    in the envelope MAS stores.
+    """
+    fixture_origin.reset_hits()
+    outcome = production_path.crawl(
+        fixture_origin.url("/download/vcard"),
+        delay_before_return_html=SHORT_WAIT,
+        max_retries=MAS_MAX_RETRIES,
+    )
+
+    assert fixture_origin.hits_for("/download/vcard") == MAS_MAX_RETRIES + 1
+    assert outcome.result.get("crawl_stats", {}).get("attempts") == MAS_MAX_RETRIES + 1
 
 
 # ── our own faults (the wall-clock fence) ────────────────────────────────

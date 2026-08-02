@@ -1,12 +1,47 @@
 # A second markup family collapses the body — and nothing detects a collapse
 
-**Status:** **Part 1 (the guard) is DONE and DEPLOYED, 2026-08-01. Part 2 is open,
-and as of 2026-08-02 it has production evidence and a measured cheaper first
-move — read §"Production evidence" and §"Recovery is measured" before anything
-else in this file.** Part 1 shipped in one image with
-`done/detector-round3-evidence-vs-inference.md`,
+**Status:** **Part 1 (the guard) DONE and DEPLOYED 2026-08-01. Recovery on guard
+fire DONE 2026-08-02, shipped with
+`done/download-navigation-is-not-a-render-error.md`. What is left of this file
+is repair 1, scoped to `unclosed-script` — the one shape that is still silent.**
+Part 1 shipped in one image with `done/detector-round3-evidence-vs-inference.md`,
 `done/challenge-interstitial-resolve.md` phase 2 and
 `done/render-500-window-2026-07-31.md`'s S half.
+
+> **What the implementing session found wrong, 2026-08-02.** Read this before
+> the rest; two of the three would have shipped as defects.
+>
+> 1. **"Recovery reuses the converter `aitosoft_static_mode` already ships" is
+>    true of the converter and false of the pipeline, and the difference is the
+>    whole feature.** Static mode does not call html2text on the HTML — it calls
+>    `_strip_hidden_decoys()` first, which `decompose()`s every `noscript`. On an
+>    unclosed `<noscript>` Chromium has re-serialized the whole document *inside*
+>    that element, so BeautifulSoup deletes the page: **1,265 characters -> 0**,
+>    measured. It reproduces `strip_noscript()`'s failure by a different route.
+>    Recovery calls `HTML2Text` directly and deliberately skips the decoy strip,
+>    which costs us hidden-decoy email obfuscation (the roadscanners.com class)
+>    on recovered pages. Pinned by `test_recovery_must_not_reuse_static_modes_pipeline`.
+> 2. **The obvious acceptance bar opens a new silent-loss channel.** The first
+>    draft accepted a recovery on MAS's degenerate floor alone, arguing symmetry:
+>    treat a recovery exactly as the normal path would treat the same output. A
+>    review refuted it by measurement — a page with 41,408 characters of visible
+>    text recovering **599** goes out green (599 > 500) and 40,809 characters
+>    vanish with no signal on either side. The two paths are **not** symmetric:
+>    here the guard has *already proved* the collapse, and declining to use
+>    evidence we hold is not consistency. A recovery must now clear the ratio
+>    floor as well. No new constant; every genuine recovery ever measured sits
+>    10-28x above it.
+> 3. **"The item that returns customer data, and it returns it on the shapes we
+>    can already see" overstates what is known** (`tasks/README.md` said this).
+>    Recovery is measured on **fixtures**. Which mechanism the 9 production URLs
+>    hit is still unknown — this file's own part 2 says `apteam.fi`'s fingerprint
+>    fits at least two rows. Real-traffic yield is somewhere in 0-9 of 9 and is
+>    unmeasured. The honest reason to ship it is this file's *second* argument:
+>    it is a **free mechanism classifier**, and the yield is then a measurement
+>    rather than a claim.
+>
+> The measurement in §"Recovery is measured" was re-derived independently and
+> **reproduces to the character**, including the byte-identical 1,265. It stands.
 
 **The 2026-08-02 scope cut in this file ("do repair 1, park 2 and 3") was
 written before the recovery numbers existed and is superseded.** The new
@@ -86,11 +121,30 @@ Two caveats on the numbers, so nobody over-reads them:
 - The 1,209 renders before the guard existed (revisions `--0000030`/`--0000031`)
   had no detection at all. If the rate held, ~30 pages were lost silently in
   those runs — an extrapolation, not a measurement. Do not quote it as one.
-- 12 firings over 9 URLs means three URLs were requested twice. We serve
-  `render_defect` at 200 precisely so MAS does not retry; whether those repeats
-  are their agent revisiting a URL for its own reasons, or a retry path we have
-  not accounted for, is **unresolved and worth one query** before assuming the
-  200 contract is holding as designed.
+- ~~12 firings over 9 URLs means three URLs were requested twice…
+  **unresolved and worth one query**~~ — **RESOLVED 2026-08-02 by that query.**
+  One Log Analytics read, zero crawl cost. The three repeats are
+  `taitotalo.fi/henkilokunta` (52 s apart), `casambi.com/category/news/` (15 s)
+  and `vestra.fi/fi/palvelut` (21 s). None of those gaps is MAS's retry backoff
+  (1/2/4 s), and their client does not retry a 2xx at all — so these are their
+  agent revisiting a URL for its own reasons. **The 200 contract is holding as
+  designed.**
+
+The same read sizes the population, which is worth having because the ratio
+floor scales with it — a 40 KB page needs 4,000 characters back before recovery
+is accepted, a 725-character page needs 500:
+
+| visible chars | URL |
+|---:|---|
+| 40,165 | `www.taitotalo.fi/henkilokunta` |
+| 27,517 | `www.begroup.fi/be-group` |
+| 21,056 | `www.vestra.fi/services` |
+| 20,986 | `www.vestra.fi/fi/palvelut` |
+| 20,901 | `www.takk.fi/fi/takk` |
+| 20,042 | `www.takk.fi` |
+| 17,264 | `casambi.com/category/news/` |
+| 6,191 | `www.castren.fi/people/` |
+| 725 | `kiesi.fi/uutiset-ja-artikkelit/oppaat` |
 
 ## Recovery is measured, and it changes the sequence
 
@@ -138,30 +192,97 @@ does not reproduce, that finding outranks everything below it.
 
 ### The sequence, replacing the 2026-08-02 cut
 
-1. **Recovery on guard fire.** Lives in `aitosoft_collapse_guard.py`, which is
-   100 % ours — no new divergence from upstream's parser, nothing extra to merge
-   forever. This is the item that returns customer data, and it returns it on the
-   shapes we can already see.
-2. **Repair 1, scoped to `unclosed-script`** — after 1, and priced against how
-   often that shape actually appears. Recovery gives us a free classifier for
-   that: once it ships, a page the guard catches and recovery *fails* is either
-   the comment family or something new, and the log line says which.
-3. Repair 3: parked. Repair 2: closed.
+1. ~~**Recovery on guard fire.**~~ **DONE 2026-08-02.** Lives in
+   `aitosoft_collapse_guard.py`, which is 100 % ours — no new divergence from
+   upstream's parser, nothing extra to merge forever. Ships as a free mechanism
+   classifier; the customer data it returns on real traffic is a measurement we
+   do not have yet (see the correction at the top of this file).
+2. **Price `content_source="raw_html"` as the PRIMARY generator before writing
+   repair 1.** This is the principle-7 question nobody asked, and the review
+   that found it is right that it was missing from both task files.
 
-### Two design points recovery has to decide, not inherit
+   `DefaultMarkdownGenerator` takes a documented
+   `content_source: "raw_html" | "cleaned_html" | "fit_html"`
+   (`crawl4ai/markdown_generation_strategy.py`). Recovery rejected it *as the
+   fallback* on "fewer moving parts over malformed markup", which is a fine
+   reason and a small question. The large question is the other one: generating
+   markdown from raw HTML would mean **the collapse never happens** for the
+   noscript and deep-nesting families — deleting the guard's largest population
+   instead of catching it, and probably `unclosed-script` with it.
 
-- **A recovered page should go out as `success: true` with the recovered
-  markdown.** Option B — keep `success: false` and attach it — buys nothing:
-  MAS's client reads `success` and would discard the content we just rescued.
-  Shipping it as a success is the entire point, and it narrows `render_defect` to
-  its true meaning: *we lost the body and could not get it back.* Both shapes are
-  HTTP 200 either way, so **no retry behaviour changes** and this is additive
-  from MAS's side.
-- **Do not add a `markdown_source` / "this came from the fallback" field in this
-  image.** It is a contract change and the name is MAS's to pick, exactly like
-  the `fodbar.fi` field. Log it on our side, mention it in the next relay, ship
-  the field if they want it. This file's own rule: no unannounced contract
-  changes in an image about something else.
+   It is not free — `cleaned_html` exists to strip nav and boilerplate, so every
+   page's markdown would grow — but the cost looks far smaller than anyone would
+   guess, and it is **measurable offline in an hour** against the 66 stored
+   captures. Two independent measurements already exist and agree:
+
+   - raw-html markdown vs the stored normal-path markdown is **0.9988–1.0066**
+     on 5 of 6 hosts, and 1.161 on `talgraf.fi`;
+   - plain html2text over the same stored `html` is a **median 0.91×** the
+     stored markdown length across the 59 captures that have real markdown
+     (min 0.76 on `jpond.fi`, max 0.98).
+
+   Six hosts is not enough to change every page on. It *is* enough to say this
+   deserves an hour before anyone writes a pre-parse repair, because if it holds
+   it deletes repair 1, repair 3 and most of the guard's reason to exist.
+
+3. **Repair 1, scoped to `unclosed-script`** — if #2 does not delete it. Priced
+   against how often that shape actually appears; recovery is the classifier for
+   that and it is live. `RENDER DEFECT … recovered 0 chars` is the
+   comment/script family, `COLLAPSE RECOVERED` is the noscript/nesting family,
+   and a *non-zero* count under `RENDER DEFECT` is a partial recovery, which is
+   a third thing nobody has seen yet.
+4. Repair 3: parked. Repair 2: closed.
+
+**Worth stating plainly because it is nowhere else:** `strip_noscript()` — our
+own pre-parse repair for the *nested* `<noscript>` case — is what **creates**
+the `unclosed-noscript` loss, per CLAUDE.md's own key finding. So recovery is a
+fallback compensating for one of our repairs, and both now ship. That is
+defensible (the nested case ran 3.5 months across 406 pages; the unclosed case
+is now recovered) but it is the kind of arrangement that looks accidental to a
+fresh reader, and #2 above would dissolve it.
+
+### Two design points recovery had to decide, not inherit — both decided
+
+- **A recovered page goes out as `success: true` with the recovered markdown.**
+  Option B — keep `success: false` and attach it — buys nothing: MAS's client
+  reads `success` and would discard the content we just rescued. Shipping it as
+  a success is the entire point, and it narrows `render_defect` to its true
+  meaning: *we lost the body and could not get it back.* Both shapes are HTTP
+  200 either way, so **no retry behaviour changes** and this is additive from
+  MAS's side.
+
+  The corollary the file did not state, and it matters: a **partial** recovery
+  is not attached either. On a failed result the markdown is *evidence* — it is
+  what our parse produced — and overwriting it with something we have just
+  declined to call a success destroys that for no gain, since MAS reads
+  `success` and stops. The character count goes in the log line instead.
+- **No `markdown_source` / "this came from the fallback" field in this image.**
+  It is a contract change and the name is MAS's to pick, exactly like the
+  `fodbar.fi` field. Logged on our side under its own token
+  (`COLLAPSE RECOVERED`, deliberately *not* a substring of `RENDER DEFECT`, so
+  the two populations stay countable apart across images), to be mentioned in
+  the next relay. This file's own rule: no unannounced contract changes in an
+  image about something else.
+
+### What recovery does NOT fix, recorded so it is not rediscovered
+
+- `cleaned_html` is left as our parse produced it, `fit_markdown` stays empty
+  (no content filter ran) and `links` stays whatever the collapsed parse
+  produced — usually nothing. That is the same shape `aitosoft_static_mode`
+  already returns for every static capture MAS consumes, so it is not a new
+  thing for their client, but a recovered result is genuinely less complete than
+  a healthy one.
+- `handle_stream_crawl_request` calls neither `guard_result` nor
+  `classify_result`, so "the guard runs on every successful result" is only true
+  of `/crawl`. MAS does not use streaming (message 09), so this is a note, not a
+  task.
+- Upstream's own seam — `DefaultMarkdownGenerator(content_source="raw_html")` —
+  produces an **identical** recovery (measured) and would additionally fill
+  `markdown_with_citations` and use full mode's markdown dialect. It was not
+  chosen because recovery runs on markup we already know is malformed and the
+  fewer lines of upstream machinery that touch it the better. Recorded because
+  it is the better-looking option and the next session should not have to
+  re-derive that the yield is the same.
 
 ## What MAS measured
 
@@ -496,7 +617,10 @@ Part 1, done 2026-08-01 — **192 tests, zero live requests**:
   `test_an_unclosed_noscript_still_swallows_the_body` **inverted** into
   `test_a_swallowed_body_is_reported_as_a_defect`, parameterised over the three
   detectable shapes: `success: false`, `failure_class: render_defect`, **HTTP
-  200**, content still attached. `test_no_markup_shape_swallows_the_body`
+  200**, content still attached. (That name no longer exists — recovery split it
+  on 2026-08-02 into `test_a_swallowed_body_is_recovered` and
+  `test_an_unrecoverable_collapse_is_reported_as_a_defect`. Kept here as the
+  history of what shipped on 2026-08-01.) `test_no_markup_shape_swallows_the_body`
   re-parameterised over the complement of the measured swallowing set — the
   original "no exclusion" wording assumed the root cause was fixed, which it is
   not, so the exclusion is now a *measured* set with a test that fails if a
@@ -505,17 +629,34 @@ Part 1, done 2026-08-01 — **192 tests, zero live requests**:
   rather than left to be rediscovered.
 - Full offline suite 152, `pre-commit run --all-files` clean, secret check exit 1.
 
+Recovery, done 2026-08-02 — **zero live requests**:
+
+- `test_collapse_guard.py` — the four fixtures that used to pin "collapsed and
+  stays collapsed" are all 100 % recoverable, so they were rewritten rather than
+  patched: `test_guard_result_recovers_a_lost_body` (the win),
+  `test_a_body_html2text_cannot_read_either_is_still_a_defect` (the net),
+  `test_a_partial_recovery_must_not_become_a_silent_success` (the review's
+  41,408/599 case), `test_a_recovery_must_clear_both_floors` (the rule at its
+  corners), `test_recovery_must_not_reuse_static_modes_pipeline` (the
+  `_strip_hidden_decoys` trap), `test_recovery_never_runs_on_a_healthy_page`
+  (cost).
+- `test_fixture_origin.py` — `test_a_swallowed_body_is_reported_as_a_defect`
+  **split**, because 2 of its 3 shapes now recover. `RECOVERABLE_SHAPES` is a
+  third measured partition next to `BODY_SWALLOWING_SHAPES` and
+  `GUARD_BLIND_SHAPES`; the shapes did **not** move out of
+  `BODY_SWALLOWING_SHAPES`, because they still swallow the body — moving them
+  would have made `test_no_markup_shape_swallows_the_body` assert a green path
+  for a page that is still collapsing underneath.
+- Both assertions check `CONTENT_TAIL_MARKER`, not only `CONTENT_MARKER`: a
+  recovery that returned the heading and stopped is exactly how the `<noscript>`
+  loss hid for 3.5 months.
+- Cost measured: html2text is 2.6 ms on the largest fixture (80 KB) and 26 ms on
+  the largest real capture we hold (`solwers.com`, 721 KB), and it only runs
+  after the guard has fired.
+
 Still owed:
 
-- **Tier 1 regression 4/4** — not run this session; needs a live server and four
-  live requests, and this image is not deploying yet. Run it with #4's work in
-  the shared image, not twice.
 - Do not re-hit `apteam.fi` or `flvi.fi`.
-- **Do not deploy this on its own.** It ships in one image with
-  `detector-round3-evidence-vs-inference.md`, and possibly with the memory-guard
-  fix from `render-500-window-2026-07-31.md`. The two detector defects pull in
-  opposite directions by design and their net effect is only measurable in a
-  single deploy; a solo deploy here spends the measurement for nothing.
 
 **A note for whoever runs Tier 1 on the shared image.** The guard has never seen
 a live page. Its evidence is 37 stored captures of the four Tier 1 hosts, which

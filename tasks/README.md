@@ -49,11 +49,20 @@ What that run *found*:
 1. **9 of 328 pages (2.7 %) returned zero markdown**, across 7 of 38 hosts. This
    is ours, it is the only thing costing MAS data, and **MAS reported the same
    run as clean** — a page with no contacts looks exactly like a page that has no
-   contacts. Owned by `cleaned-html-collapse-guard.md`.
+   contacts. Recovery shipped 2026-08-02; how much of this it actually returns
+   on real traffic is **unmeasured** (fixtures say two of four mechanisms come
+   back whole; which mechanism these 9 hit is unknown).
 2. **One URL burned four renders and produced every 500 of the run.** A vCard
-   endpoint; Chromium refuses to navigate to a download, the error text matches
-   nothing, so it defaults to `render_error` → 500 → three MAS retries. Owned by
-   `download-navigation-is-not-a-render-error.md`.
+   endpoint; Chromium refuses to navigate to a download. Fixed 2026-08-02 —
+   `unrenderable_content` at 200. The cost was worse than recorded: upstream
+   retries on any exception, so at MAS's `max_retries: 2` those four requests
+   were **8–12 page loads**, not 4.
+
+Both were read out of Log Analytics again on 2026-08-02, which also settled the
+one open question from the first read: the 12 guard firings over 9 URLs are 3
+URLs MAS's agent revisited 15–52 s apart, not a retry path. Their gaps are
+nothing like the 1/2/4 s backoff and their client does not retry a 2xx — **the
+200 contract is holding as designed.**
 
 **The untested axis is concurrency.** This run peaked at 2 concurrent with a
 queue depth of 1. Heavier scraping is where 429s, eviction pressure and
@@ -65,16 +74,19 @@ instrument, not another task file.
 
 ## The open items, in order
 
-Items 1 and 2 ship in **one image**. They are independent, both small, and both
-are worth having in before a heavier sweep — every page recovered during a sweep
-is a page nobody has to re-crawl afterwards.
+**Old items 1 and 2 shipped together on 2026-08-02** as `0.9.2-collapse-recovery`
+— collapse recovery and `unrenderable_content`. Both task files carry what the
+implementing session found wrong; the short version is that **three load-bearing
+claims across the two files did not survive**: recovery could not reuse static
+mode's pipeline (only its converter), the obvious acceptance bar opened a new
+silent-loss channel, and the download failure arrives as a failed *result*, not
+an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 
 | # | Task | Size | What to know |
 |---|------|------|--------------|
-| 1 | `cleaned-html-collapse-guard.md` — **recovery on guard fire** | S | The file's own line ~190 proposed it and deferred the call to "its numbers". The numbers were measured 2026-08-02: html2text over the same rendered HTML returns **full content** for `unclosed-noscript` (1,265 chars — identical to the healthy control) and `deep-nesting`, and nothing for `unterminated-comment` / `unclosed-script`. It lives in `aitosoft_collapse_guard.py`, which is 100 % ours, so it adds **no** divergence from upstream's parser. **Re-run the measurement before building on it** — §"Recovery is measured" says exactly how. |
-| 2 | `download-navigation-is-not-a-render-error.md` | XS | One URL in 328, but 4× charged and it recurs on contact pages by construction. The line of code is trivial; the *class name* is a contract decision the file lays out and does not make for you. |
-| 3 | `cleaned-html-collapse-guard.md` — **repair 1, scoped to `unclosed-script`** | M | Only after 1. Recovery closes repair 2 outright and covers `unclosed-noscript`, which leaves `unclosed-script` as the **one silent member** — `success: true`, zero markdown, guard structurally blind. That is now the whole argument for repair 1, and it is still the strongest of our four upstream PRs. |
-| 4 | `flaky-fence-test-margin.md` | ~1 h | Our only pre-deploy gate is "the offline suite is green", and this test fails ~1 run in 3 for reasons unrelated to the code. **Diagnose before widening**: the same red can mean harness overhead *or* a fence that unwinds slowly under load, and the second is a finding about our 180 s fence against Azure's 240 s ingress limit. Natural time to do it is if it bites while shipping 1 + 2. |
+| 1 | `cleaned-html-collapse-guard.md` — **price `content_source="raw_html"` before writing any repair** | ~1 h | The principle-7 question neither task file asked, found by the pre-deploy review. Upstream already has the seam; generating markdown from raw HTML would make the collapse **not happen** for the noscript and deep-nesting families rather than catching it, and probably for `unclosed-script` too. Two independent measurements say the quality cost is small (0.9988–1.0066 on 5 of 6 hosts; median 0.91× across 59 stored captures). Measurable offline against the 66 stored captures. If it holds, it deletes items 2 and 3 below. |
+| 2 | `cleaned-html-collapse-guard.md` — **repair 1, scoped to `unclosed-script`** | M | Only if #1 does not dissolve it. Recovery closed repair 2 outright and covers `unclosed-noscript`, which leaves `unclosed-script` as the **one silent member** — `success: true`, zero markdown, guard structurally blind. That is the whole argument for repair 1, and it is still the strongest of our four upstream PRs. Recovery is now a live classifier, so the next sweep's log split (`COLLAPSE RECOVERED` vs `RENDER DEFECT … recovered 0 chars`) sizes this shape for free. |
+| 3 | `flaky-fence-test-margin.md` | ~1 h | Our only pre-deploy gate is "the offline suite is green", and this test fails ~1 run in 3 for reasons unrelated to the code. **Diagnose before widening**: the same red can mean harness overhead *or* a fence that unwinds slowly under load, and the second is a finding about our 180 s fence against Azure's 240 s ingress limit. It did **not** bite across the three full runs on 2026-08-02, so the 1-in-3 figure may itself be stale. |
 
 **One decision left behind by the pool deploy, deliberately not taken.** The boot
 ("permanent") browser is unreachable **by construction**: `server.py:199` builds
@@ -146,12 +158,20 @@ request**, and check `test-aitosoft/artifacts/` before you add a route. The
 2026-08-01 image, the 2026-08-02 pool work and the 2026-08-02 production
 forensics cost **zero live crawl requests** between them.
 
-**Five consecutive implementing sessions found the previous session's task file
+**Six consecutive implementing sessions found the previous session's task file
 materially wrong about something load-bearing** — that is the separation of roles
 working (CLAUDE.md principle 6), not a quality problem. Verify the diagnosis, not
 just the plan, and **check the arithmetic**, not just the logic. The sharpest
 case: the record said 8 browsers at 165 MB "is the whole 4 GiB budget". That is
 ~36 %. Four sessions read past it.
+
+The sixth (2026-08-02) added a variant worth naming: **a claim can be right about
+the component and wrong about the thing that ships.** "Recovery reuses the
+converter `aitosoft_static_mode` already ships" was true of `HTML2Text` and false
+of the pipeline around it, which deletes the very pages recovery exists for. The
+published measurement reproduced to the character; the *justification* under it
+did not. Re-run the measurement — and then check that what ships is what was
+measured.
 
 **A consumer reporting "no problems" is not evidence of no data loss.** MAS
 called the 2026-08-01 run clean; 9 of its pages came back with nothing in them.
@@ -198,6 +218,22 @@ only on a reason to open an image: the `fodbar.fi` "content was present despite
 the origin status" field (MAS names it), and flipping envelope `success` to the
 aggregate — which must ship **alone**, since it breaks a pinned contract
 (`test_static_mode.py:257`) and buys no behaviour.
+
+**To announce in the next relay** (shipped 2026-08-02, additive, no behaviour
+change on their side — per this file's own rule, additive changes ship and get
+announced):
+
+- A new `failure_class` value, **`unrenderable_content`** — HTTP 200,
+  non-retryable, for a URL that answers correctly with something that is not a
+  web page (vCard exports, PDFs, any `Content-Disposition: attachment`). It used
+  to reach them as `render_error` at 500 and cost them three retries.
+- Worth telling them because it is *their* lever, not ours: **`render_mode:
+  "static"` would fetch that vCard's body** and hand them the actual contact
+  card, which is the data they were crawling the page for.
+- Collapse recovery: some captures that used to arrive `render_defect` now
+  arrive as ordinary successes with markdown. No field changed, no status
+  changed. If they want a "this markdown came from the fallback" flag, the name
+  is theirs to pick — same as the `fodbar.fi` field.
 
 **How to run this exchange**, since it is easy to get wrong: the *channel* is
 correspondence, but the *contract* has no home — MAS's model of our behaviour is

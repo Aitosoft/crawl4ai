@@ -52,7 +52,18 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
   5xx reserved for our own faults (test_failure_classification.py pins it).
   Also the evidence/inference split (`_INFERRED_BLOCK_RE`, 2026-08-01): a block
   verdict derived from an empty-looking page is `render_error`, not
-  `origin_blocked` — discarding the reason does not discard the status
+  `origin_blocked` — discarding the reason does not discard the status.
+  And `unrenderable_content` (2026-08-02): a URL that answers correctly with a
+  download is nobody's fault and permanently unrenderable — non-retryable, 200,
+  and deliberately not an origin class
+- `aitosoft_collapse_guard.py` - Detects a capture whose body vanished in our
+  parse (**visible text chars in vs markdown chars out**, never an HTML-byte
+  ratio — the byte ratio fires on healthy pages and is blind to a whole
+  mechanism), then **recovers** it with html2text over the same rendered HTML.
+  A recovery is only accepted if it clears MAS's degenerate floor *and* the
+  guard's own ratio floor; recovered pages go out as ordinary successes.
+  Reuses static mode's converter, never its pipeline — `_strip_hidden_decoys()`
+  deletes exactly the pages recovery exists for (test_collapse_guard.py pins it)
 
 ### Deployment
 - `azure-deployment/` - `deploy-image.sh` (THE deploy path), `batch-scale.sh`

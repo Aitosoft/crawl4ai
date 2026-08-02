@@ -50,8 +50,167 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- Offline suites green: test_mas_contract.py (11), test_admission.py (10), test_static_mode.py (10), test_crawler_pool.py (4), test_patchright_fallback.py (4), test_redirect_block_detection.py (11), test_render_bounds.py (17), test_failure_classification.py (34), test_noscript_body_collapse.py (11), test_antibot_challenge_detection.py (18) — **130 pure-function tests, ~8 s**
-- Plus test_fixture_origin.py (23) — browser-driven against a local fixture origin, ~50 s. **`pytest test-aitosoft/` = 153 tests, ~60 s, all offline** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
+- **`pytest test-aitosoft/` = 271 tests, ~235 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
+- Pure-function subset: **217 tests, ~13 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
+- Browser-driven subset: test_fixture_origin.py (54), against a local fixture origin, ~220 s
+
+---
+
+## Collapse recovery + `unrenderable_content` (2026-08-02)
+
+Two independent items in one image, both small, both worth having in before a
+heavier MAS sweep — every page recovered during a sweep is a page nobody has to
+re-crawl afterwards.
+
+### 1. A detected collapse is now recovered, not just reported
+
+The guard shipped 2026-08-01 detects a capture whose body vanished in our parse.
+Detecting it does not return the data. It now takes a **second opinion**: the
+same rendered `html`, re-converted with `crawl4ai.html2text` — the converter
+`aitosoft_static_mode` already serves to MAS. Measured through the browser at
+73 KB, and **re-derived independently before shipping** (it reproduces to the
+character, including the byte-identical 1,265):
+
+| shape | markdown today | html2text over the same html | recovered? |
+|---|---:|---:|---|
+| `unclosed-noscript` | 0 | **1,265** | yes — byte-identical to the healthy control's own html2text output |
+| `deep-nesting` | 0 | **1,239** | yes — content complete; the markdown table loses its `\| --- \|` separator |
+| `unterminated-comment` | 0 | 0 | no |
+| `unclosed-script` | 0 (guard-blind) | 0 | no |
+| *healthy control* | 1,258 | 1,265 | — |
+
+A recovered capture goes out as an **ordinary success** carrying the recovered
+markdown (`failure_class: none`). Option B — `success: false` with the recovery
+attached — buys nothing: MAS's client reads `success` and would discard exactly
+what we rescued. Both are HTTP 200, so **no retry behaviour changes**; this is
+additive from their side. `render_defect` now means what it says: *we lost the
+body and could not get it back.*
+
+Three things worth carrying forward, because two of them were nearly shipped
+wrong:
+
+- **Recovery reuses static mode's CONVERTER, never its pipeline.**
+  `_fetch_static_one` calls `_strip_hidden_decoys()` first, which `decompose()`s
+  every `noscript` — and on an unclosed `<noscript>` Chromium has re-serialized
+  the whole document *inside* that element, so BeautifulSoup deletes the page.
+  Measured 1,265 → 0. It reproduces `strip_noscript()`'s failure by a different
+  route. Pinned by `test_recovery_must_not_reuse_static_modes_pipeline`. The cost
+  of skipping it: hidden-decoy email obfuscation (the roadscanners.com
+  `oe_displaynone` class) is not stripped from recovered markdown. On a page that
+  would otherwise return nothing, that is the right trade.
+- **A recovery must clear BOTH the degenerate floor and the ratio floor.** The
+  first draft accepted on MAS's `DEGENERATE_CAPTURE_CHARS = 500` alone, arguing
+  that recovery should treat its output exactly as the normal path would. Review
+  refuted it by measurement: a page with 41,408 characters of visible text
+  recovering **599** would go out green (599 > 500) and lose 40,809 characters
+  silently — a *new* silent-loss channel inside the fix for silent loss. The two
+  paths are not symmetric: here the guard has **already proved** the collapse.
+  No new constant; every genuine recovery measured sits 10–28× above the ratio
+  floor.
+- **A partial recovery is not attached.** On a failed result the markdown is
+  evidence — what our parse produced — and MAS reads `success` and stops. The
+  character count goes in the log line instead, where it is the diagnosis.
+
+**New log token, deliberately disjoint from the old one:** `COLLAPSE RECOVERED`
+is *not* a substring of `RENDER DEFECT`, so the recovered and lost populations
+stay countable apart across images. The 2026-08-01 baseline of 2.7 % of pages /
+18 % of hosts is now the **sum** of the two. `RENDER DEFECT` also carries the
+recovered char count: 0 means html2text agreed the page was empty, non-zero means
+a partial recovery we declined — a third case nobody has seen yet.
+
+**What it does not fix:** `cleaned_html` and `links` on a recovered result are
+left as the collapsed parse produced them — deliberately, they are the evidence
+and they explain the recovery rather than contradicting it. The other markdown
+variants (`fit_markdown`, `markdown_with_citations`, `references_markdown`) are
+**blanked**, not left: review caught `markdown_with_citations` still holding the
+collapsed parse's one character next to 1,266 characters of recovered
+`raw_markdown` — one object, contradicting itself, every signal green. That is
+this module's own failure shape one field to the left. Empty says "we did not
+produce one"; anything else lies.
+
+**Honest sizing:** recovery is measured on **fixtures**. Which mechanism the 9
+production URLs hit is still unknown, so the real-traffic yield is somewhere in
+0–9 of 9. The reason to ship it is that it is a free **mechanism classifier**;
+the yield is then a measurement rather than a claim.
+
+### 2. A URL that downloads is `unrenderable_content`, at 200
+
+One `GetVCard` endpoint produced every HTTP 500 of MAS's 2026-08-01 run.
+Chromium refuses to commit a navigation to a download, `page.goto` raises, the
+text matched nothing in the taxonomy, and `render_error` at 500 bought three
+retries of a URL that will do the same thing forever.
+
+`unrenderable_content` — non-retryable, HTTP 200, and deliberately **not** an
+origin class. `origin_http_error` was the cheaper option and was rejected:
+this module's documented bias is that mislabelling a healthy site as broken is
+the expensive direction, and upstream leaves `status_code` **null** when the
+navigation never commits — so it would have been a lie visible in the one field
+MAS was promised holds the origin's real final status.
+
+Three corrections to the diagnosis, all measured offline:
+
+- **It arrives as a failed *result*, not an escaped exception.** Upstream's
+  `arun` wraps its whole body in `try:` and returns a failed `CrawlResult`, so
+  `classify_result` decides it, not `classify_exception`. The production log
+  line's own prefix (`Crawl request failed: …`) is built at exactly one place —
+  `server.py`'s `_crawl_response`, the result path.
+- **`Content-Disposition: attachment` is not the trigger.** Inline `text/vcard`,
+  inline `application/pdf` and `application/octet-stream` all fail identically.
+  The rule is "Chromium will not render this inline". That answers the open PDF
+  question: yes, on bundled Chromium. Production runs real Chrome, which ships a
+  PDF viewer, so the inline-PDF row could differ there; the attachment rows
+  cannot.
+- **"Charged four renders" undercounts.** Upstream retries on *any* exception,
+  not only on a detected block, so one client request at MAS's `max_retries: 2`
+  is three navigations. Four client requests were 8–12 page loads.
+  `crawl_stats.attempts` already ships in the envelope MAS stores.
+
+`accept_downloads: true` does **not** rescue it — checked, because it was the
+cheap lever nobody had tried. `page.goto` still raises and the download handler
+then dies with `Target page … has been closed`.
+
+**A second status-mapping site fell out of the change.** `api.py`'s exception
+handler gated its 200-envelope branch on `_exc_class in ORIGIN_CLASSES` rather
+than on `http_status_for` — the "one class, two wire statuses" defect MAS found
+in July, in the one place the 2026-08-01 fix did not reach. It was latent (no
+non-retryable-but-not-origin class could reach that handler); `unrenderable_content`
+can. The same handler also dropped 504 on the floor: a Playwright timeout that
+escaped `arun` (browser launch, pool acquisition) classified `render_timeout`
+and went out as **500**, while the identical class at the wall-clock fence goes
+out as 504. Both branches now ask `http_status_for`, so the exception path
+mirrors `server._crawl_response` exactly.
+
+### 3. Every failed result is now logged, which it never was
+
+Found by the pre-deploy review while checking a claim in the download task file
+("the class is now measurable"). It was not: **nothing logged a failed result's
+`failure_class` at all.** These URLs were only ever visible because they
+produced a 500 and `server.py` logs 500s — the `Crawl request failed: … Download
+is starting` line is literally how the defect was found.
+
+Generalise it, because it will recur: **every time this taxonomy moves a class
+off 5xx, it deletes that class's only log line.** `unrenderable_content` was
+about to be the first class shipped with no server-side counter at all. `api.py`
+now emits `RESULT FAILURE: url=… failure_class=… status=… error=…` for every
+failed result, which also closes a hole open since the taxonomy shipped: origin
+blocks and origin 4xx arrive as *results*, while `ORIGIN FAILURE` is on the
+*exception* path — so `OVERNIGHT_PLAYBOOK.md` has been describing a token that
+almost never fires.
+
+**To tell MAS:** the new class value, and that `render_mode: "static"` would
+fetch that vCard's body with httpx and hand them the actual contact card. That
+is their routing decision, not ours to make.
+
+### Files
+
+| File | Change |
+|---|---|
+| `deploy/docker/aitosoft_collapse_guard.py` | `recover_markdown()`, `_is_a_real_recovery()`, `GuardVerdict`; `guard_result` returns a verdict instead of a string |
+| `deploy/docker/aitosoft_failure_class.py` | `UNRENDERABLE_CONTENT` + `_DOWNLOAD_RE`; `classify_exception` docstring corrected |
+| `deploy/docker/api.py` | recovered vs lost branches + `COLLAPSE RECOVERED` token; `RESULT FAILURE` on every failed result; exception gate asks `http_status_for` for 200 **and** 504 |
+| `test-aitosoft/fixture_origin.py` | `/download/{kind}` (5 kinds, hand-built PDF), `RECOVERABLE_SHAPES` |
+| `test-aitosoft/test_collapse_guard.py`, `test_fixture_origin.py`, `test_failure_classification.py` | recovery + download coverage |
+| `OVERNIGHT_PLAYBOOK.md` | `COLLAPSE RECOVERED` and `RESULT FAILURE` rows; `RENDER DEFECT` and `ORIGIN FAILURE` rows restated |
 
 ---
 

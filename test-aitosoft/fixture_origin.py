@@ -59,6 +59,7 @@ Routes (every default is a module constant; every one is overridable):
     /hydrate-after/{s}                    near-empty body that paints after N s
     /redirect-to/{route}                  301 into any route above
     /collapse/{shape}                     large body carrying one swallowing shape
+    /download/{kind}                      a resource that is not a web page
     /heavy                                a page the SHAPE of a real SME site
     /img/{w}x{h}.png                      a real decodable image of that size
 
@@ -303,6 +304,25 @@ BODY_SWALLOWING_SHAPES = frozenset(
     }
 )
 
+#: Of the swallowing shapes, the ones the collapse guard's html2text recovery
+#: gets back. **Measured 2026-08-02 and re-derived independently before it
+#: shipped**, through `ProductionPath.crawl` at `?bytes=73000`:
+#:
+#:   unclosed-noscript  1,265 chars — byte-identical to the healthy control's
+#:                      own html2text output. Full recovery, not a degraded
+#:                      scrape.
+#:   deep-nesting       1,239 chars — content complete (every email, phone
+#:                      number, name and title); what is missing is the markdown
+#:                      table's `| --- |` separator row and the list indent, so
+#:                      a downstream parser sees the table as prose.
+#:
+#: The other two recover **nothing**: `unterminated-comment` because the content
+#: really is inside a comment, `unclosed-script` because it is inside a script.
+#: Both are the same answer html2text gives to `cleaned_html`, which is what
+#: makes recovery a free classifier — a capture the guard catches and recovery
+#: fails is the comment family or something new.
+RECOVERABLE_SHAPES = frozenset({"unclosed-noscript", "deep-nesting"})
+
 #: Of those, the one the collapse guard cannot see, and this is by design.
 #: `unclosed-script` puts the whole document inside a `<script>` element, and
 #: the guard's visible-text measure strips script blocks — it must, because real
@@ -500,6 +520,130 @@ def _collapse(m, query):
         200,
         PAGE.format(body=f"{shape}{_padding(nbytes)}{CONTENT_HTML}"),
     )
+
+
+#: `/download/{kind}` — a URL that answers correctly with something that is not
+#: a web page. `tasks/download-navigation-is-not-a-render-error.md`: one
+#: `GetVCard` endpoint produced every HTTP 500 of MAS's 2026-08-01 run, four
+#: renders for one URL, because Chromium refuses to commit a navigation to a
+#: download and the resulting error text matches nothing in the taxonomy.
+#:
+#: MAS crawls contact and people pages by design, which is exactly where vCard
+#: exports and PDF brochures live, so this is a shape of the corpus and not one
+#: odd URL.
+#:
+#: **The trigger is not the header.** The task file (and this route's first
+#: draft) assumed `Content-Disposition: attachment` was what made Chromium
+#: refuse. Measured 2026-08-02: an inline `text/vcard`, an inline
+#: `application/pdf` and an `application/octet-stream` all raise the byte-identical
+#: `Page.goto: Download is starting`. The rule is "Chromium will not render this
+#: inline", and a fixture that varied only the header would have sized the
+#: population wrong — the same unfaithful-fixture failure the padded-403 route
+#: already cost us once.
+DOWNLOAD_VCARD = (
+    "BEGIN:VCARD\r\n"
+    "VERSION:3.0\r\n"
+    "N:Meikalainen;Matti\r\n"
+    "FN:Matti Meikalainen\r\n"
+    "ORG:Yritys Oy\r\n"
+    "TITLE:toimitusjohtaja\r\n"
+    "TEL;TYPE=WORK,VOICE:+358401234501\r\n"
+    "EMAIL;TYPE=PREF,INTERNET:info@yritys.fi\r\n"
+    "END:VCARD\r\n"
+)
+
+
+def _pdf(lines: Tuple[str, ...]) -> bytes:
+    """A real, structurally valid one-page PDF, built by hand.
+
+    Valid matters: the inline case asks whether Chromium hands the response to
+    its PDF viewer or downloads it, and a malformed file would answer a
+    different question. No reportlab dependency — the devcontainer does not have
+    one and this is the same 20-line trick `_png` uses for images.
+    """
+    text = "\n".join(
+        "BT /F1 12 Tf 72 %d Td (%s) Tj ET"
+        % (770 - 18 * i, line.replace("\\", "").replace("(", "").replace(")", ""))
+        for i, line in enumerate(lines)
+    ).encode("latin-1", "replace")
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]"
+        b" /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(text), text),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets: List[int] = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+
+    startxref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    for offset in offsets:
+        out += b"%010d 00000 n \n" % offset
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1,
+        startxref,
+    )
+    return bytes(out)
+
+
+DOWNLOAD_PDF_LINES = (
+    "Yritys Oy",
+    "Puhelin 010 123 4567",
+    "info@yritys.fi",
+)
+
+
+#: `kind -> (content type, filename extension, attachment?)`. Kept as data so a
+#: new shape is a dict entry and a parametrize case, never a new route.
+#:
+#: `vcard` is the grantthornton.fi `GetVCard` shape verbatim — the URL that
+#: produced every HTTP 500 of MAS's 2026-08-01 run. The other four vary one axis
+#: each, and **all five behave identically today**.
+DOWNLOAD_KINDS: Dict[str, Tuple[str, str, bool]] = {
+    "vcard": ("text/vcard; charset=utf-8", "vcf", True),
+    "vcard-inline": ("text/vcard; charset=utf-8", "vcf", False),
+    "pdf-attachment": ("application/pdf", "pdf", True),
+    "pdf-inline": ("application/pdf", "pdf", False),
+    "octet-stream": ("application/octet-stream", "bin", False),
+}
+
+#: Measured through the browser 2026-08-02: every kind above raises
+#: `Page.goto: Download is starting`. Named as a set anyway, so that a kind
+#: which starts rendering (a real-Chrome PDF viewer is the live candidate —
+#: this devcontainer has no Chrome binary and production runs
+#: `chrome_channel: chrome`) fails the suite rather than quietly leaving it.
+DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER = frozenset(DOWNLOAD_KINDS)
+
+
+@_route(r"/download/([a-z-]+)")
+def _download(m, query):
+    """A resource the origin serves correctly and a browser will not render.
+
+    `?filename=` overrides the download name; `?status=` the code, as everywhere.
+    """
+    kind = m.group(1)
+    if kind not in DOWNLOAD_KINDS:
+        return Reply(
+            404, "<!DOCTYPE html><html><body><p>no such kind</p></body></html>"
+        )
+
+    content_type, extension, attach = DOWNLOAD_KINDS[kind]
+    filename = _one(query, "filename", "contact")
+    headers = (
+        {"Content-Disposition": f'attachment; filename="{filename}.{extension}"'}
+        if attach
+        else {}
+    )
+    if extension == "vcf":
+        return Reply(200, DOWNLOAD_VCARD, content_type, headers)
+    return Reply(200, "", content_type, headers).with_bytes(_pdf(DOWNLOAD_PDF_LINES))
 
 
 #: `/heavy` defaults, taken from **our own stored captures**, not from

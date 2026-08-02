@@ -54,7 +54,7 @@ python test-aitosoft/test_soak.py --duration-min 30                 # leak hunti
 Everything pytest collects is OFFLINE — no server, no customer site:
 
 ```bash
-pytest test-aitosoft/          # 153 tests, ~60 s
+pytest test-aitosoft/          # 271 tests, ~235 s
 ```
 
 That splits in two, and the split matters when you are choosing where to put a
@@ -62,17 +62,19 @@ new test:
 
 | | Suites | Tests | Time | Covers |
 |---|---|---:|---|---|
-| Pure-function | the ten below | 130 | ~8 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the config boundary, the gate |
-| Browser-driven | `test_fixture_origin.py` | 23 | ~50 s | **time, navigation and the browser** — challenge resolution, hydration races, redirect chains, the wall-clock fence |
+| Pure-function | the eleven below | 217 | ~13 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the config boundary, the gate |
+| Browser-driven | `test_fixture_origin.py` | 54 | ~220 s | **time, navigation and the browser** — challenge resolution, hydration races, redirect chains, the wall-clock fence |
 
 ```bash
-pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py
+pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py test-aitosoft/test_collapse_guard.py
 ```
 
-Keep this list in sync with the same command in `CLAUDE.md` — they drifted
-once (this file still said "seven suites, 64 tests" three suites later), and
-this file declares itself the winner in a contradiction, so the stale copy
-was the one a fresh session would have trusted.
+This list drifts, twice now: it said "seven suites, 64 tests" three suites
+later, and it was still missing `test_collapse_guard.py` a day after that suite
+shipped. **`CLAUDE.md` no longer keeps a parallel copy** — it runs
+`--ignore=test-aitosoft/test_fixture_origin.py` instead, which is the same split
+expressed as a complement and cannot go stale. Prefer that form; this explicit
+list survives only because it names the suites.
 
 The four CLI scripts (`test_regression.py`, `test_site.py`,
 `test_fingerprint.py`, `test_soak.py`) need a live server + token and are run by

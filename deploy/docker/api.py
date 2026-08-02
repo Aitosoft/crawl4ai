@@ -921,12 +921,14 @@ async def handle_crawl_request(
                 if _eff_status is not None:
                     result_dict["status_code"] = _eff_status
 
-                # Aitosoft: catch a capture whose body vanished in our own parse.
-                # Twice a markup shape has reduced a full page to ~nothing while
-                # every signal stayed green — the <noscript> case ran 3.5 months
-                # across 406 pages at success:true. The guard measures the
-                # consequence (visible text in, markdown out) rather than the
-                # cause, because the causes are unbounded.
+                # Aitosoft: catch a capture whose body vanished in our own parse,
+                # and try to get it back. Twice a markup shape has reduced a full
+                # page to ~nothing while every signal stayed green — the
+                # <noscript> case ran 3.5 months across 406 pages at
+                # success:true. The guard measures the consequence (visible text
+                # in, markdown out) rather than the cause, because the causes are
+                # unbounded; when it fires, html2text over the same rendered HTML
+                # recovers the body for two of the three shapes we can see.
                 # See aitosoft_collapse_guard.py.
                 _collapse = guard_result(result_dict)
 
@@ -935,13 +937,60 @@ async def handle_crawl_request(
                 # success. See aitosoft_failure_class.py.
                 result_dict["failure_class"] = classify_result(result_dict)
 
-                if _collapse:
+                if _collapse and _collapse.recovered:
+                    # A rescued page is an ordinary success — `failure_class`
+                    # stays "none" and MAS gets the content. Logged at its own
+                    # token (NOT a substring of "RENDER DEFECT") so the recovered
+                    # and lost populations stay countable apart across images:
+                    # the 2.7 % figure from 2026-08-01 was measured with the
+                    # older token and must stay comparable.
+                    logger.warning(
+                        "COLLAPSE RECOVERED: url=%s %s; recovered %d chars via html2text",
+                        result_dict.get("url"),
+                        _collapse.reason,
+                        _collapse.recovered_chars,
+                    )
+                elif _collapse:
                     # The guard is a better witness than classify_result, which
                     # only sees the error text the guard itself just wrote.
                     # Permanent and ours: 200 on the wire, no retries.
                     result_dict["failure_class"] = RENDER_DEFECT
+                    # The recovery's character count is part of the diagnosis,
+                    # not noise: 0 means html2text agreed the page was empty
+                    # (the comment/script family), anything above it means a
+                    # PARTIAL recovery we declined to serve as a success. Those
+                    # are different findings and only this line distinguishes
+                    # them — the partial text is deliberately not attached.
                     logger.error(
-                        "RENDER DEFECT: url=%s %s", result_dict.get("url"), _collapse
+                        "RENDER DEFECT: url=%s %s; html2text recovered %d chars",
+                        result_dict.get("url"),
+                        _collapse.reason,
+                        _collapse.recovered_chars,
+                    )
+                elif not result_dict.get("success"):
+                    # Aitosoft 2026-08-02: every OTHER failed result, which until
+                    # now was logged nowhere at all.
+                    #
+                    # This was invisible while the taxonomy's job was to *stop*
+                    # producing 5xx, because a 5xx is what server.py logs — the
+                    # `Crawl request failed: … Download is starting` line is
+                    # literally how the vCard defect was found. Moving a class to
+                    # 200 therefore also moves it out of the logs, and
+                    # `unrenderable_content` was about to be the first class we
+                    # shipped with no server-side counter at all.
+                    #
+                    # `ORIGIN FAILURE` below is NOT this line: it is on the
+                    # exception path, which the correction there shows this
+                    # family does not take. One line per failed result is the
+                    # right volume — it is what RENDER DEFECT already does for
+                    # its subset, and the failures are exactly what we want to
+                    # count.
+                    logger.warning(
+                        "RESULT FAILURE: url=%s failure_class=%s status=%s error=%s",
+                        result_dict.get("url"),
+                        result_dict.get("failure_class"),
+                        result_dict.get("status_code"),
+                        (result_dict.get("error_message") or "?")[:300],
                     )
 
                 processed_results.append(result_dict)
@@ -1034,18 +1083,60 @@ async def handle_crawl_request(
         if start_mem_mb is not None and end_mem_mb_error is not None:
             mem_delta_mb = end_mem_mb_error - start_mem_mb
 
-        # Aitosoft: the origin's own failure must not become our 5xx.
-        # Upstream re-raises a navigation failure when there is a single proxy
-        # and max_retries <= 1 (async_webcrawler.py ~543), so an origin that
-        # serves an unrenderable 5xx — anitamakela.com's zero-byte Apache 500 —
-        # arrives here as RuntimeError("Failed on navigating ACS-GOTO: …
-        # net::ERR_HTTP_RESPONSE_CODE_FAILURE"). That produced 8 client retries
-        # in 35 s for a site that was simply broken. Return the same envelope
-        # shape a failed result would have, with the verdict attached.
+        # Aitosoft: the origin's own failure must not become our 5xx. An origin
+        # that serves an unrenderable 5xx — anitamakela.com's zero-byte Apache
+        # 500 — surfaces as RuntimeError("Failed on navigating ACS-GOTO: …
+        # net::ERR_HTTP_RESPONSE_CODE_FAILURE") and produced 8 client retries in
+        # 35 s for a site that was simply broken. Return the same envelope shape
+        # a failed result would have, with the verdict attached.
+        #
+        # CORRECTION 2026-08-02: this comment used to claim upstream *re-raises*
+        # that navigation failure "when there is a single proxy and max_retries
+        # <= 1". Measured: `arun` wraps its whole body in try/except
+        # (async_webcrawler.py:256/742) and returns a failed CrawlResult instead,
+        # so the ACS-GOTO family reaches `classify_result` above, not this
+        # handler. What still lands here is a failure that escaped `arun`
+        # entirely — pool acquisition, browser launch, serialization. The
+        # classification is identical either way (both call
+        # `classify_error_text`), which is why the mistake was invisible; the
+        # *status* mapping was not, which is the next paragraph.
+        #
+        # Aitosoft 2026-08-02: this gate used to read `_exc_class in
+        # ORIGIN_CLASSES`, which made it a SECOND status-mapping site — exactly
+        # the thing aitosoft_failure_class's docstring says must not exist, and
+        # the defect MAS found in July ("one class, two wire statuses"). It was
+        # latent, because no class that is non-retryable-but-not-origin could
+        # reach here; `unrenderable_content` can. Ask the mapping function.
         _exc_class = classify_exception(e)
-        if _exc_class in ORIGIN_CLASSES:
+        _exc_status = http_status_for([_exc_class])
+        if _exc_status == 504:
+            # `render_timeout` from a Playwright timeout that escaped `arun`
+            # (browser launch, pool acquisition) used to fall through to the 500
+            # below — so the one class already meaning 504 at the wall-clock
+            # fence meant 500 here. Same "one class, two wire statuses" defect,
+            # in the last place it survived. 504 is also the better answer on its
+            # merits: MAS does not retry it and pivots the host to static after
+            # two, which beats three more attempts at a wedged replica.
             logger.warning(
-                "ORIGIN FAILURE: url=%s failure_class=%s error=%s",
+                "TERMINAL FAILURE: url=%s failure_class=%s error=%s",
+                urls[0] if urls else "?", _exc_class, str(e)[:300],
+            )
+            try:
+                from monitor import get_monitor
+                await get_monitor().track_request_end(
+                    request_id, success=False,
+                    error=f"{_exc_class}: {str(e)[:300]}", status_code=504,
+                )
+            except:
+                pass
+            raise HTTPException(504, "Crawl exceeded the time limit")
+
+        if _exc_status == 200:
+            logger.warning(
+                "%s: url=%s failure_class=%s error=%s",
+                # Keep the ORIGIN FAILURE token for the origin's own faults —
+                # it is what existing Log Analytics queries key on.
+                "ORIGIN FAILURE" if _exc_class in ORIGIN_CLASSES else "TERMINAL FAILURE",
                 urls[0] if urls else "?", _exc_class, str(e)[:300],
             )
             try:
