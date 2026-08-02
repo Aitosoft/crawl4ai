@@ -1,269 +1,164 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-02 by the coordinator, after the browser cap deployed and
-**message 11 went to MAS asking them to re-scrape**. If you are the session
-holding their reply, jump to **"START HERE if you are the session that has MAS's
-reply"** — it maps every answer to what it changes, so you do not have to
-re-derive it.
+**Updated:** 2026-08-02 by the coordinator, after reading the first real
+production traffic the current image has served.
 
-Read "The scope cut" before picking anything else up: several task files on disk
-are **parked on purpose**, not waiting for a free session. Row numbers are not
-stable across revisions; cross-references name the task file, never the number.
+**This file holds ordering, gating and current state — nothing else.** The
+reasoning lives in each task file, the evidence in
+`waa-eval-2026-07-30-forensics.md`, the shipped history in `AITOSOFT_CHANGES.md`.
+It used to carry all three and had grown to 500 lines of duplicated changelog;
+if you find yourself adding a narrative section here, it belongs in one of those.
 
-**This file holds ordering, gating and current state.** The reasoning lives in
-each task file, the evidence in `waa-eval-2026-07-30-forensics.md`. If a task
-file and this index disagree, **the task file wins and this index is stale** —
-fix it.
+**If a task file and this index disagree, the task file wins and this index is
+stale** — fix it.
+
+Read "Parked on purpose" before picking anything up: several files on disk are
+parked deliberately, not waiting for a free session.
+
+---
 
 ## Where we actually are
 
-**The service works.** Production is `0.9.2-pool-cap`, revision `--0000033`,
-2 vCPU / 4 GiB, `minReplicas: 0`, health 200, verified 2026-08-02. On MAS's 243-host
-probe — the only real workload the current generation has seen — roughly **15 of
-243 failures were ours** (9 memory refusals, 4 detector false positives, ~2 parse
-collapses). About 6 %, and **13 of those 15 are already fixed and deployed**.
-Zero timeouts. Everything below is tail work; nothing is a deploy blocker and
-nothing is on fire.
+**Production is `0.9.2-pool-cap`, revision `--0000033`**, 2 vCPU / 4 GiB,
+`minReplicas: 0`, `maxReplicas: 30`, scale rule 2 concurrent/replica.
+`main` and production are in sync.
 
-**MAS has had no production traffic since 2026-07-30** and there is no sweep
-date. We are building against a workload nobody has run yet. That is the single
-biggest reason to keep scope small — see CLAUDE.md principle 7.
+**MAS ran ~30 prospect sites on the evening of 2026-08-01 — the first real
+workload this image has seen.** 336 renders, 328 distinct URLs, 38 hosts, read
+out of Log Analytics with zero live requests of our own.
 
-**`main` and production are in sync.** The browser cap **shipped 2026-08-02** as
-`0.9.2-pool-cap`, revision `--0000033`: `max_browsers: 6` with LRU eviction, the
-memory-adaptive TTL removed, the memory guard now shedding before it refuses, and
-`permanent_unused_ttl_sec` cut 600 → 120. Tier 1 4/4, offline 247 green.
+What that run settled:
 
-**That habit still holds even so:** before assuming a fix is live, check the
-deployed image tag against `azure-deployment/` rather than the commit history.
+| | |
+|---|---|
+| RenderGate 429 | **0** |
+| Memory refusals | **0** (revision `--0000031` threw **36** on a comparable workload) |
+| Wall-clock 504 | **0** |
+| Janitor force-close | **0** |
+| Anti-bot blocks / patchright retries | **0** |
+| Latency | p50 4.7 s, p90 6.3 s, p99 7.3 s, max 14.9 s |
+| Pool memory | p50 15.7 %, p95 39.8 %, max 56 %; resident peaked at the 6-browser cap |
+| Queue | 14 of 335 waited, max 7.6 s, max depth 1 |
 
-**Two production readings from the deploy are worth carrying forward.**
+**The capacity and memory work is done and proven.** The cap, the shed-before-refuse
+guard and `permanent_unused_ttl_sec: 120` between them took memory refusals from
+36 to 0. Nothing in the memory family needs building.
 
-1. **Closing the boot browser freed ~196 MB anon / ~5.0 points** on a live
-   replica, from a one-number config change (`permanent_unused_ttl_sec` 600 →
-   120). The two instruments agree — 5.0 % of 4096 MB ≈ the 196 MB anon drop —
-   and `file` barely moved, so the reading tracks anon, not page cache. **~196 MB
-   is above the offline per-browser figures** (129.6 / 141.3 MB anon), so the
-   offline instrument is a floor on the real path.
-2. **A serving replica read 13–22 %, not ~65 %.** This does **not** refute the
-   disputed intercept — Tier 1 is four sequential requests; the disputed 68
-   samples were a 243-host probe at concurrency — but it does show the baseline
-   is not a constant that "appears with traffic". It needs *concurrent* traffic,
-   which points at candidate 1 (in-render transient memory) and away from
-   candidates 3 and 4 in `replica-memory-baseline-unexplained.md`.
+What that run *found*:
 
-3. **Part of the disputed 59 % intercept is now explained — and already removed.**
-   The probe's `📊 Pool:` line logged `hot=`/`cold=` and `permanent=yes/no` but
-   **no combined count**, so the regression's x-variable excluded the permanent
-   browser — which was resident in all 68 samples and never closed (its unused
-   TTL did not exist until after the probe). An omitted constant lands entirely
-   in the intercept. Closing it is worth **~5.0 points**, so the current build's
-   intercept should be that much lower, and **any re-derivation must use
-   post-`--0000033` data**. See `replica-memory-baseline-unexplained.md` §4.
+1. **9 of 328 pages (2.7 %) returned zero markdown**, across 7 of 38 hosts. This
+   is ours, it is the only thing costing MAS data, and **MAS reported the same
+   run as clean** — a page with no contacts looks exactly like a page that has no
+   contacts. Owned by `cleaned-html-collapse-guard.md`.
+2. **One URL burned four renders and produced every 500 of the run.** A vCard
+   endpoint; Chromium refuses to navigate to a download, the error text matches
+   nothing, so it defaults to `render_error` → 500 → three MAS retries. Owned by
+   `download-navigation-is-not-a-render-error.md`.
 
-**Read those lines correctly or they mislead:** within a single `📊 Pool:` line
-the `mem=` figure is sampled up to 60 s *before* the counts beside it (the
-janitor samples before its sleep, logs after the cleanup). Treat each `mem=` as
-belonging to the previous tick.
+**The untested axis is concurrency.** This run peaked at 2 concurrent with a
+queue depth of 1. Heavier scraping is where 429s, eviction pressure and
+scale-from-zero live, and none of it can be answered from here. MAS has agreed to
+notify us before a heavier sweep so it can be watched live — that is the
+instrument, not another task file.
 
-## The scope cut, 2026-08-02
+---
 
-Tero asked whether we were over-engineering. We were. **The cut stands; the
-example I first gave for it does not** — see the resize section below. I told him
-an April note showed we could have doubled replica memory with one command and
-never tried it. Azure rejected that command: 2 vCPU / 4 GiB is the maximum this
-environment offers, and the April note was never valid. **A vivid example that
-turns out to be fiction is worse than a dull one that holds**, and a coordinator
-arguing "we over-complicate" by reaching for the most striking available story is
-committing the error it is naming. Recorded rather than quietly deleted, because
-the reasoning is the reusable part.
+## The open items, in order
 
-The cut rests on three things that are still true:
+Items 1 and 2 ship in **one image**. They are independent, both small, and both
+are worth having in before a heavier sweep — every page recovered during a sweep
+is a page nobody has to re-crawl afterwards.
 
-- **MAS has had no production traffic since 2026-07-30 and there is no sweep
-  date.** Everything shipped since then is validated against fixtures, our own
-  stored captures, and one probe run against the *previous* image. We are
-  building against a workload nobody has run.
-- **MAS asked us in writing not to build ahead of them.** Two parked items are
-  parked on their instruction.
-- **Several open questions can only be answered by their corpus**, so more work
-  on our side cannot resolve them — it can only guess at their size.
-
-**So the open list is cut from nine items to three.** What was dropped was not
-wrong, it was *unasked for*.
-
-**Do not re-expand this list without a reason that arrives from outside** — a
-MAS message, a production failure, or a measurement. "There is a session free"
-is not a reason.
-
-## ~~Decision pending with Tero — resize the replica~~ ANSWERED BY AZURE, 2026-08-02
-
-**Tero approved it. Azure refused it. There is no resize to be had.**
-
-```
-$ az containerapp update -n crawl4ai-service -g aitosoft-prod --cpu 2.0 --memory 8.0Gi
-ERROR: (ContainerAppInvalidResourceTotal) ... must add up to one of: [0.25/0.5Gi]
-[0.5/1.0Gi] [0.75/1.5Gi] [1.0/2.0Gi] [1.25/2.5Gi] [1.5/3.0Gi] [1.75/3.5Gi] [2.0/4.0Gi]
-```
-
-The list **ends at 2 vCPU / 4 GiB — we are already at the maximum**. This
-environment is a *legacy Consumption-only* managed environment
-(`properties.workloadProfiles: null`); the 4 vCPU / 8 GiB ceiling this file
-guessed at belongs to the Consumption **profile inside a workload-profiles
-environment**, which is a different environment type. The April note's
-`--memory 8.0Gi` was never a valid command.
-
-**The scope cut above was still right, but its headline example was fiction.**
-Keep the cut; stop citing "we could have doubled memory with one command".
-
-**The only path to more memory is converting the managed environment** to
-workload profiles (`az containerapp env update -w <name> --workload-profile-type
-...`). That is a production infrastructure migration with a different billing
-model — dedicated profiles bill provisioned instances continuously, which would
-end `minReplicas: 0` scale-to-zero economics; the Consumption profile inside such
-an environment would keep them and allow 4/8. **Not done, not approved: what Tero
-approved was a resize, and this is not one.** Costed sketch for that decision:
-4 vCPU / 8 GiB is ~2× per replica-second, so unless `render_capacity` also rises
-to 4, **cost per fetch doubles for zero throughput gain**.
-
-Consequences, live now:
-
-- **`replica-memory-baseline-unexplained.md`'s un-park condition is met** (it was
-  "Tero declines the resize"; unavailable is functionally that). Coordinator's
-  call whether to un-park, but headroom cannot be bought.
-- The browser cap, the shed-before-refuse memory guard and
-  `permanent_unused_ttl_sec: 120` are the *only* memory levers we hold.
-- **`render_capacity` stays 2** — it is fixed by 2 vCPU. No scale-rule change.
-  Note `deploy-image.sh` verifies that invariant **after** updating the image, so
-  it is a post-hoc alarm, not a gate: change the ACA rule first if it ever moves.
-
-Still open and still Tero's: **`minReplicas: 1` for the sweep window only**
-removes the scale-from-zero burst behind every 500 we have seen. It is a scale
-setting, **not** `--set-env-vars`, so it does not carry the token risk.
-
-## START HERE if you are the session that has MAS's reply
-
-**Message 11 was sent 2026-08-02** —
-`tmp/mas-repo-messages/11-to-mas-please-re-scrape-and-what-to-report.md`
-(gitignored; read it, it states what we asked and why). It asks MAS to re-scrape
-their 243 hosts **against a cold service** and report eight things, lettered
-(a)–(h). Their reply is the input to this session.
-
-**Save their reply as `tmp/mas-repo-messages/12-from-mas-*.md` before acting on
-it**, so the transcript stays complete.
-
-**Then read their numbers adversarially before believing them.** This is not
-distrust — it is the same rule that has caught five consecutive task files
-(CLAUDE.md principle 6). Their 243-host probe is the *entire* dataset our current
-generation has been shaped by, and we have already built and unbuilt priorities
-on it. Specifically: ask what their number counts, whether it predates any change
-on either side, and whether anything in the data-generating process moved while
-they measured. We got all three of those wrong ourselves on the memory
-regression.
-
-### What each answer changes — act on this, do not re-derive it
-
-| Answer | If it says… | Then |
-|---|---|---|
-| **(a)** wire-status histogram | few or no 429s on a cold run | The cap + boot-browser change worked. **`minReplicas: 1` becomes optional rather than needed** — tell Tero, it is his spend |
-| | a burst of 429s again | The cold-start problem survives our three levers. Un-park `replica-memory-baseline-unexplained.md` and re-derive on **post-`--0000033`** data only |
-| | any 500s | Read them first — a 500 is now supposed to be *ours and transient only*. Any other cause is a taxonomy bug and outranks everything on this list |
-| **(b)** the four padded-403 hosts | now `origin_blocked` | Detector defect A confirmed in production. Record it in the forensics file and close the loop; nothing to build |
-| | still returning content | The new block-notice tier does not fire on the real page. That is a **real defect** and jumps to the top — and note the fixture was already unfaithful once on exactly this axis |
-| **(c)** `norex.com` / `jarvenkylamaatila.fi` retry cost | just these two, cost small | Accept it. It is the price of not calling a healthy host permanently blocked |
-| | a larger population | **Do not change the wire status.** Make the *inference tier* less eager instead — the class is right, the trigger is too broad. New task file |
-| **(d)** the 23 challenge hosts | mostly return content | The 10 s retry wait works. `residential-egress-retry-path.md`'s population collapses toward its floor of 6 — likely **not worth spending money on**, which is the outcome we want |
-| | mostly still blocked | Population is near the ceiling of 29. **Then, and only then**, the dev container's Finnish consumer-ISP egress probe is worth running — one hit per host, logged. Still no spend without Tero |
-| **(e)** `render_defect` sightings + one raw `html` | any at all | First production evidence for the collapse guard. **The `html` is the prize**: run it through `fixture_origin`'s four shapes to identify which mechanism `apteam.fi` actually hits — that is what repair sequencing has been waiting on |
-| **(f)** empty-capture residual | small | **Leave repairs 2 and 3 parked permanently** and say so in the task file, so it stops being re-litigated |
-| | large | Un-park whichever repair (e)'s `html` points at. One repair, not both |
-| **(g)** unmarked-interstitial count | small | Write it down and close the question. We deliberately do not catch this class; a number lets us stop wondering |
-| | large | Reopen the design — but remember any rule that catches it is the same inference we removed in `detector-round3`. It needs evidence, not a low-text gate |
-| **(h)** the sweep's shape | any answer | Feeds the `minReplicas` decision and tells us whether `render_capacity: 2` per replica is enough at their concurrency. **Tero's call, not ours** |
-
-**If their reply does not arrive or is thin:** items 2 and 3 below are
-self-contained and need nobody. Do those. Do **not** un-park anything to fill
-time — see "The scope cut".
-
-## The open items — one done, two left, both self-contained
-
-| # | Task | State | What to know |
-|---|------|-------|--------------|
-| ~~1~~ | ~~`pool-residency-unbounded.md`~~ **DONE — deployed 2026-08-02** | `0.9.2-pool-cap`, revision `--0000033`. Tier 1 4/4, offline 247 green | Both fixes shipped, but **(a) could not be done as specified** and that is the reusable lesson: "evict, **re-read**, then refuse" cannot work, because `_close_detached` schedules the close on a task that cannot start before the coroutine yields — the re-read measures the number it just read. Shipped as evict-one-idle-LRU-**then-refuse-anyway**. Doing it via the existing `_evict_for_capacity(headroom=1)` would also have been a **silent no-op below the cap**. (b) shipped as written; the cardinality argument is now verified, not asserted — 8 identical `user_agent_mode: "random"` configs give **5** distinct pool signatures, 8 fixed-UA configs give **1**. Bonus lever taken: `permanent_unused_ttl_sec` 600 → 120, because the boot browser is unreachable **by construction** and was holding ~140 MB through exactly the cold-burst window that produced all nine 500s. |
-| 2 | `cleaned-html-collapse-guard.md` **part 2, repair 1 only** | Part 1 deployed 2026-08-01 | **Do repair 1. Do not do repairs 2 and 3.** Repair 1 is the raw-text re-serialization family (`unclosed-noscript`, `unclosed-script`) — a genuine upstream bug, the strongest of our upstream PRs, and the one shape the collapse guard is structurally blind to (`unclosed-script` has 0 visible text, so no text-ratio guard can see it). Repairs 2 (libxml2 depth limit) and 3 (unterminated comment) are **parked**: the guard already catches both and reports them to MAS truthfully at HTTP 200 + `success: false`, so they cost accuracy, not data. Re-open only if MAS's residual count says the population is large. |
-| 3 | `flaky-fence-test-margin.md` | Open, ~1 hour | Our only pre-deploy gate is "the offline suite is green"; this test fails ~1 run in 3 for reasons unrelated to the code. **Diagnose before widening** — the same red can mean harness overhead *or* a fence that unwinds slowly under load, and the second is a finding about our 180 s fence against Azure's 240 s ingress limit. |
+| # | Task | Size | What to know |
+|---|------|------|--------------|
+| 1 | `cleaned-html-collapse-guard.md` — **recovery on guard fire** | S | The file's own line ~190 proposed it and deferred the call to "its numbers". The numbers were measured 2026-08-02: html2text over the same rendered HTML returns **full content** for `unclosed-noscript` (1,265 chars — identical to the healthy control) and `deep-nesting`, and nothing for `unterminated-comment` / `unclosed-script`. It lives in `aitosoft_collapse_guard.py`, which is 100 % ours, so it adds **no** divergence from upstream's parser. **Re-run the measurement before building on it** — §"Recovery is measured" says exactly how. |
+| 2 | `download-navigation-is-not-a-render-error.md` | XS | One URL in 328, but 4× charged and it recurs on contact pages by construction. The line of code is trivial; the *class name* is a contract decision the file lays out and does not make for you. |
+| 3 | `cleaned-html-collapse-guard.md` — **repair 1, scoped to `unclosed-script`** | M | Only after 1. Recovery closes repair 2 outright and covers `unclosed-noscript`, which leaves `unclosed-script` as the **one silent member** — `success: true`, zero markdown, guard structurally blind. That is now the whole argument for repair 1, and it is still the strongest of our four upstream PRs. |
+| 4 | `flaky-fence-test-margin.md` | ~1 h | Our only pre-deploy gate is "the offline suite is green", and this test fails ~1 run in 3 for reasons unrelated to the code. **Diagnose before widening**: the same red can mean harness overhead *or* a fence that unwinds slowly under load, and the second is a finding about our 180 s fence against Azure's 240 s ingress limit. Natural time to do it is if it bites while shipping 1 + 2. |
 
 **One decision left behind by the pool deploy, deliberately not taken.** The boot
 ("permanent") browser is unreachable **by construction**: `server.py:199` builds
 its `BrowserConfig` inline *without* `enforce_egress`, while
 `get_default_browser_config():138` and every request path apply it, so the
-signatures differ in `ignore_https_errors` and can never match — 0 hits in 224
-production pool gets. The two fixes point **opposite ways** — delete the
-`init_permanent` call, or route it through `get_default_browser_config()` to make
-it reachable — which is exactly why it should not be bundled into someone else's
-image. The cold-burst cost was mitigated in the meantime by
-`permanent_unused_ttl_sec: 120`, so this is a decision, not a defect. Prior
-sessions considered only the second option and declined it; **nobody had proposed
-deleting it.** `monitor_routes.py:273-284`'s self-deadlock (`init_permanent`
-called *inside* `async with LOCK`, which it re-acquires) is in the same file and
-is the natural thing to fix in the same change.
+signatures can never match — 0 hits in 224 production pool gets. The two fixes
+point **opposite ways** — delete the `init_permanent` call, or route it through
+`get_default_browser_config()` to make it reachable — which is why it should not
+be bundled into someone else's image. The cost was mitigated by
+`permanent_unused_ttl_sec: 120`, so this is a decision, not a defect.
+`monitor_routes.py:273-284`'s self-deadlock (`init_permanent` called *inside*
+`async with LOCK`, which it re-acquires) is in the same file and is the natural
+thing to fix in the same change.
+
+---
 
 ## Parked on purpose — do not pick these up unasked
 
 | Task | Why parked | What would un-park it |
 |---|---|---|
-| `replica-memory-baseline-unexplained.md` | The 59 % may be an artefact of a metric that has since changed, and a resize would make it moot | Tero declines the resize, **or** the guard still fires after it |
-| `pool-browser-retains-last-page.md` | **Closed as refuted** — `about:blank` returns 0.5 MB even against a 100 MB JS heap; per-browser memory is a ratchet only a close resets | Nothing. Kept as a record of a measured negative |
-| `static-fallback-within-fence.md` | 0 × 504 in the only workload we have; the hang it was sized against was fixed in `done/render-retry-unbounded-hang.md` | A real 504 population in MAS's sweep |
-| `blocked-host-retry-economy.md` | Cost optimisation, not a defect. And lever 1 now also skips the slow-hydration rescue (the patchright retry gained a 10 s wait) | The sweep showing blocked-host cost actually hurts |
+| `replica-memory-baseline-unexplained.md` | The 59 % may be an artefact of a metric that changed under it, and the 2026-08-01 run measured p95 **39.8 %** with zero refusals. There is no symptom left to explain | The guard firing again, on real traffic |
+| `static-fallback-within-fence.md` | 0 × 504 in two workloads now; the hang it was sized against was fixed in `done/render-retry-unbounded-hang.md` | A real 504 population in a sweep |
+| `blocked-host-retry-economy.md` | Cost optimisation, not a defect — and the 2026-08-01 run saw **0 blocks in 336 renders** | A sweep showing blocked-host cost actually hurts |
+| `residential-egress-retry-path.md` | Population is floor 6 / ceiling 29, costs money, and 0 blocks were seen in the only recent traffic | A real count, then Tero |
+| `static-mode-tls-impersonation.md` | Hardens a path nothing currently falls back to | `residential-egress-retry-path.md` |
 | `base-config-boolean-defaults-never-applied.md` | `simulate_user` has never taken effect and nothing has missed it. "Delete the line" is the likely right answer | Someone wanting a boolean in `base_config` to work |
 | `preflight-batch-endpoint.md` | **MAS said do not build speculatively.** Their words | MAS asks |
-| `residential-egress-retry-path.md` | Population is floor 6 / ceiling 29 and the 23 undetermined resolve for free in MAS's next sweep. Costs money | A real count, then Tero |
-| `static-mode-tls-impersonation.md` | Hardens a path nothing currently falls back to | `residential-egress` |
-| `file-upstream-prs.md` | Standing tracker, four PRs open. Core behavioural changes sit for months | Nothing — check occasionally |
+| `file-upstream-prs.md` | Standing tracker, four PRs open. Upstream `develop` is **one commit past v0.9.2** (a Docker IPv6 fix, checked 2026-08-02) — core behavioural changes sit for months and waiting for them is not a plan | Nothing — check occasionally |
 | `waa-eval-2026-07-30-forensics.md` | **Reference, not a task.** Never close it | — |
+
+**Do not re-expand this list without a reason that arrives from outside** — a MAS
+message, a production failure, or a measurement. "There is a session free" is not
+a reason.
+
+---
+
+## Settled, so it stops being re-litigated
+
+**There is no replica resize to be had.** Tero approved it; Azure refused it.
+`az containerapp update --cpu 2.0 --memory 8.0Gi` is rejected — the allowed list
+**ends at 2 vCPU / 4 GiB**, because this is a legacy Consumption-only managed
+environment (`properties.workloadProfiles: null`). The April note claiming
+`--memory 8.0Gi` "doubles headroom at zero cost" was never a valid command. The
+only path to more memory is converting the environment to workload profiles,
+which is an infrastructure migration with a different billing model (dedicated
+profiles bill continuously and would end `minReplicas: 0` economics) — and at
+2× cost per replica-second with `render_capacity` fixed at 2 by the vCPU count,
+**cost per fetch would double for zero throughput gain**. Not approved, and no
+longer needed: memory refusals are at zero.
+
+**`render_capacity` stays 2** — fixed by 2 vCPU. If it ever moves, change the ACA
+scale rule *first*: `deploy-image.sh` verifies that invariant **after** updating
+the image, so it is a post-hoc alarm, not a gate.
+
+**Still Tero's, and cheap:** `minReplicas: 1` for a sweep window removes the
+scale-from-zero burst behind every 500 we have ever seen. It is a scale setting,
+**not** `--set-env-vars`, so it carries no token risk.
+
+---
 
 ## Standing rules that have earned their place
 
-**Live traffic is the last instrument, not the first** (since 2026-07-31, now
-TESTING.md golden rule 0). Every failure class since 2026-04 was diagnosed
-against a customer's website, all of it leaving from one shared Azure address
-that is not contractually ours — and MAS's requests and our test requests share
-that egress. `test-aitosoft/fixture_origin.py` is a local origin driven through
-the real production path; **add a route before you add a request**, and check
-`test-aitosoft/artifacts/` before you add a route. The entire 2026-08-01 image
-and the 2026-08-02 pool work cost **zero live crawl requests** between them.
+**Live traffic is the last instrument, not the first** (TESTING.md golden rule 0).
+Every failure class since 2026-04 was diagnosed against a customer's website, all
+of it leaving from one shared Azure address that is not contractually ours — and
+MAS's requests share that egress. `test-aitosoft/fixture_origin.py` is a local
+origin driven through the real production path; **add a route before you add a
+request**, and check `test-aitosoft/artifacts/` before you add a route. The
+2026-08-01 image, the 2026-08-02 pool work and the 2026-08-02 production
+forensics cost **zero live crawl requests** between them.
 
-**Five consecutive sessions have found the previous session's task file
-materially wrong about something load-bearing.** That is the separation of roles
-working (CLAUDE.md principle 6), not a quality problem — but it means: verify the
-diagnosis, not just the plan, and **check the arithmetic**, not just the logic.
-The 2026-08-02 case is the sharpest: the record said 8 browsers at 165 MB "is the
-whole 4 GiB budget". That is ~36 %. Four sessions read past it.
+**Five consecutive implementing sessions found the previous session's task file
+materially wrong about something load-bearing** — that is the separation of roles
+working (CLAUDE.md principle 6), not a quality problem. Verify the diagnosis, not
+just the plan, and **check the arithmetic**, not just the logic. The sharpest
+case: the record said 8 browsers at 165 MB "is the whole 4 GiB budget". That is
+~36 %. Four sessions read past it.
 
-## Shipped 2026-08-01 — one image, four items
+**A consumer reporting "no problems" is not evidence of no data loss.** MAS
+called the 2026-08-01 run clean; 9 of its pages came back with nothing in them.
+They were not careless — the failure is invisible from their side by
+construction. Record what we measured, not what we were told.
 
-`0.9.2-detector-round3`, revision `--0000032`. Closed:
-`challenge-interstitial-resolve.md` (both phases),
-`detector-round3-evidence-vs-inference.md`,
-`antibot-minimal-text-false-positive.md`, and the S half of
-`render-500-window-2026-07-31.md`. `cleaned-html-collapse-guard.md` part 1 is
-deployed.
-
-- **Detection widened and invention narrowed in the same deploy, on purpose.** A
-  block page padded to 80 KB at status 202 is caught as *evidence*
-  (`origin_blocked`); a verdict derived from an empty-looking page is now *ours*
-  (`render_error`). They compose: without the new tier, the unpadded form would
-  have flipped from `origin_blocked` to `render_error` — a real block reported as
-  our bug.
-- **A real second instance was sitting in `test-aitosoft/artifacts/`.**
-  `monidor.com`, returned to MAS at `success: true`, is an 11,515-byte
-  interstitial with 58 characters of text. We had it for weeks.
-- **Phase 2 rescues slow-hydrating shells, not just challenges** — MAS's
-  `revisol.fi` class, absorbed server-side at zero extra page loads.
-- **The cost of `detector-round3` defect B:** two of MAS's four cases move from a
-  terminal 200 to a retried 500. Correct direction, real cost. Watch it in the
-  next sweep.
+---
 
 ## Cross-repo state
 
@@ -272,24 +167,31 @@ gitignored `tmp/mas-repo-messages/`, numbered and direction-labelled, relayed by
 Tero both ways. Durable conclusions get copied into the forensics record; the
 messages are the transcript, not the source of truth.
 
-**Status as of 2026-08-02: the ball is with them, and message 11 is why.**
+**The ball is with them.** Message 11 (sent 2026-08-02) asked for a cold-start
+re-scrape of their 243 hosts and eight lettered reports. Since then they have run
+~30 sites of real traffic instead, which answered some of it from our side.
 
-- **Message 10** (relayed 2026-08-01) answered every item they had raised and
-  asked four things back. Three are still outstanding and were rolled into
-  message 11 as (f), (g) and (h).
-- **Message 11** (sent 2026-08-02,
-  `tmp/mas-repo-messages/11-to-mas-please-re-scrape-and-what-to-report.md`) asks
-  for a **cold-start re-scrape of the same 243 hosts** and eight lettered
-  reports. See "START HERE if you are the session that has MAS's reply" above for
-  what each answer changes — that mapping is the handover, do not re-derive it.
-- **Why we asked rather than built:** five behavioural changes have shipped since
-  their probe and **none has been observed on real traffic**. We have no traffic
-  of our own. Three of the open questions are only answerable from their corpus.
-- **The `fodbar.fi` field** is still unbuilt and still theirs to name — it was
-  deliberately *not* re-asked in message 11, to keep that message about one
-  thing. Ship it when they name it.
-- **Nothing on our side is blocked on any of it**, and message 11 says so
-  explicitly. No reply is owed by us.
+Still genuinely open, and only their corpus can answer:
+
+| | question | why it still matters |
+|---|---|---|
+| (b) | do the four padded-403 hosts now come back `origin_blocked`? | If they still return content, the new block-notice tier does not fire on the real page — a real defect, and the fixture was already unfaithful once on exactly this axis |
+| (c) | how many hosts moved to `render_error` at 500 (the `norex.com` class)? | If it is a large population, **do not change the wire status** — make the *inference tier* less eager instead |
+| (f) | residual empty-capture count | Sizes the population our own 2.7 % only samples |
+| (g) | count of interstitials carrying no marker, no prose and no notice | We deliberately do not catch this class and cannot count it. A number lets us stop wondering |
+
+Answered from our side on 2026-08-01/02, so do not re-ask:
+
+- **(a) wire statuses on a cold service** — the run started against a
+  scaled-to-zero app and produced **0 × 429 and 0 × memory refusals**. The cap
+  worked. `minReplicas: 1` is now optional rather than needed.
+- **(d) blocked hosts** — 0 blocks and 0 patchright retries in 336 renders. Weak
+  evidence, but it points away from the residential-egress spend.
+- **(e) `render_defect` sightings** — we have our own now: 9 URLs, 7 hosts. Their
+  bytes are still welcome but no longer gating, because recovery (item 1)
+  classifies the mechanism for free.
+- **(h) the sweep's shape** — being handled by process instead: MAS will notify
+  before heavier scraping so it can be watched live.
 
 **Two agreed changes are unblocked and unshipped**, both additive, both waiting
 only on a reason to open an image: the `fodbar.fi` "content was present despite
@@ -299,205 +201,10 @@ aggregate — which must ship **alone**, since it breaks a pinned contract
 
 **How to run this exchange**, since it is easy to get wrong: the *channel* is
 correspondence, but the *contract* has no home — MAS's model of our behaviour is
-reconstructed from ten messages, which is how `render_error` came to mean two
-wire statuses for weeks without either side noticing. If a third party ever joins,
-or if the taxonomy changes again, write the contract down as its own versioned
-document rather than growing the message chain. And **never let a relay block a
-deploy**: that coupling is what dropped the `fodbar.fi` field from a finished
-image. Additive changes ship and get announced; behaviour changes wait for the
-relay.
-
-Settled 2026-07-31 (their message 07):
-
-- **Envelope `success`:** flip it to the aggregate, **conditional on the HTTP
-  wire status staying 200**. That condition is the load-bearing half.
-  **Deliberately NOT shipped in the 2026-08-01 image** — it buys no behaviour
-  (they never read it on 2xx) and would have been a third contract change in one
-  deploy. Proposed in message 10; ship it on its own afterwards.
-- **Their `DEGENERATE_CAPTURE_CHARS = 500` floor is 500 markdown characters**,
-  not HTML bytes. The unit hazard is live — we reason in HTML bytes, they store
-  markdown. Name the unit every time.
-- They now store `cleaned_html` alongside markdown when a capture comes back
-  degenerate, which removes the round-trips that dominated 2026-07-30.
-
-Settled 2026-07-31 (their message 09), and it reframes the contract:
-
-- **The wire status is the contract; `failure_class` is documentation.** Their
-  retry branch is `retryableStatuses.includes(response.status)`, evaluated before
-  the body is parsed — `failure_class` is received, logged and unread. So a
-  detected collapse goes out as **HTTP 200 + result-level `success: false`**, the
-  shape `savaterra.fi` proved end to end at zero retries. Never behind 500/502/503.
-- ~~**`render_error` is currently served at two wire statuses.**~~ **FIXED and
-  deployed 2026-08-01.** Static returned it inside a 200 (static never raises),
-  full mode at 500. Both modes now route through `server._crawl_response` →
-  `http_status_for`. The missing axis was **permanence, not ownership**:
-  `render_defect` is entirely ours *and* must not be retried.
-- **They have had zero production traffic since our deploy** — 86 WAA runs on
-  2026-07-30, all before 18:24 UTC, none since. Their 243-host probe is the only
-  workload the current image has seen. Do not read their silence as "seeing none".
-- **No sweep date, and that is deliberate.** It runs when their system is ready.
-- **The shared-egress finding landed on their side too**, with a consequence we
-  had not drawn: a residential-vendor probe *run from our egress cannot answer the
-  question it exists to answer*. They have marked their residential analysis
-  part-superseded and will bring us the sweep's shape — waves, concurrency,
-  per-host spacing — before wave 1.
-
-Found on our side 2026-08-01 (logs + offline probe, zero traffic — see
-`render-500-window-2026-07-31.md` and forensics §11; the coordinator's first pass on this is superseded):
-
-- **The 9 × 500 were our memory guard, not a render failure.** `crawler_pool.py:179`
-  refuses to create a browser at `memory_threshold_percent: 85.0`; the readings
-  were 85.1–95.6 %.
-- **The 235 MB and the cgroup reading were never measuring the same memory.**
-  `server_peak_memory_mb` is the gunicorn worker's RSS (`api.py:105`) and Chrome
-  is ~7 child processes per browser. Measured on the real path: **+2.0 MB worker
-  RSS vs +139–165 MB cgroup per pooled browser**, of which a stable **130 MB is
-  `anon`**. So the reading is roughly right and the memory was scarce; the page
-  cache term is a one-time cold-container fill (27 MB/browser cold, 1.8 warm),
-  not the story.
-- **"We are full" is answered with two different wire statuses**, exactly like
-  `render_error`: RenderGate says 429 + `Retry-After`, the memory guard says 500,
-  and 500 is the one MAS retries three times. Memory pressure currently
-  multiplies its own load by four.
-- **It was scale-from-zero, not scale-out.** The app was at zero replicas at
-  04:40; all nine 500s are on the one replica that came up at 04:44:49, and the
-  second replica served its first render at 04:46:54 — after eight of the nine.
-- **Nothing bounds the number of live browsers.** `render_capacity` bounds
-  renders and `max_pages` bounds pages; residency was governed by idle TTL alone.
-  ~~so 8 browsers were held to do 2 renders' worth of work~~ **Corrected
-  2026-08-02: peak was 9–10 per replica.** Capped at 6. The replacement claim —
-  `mem% = 59.3 + 2.65 × browsers`, r² = 0.22, "browsers are not where the memory
-  is" — is **disputed on three counts** and must not be quoted as settled: see
-  `replica-memory-baseline-unexplained.md` §"Why the fit is not settled". What
-  survives: the *old* arithmetic (8 × 165 MB = "the whole 4 GiB") was wrong.
-  What is open: by how much, and whether a resize makes it moot.
-- **The "15,000 signatures" refutation is weaker than it reads.** The `dcount`
-  was **per replica** over ~5 replicas, so it cannot bound global cardinality;
-  nobody ran it without the `by`. Structurally it is probably bounded (the
-  persona reference is 11 personas → 10 distinct payloads) but **we cannot show
-  MAS runs that file**, and `user_agent_mode: "random"` — allowlisted, and
-  recommended by our own shipped client docs — would make it one signature per
-  request. The cap is correct under both models; that is now its main
-  justification.
-- **The permanent browser is never used** — 0 hits in 224 pool gets. ~130 MB of
-  `anon` per replica for its whole life. ~~because MAS always sends a
-  `browser_config`~~ **Corrected 2026-08-02: because `init_permanent` skips
-  `enforce_egress`**, so its signature differs from every request's in
-  `ignore_https_errors`. It is unreachable by construction, not by contract.
-
-Found on our side 2026-08-01 (`cleaned-html-collapse-guard.md` part 1, offline,
-zero traffic):
-
-- **Four markup shapes swallow the body, not one**, by three distinct mechanisms,
-  all deterministic. `deep-nesting` is **harmless at 1.5 KB and fatal at 73 KB** —
-  enumerating unpadded misses root causes, not just thresholds. `apteam.fi`'s
-  fingerprint fits at least two of them, so the cause is still unknown; their
-  bytes are now worth asking for to pick which repair goes first.
-- **A collapse guard cannot be an HTML-byte ratio.** The healthy control padded
-  to 73 KB gives the same 0.0036 `cleaned_html` ratio as the collapsed page, and
-  `accountor.com`'s real cookie wall is 99,649 → 230. Text-to-text is the only
-  measure that separates them.
-- **`bad_request` was one line from becoming a retried 500.** Static mode attaches
-  it to a result when the egress broker refuses a redirect hop; its unconditional
-  200 was making "MAS must never retry it" true by accident. Caught before
-  shipping, now in `NON_RETRYABLE_CLASSES`.
-- **`test_the_wall_clock_fence_is_a_504_and_ours` is load-flaky** (pre-existing,
-  untouched by the collapse-guard work; now tracked as
-  `flaky-fence-test-margin.md`): it asserts `elapsed_s < 3` against a 1 s fence, so ~2 s of
-  pool + page + teardown overhead has to fit, and a fully-loaded suite run
-  sometimes does not. Failed once in three full runs. Not diagnosed — someone
-  should either widen the margin deliberately or measure fence latency separately
-  from harness overhead.
-
-**Message 10 was RELAYED 2026-08-01** (Tero confirmed to the coordinator):
-`tmp/mas-repo-messages/10-to-mas-the-202-answer-and-four-deploys-in-one-image.md`.
-MAS now knows all of it — including that two of their four corrected verdicts
-cost them retries, and that a second source of 429 exists. **Two things unblock
-on the relay, both additive and both previously held only because the message
-had not gone:**
-
-- **The `fodbar.fi` field.** Its stated condition was "message 10 describes it
-  first". Condition met; §7.2 asks MAS to name it. Ships in the next image once
-  they answer, or is dropped if they say no.
-- **Flipping envelope `success` to the aggregate.** Announced in message 10's
-  closing section. Ship it **on its own**, never bundled — it breaks a pinned
-  contract (`test_static_mode.py:257`) and buys no behaviour, so a surprise must
-  be attributable to it.
-
-What it says, kept here because the message file is gitignored:
-
-- **The 202 result — ANSWERED 2026-08-01, offline.** `W + 1.22 s` is the capture
-  budget; their 2.0 covers a 3.2 s challenge, which confirms the bottom of their
-  own 3–5 s `raw://` figure and refutes the top. **Tell them not to raise it
-  globally**: at ~120,000 fetches, 2.0 → 10.0 is 267 render-hours, and a blocked
-  host pays the raise *twice* because our patchright retry re-fetches with the
-  same config. We do the targeted version server-side for 8–36 render-hours and
-  zero extra page loads. Caveat to send with it: it cannot rescue interstitials
-  we do not detect, and only their stored corpus can size that class.
-  Also worth telling them: `delay_before_return_html` is already
-  per-request-settable, so a per-host value on their side needs no deploy from us.
-- **The wire status we will serve the collapse guard at — BUILT 2026-08-01.**
-  HTTP 200 + result-level `success: false` + `failure_class: render_defect`,
-  content still attached. The `render_error` split is fixed in the same change:
-  one mapping site, both render modes. Send when the image ships. Tell them the
-  new class is **ours and permanent** — the distinction the taxonomy was missing
-  is permanence, not ownership.
-- **Two things we did NOT bundle**, both agreed with them and both deliberately
-  held back: flipping envelope `success` to the aggregate (their own message 09
-  says they never read it for 2xx, and it breaks a pinned contract in an image
-  already changing static mode's wire status), and the `fodbar.fi`
-  "content was present despite the origin status" field. The field was
-  conditional on message 10 describing it first; message 10 had not gone out
-  when the image was ready, so per that condition it was dropped rather than
-  delaying the deploy. Both are additive. Propose them in message 10 and ship
-  them together afterwards, in their own change where a surprise is attributable.
-- **The detector now catches two classes it used to store as content, and
-  invents one class fewer** (shipped 2026-08-01). Tell them:
-  (a) a block page padded past our size gates — their four 202 hosts — is now
-  `origin_blocked`; (b) four of their 33 `origin_blocked` verdicts were our
-  inference, not the origin, and two of those (`norex.com`,
-  `jarvenkylamaatila.fi`) now arrive as **`render_error` at HTTP 500, which they
-  retry 3x** — a real cost we chose deliberately, because the alternative was
-  telling them a healthy host is permanently blocked; (c) `snuup.fi` is now
-  `origin_http_error`, still terminal; (d) `fodbar.fi` is unchanged, as agreed.
-- **Ask them to count the silent family.** We still cannot detect an
-  interstitial that carries no marker, no interstitial prose and no refusal
-  notice, and we cannot count it either — any rule that caught it would be the
-  same inference we just removed. Their stored corpus can: a page under ~500
-  markdown characters whose HTML carries a challenge asset. That number sizes
-  the remaining gap for both sides and is the one thing we cannot produce.
-- **Memory-pressure refusals now arrive as 429 + `Retry-After`, not 500.**
-  Their client already backs off correctly, so nothing breaks, but on a cold
-  first wave a single replica can answer a burst of them. That is right
-  behaviour and still looks like a stall from their side. Send it with the
-  scale-from-zero finding — the two are the same event seen from either end —
-  and say plainly that the 429 makes the symptom cheap without removing the
-  cause.
-- **Whether the 9 × 500 reached the origin — ANSWERED 2026-08-01: they did not.**
-  The memory guard raises before the browser is created, so no navigation
-  happened. **Their day cost 246 origin hits, not 255.** Under the shared-egress
-  finding this is our number to produce, and it is produced.
-- **Whether the 04:46–04:50 clustering means anything — ANSWERED: yes, and it is
-  not a per-host rate.** All nine are on a single replica that absorbed the
-  opening burst alone for 122 s, because the service was scaled to zero when
-  their probe started and the second replica did not serve until 04:46:54. It is
-  scaling lag, **not** a scale-out ramp — an earlier draft of this answer said
-  the latter; do not send that version. They were right to flag it and right not
-  to interpret it.
-- **`fodbar.fi`:** they agree we should report the origin's status rather than
-  overrule a 403 that serves content, and would like a small field saying *content
-  was present despite the origin status* — moving the decision to their side,
-  where 117,000 stored pages are. Cheap; **unblocked now that message 10 has
-  gone** — it ships once MAS names the field.
-- **A second source of 429 is coming, and they should hear it before it lands.**
-  Shipped 2026-08-01: memory-pressure refusals arrive as **429 +
-  `Retry-After`** instead of 500. Their client already backs off correctly on
-  429, so nothing breaks — but the *shape* changes: on a cold first wave a single
-  replica can answer a burst of them, which is right behaviour and still looks
-  like a stall from their side. Send it with the scale-from-zero finding, since
-  the two are the same event seen from either end, and say plainly that the 429
-  makes the symptom cheap without removing the cause. **Corrected 2026-08-02:
-  that message named `pool-residency-unbounded.md` as the cause; it is at most a
-  contributor. The cause is unsettled, and a replica resize may remove it
-  outright without any of this.** Nothing was sent to MAS naming a cause, so
-  there is nothing to retract.
+reconstructed from eleven messages, which is how `render_error` came to mean two
+wire statuses for weeks without either side noticing. If a third party ever
+joins, or if the taxonomy changes again, write the contract down as its own
+versioned document rather than growing the message chain. And **never let a relay
+block a deploy**: that coupling is what dropped the `fodbar.fi` field from a
+finished image. Additive changes ship and get announced; behaviour changes wait
+for the relay.

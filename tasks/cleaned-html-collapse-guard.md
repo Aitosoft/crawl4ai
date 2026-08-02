@@ -1,9 +1,18 @@
 # A second markup family collapses the body — and nothing detects a collapse
 
-**Status:** **Part 1 (the guard) is DONE and DEPLOYED, 2026-08-01. Part 2 (root
-cause) is open and is bigger than this file said.** It shipped in one image with
-`detector-round3-evidence-vs-inference.md`, `challenge-interstitial-resolve.md`
-phase 2 and `render-500-window-2026-07-31.md`'s S half.
+**Status:** **Part 1 (the guard) is DONE and DEPLOYED, 2026-08-01. Part 2 is open,
+and as of 2026-08-02 it has production evidence and a measured cheaper first
+move — read §"Production evidence" and §"Recovery is measured" before anything
+else in this file.** Part 1 shipped in one image with
+`done/detector-round3-evidence-vs-inference.md`,
+`done/challenge-interstitial-resolve.md` phase 2 and
+`done/render-500-window-2026-07-31.md`'s S half.
+
+**The 2026-08-02 scope cut in this file ("do repair 1, park 2 and 3") was
+written before the recovery numbers existed and is superseded.** The new
+sequence is at the end of §"Recovery is measured". The cut's *reasoning* still
+holds; what changed is that a cheaper instrument turned out to cover two of the
+three repairs.
 
 **MAS's half of this task got smaller in the same image, by accident.** Phase 2
 of `challenge-interstitial-resolve.md` gives the patchright retry a 10 s capture
@@ -37,7 +46,122 @@ one month, and the first one (`<noscript>`) ran undetected for 3½ months across
 needs the same fixture discipline `done/noscript-collapses-body-to-empty-markdown.md`
 used.
 **Evidence:** `tmp/mas-repo-messages/07-from-us-243-host-rescrape.md` §1 and its
-33-row appendix.
+33-row appendix; and, since 2026-08-02, our own production logs — see below.
+
+## Production evidence, 2026-08-02 (the guard's first real traffic)
+
+MAS ran ~30 prospect sites on the evening of 2026-08-01, the first real workload
+revision `--0000033` has seen. Read from Log Analytics, zero live requests:
+
+| | |
+|---|---:|
+| renders admitted | 336 |
+| distinct URLs | 328 |
+| distinct hosts | 38 |
+| **`RENDER DEFECT` firings** | **12** |
+| **distinct URLs affected** | **9 (2.7 %)** |
+| **distinct hosts affected** | **7 of 38 (18 %)** |
+
+Every one has the same shape: **0 characters of markdown out**, from 725–40,165
+characters of visible text in. Hosts: `taitotalo.fi`, `casambi.com`, `kiesi.fi`,
+`takk.fi`, `castren.fi`, `begroup.fi`, `vestra.fi`.
+
+Three things follow, and the third is the one that matters most.
+
+1. **The population is larger than this file assumed.** It was sized from MAS's
+   two reproducible hosts (`apteam.fi`, `flvi.fi`). One ordinary evening produced
+   seven more.
+2. **The guard works on real pages**, not only on fixtures. It fired on live
+   customer markup, at HTTP 200 with content attached, costing zero retries. That
+   was the thing part 1 had never been able to demonstrate.
+3. **MAS reported the same run as clean.** They observed no issues. They were not
+   being careless — a page that yields no contacts is indistinguishable, from
+   their side, from a page that has no contacts. This is the identical silent
+   failure mode as the `<noscript>` case that ran 3½ months. **A consumer
+   reporting "no problems" is not evidence of no data loss, and must never again
+   be recorded as if it were.**
+
+Two caveats on the numbers, so nobody over-reads them:
+
+- The 1,209 renders before the guard existed (revisions `--0000030`/`--0000031`)
+  had no detection at all. If the rate held, ~30 pages were lost silently in
+  those runs — an extrapolation, not a measurement. Do not quote it as one.
+- 12 firings over 9 URLs means three URLs were requested twice. We serve
+  `render_defect` at 200 precisely so MAS does not retry; whether those repeats
+  are their agent revisiting a URL for its own reasons, or a retry path we have
+  not accounted for, is **unresolved and worth one query** before assuming the
+  200 contract is holding as designed.
+
+## Recovery is measured, and it changes the sequence
+
+Line ~190 of this file already proposed it and deferred the decision: *"Consider
+whether recovery is worth adding after the guard works: html2text over the raw
+rendered HTML … ship detection first and decide recovery on its numbers."* The
+numbers now exist.
+
+Measured 2026-08-02 through `ProductionPath.crawl` against `fixture_origin` at
+`?bytes=73000`, zero external traffic. Each shape was crawled the production way,
+then the **same** returned `html` was re-converted with `crawl4ai.html2text.HTML2Text`
+(`body_width=0`, `ignore_images=True`) — the converter `aitosoft_static_mode.py`
+already ships and already uses:
+
+| shape | markdown today | html2text over the same HTML | content marker | tail marker |
+|---|---:|---:|:--:|:--:|
+| `unclosed-noscript` | 0 | **1,265** | yes | yes |
+| `deep-nesting` | 0 | **1,239** | yes | yes |
+| `unterminated-comment` | 0 | 0 | no | no |
+| `unclosed-script` | 0 *(guard blind, `success: true`)* | 0 | no | no |
+| *healthy control* | 1,258 | 1,265 | yes | yes |
+
+`unclosed-noscript` recovers to **1,265 characters — the same figure the healthy
+control produces**. This is full recovery, not a degraded scrape.
+
+**Re-run this before building on it.** It is one session's measurement and it is
+load-bearing; the reproduction is ~40 lines (start `FixtureOrigin`, crawl
+`/collapse/{shape}?bytes=73000` through `ProductionPath`, re-convert
+`outcome.html`, compare against `CONTENT_MARKER` / `CONTENT_TAIL_MARKER`). If it
+does not reproduce, that finding outranks everything below it.
+
+### What this does to the three repairs
+
+- **Repair 2 (`deep-nesting`, libxml2 depth limit) is deleted, not parked.**
+  Recovery returns the full body. There is no remaining reason to touch libxml2's
+  depth handling.
+- **Repair 1 shrinks to one shape and keeps its urgency there.** Recovery only
+  runs when the guard fires, and the guard is structurally blind to
+  `unclosed-script` — that page still returns `success: true` with zero markdown.
+  **`unclosed-script` is now the only silent member of the family, and repair 1
+  is the only instrument for it.** It also remains the strongest of our upstream
+  PRs, for the same reason as before.
+- **Repair 3 (`unterminated-comment`) stays parked**, unchanged: recovery does
+  not help, and the guard already reports it truthfully.
+
+### The sequence, replacing the 2026-08-02 cut
+
+1. **Recovery on guard fire.** Lives in `aitosoft_collapse_guard.py`, which is
+   100 % ours — no new divergence from upstream's parser, nothing extra to merge
+   forever. This is the item that returns customer data, and it returns it on the
+   shapes we can already see.
+2. **Repair 1, scoped to `unclosed-script`** — after 1, and priced against how
+   often that shape actually appears. Recovery gives us a free classifier for
+   that: once it ships, a page the guard catches and recovery *fails* is either
+   the comment family or something new, and the log line says which.
+3. Repair 3: parked. Repair 2: closed.
+
+### Two design points recovery has to decide, not inherit
+
+- **A recovered page should go out as `success: true` with the recovered
+  markdown.** Option B — keep `success: false` and attach it — buys nothing:
+  MAS's client reads `success` and would discard the content we just rescued.
+  Shipping it as a success is the entire point, and it narrows `render_defect` to
+  its true meaning: *we lost the body and could not get it back.* Both shapes are
+  HTTP 200 either way, so **no retry behaviour changes** and this is additive
+  from MAS's side.
+- **Do not add a `markdown_source` / "this came from the fallback" field in this
+  image.** It is a contract change and the name is MAS's to pick, exactly like
+  the `fodbar.fi` field. Log it on our side, mention it in the next relay, ship
+  the field if they want it. This file's own rule: no unannounced contract
+  changes in an image about something else.
 
 ## What MAS measured
 
@@ -317,6 +441,15 @@ Sequence them; do not bundle. Each one gets its shape out of
 `BODY_SWALLOWING_SHAPES` and its case into `test_no_markup_shape_swallows_the_body`,
 and the guard stays as the net underneath.
 
+> **SUPERSEDED 2026-08-02 (same day, later) by §"Recovery is measured".** The cut
+> below was written before anyone measured what html2text does to these shapes.
+> Recovery covers `deep-nesting` outright (repair 2 is closed, not parked) and
+> `unclosed-noscript` outright, which leaves repair 1 needed for
+> **`unclosed-script` alone** — where the argument below is still exactly right
+> and is now the whole argument. Repair 3 is unaffected. Kept because the
+> reasoning is reusable and because a cut that gets narrowed by a measurement,
+> rather than by a free session, is the process working.
+>
 > **Scope cut, coordinator 2026-08-02: do repair 1. Repairs 2 and 3 are parked.**
 >
 > Repair 1 earns its place on two grounds that the others do not share. It is a
