@@ -9,9 +9,10 @@ Keeping this log helps when syncing with upstream updates.
 
 **Last Updated**: 2026-08-02
 
-> **`main` and production are in sync** as of 2026-08-02 — the `pool.max_browsers`
-> cap shipped in `0.9.2-pool-cap` (revision `--0000033`). Still: read the deployed
-> image tag below, not `git log`, when you need to know what is running.
+> **`main` and production are in sync** as of 2026-08-02 — collapse recovery and
+> `unrenderable_content` shipped in `0.9.2-collapse-recovery` (revision
+> `--0000034`). Still: read the deployed image tag below, not `git log`, when you
+> need to know what is running.
 >
 > **There is no replica resize to be had.** Azure caps this app at **2 vCPU /
 > 4 GiB**, which is what it already runs — the environment is a *legacy
@@ -22,9 +23,12 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
-- **Production**: the above + browser cap with LRU eviction + memory guard that sheds before refusing + 120 s permanent-browser TTL (deployed 2026-08-02)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-pool-cap` (revision `crawl4ai-service--0000033`, digest `sha256:8f9c1eb295760cc2ebff8f27be641548af07a83991429d569889ffc1512cbf50`)
-- **Previous**: `0.9.2-detector-round3` (revision `--0000032`, deployed 2026-08-01, digest `sha256:41ffd880d2f3a1e28136f2e03b53bf4a83c8ce994b6447d2c90096d70ace67a9`)
+- **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result (deployed 2026-08-02)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-collapse-recovery` (revision `crawl4ai-service--0000034`, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`)
+- **Previous**: `0.9.2-pool-cap` (revision `--0000033`, deployed 2026-08-02, digest `sha256:8f9c1eb295760cc2ebff8f27be641548af07a83991429d569889ffc1512cbf50`)
+- **Prod smoke 2026-08-02 (collapse-recovery)**: health 200 ✅ (8.0 s cold start from zero), unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅ (`deploy-image.sh` exit 0), revision `--0000034` **`Running` at 100 % with `--0000033` Deprovisioning — checked before the crawl**, per the 2026-07-30 mid-cutover lesson ✅. **Tier 1 regression 4/4** (`--version collapse-recovery`) ✅.
+  **The check that was actually worth running:** zero `RENDER DEFECT`, zero `COLLAPSE RECOVERED`, zero `RESULT FAILURE` across the four live pages. The guard's evidence is 37 stored captures of exactly these hosts, so a Tier 1 run is a genuine test that the corpus still describes the live sites — and the recovery path, which can now *rewrite* a result's markdown, stayed entirely out of the way on real customer pages. Had it fired, the instruction was to treat it as a finding, not to tune the threshold.
+  **Found while verifying, not by a failure:** `test-aitosoft/artifacts/` is gitignored, so the 140 captures those thresholds are asserted against exist only on this machine and three offline tests fail on a fresh clone. Our only pre-deploy gate is machine-dependent. `tasks/guard-corpus-is-not-in-the-repo.md`.
 - **Prod smoke 2026-08-02 (pool-cap)**: health 200 ✅ (33 s cold start from zero), unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅ (`deploy-image.sh` exit 0), revision `--0000033` at 100 % traffic with `--0000032` ScaledToZero — **checked before the crawl**, per the 2026-07-30 mid-cutover lesson ✅. **Tier 1 regression 4/4** (`--version pool-cap`) ✅. Pool instrumentation live: `📊 Pool: hot=0, cold=1, permanent=yes, resident=2/6, mem=13.3%, anon=585MB file=328MB inactive_file=43MB`.
   **Worth more than the smoke it came from:** that line is a *serving* replica reading **13.3 %**, not the ~65 % the disputed regression predicts for 2 browsers. It does not refute the intercept (Tier 1 is 4 sequential requests; the 68 disputed samples were a 243-host probe at concurrency) — but it does show the baseline is **not** a constant that "appears with traffic". It needs *concurrent* traffic, which points at candidate 1 (in-render transient memory) in `replica-memory-baseline-unexplained.md` and away from candidates 3 and 4.
 - **Prod smoke 2026-08-01 (detector-round3)**: health ✅, unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅, revision `--0000032` Running at 100 % traffic with `--0000031` deprovisioning (checked **before** the crawl — the 2026-07-30 smoke was taken mid-cutover and reported pre-fix output) ✅. `caverna.fi` → HTTP 200 / `success:true` / `failure_class:"none"` / 1210 B markdown / 4.8 s ✅ — byte-identical markdown to the pre-deploy Tier 1 run, i.e. the widened detector and the collapse guard both stayed silent on a healthy page in production.

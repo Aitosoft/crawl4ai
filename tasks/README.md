@@ -19,7 +19,8 @@ parked deliberately, not waiting for a free session.
 
 ## Where we actually are
 
-**Production is `0.9.2-pool-cap`, revision `--0000033`**, 2 vCPU / 4 GiB,
+**Production is `0.9.2-collapse-recovery`, revision `--0000034`** (deployed
+2026-08-02, Tier 1 4/4, zero guard fires on the four live pages), 2 vCPU / 4 GiB,
 `minReplicas: 0`, `maxReplicas: 30`, scale rule 2 concurrent/replica.
 `main` and production are in sync.
 
@@ -86,7 +87,8 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 |---|------|------|--------------|
 | 1 | `cleaned-html-collapse-guard.md` — **price `content_source="raw_html"` before writing any repair** | ~1 h | The principle-7 question neither task file asked, found by the pre-deploy review. Upstream already has the seam; generating markdown from raw HTML would make the collapse **not happen** for the noscript and deep-nesting families rather than catching it, and probably for `unclosed-script` too. Two independent measurements say the quality cost is small (0.9988–1.0066 on 5 of 6 hosts; median 0.91× across 59 stored captures). Measurable offline against the 66 stored captures. If it holds, it deletes items 2 and 3 below. |
 | 2 | `cleaned-html-collapse-guard.md` — **repair 1, scoped to `unclosed-script`** | M | Only if #1 does not dissolve it. Recovery closed repair 2 outright and covers `unclosed-noscript`, which leaves `unclosed-script` as the **one silent member** — `success: true`, zero markdown, guard structurally blind. That is the whole argument for repair 1, and it is still the strongest of our four upstream PRs. Recovery is now a live classifier, so the next sweep's log split (`COLLAPSE RECOVERED` vs `RENDER DEFECT … recovered 0 chars`) sizes this shape for free. |
-| 3 | `flaky-fence-test-margin.md` | ~1 h | Our only pre-deploy gate is "the offline suite is green", and this test fails ~1 run in 3 for reasons unrelated to the code. **Diagnose before widening**: the same red can mean harness overhead *or* a fence that unwinds slowly under load, and the second is a finding about our 180 s fence against Azure's 240 s ingress limit. It did **not** bite across the three full runs on 2026-08-02, so the 1-in-3 figure may itself be stale. |
+| 3 | `guard-corpus-is-not-in-the-repo.md` | S | Found while deploying, by checking a claim rather than by a failure: `test-aitosoft/artifacts/` is **gitignored**, so the 140 captures the collapse guard's thresholds are asserted against exist only on this machine. Three offline tests fail on a fresh clone. Our only pre-deploy gate is "the offline suite is green", and it is machine-dependent. The sizing decision — how much real customer HTML belongs in a public repo — is the task. |
+| 4 | `flaky-fence-test-margin.md` | ~1 h | Our only pre-deploy gate is "the offline suite is green", and this test fails ~1 run in 3 for reasons unrelated to the code. **Diagnose before widening**: the same red can mean harness overhead *or* a fence that unwinds slowly under load, and the second is a finding about our 180 s fence against Azure's 240 s ingress limit. It did **not** bite across the three full runs on 2026-08-02, so the 1-in-3 figure may itself be stale. |
 
 **One decision left behind by the pool deploy, deliberately not taken.** The boot
 ("permanent") browser is unreachable **by construction**: `server.py:199` builds
