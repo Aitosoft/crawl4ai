@@ -54,7 +54,7 @@ python test-aitosoft/test_soak.py --duration-min 30                 # leak hunti
 Everything pytest collects is OFFLINE — no server, no customer site:
 
 ```bash
-pytest test-aitosoft/          # 283 tests, ~240 s
+pytest test-aitosoft/          # 285 tests, ~240 s
 ```
 
 That splits in two, and the split matters when you are choosing where to put a
@@ -62,7 +62,7 @@ new test:
 
 | | Suites | Tests | Time | Covers |
 |---|---|---:|---|---|
-| Pure-function | the twelve below | 229 | ~15 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the config boundary, the gate |
+| Pure-function | the twelve below | 231 | ~15 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the config boundary, the gate |
 | Browser-driven | `test_fixture_origin.py` | 54 | ~220 s | **time, navigation and the browser** — challenge resolution, hydration races, redirect chains, the wall-clock fence |
 
 ```bash

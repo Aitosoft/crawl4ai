@@ -9,13 +9,19 @@ Keeping this log helps when syncing with upstream updates.
 
 **Last Updated**: 2026-08-05
 
-> **`main` is AHEAD of production as of 2026-08-05** — the egress-path work
-> (blocking DNS off the loop, `RES_OPTIONS`, the dead-domain and `http://`
-> misattributions) is committed and **undeployed**. It contains one wire-status
-> change, so it waits for the MAS relay by this repo's own rule. Production is
-> still `0.9.2-collapse-recovery` (revision `--0000034`, deployed 2026-08-02).
-> **Read the deployed image tag below, not `git log`, when you need to know what
-> is running** — that has never mattered more than it does right now.
+> **Deployed 2026-08-05: `0.9.2-egress-dns-fix`.** The egress-path work —
+> blocking DNS off the event loop, `RES_OPTIONS`, and two misattributions. It
+> carries **one wire-status change**: a domain that does not resolve is now
+> `origin_unreachable` at HTTP 200 instead of an SSRF 400. MAS was told in
+> `tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`.
+>
+> **The `-fix` suffix is not cosmetic.** The first deploy that day
+> (`0.9.2-egress-dns`, revision `--0000035`) shipped a `NameError` that made a
+> dead domain a **500** — worse than the 400 it replaced. Every test suite and
+> CI passed it, because every test patched the layer above the broken line.
+> Caught by the first live probe after deploy, ~8 minutes of exposure, no MAS
+> traffic in the window. Full account, including why nothing caught it:
+> `tasks/done/egress-proxy-blocks-the-event-loop.md`.
 >
 > **2026-08-05, infrastructure only — no image, no code.**
 > `ContainerAppHTTPLogs` is now enabled: diagnostic setting **`aca-http-logs`**
@@ -54,9 +60,12 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
-- **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result (deployed 2026-08-02)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-collapse-recovery` (revision `crawl4ai-service--0000034`, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`)
-- **Previous**: `0.9.2-pool-cap` (revision `--0000033`, deployed 2026-08-02, digest `sha256:8f9c1eb295760cc2ebff8f27be641548af07a83991429d569889ffc1512cbf50`)
+- **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result + the egress-path work (deployed 2026-08-05)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-egress-dns-fix` (revision `crawl4ai-service--0000036`, deployed 2026-08-05)
+- **Previous**: `0.9.2-collapse-recovery` (revision `--0000034`, deployed 2026-08-02, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`). **Revision `--0000035` (`0.9.2-egress-dns`) is a burned tag** — it shipped a `NameError` and lasted 8 minutes; do not roll back to it.
+- **Prod smoke 2026-08-05 (egress-dns-fix)**: health 200 (0.20 s) ✅, unauthenticated POST /crawl → 401 ✅, render-capacity invariant ✅, revision `--0000036` **Running at 100 % with `--0000035` Deprovisioning — checked before the crawl** ✅. **Tier 1 regression 4/4** ✅.
+  **The check that was worth running, and it is now a habit:** a crawl of a *lapsed* domain — HTTP 200, `success:false`, `failure_class: origin_unreachable`, `"DNS: host does not resolve"`, 0.23 s. It exercises the whole egress path and **contacts no third party**, because the name does not resolve. It is also what caught the `NameError` in `--0000035` eight minutes after that deploy, when four green test suites and a green CI run had not.
+  **The negative check matters as much:** `169.254.169.254` and `127.0.0.1:8080` both still return 400 `URL blocked (SSRF protection)`. The change moved *only* "there is no address at all" out of that bucket; the security verdict is untouched.
 - **Prod smoke 2026-08-02 (collapse-recovery)**: health 200 ✅ (8.0 s cold start from zero), unauthenticated POST /crawl → 401 ✅, render-capacity invariant `render_capacity=2` == `http-renders` rule ✅ (`deploy-image.sh` exit 0), revision `--0000034` **`Running` at 100 % with `--0000033` Deprovisioning — checked before the crawl**, per the 2026-07-30 mid-cutover lesson ✅. **Tier 1 regression 4/4** (`--version collapse-recovery`) ✅.
   **The check that was actually worth running:** zero `RENDER DEFECT`, zero `COLLAPSE RECOVERED`, zero `RESULT FAILURE` across the four live pages. The guard's evidence is 37 stored captures of exactly these hosts, so a Tier 1 run is a genuine test that the corpus still describes the live sites — and the recovery path, which can now *rewrite* a result's markdown, stayed entirely out of the way on real customer pages. Had it fired, the instruction was to treat it as a finding, not to tune the threshold.
   **Found while verifying, not by a failure:** `test-aitosoft/artifacts/` is gitignored, so the 140 captures those thresholds are asserted against exist only on this machine and three offline tests fail on a fresh clone. Our only pre-deploy gate is machine-dependent. `tasks/guard-corpus-is-not-in-the-repo.md`.
@@ -85,8 +94,8 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- **`pytest test-aitosoft/` = 283 tests, ~240 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
-- Pure-function subset: **229 tests, ~15 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
+- **`pytest test-aitosoft/` = 285 tests, ~240 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
+- Pure-function subset: **231 tests, ~15 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
 - Browser-driven subset: test_fixture_origin.py (54), against a local fixture origin, ~220 s
 
 ---

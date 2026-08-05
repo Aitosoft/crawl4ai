@@ -25,11 +25,14 @@ parked deliberately, not waiting for a free session.
 2026-08-02, Tier 1 4/4, zero guard fires on the four live pages), 2 vCPU / 4 GiB,
 `minReplicas: 0`, `maxReplicas: 30`, scale rule 2 concurrent/replica.
 
-**`main` is AHEAD of production as of 2026-08-05** — the egress-path work is
-committed and undeployed. It carries one **wire-status change** (a dead domain
-is now `origin_unreachable` at 200 instead of an SSRF 400), so by this repo's own
-rule it waits for the MAS relay. Everything else in it is invisible to MAS.
-Deploy = `./azure-deployment/deploy-image.sh <tag>` + Tier 1 4/4.
+**Production is `0.9.2-egress-dns-fix`, revision `--0000036`** (deployed
+2026-08-05, Tier 1 4/4). `main` and production are in sync again. It carries one
+**wire-status change**: a dead domain is `origin_unreachable` at 200, not an SSRF
+400. MAS has been told, in
+`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md` §0.
+
+**Revision `--0000035` is a burned tag** — it shipped a `NameError` and lasted
+8 minutes. Do not roll back to it; `--0000034` is the last good prior image.
 
 **MAS ran ~30 prospect sites on the evening of 2026-08-01 — the first real
 workload this image has seen.** 336 renders, 328 distinct URLs, 38 hosts, read
@@ -182,7 +185,7 @@ their gate. `main` == production in code — every commit since the deployed ima
 is documentation. So "is our pre-deploy gate sound?" is currently a moot
 question, which is what deflates items 3 and 4 below.
 
-**The message is written and the ball is with Tero to relay it:**
+**Deployed and announced. The ball is with Tero to relay:**
 `tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`.
 Its source material — every citation and measurement behind it — is
 `tasks/done/mas-reply-owed-message-16.md`; argue from that file, not the message,
@@ -198,10 +201,9 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 
 | # | Task | Size | What to know |
 |---|------|------|--------------|
-| 1 | **Deploy `0.9.2-egress-dns`** — not a task file | S | **Gated on one answer from MAS, and that is the only thing gating it.** `main` holds the egress-path work undeployed because it moves a class from HTTP 400 to 200. The message is written and awaiting relay: `tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`, §0. Sequence, and the post-deploy check that has no other signal, are in the **Deploy** section of `tasks/done/egress-proxy-blocks-the-event-loop.md`. |
-| 2 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | **New 2026-08-05.** `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 54 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some of the 54 to change behaviour, and treat that as the payoff. |
-| 3 | `guard-corpus-is-not-in-the-repo.md` | S | **After the sweep.** Real and verified — `test-aitosoft/artifacts/*` is gitignored, three tests fail on a fresh clone at `assert checked >= 30`. But its load-bearing sentence is **wrong**: "our only pre-deploy gate is the offline suite" is false (see corrections below), and it fails *loud*, in the safe direction. If ever done: 4–6 files into `artifacts/keep/`, the mechanism `.gitignore:14-17` already provides. Do **not** open its four-option sizing table before the sweep. |
-| 4 | `flaky-fence-test-margin.md` | S | **After the sweep.** The 1-in-3 figure is stale — it is **1 failure in 9** recorded full runs (0/3 on 08-02, 0/3 on 08-05). Its "this might be a product finding about the 240 s ingress limit" fear is **refuted from code**: the unwind is bounded at 10 s by our own `PAGE_CLOSE_TIMEOUT_S` (`async_crawler_strategy.py:49`), so worst case is 180 + ≤10 ≈ 190 s, ~50 s inside the limit. The test also moved — it is `test_fixture_origin.py:748`, not `:640`. Fix is to raise `stall` and the assertion together. |
+| 1 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | **New 2026-08-05.** `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 54 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some of the 54 to change behaviour, and treat that as the payoff. |
+| 2 | `guard-corpus-is-not-in-the-repo.md` | S | **After the sweep.** Real and verified — `test-aitosoft/artifacts/*` is gitignored, three tests fail on a fresh clone at `assert checked >= 30`. But its load-bearing sentence is **wrong**: "our only pre-deploy gate is the offline suite" is false (see corrections below), and it fails *loud*, in the safe direction. If ever done: 4–6 files into `artifacts/keep/`, the mechanism `.gitignore:14-17` already provides. Do **not** open its four-option sizing table before the sweep. |
+| 3 | `flaky-fence-test-margin.md` | S | **After the sweep.** The 1-in-3 figure is stale — it is **1 failure in 9** recorded full runs (0/3 on 08-02, 0/3 on 08-05). Its "this might be a product finding about the 240 s ingress limit" fear is **refuted from code**: the unwind is bounded at 10 s by our own `PAGE_CLOSE_TIMEOUT_S` (`async_crawler_strategy.py:49`), so worst case is 180 + ≤10 ≈ 190 s, ~50 s inside the limit. The test also moved — it is `test_fixture_origin.py:748`, not `:640`. Fix is to raise `stall` and the assertion together. |
 
 **Old items 1 and 2 are gone.** Item 1 (`content_source="raw_html"`) was priced
 2026-08-05 and the answer is no — it is recorded in

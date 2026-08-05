@@ -1,8 +1,8 @@
 # The egress path: blocking DNS on the single loop, and two misattributions
 
-**Status:** DONE 2026-08-05. Code, tests and docs shipped to `main`.
-**Not yet deployed** — see "Deploy" at the bottom; one change is a wire-status
-change and this repo's own rule is that behaviour changes wait for the relay.
+**Status:** DONE and **DEPLOYED 2026-08-05** as `0.9.2-egress-dns-fix`
+(revision `--0000036`). Tier 1 4/4. The first deploy that day shipped a
+`NameError` — see "What went wrong on deploy day".
 **Size:** planned S, delivered S. Six files, ~60 lines of behaviour.
 
 Planned by the 2026-08-05 research session, implemented the same day by a
@@ -204,16 +204,22 @@ stands.
 
 ## What I am least sure of
 
-- **`RES_OPTIONS` is the one change that cannot be fully tested from here.**
-  The quoting *is* verified — supervisor's own parser
-  (`supervisor.datatypes.dict_of_key_value_pairs`) reads the line as
-  `{'PYTHONUNBUFFERED': '1', 'RES_OPTIONS': 'timeout:2 attempts:2 ndots:1'}`,
-  quotes stripped. What is not verified is glibc honouring it *in the ACA
-  container*; the stall measurement was a faithful replay of ACA's resolver
-  config, not the container itself. The failure mode is **silence** — glibc
-  ignores options it cannot parse and we simply keep the old behaviour, which
-  looks identical to success. **First thing to check after deploy:**
-  `az containerapp exec … --command "cat /proc/1/environ"`.
+- **`RES_OPTIONS` — the mechanism is now verified end to end locally, the
+  effect in-container is not.** Verified: supervisor's parser reads the line
+  correctly, *and* a real `supervisord` run hands its child
+  `RES_OPTIONS=timeout:2 attempts:2 ndots:1` with quotes stripped (42-var
+  environment, checked from `/proc/self/environ`). Not verified: glibc honouring
+  it inside the ACA container. That is documented glibc behaviour and the stall
+  numbers came from a faithful replay of ACA's resolver config, so the risk is
+  low — but the failure mode is **silence**, since glibc ignores options it
+  cannot parse and the result looks identical to success.
+
+  **`az containerapp exec` could not settle it** and the reason is worth
+  recording: it requires a TTY (`termios.error` without one), and wrapping it in
+  `script` hung past 180 s. If someone needs this in future, the cheap answer is
+  a boot log line printing the resolver options rather than fighting `exec`.
+  Note also that the check must target the **gunicorn** process, not PID 1 —
+  PID 1 is supervisord, and `RES_OPTIONS` is set on the program, not globally.
 - **`ndots:1` assumes nothing in the container resolves a short name.** Redis is
   `localhost` via `/etc/hosts` and every outbound name is a customer FQDN, so
   this should be safe — but it is an assumption about the whole container, not
@@ -235,34 +241,88 @@ stands.
 
 ---
 
-## Deploy
+## What went wrong on deploy day, and it was mine
 
-**Not deployed as of 2026-08-05.** `main` is ahead of production.
+**The first deploy (`0.9.2-egress-dns`, revision `--0000035`) shipped a
+`NameError` and made a dead domain a 500.**
 
-The hold is deliberate and follows this repo's own rule (`tasks/README.md`,
-"How to run this exchange"): *additive changes ship and get announced; behaviour
-changes wait for the relay.* Six of the seven changes are invisible to MAS. The
-seventh moves a class from HTTP 400 to HTTP 200, and "one class, two wire
-statuses" is the exact defect that cost both repos weeks in July — so MAS gets
-told before it lands, not after.
+While implementing, I added an `EgressUnresolvable(EgressBlocked)` subclass to
+`egress_broker.py`, then decided against it — the distinction belongs in
+`api.py`, where it does not disturb the seven endpoints sharing
+`validate_url_destination`. I reverted the class **and left its `raise`
+behind**. `egress_broker._resolve`'s `except socket.gaierror` branch therefore
+raised `NameError`, which is neither `EgressBlocked` nor `HTTPException`, so it
+fell through every handler to `classify_exception` → `render_error` → **HTTP
+500**. MAS retries 500s three times. That is strictly worse than the 400 the
+change existed to remove.
 
-`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`
-carries the announcement in its §0, including the ask for a go-ahead. Its
-source material is `tasks/done/mas-reply-owed-message-16.md`.
+**What did not catch it, which is the interesting part:**
 
-**Sequence:**
+- 229 offline tests, 54 browser-driven tests, 316 upstream security tests
+- a green GitHub Actions Security run on the exact commit
+- `pre-commit` (black, ruff, **mypy**)
+- the deploy script's own invariant check, `/health`, and the 401 auth probe
 
-1. Relay the MAS message; get the one-line ack on the 400 → 200 change.
-2. `./azure-deployment/deploy-image.sh <tag>` — suggested tag `0.9.2-egress-dns`.
-3. Tier 1 regression 4/4 (`test_regression.py --tier 1 --version egress-dns`).
-4. **Confirm `RES_OPTIONS` actually arrived** —
-   `az containerapp exec … --command "cat /proc/1/environ"`. Its failure mode is
-   silence, so nothing else will tell you.
-5. First `RESULT FAILURE` query after the sweep's segment 1: watch
-   `origin_unreachable` **rise**. That is the reclassification landing, not a
-   regression — the same URLs were 400s before and were not in that class at all.
+**Why:** every test in the new suite monkeypatched `resolve_and_pin` or
+`validate_url_destination` — the layer *above* the broken line. The branch only
+executes for a name that genuinely does not resolve, and nothing in the suite
+ever resolved one. Ruff does not flag an undefined name inside an `except`
+body it cannot prove reachable, and mypy was scoped past this file.
 
-If the sweep starts before the ack lands, deploying is still the better of the
-two risks: both statuses are terminal and non-retryable for MAS, and the
-un-deployed state is the one that freezes a replica on a dead nameserver. That
-is a judgement for whoever is holding the relay, not a rule.
+**What caught it:** the first live probe after deploy — one request for a
+made-up domain, which contacts no customer. ~8 minutes of exposure, no MAS
+traffic in the window (they have no sweep running).
+
+**Fixed** in `0.9.2-egress-dns-fix`, plus two tests that patch
+**`socket.getaddrinfo`** instead — the C call, the lowest level there is — so
+every one of our own functions above it runs for real. Both were verified to
+fail against the shipped bug. They cost 0.00 s; the version that resolved a real
+non-existent name cost 10–27 s per test, and `.invalid` (the principled-looking
+choice) cost **20 s per lookup** because it is not delegated at all.
+
+**The generalisable lesson, and it is not "test more":** *if every test patches a
+function, that function's own error paths are untested.* Patch the layer below
+the one under test. This sits alongside the existing "a fixture can be unfaithful
+on exactly the load-bearing axis" — same failure, one level down.
+
+**The second lesson is about me, not the code:** I reverted a design decision
+mid-implementation and did not re-read the diff of what I was reverting. The
+repo already knows this shape — "a claim can be right about the component and
+wrong about the thing that ships". Here it was right about the design and wrong
+about the file.
+
+---
+
+## Deploy — done 2026-08-05
+
+**Deployed:** `0.9.2-egress-dns-fix`, revision `--0000036`, digest from ACR run
+`cb13`. Superseded `0.9.2-egress-dns` / `--0000035`, which lasted ~8 minutes and
+is the incident above. Previous good image was `0.9.2-collapse-recovery` /
+`--0000034`.
+
+MAS was told, not asked: the message announces the change as live and explains
+why we did not hold it — the alternative was landing a reclassification between
+two segments of a running sweep.
+`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md` §0.
+
+**Verification, in the order it was run:**
+
+| check | result |
+|---|---|
+| render-capacity invariant (`deploy-image.sh`) | `render_capacity=2` == `http-renders` rule ✅ |
+| revision `Running` at 100 % **before** any crawl (2026-07-30 lesson) | ✅ `--0000035` Deprovisioning |
+| `/health` | 200 in 0.20 s ✅ |
+| unauthenticated `POST /crawl` | 401 ✅ |
+| **the contract change** — a lapsed domain | **HTTP 200, `success:false`, `failure_class: origin_unreachable`, `error_message: "DNS: host does not resolve"`, 0.23 s** ✅ |
+| **the security boundary** — `169.254.169.254` and `127.0.0.1:8080` | both still **400** `URL blocked (SSRF protection)` ✅ |
+| Tier 1 regression | **4/4** ✅ |
+| production logs, 30 min | zero 500s, zero `RENDER DEFECT`, zero `COLLAPSE RECOVERED`; one `ORIGIN FAILURE` line — the probe above ✅ |
+
+The lapsed-domain probe is worth keeping as a habit: **it verifies the whole
+egress path and contacts no third party**, because the name does not resolve.
+It is the cheapest production check we have, and it is the one that caught the
+`NameError`.
+
+**Still to watch, once MAS's first segment runs:** `origin_unreachable` should
+*rise* against pre-2026-08-05 baselines. That is the reclassification, not a
+regression. Query it per segment alongside `RESULT FAILURE` by class.

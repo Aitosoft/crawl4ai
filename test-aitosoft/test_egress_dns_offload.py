@@ -383,3 +383,60 @@ def test_resolver_options_are_pinned_in_supervisord():
     # timeout:1/attempts:1 was measured at 2.00s but turns any nameserver
     # slower than 1s into a hard failure for a healthy customer domain.
     assert "timeout:1" not in env_line
+
+
+# ──────── the branch every other test in this file patches away ────────
+
+
+def _no_dns(monkeypatch):
+    """Make the C resolver report NXDOMAIN for everything.
+
+    Deliberately patched at `socket.getaddrinfo` — the lowest level there is —
+    so every one of OUR functions above it runs for real: `_resolve`'s
+    `except socket.gaierror` branch, `resolve_and_pin`, `validate_webhook_url`,
+    `validate_url_destination`, `_host_has_no_address` and
+    `_normalize_and_validate_seeds`. No DNS query leaves the machine and the
+    tests stay hermetic and instant.
+
+    Resolving a real non-existent name instead would also work, and is what this
+    file did first — but it cost 10-27 s per test (and 20 s per lookup against
+    `.invalid`, which is not delegated at all), for no extra coverage.
+    """
+
+    def boom(*a, **k):
+        raise socket.gaierror(-2, "Name or service not known")
+
+    monkeypatch.setattr(socket, "getaddrinfo", boom)
+
+
+def test_resolve_and_pin_raises_egress_blocked_when_the_name_does_not_resolve(
+    monkeypatch,
+):
+    """`egress_broker._resolve`'s gaierror branch, actually executed.
+
+    **This test exists because its absence cost a production 500.** Every other
+    test in this file patches `resolve_and_pin` or `validate_url_destination` —
+    so on 2026-08-05 a `NameError` in exactly this branch (a `raise` left behind
+    when its exception class was reverted) passed 229 offline tests, 54
+    browser-driven tests and 316 upstream security tests, and was caught only by
+    a live probe against the deployed image. A dead domain came back as
+    `render_error` at **HTTP 500**, which MAS retries three times — strictly
+    worse than the 400 the change was replacing.
+
+    The lesson generalises well past this file: **if every test patches a
+    function, that function's own error paths are untested.** Patch the layer
+    below the one you are testing.
+    """
+    from egress_broker import resolve_and_pin
+
+    _no_dns(monkeypatch)
+    with pytest.raises(EgressBlocked):
+        resolve_and_pin("https://lapsed.example/")
+
+
+@pytest.mark.asyncio
+async def test_real_nxdomain_traverses_the_whole_chain(monkeypatch):
+    """End to end with none of our own code patched: broker -> utils -> api."""
+    _no_dns(monkeypatch)
+    with pytest.raises(OriginUnresolvable):
+        await api._normalize_and_validate_seeds(["https://lapsed.example/"])
