@@ -246,8 +246,9 @@ seventh moves a class from HTTP 400 to HTTP 200, and "one class, two wire
 statuses" is the exact defect that cost both repos weeks in July — so MAS gets
 told before it lands, not after.
 
-`tasks/mas-reply-owed-message-16.md` carries the announcement in its first
-section, including the ask for a go-ahead.
+`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`
+carries the announcement in its §0, including the ask for a go-ahead. Its
+source material is `tasks/done/mas-reply-owed-message-16.md`.
 
 **Sequence:**
 

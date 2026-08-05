@@ -155,7 +155,7 @@ after segment 1 sizes both the population and the recovery yield, with zero
 traffic and zero code. **This is the highest-value activity around the sweep and
 it is not a task file.** Run it after segment 1 alongside `RESULT FAILURE` by
 `failure_class`, the 429/504/500 counts, and `origin_blocked` **per segment**
-(see the block-rate note in `mas-reply-owed-message-16.md` — a rate that climbs
+(see the block-rate note in `tasks/done/mas-reply-owed-message-16.md` — a rate that climbs
 segment over segment is IP-reputation decay and should stop the sweep).
 
 ### Azure change made 2026-08-05
@@ -182,9 +182,11 @@ their gate. `main` == production in code — every commit since the deployed ima
 is documentation. So "is our pre-deploy gate sound?" is currently a moot
 question, which is what deflates items 3 and 4 below.
 
-**The one thing with the ball on our side is a message, not code:**
-`mas-reply-owed-message-16.md`. Every answer in it is already established;
-it needs writing up, not researching. It now also gates a deploy — see above.
+**The message is written and the ball is with Tero to relay it:**
+`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`.
+Its source material — every citation and measurement behind it — is
+`tasks/done/mas-reply-owed-message-16.md`; argue from that file, not the message,
+if MAS pushes back. **Its §0 is the deploy gate.**
 
 **Old items 1 and 2 shipped together on 2026-08-02** as `0.9.2-collapse-recovery`
 — collapse recovery and `unrenderable_content`. Both task files carry what the
@@ -196,7 +198,7 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 
 | # | Task | Size | What to know |
 |---|------|------|--------------|
-| 1 | `mas-reply-owed-message-16.md` | S | **Not code, and now also the deploy gate.** Answers their five questions, and must additionally announce the **wire-status change** sitting undeployed in `main` (dead domain: SSRF 400 → `origin_unreachable` at 200). Carries three things they did not ask — `max_retries` is 1 not 2, we have no outbound politeness, watch `origin_blocked` per segment — and three questions back. |
+| 1 | **Deploy `0.9.2-egress-dns`** — not a task file | S | **Gated on one answer from MAS, and that is the only thing gating it.** `main` holds the egress-path work undeployed because it moves a class from HTTP 400 to 200. The message is written and awaiting relay: `tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`, §0. Sequence, and the post-deploy check that has no other signal, are in the **Deploy** section of `tasks/done/egress-proxy-blocks-the-event-loop.md`. |
 | 2 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | **New 2026-08-05.** `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 54 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some of the 54 to change behaviour, and treat that as the payoff. |
 | 3 | `guard-corpus-is-not-in-the-repo.md` | S | **After the sweep.** Real and verified — `test-aitosoft/artifacts/*` is gitignored, three tests fail on a fresh clone at `assert checked >= 30`. But its load-bearing sentence is **wrong**: "our only pre-deploy gate is the offline suite" is false (see corrections below), and it fails *loud*, in the safe direction. If ever done: 4–6 files into `artifacts/keep/`, the mechanism `.gitignore:14-17` already provides. Do **not** open its four-option sizing table before the sweep. |
 | 4 | `flaky-fence-test-margin.md` | S | **After the sweep.** The 1-in-3 figure is stale — it is **1 failure in 9** recorded full runs (0/3 on 08-02, 0/3 on 08-05). Its "this might be a product finding about the 240 s ingress limit" fear is **refuted from code**: the unwind is bounded at 10 s by our own `PAGE_CLOSE_TIMEOUT_S` (`async_crawler_strategy.py:49`), so worst case is 180 + ≤10 ≈ 190 s, ~50 s inside the limit. The test also moved — it is `test_fixture_origin.py:748`, not `:640`. Fix is to raise `stall` and the assertion together. |
@@ -398,10 +400,12 @@ message and it is worth honouring: their ledger numbers diverged from ours (our
 "13" is their "11"; they have no 12 or 13), and the mismatch is part of why our
 14 sat unread for two days.
 
-**The ball is with US, and it is a message:**
-`tasks/mas-reply-owed-message-16.md` holds every answer, ready to write up.
-Their message is
+**The ball is with Tero: relay
+`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`.**
+Their message it answers is
 `tmp/mas-repo-messages/15-from-us-your-answer-sat-here-two-days-and-the-run-went-cold.md`.
+Ours asks for one blocking answer (§0, the 400 → 200 wire-status change) and
+five non-blocking ones.
 
 **Message 14 was delivered and read** (2026-08-05, after sitting unread in their
 repo since 08-03 — their thread ledger had no row for it; they have fixed that

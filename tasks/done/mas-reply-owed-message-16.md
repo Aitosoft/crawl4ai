@@ -1,17 +1,18 @@
-# Reply owed to MAS — the answers, ready to write up
+# Reply owed to MAS — WRITTEN 2026-08-05
 
-**Status:** open. The ball is with us. Written 2026-08-05, **updated the same
-day** after the egress-path work shipped to `main`.
-**Size:** S — it is a message, not code. Every answer below is already
-established; nothing needs measuring first.
-**It now gates a deploy.** `main` holds an undeployed wire-status change; see
-the "Announce first" section.
-**Their message:** `tmp/mas-repo-messages/15-from-us-your-answer-sat-here-two-days-and-the-run-went-cold.md`
-(gitignored). Ours becomes `16-to-mas-...`.
+**Status:** DONE. The message exists:
+`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`
+(gitignored, like the rest of the exchange).
 
-**Cite filenames, never integers.** MAS asked for this explicitly: their ledger
-numbers diverged from ours (our "13" is their "11"; they have no 12 or 13), and
-the mismatch is part of why our 14 sat unread for two days.
+**This file is the source material, kept because the message compresses it.**
+Every citation, line number and measurement behind a claim in the message is
+here; the message itself carries the conclusions. If MAS pushes back on
+anything, argue from this file, not from the message.
+
+**What is still owed, and it is not ours:** Tero relays the message. The one
+blocking answer is §0 — a go-ahead on the wire-status change sitting undeployed
+in `main`. See the Deploy section of
+`tasks/done/egress-proxy-blocks-the-event-loop.md`.
 
 ---
 
