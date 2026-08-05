@@ -60,6 +60,29 @@ carries URL + queue wait; keep it out of OTHER),
 benign `reaped unknown pid … exit status 0` chatter and floods with
 thousands of false positives (2026-04-17 lesson).
 
+**New 2026-08-05: `ContainerAppHTTPLogs` — the ingress access log.** Enabled as
+diagnostic setting `aca-http-logs` on the environment, HTTP category only. It is
+the **only** surface that records a request the ingress handled without a
+container — a cold-start 504, an ingress-terminated request, a 429 we never saw.
+Console logs structurally cannot show these. **It has no history before
+2026-08-05.** It is environment-wide, so filter by app.
+
+```kusto
+ContainerAppHTTPLogs
+| where TimeGenerated > ago(20m)
+| where ContainerAppName_s == "crawl4ai-service"
+| summarize n=count(), p95_ms=percentile(DurationMs_d, 95)
+    by StatusCode_d, tostring(ResponseFlags_s), replica=isempty(ReplicaName_s)
+```
+
+Read it this way: **`replica=true` (empty `ReplicaName_s`) means no container
+ever saw the request** — that is the ingress answering alone, and it is the
+cold-start-504 signal MAS asked about. `ResponseFlags_s` carries Envoy's reason.
+A `StatusCode_d` here that has no matching console line is real and is *ours* to
+explain; the reverse (console line, no HTTP log) just means the setting is newer
+than the traffic. Column names are best-guessed from the documented schema and
+should be checked against a real row on first use.
+
 Add pool-mem% percentile view — it surfaces near-OS-OOM single-replica
 peaks the `refusing new browser` count alone doesn't explain:
 ```kusto

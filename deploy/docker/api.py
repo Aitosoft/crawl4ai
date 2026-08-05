@@ -31,6 +31,7 @@ from aitosoft_failure_class import (
     ORIGIN_CLASSES,
     RENDER_DEFECT,
     RENDER_ERROR,
+    OriginUnresolvable,
     classify_exception,
     classify_result,
     effective_status_of,
@@ -645,13 +646,57 @@ async def stream_results(crawler: AsyncWebCrawler, results_gen: AsyncGenerator) 
             await release_crawler(crawler)
 
 
-def _normalize_and_validate_seeds(urls: List[str]) -> List[str]:
+def _host_has_no_address(url: str) -> bool:
+    """True when the URL's host resolves to nothing at all. BLOCKING.
+
+    Consulted only on the failure path, so a healthy request still resolves
+    exactly once. Asking here keeps the dead-domain/policy-refusal distinction
+    in our own file rather than changing `validate_url_destination`, which
+    seven other endpoints (webhooks, /execute_js, the LLM and screenshot
+    routes) share and whose opaque 400 is correct for them.
+    """
+    import socket
+    from urllib.parse import urlparse
+
+    host = urlparse(url).hostname
+    if not host:
+        return False
+    try:
+        socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+        return False
+    except socket.gaierror:
+        return True
+    except Exception:
+        return False
+
+
+async def _normalize_and_validate_seeds(urls: List[str]) -> List[str]:
     """Prefix bare hosts with https:// and SSRF-validate every seed URL's
     destination. Shared by the streaming and non-streaming crawl handlers so a
-    new entry point cannot silently skip the destination check."""
+    new entry point cannot silently skip the destination check.
+
+    Aitosoft 2026-08-05, two changes:
+
+    1. **Off the loop.** `validate_url_destination` ends in a blocking
+       `socket.getaddrinfo` (`egress_broker._resolve`). This runs on every
+       `/crawl`, on the app's single event loop under `gunicorn --workers 1` —
+       the same loop serving `/health` (the ACA readiness *and* startup probe),
+       the render-admission gate and every wall-clock fence. It is also the
+       *first* resolve of a request and runs BEFORE admission, so it is not
+       even bounded by render capacity. Measured against ACA's own resolver
+       config (4 search domains, `ndots:5`) with a nameserver that never
+       answers: **22.75 s** of frozen loop, per seed.
+    2. **A dead domain is an origin failure, not an SSRF verdict** — see
+       `OriginUnresolvable`.
+    """
     urls = [('https://' + url) if not url.startswith(('http://', 'https://')) and not url.startswith(("raw:", "raw://")) else url for url in urls]
     for url in urls:
-        validate_url_destination(url)
+        try:
+            await asyncio.to_thread(validate_url_destination, url)
+        except HTTPException:
+            if await asyncio.to_thread(_host_has_no_address, url):
+                raise OriginUnresolvable("DNS: host does not resolve") from None
+            raise
     return urls
 
 
@@ -712,7 +757,7 @@ async def handle_crawl_request(
                        "single-URL per request (AITOSOFT_CHANGES.md, 2026-07-17)",
             )
 
-        urls = _normalize_and_validate_seeds(urls)
+        urls = await _normalize_and_validate_seeds(urls)
 
         # Aitosoft: static-mode short-circuit (after SSRF validation, before
         # any browser-pool work). See aitosoft_static_mode.py.
@@ -1200,7 +1245,7 @@ async def handle_stream_crawl_request(
         # SSRF guard: validate every seed URL's destination before fetching,
         # mirroring handle_crawl_request. The streaming path previously skipped
         # this, leaving /crawl/stream (and /crawl with stream=true) unguarded.
-        urls = _normalize_and_validate_seeds(urls)
+        urls = await _normalize_and_validate_seeds(urls)
         browser_config = BrowserConfig.load(browser_config, provenance=Provenance.UNTRUSTED)
         # browser_config.verbose = True # Set to False or remove for production stress testing
         browser_config.verbose = False
@@ -1276,6 +1321,17 @@ async def handle_stream_crawl_request(
         if crawler:
             await release_crawler(crawler)
         raise
+
+    except OriginUnresolvable:
+        # The streaming path has no 200-envelope machinery — it must raise
+        # before the response body starts — so keep the pre-existing 400 here
+        # rather than inventing a third shape. MAS never streams; the
+        # single-URL contract goes through /crawl.
+        if crawler:
+            await release_crawler(crawler)
+        raise HTTPException(
+            status_code=400, detail="URL blocked (SSRF protection): URL blocked"
+        )
 
     except Exception as e:
         # Release crawler on setup error (for successful streams,

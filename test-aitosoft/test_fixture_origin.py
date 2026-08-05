@@ -58,7 +58,14 @@ MAS_WAIT = 2.0  # what MAS sends in production
 #: It is not a default — `DEFAULT_CRAWLER_CONFIG` omits it, so upstream uses 0 —
 #: and it changes the *error text* a navigation failure produces, not only the
 #: cost. Any test that asserts on error text must say which it ran with.
-MAS_MAX_RETRIES = 2
+#:
+#: **Corrected 2026-08-05 from 2 to 1.** All 213 `Anti-bot retry` lines in the
+#: preceding 14 days read `1/1`, so at 2 these tests modelled a request shape
+#: production has never sent — the same "unfaithful on exactly the load-bearing
+#: axis" failure the `/block/padded-403` fixture already taught us. `config.yml`
+#: does not set it, so the value is MAS's: re-measure rather than trust this
+#: line, and see the two questions in `tasks/mas-reply-owed-message-16.md`.
+MAS_MAX_RETRIES = 1
 
 
 # ── the egress seam: the guarantee this module could have broken ─────────

@@ -84,6 +84,24 @@ BAD_REQUEST = "bad_request"  # malformed request -> 400
 # through `http_status_for` without it turns an SSRF refusal into a 500 and buys
 # MAS three more attempts at a URL our own policy has already declined.
 
+
+class OriginUnresolvable(Exception):
+    """A seed URL's hostname resolved to no address at all (NXDOMAIN/SERVFAIL).
+
+    The SSRF seed check (`utils.validate_url_destination`) deliberately
+    collapses "no such name" and "resolved, but policy refused it" into one
+    opaque HTTP 400 — right for a policy verdict, wrong for a lapsed domain,
+    which is an ORIGIN failure and owes MAS a `failure_class`. A
+    company-registry sweep is mostly lapsed domains, so without this every one
+    of them reached MAS as `URL blocked (SSRF protection)`: our own policy
+    string blaming a customer's domain, with no class attached. That is the
+    `norex.com` inversion again, on a population that is certainly non-zero.
+
+    Raised by `api._normalize_and_validate_seeds`; `classify_exception` maps it
+    to ORIGIN_UNREACHABLE, whose own comment above has always claimed DNS.
+    """
+
+
 #: Classes the origin is responsible for. These must never be reported as 5xx.
 ORIGIN_CLASSES = frozenset({ORIGIN_HTTP_ERROR, ORIGIN_BLOCKED, ORIGIN_UNREACHABLE})
 
@@ -348,6 +366,8 @@ def classify_exception(exc: BaseException) -> str:
 
     if isinstance(exc, asyncio.TimeoutError):
         return RENDER_TIMEOUT
+    if isinstance(exc, OriginUnresolvable):
+        return ORIGIN_UNREACHABLE
     return classify_error_text(str(exc)) or RENDER_ERROR
 
 

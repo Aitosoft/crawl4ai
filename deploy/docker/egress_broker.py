@@ -90,10 +90,17 @@ def is_forbidden_ip(ip_str: str) -> bool:
 
 
 def _resolve(host: str, port: int):
+    """Resolve, blocking. Callers on an event loop MUST offload this.
+
+    `socket.getaddrinfo` is a blocking C call with no timeout argument: its
+    duration is glibc's (`RES_TIMEOUT` 5s x `RES_DFLRETRY` 2 per nameserver, and
+    longer if a recursive resolver is slow rather than absent). Awaiting it
+    directly on the app's loop freezes everything else that loop serves.
+    """
     try:
         return socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except socket.gaierror:
-        raise EgressBlocked()
+        raise EgressUnresolvable()
 
 
 def assert_host_allowed(host: str, port: int = 0) -> None:

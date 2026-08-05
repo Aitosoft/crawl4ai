@@ -7,12 +7,43 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-08-02
+**Last Updated**: 2026-08-05
 
-> **`main` and production are in sync** as of 2026-08-02 — collapse recovery and
-> `unrenderable_content` shipped in `0.9.2-collapse-recovery` (revision
-> `--0000034`). Still: read the deployed image tag below, not `git log`, when you
-> need to know what is running.
+> **`main` is AHEAD of production as of 2026-08-05** — the egress-path work
+> (blocking DNS off the loop, `RES_OPTIONS`, the dead-domain and `http://`
+> misattributions) is committed and **undeployed**. It contains one wire-status
+> change, so it waits for the MAS relay by this repo's own rule. Production is
+> still `0.9.2-collapse-recovery` (revision `--0000034`, deployed 2026-08-02).
+> **Read the deployed image tag below, not `git log`, when you need to know what
+> is running** — that has never mattered more than it does right now.
+>
+> **2026-08-05, infrastructure only — no image, no code.**
+> `ContainerAppHTTPLogs` is now enabled: diagnostic setting **`aca-http-logs`**
+> on the managed environment `aitosoft-aca`, **HTTP category only**. Console and
+> system logs already arrive via the environment's `appLogsConfiguration`, so
+> adding those categories here would double-ingest and double-bill — do not
+> "complete" the setting by adding them.
+>
+> Why: it is the only surface that can record a request the ACA ingress
+> terminated *before* a container existed. Until now that was a pure absence —
+> there were no diagnostic settings at all on the app or the environment, and the
+> platform `Requests` metric demonstrably under-records exactly the cold-start
+> window (2026-07-30: one crawl served at 08:14:56, zero metric datapoints
+> 08:13–08:19). It answers an outstanding MAS question.
+>
+> Cost: ~13,400 ingress requests/month across `crawl4ai-service` +
+> `aitosoft-edge`, workspace is PerGB2018 at 30-day retention → ~0.02 GB/month.
+> With MAS's projected ~120,000 sweep fetches it stays near $0.50/month.
+> **It has no history** — it describes 2026-08-05 forward only.
+>
+> **The ACA ingress timeout is 240 s and is not configurable on this app.** The
+> knob is `properties.ingressConfiguration.requestIdleTimeout` on the
+> *environment*, and it requires premium ingress, which requires workload
+> profiles. `aitosoft-aca` is `workloadProfiles: null` — so this sits behind the
+> *same* environment migration as the 4 GiB ceiling, not a separate one. There is
+> no app-level timeout property at any API version through `2026-03-02-preview`.
+> It is an **idle** timeout; we stream nothing until the end, so for our traffic
+> idle == elapsed.
 >
 > **There is no replica resize to be had.** Azure caps this app at **2 vCPU /
 > 4 GiB**, which is what it already runs — the environment is a *legacy
@@ -54,9 +85,106 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- **`pytest test-aitosoft/` = 271 tests, ~235 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
-- Pure-function subset: **217 tests, ~13 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
+- **`pytest test-aitosoft/` = 283 tests, ~240 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
+- Pure-function subset: **229 tests, ~15 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
 - Browser-driven subset: test_fixture_origin.py (54), against a local fixture origin, ~220 s
+
+---
+
+## The egress path: blocking DNS, and two misattributions (2026-08-05)
+
+**Committed, NOT deployed.** One change alters a wire status, and this repo's
+rule is that behaviour changes wait for the relay (additive ones ship and get
+announced). Everything here is in `main`; production is still
+`0.9.2-collapse-recovery`.
+
+Full record, including the ten things the task file got wrong:
+`tasks/done/egress-proxy-blocks-the-event-loop.md`.
+
+### What changed
+
+| File | Change | Ours or upstream |
+|---|---|---|
+| `api.py` | Seed SSRF check awaited off the loop; a host with **no address at all** now raises `OriginUnresolvable` → `origin_unreachable` at HTTP 200 instead of an SSRF 400. Streaming path keeps the 400 | ours |
+| `egress_proxy.py` | Both `resolve_and_pin` calls awaited off the loop; connect budget 30 s → 15 s as `DEFAULT_CONNECT_TIMEOUT_S` + ctor arg; **`http://` connect failure now closes instead of replying `_BLOCKED`** | **upstream file** |
+| `egress_broker.py` | `_resolve` docstring only — it is blocking and callers on a loop must offload it | **upstream file** |
+| `aitosoft_static_mode.py` | Redirect `check_redirect` awaited off the loop | ours |
+| `aitosoft_failure_class.py` | `OriginUnresolvable` + `classify_exception` mapping | ours |
+| `supervisord.conf` | `RES_OPTIONS="timeout:2 attempts:2 ndots:1"` on the gunicorn program | ours |
+
+`egress_proxy.py` and `egress_broker.py` were **byte-identical to
+`upstream/develop`** before this — introduced by upstream `60886d1`. So this is
+a new merge surface and a fifth upstream PR candidate, and
+`.github/workflows/security.yml` runs upstream's 37 tests over them on push to
+`main`. All 316 upstream security tests pass.
+
+### Why
+
+Every DNS resolution on the crawl path ran as a bare blocking
+`socket.getaddrinfo` on the app's **single** event loop (`gunicorn --workers 1`,
+uvicorn worker) — the loop that also serves `/health` (ACA readiness **and**
+startup probe), the render-admission gate and every wall-clock fence. The
+dominant call site is the seed check on **every** `/crawl`, which runs *before*
+render admission and is therefore not bounded by render capacity.
+
+Measured against the running replica's own resolver config (`ndots:5` + four
+search domains, read off a live replica) with a nameserver that receives and
+never answers: **22.75 s of frozen loop per resolve, 8 UDP queries**.
+`RES_OPTIONS` takes that to ~4 s and removes 4 speculative NXDOMAIN lookups per
+resolve on the **happy** path too — a page render performs 10–40 uncached
+resolves. The two fixes are complements, not alternatives: `asyncio.to_thread`
+relocates the stall into an 8-thread pool whose queue is unbounded and whose
+threads are **not** reclaimed by cancellation; `RES_OPTIONS` is what bounds it.
+
+### The contract change, and it is the one to announce
+
+A lapsed domain used to reach MAS as **HTTP 400
+`URL blocked (SSRF protection): URL blocked`, with no `failure_class`** —
+`egress_broker._resolve` mapped `socket.gaierror` onto the same `EgressBlocked`
+as a policy refusal. It is cheap (0.078 s, no render slot), so this was a
+labelling defect, not a cost one. But a company-registry sweep is *mostly*
+lapsed domains, and it is the `norex.com` inversion again: our own policy string
+blaming a customer's domain.
+
+Now: **HTTP 200, `success:false`, `failure_class: "origin_unreachable"`,
+terminal, non-retryable** — which is what `ORIGIN_UNREACHABLE`'s own definition
+("DNS / TCP / TLS never got there") always claimed.
+
+Contained to `api.py` on purpose: `validate_url_destination` is shared by seven
+other endpoints whose opaque 400 is correct, and `validate_webhook_url` funnels
+into `except ValueError` handlers that would have become 500s. Only the failure
+path re-asks whether the host has any address; the happy path still resolves
+once. **This is a small DNS oracle** (200 vs 400 distinguishes "no such name"
+from "refused") — acceptable only because the API is fail-closed behind a token
+with one trusted consumer, and it must not be ported upstream as-is.
+
+### The `http://` misattribution
+
+On the absolute-URI path a proxy reply is an *ordinary response* Chromium
+renders as the page — so replying `_BLOCKED` handed the browser a 403 whose body
+is our own string `URL blocked`, which our own antibot detector then read as the
+customer's site blocking us: `origin_blocked`, plus a wasted patchright retry.
+Measured against a closed local port: **403 → `origin_blocked` in 16.1 s** vs
+**close → `origin_http_error` in 0.5 s**. A 502/504 does *not* work — an empty
+body trips our own inference tier and the retry fires anyway.
+
+`_BLOCKED` stays on the policy branch and on the CONNECT path, which was already
+correct (Chromium turns a non-200 CONNECT reply into
+`ERR_TUNNEL_CONNECTION_FAILED` and never renders it → `origin_unreachable`).
+
+### Tests
+
+`test-aitosoft/test_egress_dns_offload.py` — 12 hermetic tests, 2.5 s, no
+network, no browser. **The three behavioural ones were verified to fail against
+the pre-change code.** Gates: 229 offline + 54 browser-driven + 316 upstream
+security, all green.
+
+### To check first after deploy
+
+`RES_OPTIONS` is the one change that cannot be tested from here, and its failure
+mode is **silence** — glibc ignores options it cannot parse, so a mangled value
+looks exactly like the old behaviour. Confirm it arrived
+(`az containerapp exec … --command "cat /proc/1/environ"`).
 
 ---
 
@@ -1340,6 +1468,15 @@ pinning 3–5 warm replicas before batches — retired by this change.
    so queue wait can never eat the render budget. Rejection maps to
    **HTTP 429 + `Retry-After: 5`**. Static mode bypasses the gate entirely.
    Budget: 15s queue + browser get + 180s fence ≈ 200s < 240s ACA ingress.
+   **Corrected 2026-08-05: this assumes a WARM replica.** The ingress clock
+   starts when the request reaches the ingress, which includes the
+   scale-from-zero hold. Worst observed cold start **65 s** + 15 s queue +
+   184 s worst measured fence exit = **264 s > 240 s**. Never observed (all
+   13 × 504 in 93 days sat at 180–184 s, i.e. our own fence, none near 240 s),
+   it needs three worst cases at once, and MAS's 210 s client timeout fires
+   first regardless — so this is a stale budget line, not a live risk. But as
+   written it invites the reader to believe the margin is 40 s when on a cold
+   replica it can be negative.
 3. **`config.yml`** — `crawler.pool.render_capacity: 2`, `admission_queue: 4`,
    `admission_max_wait_s: 15`.
 4. **ACA config (az CLI, not in repo)** — explicit HTTP scale rule

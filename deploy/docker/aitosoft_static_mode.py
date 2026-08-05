@@ -279,7 +279,9 @@ async def _fetch_static_one(url: str) -> dict:
                     failure_class=ORIGIN_HTTP_ERROR,
                 )
             try:
-                check_redirect(next_url)
+                # OFF THE LOOP — check_redirect ends in a blocking getaddrinfo
+                # and static mode runs on the app's single event loop too.
+                await asyncio.to_thread(check_redirect, next_url)
             except EgressBlocked:
                 # error_message stays opaque (no target echo) — egress_broker
                 # rule; the server log is trusted and keeps the ops signal.

@@ -34,9 +34,32 @@ _MAX_HEADER_BYTES = 64 * 1024
 class PinningProxy:
     """Async HTTP forward-proxy that connects only to pinned, global IPs."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 0):
+    #: Upstream TCP connect budget, seconds. Chromium's own proxy-connect timer
+    #: is 30s and starts *before* ours (ours only arms after the request line is
+    #: read and the name is resolved), so at 30s ours could never win and every
+    #: dead host cost a full 30s of a render slot per leg. Measured 2026-08-05:
+    #: ours pre-empts Chromium's exactly and linearly (12s -> 12.02s elapsed),
+    #: so this constant is the real lever.
+    #:
+    #: It bounds ONLY the TCP handshake - TLS is end-to-end after CONNECT, so a
+    #: slow-TLS or slow-responding origin is untouched. The residual risk is an
+    #: origin whose handshake would have completed between this value and
+    #: Chromium's 30s: it becomes `origin_unreachable`, HTTP 200, non-retryable
+    #: - i.e. a silently dropped page. 15s is ~15-45x a normal transcontinental
+    #: handshake and keeps 3x more headroom against that than 10s, for 5s more
+    #: per dead leg. Deliberately a constant and not a config key: it has one
+    #: consumer and config.yml ships inside the image anyway.
+    DEFAULT_CONNECT_TIMEOUT_S = 15.0
+
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 0,
+        connect_timeout_s: float = DEFAULT_CONNECT_TIMEOUT_S,
+    ):
         self._host = host
         self._port = port
+        self._connect_timeout_s = connect_timeout_s
         self._server: asyncio.AbstractServer | None = None
         self.bound_host: str | None = None
         self.bound_port: int | None = None
@@ -92,7 +115,11 @@ class PinningProxy:
             await self._reply(client_writer, _BAD)
             return
         try:
-            pin = resolve_and_pin(f"https://{host}:{port_s}")
+            # OFF THE LOOP: resolve_and_pin ends in a blocking getaddrinfo, and
+            # this proxy runs on the app's own event loop (server.py lifespan,
+            # gunicorn --workers 1) - the same loop serving /health, the render
+            # admission gate and every wall-clock fence. See _resolve's note.
+            pin = await asyncio.to_thread(resolve_and_pin, f"https://{host}:{port_s}")
         except EgressBlocked:
             await self._reply(client_writer, _BLOCKED)
             return
@@ -102,7 +129,8 @@ class PinningProxy:
 
         try:
             up_reader, up_writer = await asyncio.wait_for(
-                asyncio.open_connection(pin.ip, int(port_s)), timeout=30
+                asyncio.open_connection(pin.ip, int(port_s)),
+                timeout=self._connect_timeout_s,
             )
         except Exception:
             await self._reply(client_writer, _BLOCKED)
@@ -120,7 +148,8 @@ class PinningProxy:
             return
         port = sp.port or 80
         try:
-            pin = resolve_and_pin(f"http://{sp.hostname}:{port}")
+            # OFF THE LOOP - see _handle_connect.
+            pin = await asyncio.to_thread(resolve_and_pin, f"http://{sp.hostname}:{port}")
         except EgressBlocked:
             await self._reply(client_writer, _BLOCKED)
             return
@@ -131,10 +160,24 @@ class PinningProxy:
             path += "?" + sp.query
         try:
             up_reader, up_writer = await asyncio.wait_for(
-                asyncio.open_connection(pin.ip, port), timeout=30
+                asyncio.open_connection(pin.ip, port),
+                timeout=self._connect_timeout_s,
             )
         except Exception:
-            await self._reply(client_writer, _BLOCKED)
+            # Close without replying. On the absolute-URI (plain http://) path a
+            # reply is an ORDINARY RESPONSE that Chromium renders as the page -
+            # so replying _BLOCKED here handed the browser a 403 whose body is
+            # our own string "URL blocked", which our own antibot detector then
+            # read as the customer's site blocking us: `origin_blocked`, plus a
+            # wasted patchright retry. Measured 2026-08-05 against a closed
+            # local port: 403 -> origin_blocked in 16.1s; close -> the honest
+            # origin_http_error in 0.5s, no retry. A 502/504 does NOT work -
+            # an empty body trips our own inference tier and retries anyway.
+            #
+            # The CONNECT path keeps _BLOCKED: Chromium turns a non-200 reply to
+            # a CONNECT into ERR_TUNNEL_CONNECTION_FAILED and never renders it,
+            # which already classifies as origin_unreachable.
+            await self._safe_close(client_writer)
             return
         # Re-issue in origin form with Host preserved.
         out = f"{method} {path} HTTP/1.1\r\n".encode("latin-1")

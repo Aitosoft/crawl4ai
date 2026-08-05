@@ -1,11 +1,37 @@
 # ~59 % of every replica is memory we cannot account for
 
-> **PARKED 2026-08-02 by the coordinator scope cut — do not pick this up unasked.**
-> The 59 % may be an artefact of a metric that changed on 2026-08-01 (see "Why the fit is not settled" below), and a replica resize would make the whole question moot. **Do not start this before Tero answers on the resize.** **What un-parks it: Tero declining the resize, or the memory guard still firing after it.**
-> The reasoning is in `tasks/README.md` "The scope cut" and CLAUDE.md principle 7;
-> the analysis below is preserved and still believed correct — it is the
-> *priority* that changed, not the diagnosis. If you think it should be un-parked,
-> say why in this file rather than just starting.
+> **CLOSED 2026-08-05 — there is no symptom left to explain. Do not re-open this
+> file; if memory ever becomes a symptom again, open a new one with new data.**
+>
+> Closed rather than left parked, deliberately: a parked file with no symptom is
+> an invitation, and this one had already pulled four sessions past an arithmetic
+> error nobody checked.
+>
+> Three independent reasons it is closed:
+> 1. **No symptom, across two consecutive real workloads.** Pool memory p95
+>    39.8 % (2026-08-01) then **29.9 %**, max **33.7 %** (2026-08-05, 62 renders,
+>    KEDA 0 → 15 replicas), against an 85 % guard. Zero memory refusals in both.
+>    The cap, the shed-before-refuse guard and `permanent_unused_ttl_sec: 120`
+>    took refusals from 36 to 0 and have held.
+> 2. **The replacement fit was never settled**, by its own author — see "Why the
+>    fit is not settled" below. Three problems, all biasing browsers down.
+> 3. **The underlying data is not in the repo**, and the metric changed under it
+>    (`13fcecb`, 2026-08-01, made `get_container_memory_percent` subtract
+>    `inactive_file`), so the intercept is in raw `memory.current` with page cache
+>    included. It cannot be re-derived from what we hold.
+>
+> **The one durable finding, which survives and is recorded in CLAUDE.md:**
+> regressing an observational browsers→memory slope through a live control loop
+> (the janitor closed browsers *because* memory was high) estimates the
+> controller, not the cost. That lesson is the value here; the number never was.
+>
+> `max_browsers: 6` ships and stays — it is correct under every candidate slope.
+>
+> *Original parking note, kept for the record:* PARKED 2026-08-02 by the
+> coordinator scope cut. The 59 % may be an artefact of a metric that changed on
+> 2026-08-01, and a replica resize would make the whole question moot. (The
+> resize was then refused by Azure — 2 vCPU / 4 GiB is this environment's
+> maximum.)
 
 **Status:** Open, not started. Opened 2026-08-02 by the session that built
 `pool-residency-unbounded.md`, because that task's measurements produced this

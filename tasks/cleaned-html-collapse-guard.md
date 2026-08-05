@@ -197,9 +197,73 @@ does not reproduce, that finding outranks everything below it.
    upstream's parser, nothing extra to merge forever. Ships as a free mechanism
    classifier; the customer data it returns on real traffic is a measurement we
    do not have yet (see the correction at the top of this file).
-2. **Price `content_source="raw_html"` as the PRIMARY generator before writing
-   repair 1.** This is the principle-7 question nobody asked, and the review
-   that found it is right that it was missing from both task files.
+2. **PRICED AND REJECTED, 2026-08-05. Do not re-open — read this before
+   anything else in this file.** The pricing was done and the answer is **no**:
+   `content_source="raw_html"` dissolves nothing that is still open, so it does
+   **not** delete repair 1, and it must not be flipped as a default.
+
+   Measured through the browser against `fixture_origin` at `?bytes=73000`,
+   zero external traffic:
+
+   | shape | markdown, cleaned | markdown, raw | verdict |
+   |---|---:|---:|---|
+   | `unclosed-noscript` | 1 | **1250** | prevented — but recovery already fixes it |
+   | `deep-nesting` | 1 | **1226** | prevented — recovery already fixes it |
+   | `unclosed-script` | 1 | **1** | **unchanged** |
+   | `unterminated-comment` | 1 | **1** | **unchanged** |
+   | healthy control | 1259 | 1250 | — |
+
+   **The asymmetry is structural, not incidental, and that is the whole
+   result.** The two shapes raw_html saves are lost at *tree construction*,
+   where libxml2 (`content_scraping_strategy.py:668`) and Python's
+   `html.parser` (`html2text/__init__.py:37`) legitimately differ. The two it
+   cannot save are lost at the **tokenizer**: `CDATA_CONTENT_ELEMENTS ==
+   ('script','style')` and comment discarding are HTML5 spec behaviour that
+   both parsers implement identically. **No choice of parser rescues
+   `unclosed-script`.** The claim in `tasks/README.md` that it would "probably"
+   help `unclosed-script` too was false.
+
+   It also rescues markdown *only*: `cleaned_html` is still ~50 bytes on every
+   collapsed shape, so `links`, `media`, `metadata` and `fit_markdown` are
+   unchanged.
+
+   **One of the two cited measurements was not about this at all.** The index
+   cited "two independent measurements" agreeing the quality cost is small. The
+   second — "median 0.91× across 59 stored captures" — reproduces numerically
+   (0.919, n=61) but measures `HTML2Text(ignore_images=True)`, the *recovery
+   converter*, and the 9 % gap is dropped images. It is neither independent of
+   nor about `content_source`. The real figure is **1.002** (n=61, min 0.999,
+   max 1.156 — talgraf, and its +1,103 chars are 11 image links, not text).
+
+   **And there is a contact hazard that argues against flipping it even where
+   it works.** 14 of 61 captures lose a word boundary on an email:
+   `**UB Corporate Finance Oy**ubcf@unitedbankers.fiSuomi:` — lxml re-serializes
+   `</p>\n<p>` while Chromium's raw HTML has `</p><p>`, and inside a `<td>`
+   html2text emits no break. A regex extractor reads `ubcf@unitedbankers.fiSuomi`.
+   It appeared on the one host in our corpus that has a contact table, which is
+   exactly the page type MAS crawls. Whether it matters depends on whether their
+   extractor is regex- or LLM-based — one question in a relay, unasked so far.
+
+   Corpus caveat for whoever re-checks: `test-aitosoft/artifacts/` holds 140
+   files but only **61 distinct captures across 7 URLs on 6 hosts**, five of
+   which are the Tier 1 set. "66 stored captures" overstated the breadth.
+
+   Reachability, if it is ever wanted per-request: MAS **can already set it
+   themselves** — `DefaultMarkdownGenerator` is in `UNTRUSTED_ALLOWED_TYPES`
+   and `markdown_generator` is in the `CrawlerRunConfig` allowlist
+   (`async_configs.py:193,237`), so it needs no code from us. `config.yml`
+   cannot express it (`api.py:831-835` only fills `None`/`""` fields, and
+   `markdown_generator` defaults to a live instance).
+
+   The one thing still worth considering separately is the guard's own
+   suggestion at `aitosoft_collapse_guard.py:305-318` — have `recover_markdown()`
+   use the seam instead of bare `HTML2Text`, which keeps the guard firing (so the
+   mechanism classifier survives) and gives recovered pages citations. Cosmetic,
+   and a different decision.
+
+   *Original framing, kept for the record:* This is the principle-7 question
+   nobody asked, and the review that found it is right that it was missing from
+   both task files.
 
    `DefaultMarkdownGenerator` takes a documented
    `content_source: "raw_html" | "cleaned_html" | "fit_html"`
