@@ -416,6 +416,18 @@ Incidental but useful: the capture's `<html>` carries `avia-chrome-138`, i.e.
 the deployed amd64 image really is driving **Chrome 138**, not bundled Chromium.
 That is the one thing a local Tier 1 run structurally cannot check.
 
+**A `Traceback` in the post-deploy log window is expected here, and it is not a
+regression.** The lapsed-domain probe raises `OriginUnresolvable` from
+`api._normalize_and_validate_seeds`, which is *caught* and turned into
+`origin_unreachable` at HTTP 200 — the 2026-08-05 design. The stack is logged on
+the way through, so a `Traceback` / `NameError` sweep after any deploy will hit
+it. Check the client's wire status, not the presence of a stack: this one paired
+with `ORIGIN FAILURE … failure_class=origin_unreachable` and a clean 200.
+
+The whole smoke ran on a **scale-from-zero replica** — container up at 07:55:39,
+first request served 07:55:57 — with `RenderGate` waits at 0.0 s and memory
+146 → 157 MB against an 85 % guard.
+
 ### To check first in segment 2
 
 1. **`CONSENT DECLINED` rate, and `node`/`class` on each.** A `<footer>` /
