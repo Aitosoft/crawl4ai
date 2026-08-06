@@ -288,6 +288,49 @@ to give; inverting that order would start reporting 403s as our own defect.
   it) and is the sentence that sent four sessions to the anti-bot tier instead of
   to our own DOM cleanup.
 
+### What the pre-deploy run actually measured
+
+**Tier 1, 4/4, one pass, four live requests** (`--version consent-guard-local`,
+local server on arm64/Chromium). Then the counters were read out of the same
+server's stdout — no extra traffic, because the gate run *is* the experiment.
+
+**Zero `CONSENT DECLINED` across all four sites, and the zero is real.** Verified
+rather than assumed: `api` and `aitosoft_admission` INFO lines were present in
+the same log, and the counter was then proved end-to-end by crawling the local
+`/consent/*` fixtures through the running server (below). This is the first live
+evidence for "the generic selectors do no work" beyond the 7-host corpus — and
+the strongest single case is **`accountor.com`, a real Cookiebot wall, which
+produced zero generic matches**: the named selectors did all of it. That is
+exactly the claim the fix rests on.
+
+**End-to-end through the real server, zero live traffic** (fixture origin +
+`CRAWL4AI_ALLOW_INTERNAL_URLS`), all four at HTTP 200 / `success: true` /
+`failure_class: "none"` with the contacts present:
+
+```
+/consent/html        n=1 chars=1168 pagechars=1168  node=html   structural=True
+                     selector=[class*="cookie-consent" i] class=html_stretched av-cookies-no-cookie-consent …
+/consent/inner       n=1 chars=1168 pagechars=12368 node=footer structural=False
+                     selector=[class*="cookie-notice" i] class=site-footer cookie-notice-footer
+/consent/banner      n=1 chars=92   pagechars=1261  node=div    structural=False
+                     selector=[class*="cookie-notice" i] class=cookie-notice-bar
+/consent/named-root  CONSENT STRUCTURAL selector=#cookie-notice node=body  (+ a generic decline)
+```
+
+`/consent/html` was 15 bytes at HTTP 500 before this image; 1,568 bytes at 200
+after. `/consent/named-root` is the one only the structural guard saves.
+
+**One thing to carry into reading segment 2, because it corrects an assumption
+in the task file.** The ratio does **not** cleanly separate the two cases:
+`inner` (a wrapper that also held the contacts) is 9.4 % of its page and
+`banner` (a correct removal we are now skipping) is 7.3 %. What separates them
+here is **absolute `chars`** (1,168 vs 92) and, more tellingly, **`node`** — a
+`<footer>`/`<section>`/`<main>` match is a page region, a
+`<div class="cookie-notice-bar">` is a banner. Read `node` and `class` first,
+`chars` second, the ratio last. And do not expect the counter to classify
+individual hits: its job is to size the population, and only the *content* of
+the removed element decides whether a removal would have been loss.
+
 ### To check first after deploy
 
 1. A crawl of `/consent/inner`'s real-world equivalent is not available, so use
