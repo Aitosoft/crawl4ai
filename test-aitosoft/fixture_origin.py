@@ -1002,6 +1002,21 @@ class _Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
+    def handle_error(self, request, client_address):
+        """Swallow the client-hung-up family, print anything else.
+
+        A `?stall=` route is *designed* to be abandoned — the fence test cancels
+        the render and Chromium closes the socket while the handler thread is
+        still sleeping, so the eventual write raises BrokenPipeError. socketserver
+        prints that traceback to stderr, and because the thread wakes up seconds
+        later it lands in the middle of some *other* test's output, where it
+        reads like a real failure. Same reasoning as `log_message` above.
+        """
+        import sys
+
+        if not isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError)):
+            super().handle_error(request, client_address)
+
 
 class FixtureOrigin:
     """A threaded HTTP origin on an ephemeral loopback port.

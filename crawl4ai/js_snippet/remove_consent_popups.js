@@ -9,9 +9,10 @@ async () => {
     // =========================================================================
     // Guard rails and instrumentation (Aitosoft 2026-08-06)
     // =========================================================================
-    // Phase 3 used to end with 18 generic substring selectors — `[class*=
-    // "cookie-consent" i]` and friends — and call `el.remove()` on whatever they
-    // matched, with no guard on WHAT they matched. The Enfold WordPress theme
+    // Phase 3 used to end with 20 generic selectors — 18 substring patterns
+    // (`[class*="cookie-consent" i]` and friends) plus `.cc-banner` and
+    // `.cc-window` — and call `el.remove()` on whatever they matched, with no
+    // guard on WHAT they matched. The Enfold WordPress theme
     // writes `av-cookies-no-cookie-consent` onto <html> to mean "cookie consent
     // is switched OFF on this site", so the selector matched a flag asserting
     // there is no banner and deleted the document because of it. `page.content()`
@@ -20,7 +21,7 @@ async () => {
     // Two rules come out of that, and they are different in kind:
     //
     //   1. Structural elements are never removed, whatever matched them. This
-    //      is unconditional and covers the 122 named selectors and every
+    //      is unconditional and covers the 120 named selectors and every
     //      pattern anyone adds later without reading this comment.
     //   2. The generic substring selectors do not remove anything at all. They
     //      are OBSERVED and reported instead. Across our stored corpus there is

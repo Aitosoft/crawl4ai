@@ -1,8 +1,11 @@
 # Our consent/overlay scripts delete the page, and two of the three ways are silent
 
-**Status:** IMPLEMENTED 2026-08-06, **committed and NOT deployed.** Still the
-gate on MAS's segment 2 — they are holding a 50-company run until the image is
-out.
+**Status:** DONE — **DEPLOYED 2026-08-06** as `0.9.2-consent-guard`, revision
+`--0000037`. Tier 1 4/4, prod smoke green, and **proved in production on
+`www.kubler.fi`**: 15 bytes at HTTP 500 before, 55,545 chars of markdown and 5
+contact emails after, with `av-cookies-no-cookie-consent` still on `<html>` and
+the guard's own line naming it (`node=html structural=True`). MAS's segment 2 is
+unblocked.
 **Size:** planned M, delivered M. Two JS files, one strategy method, one
 classifier branch, two fixture route families, 20 tests.
 
@@ -26,14 +29,14 @@ broken. Full change record: `AITOSOFT_CHANGES.md` 2026-08-06.
 | # | change | file |
 |---|---|---|
 | 1 | Structural guard — `documentElement`/`body`/`head` are never removed, whatever matched, in Phases 3 **and 4** | `remove_consent_popups.js` |
-| 2 | The 18 generic selectors **observe instead of removing**, and report | `remove_consent_popups.js` |
+| 2 | The 20 generic selectors **observe instead of removing**, and report | `remove_consent_popups.js` |
 | 3 | Phase 5's `document.body.style` accesses null-guarded | `remove_consent_popups.js` |
 | 4 | Same structural guard; `backgroundColor.includes("rgba")` → a real alpha test | `remove_overlay_elements.js` |
 | 5 | Read the report, log three counters, detect a click-navigation from `page.url` | `async_crawler_strategy.py` |
 | 6 | No `<body>` in the capture → `render_defect` at 200 (the sibling task) | `aitosoft_failure_class.py` |
 | 7 | `/consent/{shape}`, `/consent/elsewhere`, `consent_reports()` | `fixture_origin.py` |
 
-**1. "Drop the 18 generic selectors" would have deleted the measurement the
+**1. "Drop the generic selectors" would have deleted the measurement the
 plan depends on.** Step 5 of the cross-repo sequence branches on whether the
 declined-removal counter fires often or never — and a deleted selector cannot
 decline anything. The generics are kept and *evaluated*, removal-free: one
@@ -46,7 +49,7 @@ than from their traffic. This is the one change I would defend hardest.
 test.** With the generics gone, the Enfold class matches nothing at all — so
 every `<html>`/`<body>` fixture would stay green *with the guard reverted*, and
 the suite would have been asserting one fix twice. Added `/consent/named-root`
-(`<body id="cookie-notice">`, one of the **122 named** selectors), which only
+(`<body id="cookie-notice">`, one of the **120 named** selectors), which only
 the guard can pass. Generalisable: when two fixes cover the same symptom, at
 least one fixture has to be reachable by only one of them.
 
@@ -103,8 +106,9 @@ per-page noise rather than per-finding signal, the fix is a threshold on
 
 `crawl4ai/js_snippet/remove_consent_popups.js` — which MAS sends on **every**
 request (`remove_consent_popups: true`, pinned in `test_mas_contract.py:55`) —
-finishes with 18 generic substring selectors like `[class*="cookie-consent" i]`
-and calls `el.remove()` on everything they match, with no guard on *what* they
+finishes with 20 generic selectors — 18 substring patterns like
+`[class*="cookie-consent" i]`, plus `.cc-banner` and `.cc-window` — and calls
+`el.remove()` on everything they match, with no guard on *what* they
 match. `kubler.fi` runs the Enfold WordPress theme, which writes
 `av-cookies-no-cookie-consent` onto `<html>` to mean *"cookie consent is switched
 off on this site."* That class contains the substring, so we delete
@@ -254,9 +258,10 @@ arrived at, why, and where I think it could be wrong.
 lines, and it covers the named selectors and every generic pattern someone adds
 later without reading this file. This is the piece I am most confident in.
 
-**Dropping the 18 generic container selectors.** The census: 140 container
-selectors, **122 named and precise** (`#onetrust-consent-sdk`,
-`#CybotCookiebotDialog`, …), 18 generic substring catch-alls. In our stored
+**Dropping the generic container selectors.** The census (**corrected on
+implementation** — it was 122/18, it is 120/20): 140 container selectors,
+**120 named and precise** (`#onetrust-consent-sdk`,
+`#CybotCookiebotDialog`, …), **20** generic catch-alls. In our stored
 corpus there are **zero captures where a generic catch-all is the only thing
 that would match** — the named ones do the work (Cookiebot in 30 files,
 Complianz in 11, CookieYes in 4, Cookie Law Info in 1), and `accountor.com`, the

@@ -198,7 +198,7 @@ click that navigates destroys the JS execution context.
 
 ### crawl4ai/js_snippet/remove_consent_popups.js (+130/−25)
 The structural guard — `documentElement`, `body` and `head` are never removed,
-whatever matched them — and the 18 generic substring selectors moved from
+whatever matched them — and the 20 generic selectors (18 substring patterns + `.cc-banner`/`.cc-window`) moved from
 *removing* to *observing*. The snippet now returns a report. **This file was
 byte-identical to upstream until 2026-08-06**; it is the strongest upstream PR
 candidate we hold, because on Enfold sites the unguarded version deletes the

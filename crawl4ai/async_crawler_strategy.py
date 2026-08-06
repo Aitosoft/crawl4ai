@@ -1749,7 +1749,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
           CONSENT STRUCTURAL  a *named* vendor selector matched <html>, <body>
                               or <head>. This should never fire. If it does, the
                               named list has the same defect the generic list had
-                              and the census behind "122 named and precise" is
+                              and the census behind "120 named and precise" is
                               wrong.
 
         **Emitted through the stdlib `logging` module, not `self.logger`, and

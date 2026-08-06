@@ -825,6 +825,51 @@ def test_a_generic_selector_match_is_counted_not_removed(
     assert report["pageChars"] > widest["chars"] > report["pageChars"] * 0.05
 
 
+def test_a_declined_element_survives_into_the_html_we_ship(
+    fixture_origin, production_path
+):
+    """The declined element must reach MAS *in `result.html`*, unmodified.
+
+    This is not an internal detail — it is load-bearing for the other repo.
+    Since 2026-08-04 they persist `result.html` (the rendered DOM, before their
+    own cleaner), so from this image onward every `CONSENT DECLINED` line points
+    at an element that is **in their stored bytes**, joinable on the requested
+    URL we log. That turns our judgement ("was this a banner or a page region?")
+    into their measurement ("did it contain an email, a phone, an address?").
+
+    They named the risk themselves and could not test it — they have no
+    post-image capture. We can, and it costs nothing: if Phase 3 ever mutates
+    instead of declining, or a later phase strips what Phase 3 spared, the join
+    under-reads silently and neither side would know by how much.
+
+    Asserted on `class`, `id` and the element's own text, because a serializer
+    that reorders attributes must not fail this while a mutation passes it.
+    """
+    with consent_reports() as reports:
+        outcome = production_path.crawl(
+            fixture_origin.url("/consent/banner"),
+            delay_before_return_html=SHORT_WAIT,
+        )
+
+    assert outcome.success
+    widest = reports[-1]["report"]["declinedWidest"]
+
+    html = outcome.html
+    assert widest["cls"] in html, "the declined element's class is not in result.html"
+    assert "evasteita" in html, "the declined element's own text is gone"
+    assert "<button class='evaste-ok'>" in html or 'class="evaste-ok"' in html
+
+    # And the structural case, where the element IS the document root.
+    with consent_reports() as reports:
+        outcome = production_path.crawl(
+            fixture_origin.url("/consent/html"), delay_before_return_html=SHORT_WAIT
+        )
+    assert CONSENT_TRIGGER_CLASS in outcome.html, (
+        "the Enfold trigger must survive into the shipped HTML — it is how the "
+        "other repo confirms which element the line refers to"
+    )
+
+
 @pytest.mark.parametrize("shape", sorted(CONSENT_STRUCTURAL_SHAPES))
 def test_the_structural_guard_reports_which_element_it_saved(
     shape, fixture_origin, production_path
@@ -961,6 +1006,31 @@ def test_the_overlay_flag_no_longer_removes_an_opaque_element(
 # reason to make every other test depend on how cleanly that unwinds.
 
 
+#: The origin's stall, and the ceiling the fence must beat. Raised from 3 s on
+#: 2026-08-06 after the flake was finally diagnosed rather than tolerated.
+#:
+#: **Measured, 8 fenced runs against a warm pool:** the fence fires at 1.00 s and
+#: the request returns at 1.04-1.07 s. **Unwind costs 0.05 s**, which refutes the
+#: reading that would have made this a product finding — `flaky-fence-test-margin.md`
+#: feared the fence was slow to cancel an in-flight render, eating the 60 s of
+#: headroom between our 180 s fence and the 240 s ingress limit. It is not.
+#:
+#: The variance is entirely **outside** the fence: a healthy `/ok` control over
+#: the same session ran median 1.33 s and max 4.05 s, the outlier being a cold
+#: browser launch. That is what put a full-suite run at 3.78 s against the old
+#: 3 s ceiling — 1 failure in 10 recorded runs.
+#:
+#: So the fix is the one the task file argued for: widen the *gap between the
+#: fence and the origin's answer*, not the assertion's meaning. At 8 s the
+#: assertion still says "we returned before the origin could have answered",
+#: with ~7 s of slack for a cold launch instead of 2 s.
+#:
+#: **It costs the suite nothing.** The handler thread sleeps in the background on
+#: a `daemon_threads` server and the test returns in ~1 s; the eventual write to
+#: the closed socket is swallowed by `_Server.handle_error`.
+FENCE_STALL_S = 8
+
+
 def test_the_wall_clock_fence_is_a_504_and_ours(fixture_origin, production_path):
     """A stalled origin must hit the fence and be reported as our timeout, not
     as the origin's failure — `render_timeout` is one of the two classes that
@@ -970,14 +1040,16 @@ def test_the_wall_clock_fence_is_a_504_and_ours(fixture_origin, production_path)
     reproduce any future timeout class; no route change required.
     """
     outcome = production_path.crawl(
-        fixture_origin.url("/ok", stall=3),
+        fixture_origin.url("/ok", stall=FENCE_STALL_S),
         wall_clock_s=1,
         delay_before_return_html=SHORT_WAIT,
     )
 
     assert outcome.http_status == 504
     assert outcome.envelope is None
-    assert outcome.elapsed_s < 3, "the fence must fire before the origin answers"
+    assert (
+        outcome.elapsed_s < FENCE_STALL_S
+    ), "the fence must fire before the origin answers"
 
 
 # ── the realistic-page instrument (tasks/pool-residency-unbounded.md) ─────

@@ -1,7 +1,61 @@
 # The wall-clock fence test is load-flaky, and nobody has established why
 
-**Status:** Open, not started. Carved out of `cleaned-html-collapse-guard.md`'s
-verification notes on 2026-08-02, where it was a loose thread rather than a task.
+**Status:** DONE 2026-08-06 — diagnosed, then fixed. Carved out of
+`cleaned-html-collapse-guard.md`'s verification notes on 2026-08-02, where it was
+a loose thread rather than a task.
+
+---
+
+## The diagnosis, and it settles the question this file said to settle first
+
+The file insisted on separating **(1) harness overhead** from **(2) the fence is
+slow to unwind**, because they look identical from a red test and only (2) is a
+product finding. Measured, 8 fenced runs against a warm pool plus 5 healthy
+controls in the same session:
+
+| | |
+|---|---|
+| fence fires at | 1.00 s (its configured deadline) |
+| request returns at | 1.04 – 1.07 s |
+| **unwind cost** | **0.04 – 0.07 s** |
+| healthy `/ok` control, same session | median 1.33 s, **max 4.05 s** |
+
+**(2) is refuted.** The fence cancels an in-flight render in ~50 ms, so it does
+not eat the 60 s of headroom between our 180 s fence and the 240 s ingress
+limit. That was this file's reason for being worth more than its size, and it
+turns out not to be true — worth saying plainly.
+
+**(1) is confirmed, and located.** The variance is entirely *outside* the fence:
+the healthy control's 4.05 s outlier is a **cold browser launch**, ~2.7 s over
+the 1.33 s median. That is exactly what put a full-suite run at 3.78 s against
+the old 3 s ceiling.
+
+## What shipped
+
+`FENCE_STALL_S = 8` in `test_fixture_origin.py`, used for both the stall and the
+assertion — the fix this file argued for ("widen the *gap between the fence and
+the origin's answer*, not the assertion's meaning"). The assertion still reads
+"we returned before the origin could have answered", now with ~7 s of slack for
+a cold launch instead of 2 s.
+
+**The file's own cost warning was worth checking and is answered:** a longer
+server-side sleep costs the suite nothing. `_Server` is `daemon_threads = True`,
+so the handler sleeps in the background while the test returns in ~1 s.
+
+One thing this file did not anticipate: the abandoned handler eventually writes
+to a socket Chromium already closed, and `socketserver` printed that
+`BrokenPipeError` traceback to stderr **seconds later, in the middle of some
+other test's output**, where it reads like a real failure. At `stall=8` that
+misattribution gets worse, so `_Server.handle_error` now swallows the
+client-hung-up family and prints everything else — same reasoning as the
+`log_message` override next to it.
+
+**Observed rate before the fix:** 1 failure in 10 recorded full-suite runs
+(0/3 on 08-02, 0/3 on 08-05, 1/4 on 08-06).
+
+---
+
+## Original file below, unedited
 **Priority:** Medium, and higher than its size suggests — see "Why this is not
 cosmetic".
 **Effort:** S to fix, **but the diagnosis comes first and may not be S.**

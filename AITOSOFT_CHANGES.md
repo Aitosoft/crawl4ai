@@ -174,7 +174,7 @@ guard's docs already warn about (visible-text chars in vs markdown chars out are
 different units); it now applies to this counter too.
 
 `crawl4ai/js_snippet/remove_consent_popups.js` — which MAS sends on **every**
-request — ended with 18 generic substring selectors (`[class*="cookie-consent"
+request — ended with 20 generic selectors (18 substring patterns + `.cc-banner`/`.cc-window`) (`[class*="cookie-consent"
 i]` and friends) and called `el.remove()` on whatever they matched, with no
 guard on *what*. The Enfold WordPress theme writes `av-cookies-no-cookie-consent`
 onto `<html>` to mean **cookie consent is switched off on this site**, so we
@@ -190,7 +190,7 @@ missing, invisible to both repos by construction, because the element is removed
 
 | file | change |
 |---|---|
-| `crawl4ai/js_snippet/remove_consent_popups.js` | **Structural guard** — `documentElement`, `body` and `head` are never removed, whatever matched them (Phases 3 and 4). **The 18 generic selectors no longer remove anything**: they are a separate list that is *observed* and reported. Phase 5's `document.body.style` accesses are null-guarded. The snippet now **returns a report** |
+| `crawl4ai/js_snippet/remove_consent_popups.js` | **Structural guard** — `documentElement`, `body` and `head` are never removed, whatever matched them (Phases 3 and 4). **The 20 generic selectors no longer remove anything**: they are a separate list that is *observed* and reported. Phase 5's `document.body.style` accesses are null-guarded. The snippet now **returns a report** |
 | `crawl4ai/js_snippet/remove_overlay_elements.js` | Same structural guard. `backgroundColor.includes("rgba")` replaced with a real alpha test — see below. Null-guarded `document.body` |
 | `crawl4ai/async_crawler_strategy.py` | `remove_consent_popups(page, url)` takes the *requested* URL, reads the snippet's report, and logs it (`_report_consent_pass`). Detects a self-inflicted click-navigation by comparing `page.url` across the pass. The animation wait moved out of the `try` |
 | `deploy/docker/aitosoft_failure_class.py` | A capture with **no `<body>` element** is `render_defect` (200, terminal), not `render_error` (500, retried 3×) |
@@ -310,7 +310,7 @@ markup shapes in `cleaned-html-collapse-guard.md`, now our own JS).
 
 Three things, all small — the diagnosis itself reproduced exactly:
 
-1. **The task file proposed dropping the 18 generic selectors. Dropping them
+1. **The task file proposed dropping the 20 generic selectors. Dropping them
    silently would have thrown away the measurement the whole plan depends on.**
    Step 5 of the cross-repo plan branches on "declined-removal counter fires
    often / ~never", and a deleted selector cannot decline anything. They are kept
@@ -319,7 +319,7 @@ Three things, all small — the diagnosis itself reproduced exactly:
 2. **The structural guard and the generic drop were indistinguishable in test.**
    With the generics gone, the Enfold class matches nothing, so every
    `<html>`/`<body>` fixture would pass with the guard reverted. Added the
-   `named-root` shape (`<body id="cookie-notice">`, one of the *122 named*
+   `named-root` shape (`<body id="cookie-notice">`, one of the *120 named*
    selectors) so the guard has a test only it can pass.
 3. **The overlay fixture had to be small.** A full-width absolutely-positioned
    hero is removed by that script's *size* rule, which is legitimate — it would
@@ -427,6 +427,27 @@ with `ORIGIN FAILURE … failure_class=origin_unreachable` and a clean 200.
 The whole smoke ran on a **scale-from-zero replica** — container up at 07:55:39,
 first request served 07:55:57 — with `RenderGate` waits at 0.0 s and memory
 146 → 157 MB against an 85 % guard.
+
+### Two of our own numbers corrected on 2026-08-06, both by counting twice
+
+1. **The generic container list is 20, not 18** — 18 substring patterns plus
+   `.cc-banner` and `.cc-window`, which are the same kind of guess with a shorter
+   name. Named containers are **120, not 122**. The 140 total was right; only the
+   split was wrong, and it was wrong in every file we had written.
+2. **Kübler's segment-1 cost was 196.9 s / 20.7 %, not 266.5 s / 26.1 %.** We
+   summed all sixteen `[COMPLETE]` lines; eight of those are the first Playwright
+   leg **nested inside** the same request's total — the double-`[COMPLETE]`
+   behaviour we had documented ourselves in `tmp/mas-repo-messages/14-…` and then
+   failed to apply to our own arithmetic. Measured both sides of the ratio the
+   same way; the priority it set is unchanged, it was over-stated by a quarter.
+
+**The 32 navigations figure does NOT move** and was never inflated by the
+`max_retries` docs error: it is a count of `[FETCH]` lines, and the 16
+`Anti-bot retry 1/1` lines in the same window confirm `max_retries: 1` on the
+wire. At 2 it would have been 48.
+
+Both errors were summing the wrong rows, not measuring the wrong thing. Neither
+was caught by review; both were caught by counting a second time.
 
 ### To check first in segment 2
 
