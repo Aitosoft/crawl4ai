@@ -7,9 +7,10 @@ production on the host it was diagnosed from**.
 
 **Read this first: we no longer gate MAS's sweep, and the ball is with them.**
 `0.9.2-consent-guard` is live as `--0000037`. What is outstanding on our side is
-**one relay**: `tmp/mas-repo-messages/22-…`, which carries the window, the
-wire-status change and the counter-reading guide. Segment 2 cannot start until
-they have it.
+**two relays**: `tmp/mas-repo-messages/22-…` (the image, the wire-status change,
+the counter-reading guide) and `24-…` (their questions answered — the verbatim
+selector lists they need before segment 2's join can work). Segment 2 cannot
+start until they have both.
 
 **Do not start anything large before that relay lands.** Segment 2 is the
 measurement the next several decisions branch on (see "What step 5 branches on"),
@@ -284,7 +285,7 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 | ~~2~~ | ~~`total-loss-is-permanent-not-transient.md`~~ | S | **DONE 2026-08-06, undeployed.** `tasks/done/`. Keyed on the **capture shape** (no `<body>`), not the reason string — one test covers both production signatures, which two reason strings could not. Nothing pinned the old 500, so it was a bug fix and not a contract change. |
 | 3 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 66 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some tests to change behaviour, and treat that as the payoff. The count moved from 54 to 66 with the `/consent/*` routes. |
 | 4 | `guard-corpus-is-not-in-the-repo.md` | S | **After the sweep.** Real and verified — `test-aitosoft/artifacts/*` is gitignored, three tests fail on a fresh clone at `assert checked >= 30`. But its load-bearing sentence is **wrong**: "our only pre-deploy gate is the offline suite" is false (see corrections below), and it fails *loud*, in the safe direction. If ever done: 4–6 files into `artifacts/keep/`, the mechanism `.gitignore:14-17` already provides. Do **not** open its four-option sizing table before the sweep. **Item 1 raised its value slightly**: the 7-host corpus is load-bearing for a claim about consent selectors, and 2 of 2 CMP measurements is thin — though the `CONSENT DECLINED` counter now answers that from production instead. |
-| 5 | `flaky-fence-test-margin.md` | S | **After the sweep.** Now **1 failure in 10** recorded full runs — it fired again on 2026-08-06 at `elapsed_s == 3.78` against `< 3`, and passed on re-run. Its "this might be a product finding about the 240 s ingress limit" fear is **refuted from code**: the unwind is bounded at 10 s by our own `PAGE_CLOSE_TIMEOUT_S` (`async_crawler_strategy.py:49`), so worst case is 180 + ≤10 ≈ 190 s, ~50 s inside the limit. The line number moved again, to `test_fixture_origin.py:974` — it has now been wrong in this table twice, which is an argument for citing the test name and not the line. Fix is to raise `stall` and the assertion together. **Deliberately not bundled into the consent image**: a parked test-margin fix does not belong in a gating deploy. |
+| ~~5~~ | ~~`flaky-fence-test-margin.md`~~ | S | **DONE 2026-08-06.** `tasks/done/`. Diagnosed before it was fixed, as the file demanded: the fence unwinds in **0.05 s**, so the product-finding reading is refuted; the variance is a cold browser launch *outside* the fence (healthy control median 1.33 s, max 4.05 s). Fixed by `FENCE_STALL_S = 8`, which widens the gap rather than the assertion's meaning, and costs the suite nothing. |
 
 **Old items 1 and 2 are gone.** Item 1 (`content_source="raw_html"`) was priced
 2026-08-05 and the answer is no — it is recorded in
@@ -323,7 +324,7 @@ see** (agreed in `tmp/mas-repo-messages/20-…` §6, accepted in `21-…` §4).
 |---|---|---|---|
 | ~~1~~ | **us** | **DONE 2026-08-06** — `0.9.2-consent-guard`, `--0000037`. Tier 1 4/4, prod smoke green, `kubler.fi` proved in production | It was the only thing that stopped data loss, and a 50-company run was held on it |
 | ~~2~~ | **us, same image** | **DONE.** `CONSENT DECLINED` / `CONSENT STRUCTURAL` / `CONSENT NAVIGATION`, each carrying the requested URL beside the current one — verified firing in production | **A segment runs once.** Neither archive can hold this population — the element is deleted before capture — so segment 2 is the measurement, and a counter that missed this image would have waited for segment 3 |
-| **now** | **Tero** | **Relay `tmp/mas-repo-messages/22-…`** | Nothing downstream can start without it. It carries the window, the wire-status change, and §3's correction to how the counter must be read |
+| **now** | **Tero** | **Relay `tmp/mas-repo-messages/22-…` and `24-…`** | Nothing downstream can start without them. 22 carries the window, the wire-status change and §3's correction to how the counter must be read; 24 carries the verbatim selector lists, without which their half of the joint count measures a different population than ours |
 | 3 | **them, after our image** | The `remove_consent_popups` A/B, **three arms**: off / on-today / on-with-fix | A two-arm result answers "is the flag worth keeping", which does not change what we build. The third arm answers "does narrowing the selectors cost consent-wall coverage", which is the one thing our 7-host corpus cannot settle. Running it earlier burns a round of their traffic on the wrong question |
 | 4 | **them** | Segment 2, 50 companies, counter live, window announced first | 50 rather than 25 because our own measurement says the *activation count* costs, not the companies: 23 replicas for 25 companies, five of them serving 1–3 requests in an ~8-minute life, ~9 minutes of idle tail after the last render |
 | 5 | **us** | Read the counter and decide what it changed | Branches below — this is the step most likely to reorder everything after it |

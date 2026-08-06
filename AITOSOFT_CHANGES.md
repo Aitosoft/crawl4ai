@@ -107,17 +107,19 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- **`pytest test-aitosoft/` = 305 tests, ~270 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
+- **`pytest test-aitosoft/` = 306 tests, ~250 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
 - Pure-function subset: **239 tests, ~30 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
-- Browser-driven subset: test_fixture_origin.py (66), against a local fixture origin, ~235 s
-- **`test_the_wall_clock_fence_is_a_504_and_ours` is a known flake** and it is now
-  **1 failure in 10** recorded full runs (it failed the 2026-08-06 run at
-  `elapsed_s == 3.78` against a `< 3` assertion, and passed on re-run).
-  Diagnosis and the two-constant fix: `tasks/flaky-fence-test-margin.md`. Left
-  parked on purpose — it is a test margin, it fails loud and in the safe
-  direction, and it is not worth adding to a gating image. Re-run it before
-  reading a red suite as a regression. Its line number moved again, to
-  `test_fixture_origin.py:974`.
+- Browser-driven subset: test_fixture_origin.py (67), against a local fixture origin, ~215 s
+- **The fence test's flake is FIXED (2026-08-06)** after being diagnosed rather
+  than tolerated. It had reached 1 failure in 10 full runs. Measured: the fence
+  fires at 1.00 s and the request returns at 1.04-1.07 s, so **unwind costs
+  0.05 s** — which refutes the reading that would have made it a product finding
+  (a fence slow to cancel would eat the 60 s between our 180 s fence and the
+  240 s ingress limit). The variance is entirely outside the fence: a healthy
+  `/ok` control ran median 1.33 s, **max 4.05 s**, the outlier a cold browser
+  launch. Fixed by `FENCE_STALL_S = 8`, which widens the gap between fence and
+  origin rather than the assertion's meaning, and costs the suite nothing.
+  `tasks/done/flaky-fence-test-margin.md`.
 
 ---
 

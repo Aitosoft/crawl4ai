@@ -48,9 +48,9 @@ curl http://localhost:11235/health
 pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
 # Testing (run from repo root — relative artifact paths; see TESTING.md)
-pytest test-aitosoft/            # ALL offline suites, 305 tests, ~270 s — no server, no customer site
+pytest test-aitosoft/            # ALL offline suites, 306 tests, ~250 s — no server, no customer site
 pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # pure-function subset, 239 tests, ~30 s
-pytest test-aitosoft/test_fixture_origin.py   # browser-driven, local fixture origin, 66 tests, ~235 s
+pytest test-aitosoft/test_fixture_origin.py   # browser-driven, local fixture origin, 67 tests, ~215 s
 python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression (live server)
 python test-aitosoft/test_site.py <domain> --page <path>            # Single site (live server)
 python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic (live server)
