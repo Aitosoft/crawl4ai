@@ -600,10 +600,22 @@ message and it is worth honouring: their ledger numbers diverged from ours (our
 "13" is their "11"; they have no 12 or 13), and the mismatch is part of why our
 14 sat unread for two days.
 
+**`22-to-mas-the-image-is-out-and-here-is-how-to-read-the-counter.md` is written
+and needs relaying.** It announces the image and the one wire-status change
+(`render_defect` at 200 for a deleted root), delivers their `21-…` §6 ask (the
+requested URL beside the current one in every counter line), and asks for two
+things: the **three-arm** A/B (off / on-today / on-with-this-image — arm 3 is
+the only one that answers anything we cannot) and segment 2 with the window
+announced first. Its §3 corrects our own plan: the `chars`/`pagechars` **ratio
+does not separate** a wrapper holding contacts (9.4 %) from a genuine cookie bar
+(7.3 %) — read `node` and `class` first, absolute `chars` second, the ratio
+last. Its §5 table says in advance what each counter outcome would make us do,
+so nobody has to guess when the numbers land.
+
 **The 2026-08-05/06 exchange (`17-…` through `21-…`) is the densest we have had
 and most of it is settled.** Read `20-…` if you read one — it is ours, it carries
-every measurement behind `consent-scripts-delete-the-page.md`, and its §6 is the
-division of labour both sides then agreed to. What closed:
+every measurement behind `done/consent-scripts-delete-the-page.md`, and its §6 is
+the division of labour both sides then agreed to. What closed:
 
 - **`16-…` §0 landed and works.** Three genuinely dead domains came back
   `origin_unreachable` and MAS's agent filed them as *"this company has no
