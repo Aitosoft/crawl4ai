@@ -7,8 +7,21 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-08-05
+**Last Updated**: 2026-08-06
 
+> **Deployed 2026-08-06: `0.9.2-consent-guard` (revision `--0000037`).** Our own
+> consent JS was deleting customer pages; the fix, its three counters, and
+> `render_defect` at 200 for a deleted root. **One wire-status change**: a
+> capture with no `<body>` is now `render_defect` at HTTP 200 (terminal) instead
+> of `render_error` at 500 (retried 3x). Pre-agreed with MAS
+> (`19-…` §1, `21-…` §1). Proof on the diagnosed host, the smoke, and how to
+> read the counter: the 2026-08-06 section below.
+>
+> **MAS's segment 2 (50 companies) is unblocked.**
+> `tmp/mas-repo-messages/22-to-mas-the-image-is-out-and-here-is-how-to-read-the-counter.md`
+> needs relaying — it carries the window, the wire-status change, and the
+> counter-reading guide.
+>
 > **Deployed 2026-08-05: `0.9.2-egress-dns-fix`.** The egress-path work —
 > blocking DNS off the event loop, `RES_OPTIONS`, and two misattributions. It
 > carries **one wire-status change**: a domain that does not resolve is now
@@ -60,9 +73,9 @@ Keeping this log helps when syncing with upstream updates.
 
 ### Version
 - **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below). **`main` is one image ahead of production**: the consent-JS fix + `render_defect` for a deleted root are committed and undeployed (2026-08-06)
-- **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result + the egress-path work (deployed 2026-08-05)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-egress-dns-fix` (revision `crawl4ai-service--0000036`, deployed 2026-08-05)
-- **Previous**: `0.9.2-collapse-recovery` (revision `--0000034`, deployed 2026-08-02, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`). **Revision `--0000035` (`0.9.2-egress-dns`) is a burned tag** — it shipped a `NameError` and lasted 8 minutes; do not roll back to it.
+- **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result + the egress-path work + **the consent-JS guard and its counters** (deployed 2026-08-06)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-consent-guard` (revision `crawl4ai-service--0000037`, deployed 2026-08-06, digest `sha256:4ad6e11634a5c14b07faac9ba434cef73ff120a89f579b80ecf4be37f325c215`)
+- **Previous**: `0.9.2-egress-dns-fix` (revision `--0000036`, deployed 2026-08-05) — the rollback target. Before that, `0.9.2-collapse-recovery` (revision `--0000034`, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`). **Revision `--0000035` (`0.9.2-egress-dns`) is a burned tag** — it shipped a `NameError` and lasted 8 minutes; do not roll back to it.
 - **Prod smoke 2026-08-05 (egress-dns-fix)**: health 200 (0.20 s) ✅, unauthenticated POST /crawl → 401 ✅, render-capacity invariant ✅, revision `--0000036` **Running at 100 % with `--0000035` Deprovisioning — checked before the crawl** ✅. **Tier 1 regression 4/4** ✅.
   **The check that was worth running, and it is now a habit:** a crawl of a *lapsed* domain — HTTP 200, `success:false`, `failure_class: origin_unreachable`, `"DNS: host does not resolve"`, 0.23 s. It exercises the whole egress path and **contacts no third party**, because the name does not resolve. It is also what caught the `NameError` in `--0000035` eight minutes after that deploy, when four green test suites and a green CI run had not.
   **The negative check matters as much:** `169.254.169.254` and `127.0.0.1:8080` both still return 400 `URL blocked (SSRF protection)`. The change moved *only* "there is no address at all" out of that bucket; the security verdict is untouched.
@@ -110,8 +123,55 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Our own consent JS deleted customer pages (2026-08-06)
 
-**Committed, NOT deployed.** One wire-status change; see "The contract change"
-below. MAS is holding segment 2 (50 companies) on this image.
+**DEPLOYED 2026-08-06 as `0.9.2-consent-guard`, revision `--0000037`**, digest
+`sha256:4ad6e11634a5c14b07faac9ba434cef73ff120a89f579b80ecf4be37f325c215`.
+Tier 1 4/4 pre-deploy; prod smoke below. One wire-status change; see "The
+contract change". MAS's segment 2 (50 companies) is unblocked —
+`tmp/mas-repo-messages/22-…` needs relaying.
+
+### The proof, in production, on the host it was diagnosed from
+
+`www.kubler.fi` — the confirmed Enfold host, **15 bytes at HTTP 500** before
+this image, 8 requests / 32 navigations / 266 s in segment 1:
+
+```
+HTTP 200  success=true  failure_class=none  html=314,807 B  markdown=55,545 chars
+5 contact emails (jani-pekka.rulamo@, jukka.mustakallio@, jussi.siira@,
+kimmo.kuusinen@, kubler@)  ·  2 phone numbers  ·  4.6 s
+```
+
+**And it was our fix that did it, not the site changing under us** — which is
+the check worth insisting on, because "it works now" is not evidence of why.
+Three independent confirmations:
+
+1. `av-cookies-no-cookie-consent` **is still on `<html>`** in the live capture
+   (item 25 of 39 in the class list, which is why it is easy to miss in a
+   truncated dump).
+2. The production log line, verbatim:
+
+```
+CONSENT DECLINED: requested=https://www.kubler.fi url=https://kubler.fi/ n=1
+chars=2634 pagechars=2634 selector=[class*="cookie-consent" i] node=html id=
+class=html_stretched responsive av-preloader-disabled … structural=True
+```
+
+3. `structural=True`, `node=html`, `chars == pagechars` — the selector matched
+   the document root and 100 % of the page's text. That is the deletion, caught
+   at the point of removal instead of after it.
+
+The line also earns its two design decisions in one shot: **the requested URL
+differs from the current one** (`www.kubler.fi` → `kubler.fi/`, an ordinary
+redirect, but the join key MAS asked for in `21-…` §6 would have been lost
+otherwise), and **the selector survived intact** — on the rich console it would
+have rendered as the empty string.
+
+**A unit warning, from the same line.** `pagechars` is
+`document.body.innerText`: **rendered visible text**, no link URLs, no hidden or
+collapsed content. It is *not* markdown length and must never be compared with
+one. Kübler reads `pagechars=2634` against `markdown=55,545` — and 48,673 of
+those markdown characters are `[text](url)` constructs. Same trap the collapse
+guard's docs already warn about (visible-text chars in vs markdown chars out are
+different units); it now applies to this counter too.
 
 `crawl4ai/js_snippet/remove_consent_popups.js` — which MAS sends on **every**
 request — ended with 18 generic substring selectors (`[class*="cookie-consent"
@@ -331,18 +391,48 @@ here is **absolute `chars`** (1,168 vs 92) and, more tellingly, **`node`** — a
 individual hits: its job is to size the population, and only the *content* of
 the removed element decides whether a removal would have been loss.
 
-### To check first after deploy
+### Prod smoke 2026-08-06 (consent-guard)
 
-1. A crawl of `/consent/inner`'s real-world equivalent is not available, so use
-   the log split instead: `CONSENT DECLINED` should appear at a non-trivial rate
-   in the first sweep segment, and `CONSENT STRUCTURAL` should appear **never**.
-   A `CONSENT STRUCTURAL` line means a named vendor selector is also unsafe.
-2. `kubler.fi` — the confirmed Enfold host, and the one live check worth the
-   request. Expect HTTP 200, `success: true`, real markdown. Before this image it
-   was 15 bytes at 500, twice per sweep, for 26 % of a run's render seconds.
+Taken **after** `--0000037` reached 100 % with `--0000036` Deprovisioning, per
+the 2026-07-30 mid-cutover lesson.
+
+| check | result |
+|---|---|
+| `/health` | 200 in 0.17 s ✅ |
+| unauthenticated `POST /crawl` | 401 ✅ |
+| render-capacity invariant | `render_capacity=2` == `http-renders` rule ✅ |
+| SSRF negatives (`169.254.169.254`, `127.0.0.1:8080`) | both 400 ✅ — the change touched nothing here |
+| lapsed domain (the `NameError` canary from 08-05) | 200, `origin_unreachable`, `DNS: host does not resolve`, 0.15 s ✅ |
+| `caverna.fi` — clean control | 200, `success: true`, `none`, 532 chars, 4.4 s ✅ |
+| **`www.kubler.fi`** | **200, `success: true`, `none`, 55,545 chars, 5 emails** ✅ |
+
+**Two live third-party requests for the whole deploy**, and both were the ones
+that could not be answered any other way: `caverna.fi` proves the *built image*
+renders through real Chrome (the pre-deploy Tier 1 ran on arm64/Chromium, so
+the engine was genuinely untested), and `kubler.fi` proves the fix on the host
+it was diagnosed from. `kubler.fi` is on the burned list as of this session.
+
+Incidental but useful: the capture's `<html>` carries `avia-chrome-138`, i.e.
+the deployed amd64 image really is driving **Chrome 138**, not bundled Chromium.
+That is the one thing a local Tier 1 run structurally cannot check.
+
+### To check first in segment 2
+
+1. **`CONSENT DECLINED` rate, and `node`/`class` on each.** A `<footer>` /
+   `<section>` / `<main>` match is a page region and points at the silent
+   channel; a `<div class="cookie-notice-bar">` is a banner and is a removal we
+   are now correctly skipping. Read `node` and `class` before `chars`, and
+   `chars` before the ratio — see the ratio caveat above.
+2. **`CONSENT STRUCTURAL` should appear never**, other than on Enfold-shaped
+   hosts where the *generic* pass reports `structural=True`. A line naming one
+   of the 122 **named** vendor selectors means that list has the same defect the
+   generic one had, and it wants looking at immediately rather than at the end
+   of the segment.
 3. `RESULT FAILURE … failure_class=render_defect` at **200**, not 500. If it
    fires at all after this image, a mechanism nobody has identified is still
    deleting documents — that is a new investigation, not a tuning exercise.
+4. `origin_blocked` **per segment**. A rate that climbs segment over segment is
+   IP-reputation decay and should stop the sweep. Segment 1's baseline was 0.
 
 ---
 

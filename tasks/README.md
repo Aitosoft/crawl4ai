@@ -1,25 +1,20 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-06 (second update that day), after items 1 and 2 were
-implemented. MAS's segment 1 (25 companies) and a five-message exchange found a
-defect of ours large enough to reorder the whole list; the fix is now written,
-tested and **committed but not deployed**.
+**Updated:** 2026-08-06 (third update that day), after items 1 and 2 shipped.
+MAS's segment 1 (25 companies) and a five-message exchange found a defect of ours
+large enough to reorder the whole list; it is now fixed, deployed and **proved in
+production on the host it was diagnosed from**.
 
-**Read this first: we gate MAS's sweep, and the code half is done.** Segment 2
-(50 companies) is held until the consent-JS image is **out**, not until it is
-written — so the next action is a deploy decision, not a task file. Everything
-else in this file is downstream of that. The cross-repo sequence, with the
-reasoning behind each step, is in "The plan across both repos" below; it is the
-section to revisit first if something unexpected happens, because every later
-step is conditional on an earlier measurement.
+**Read this first: we no longer gate MAS's sweep, and the ball is with them.**
+`0.9.2-consent-guard` is live as `--0000037`. What is outstanding on our side is
+**one relay**: `tmp/mas-repo-messages/22-…`, which carries the window, the
+wire-status change and the counter-reading guide. Segment 2 cannot start until
+they have it.
 
-**Where step 1 stands.** `main` now carries the consent-JS fix and
-`render_defect` for a deleted root (`tasks/done/consent-scripts-delete-the-page.md`,
-`tasks/done/total-loss-is-permanent-not-transient.md`). Offline gate green: 239
-pure-function + 66 browser-driven, both halves verified **red without the fix**.
-Not yet done and required before the image ships: **Tier 1, 4/4, live** —
-`accountor.com` is the one live instrument for "did we break consent-wall
-removal", so it is not optional for this change in particular.
+**Do not start anything large before that relay lands.** Segment 2 is the
+measurement the next several decisions branch on (see "What step 5 branches on"),
+it runs once, and reading it is the work. The cross-repo sequence with the
+reasoning behind each step is in "The plan across both repos" below.
 
 **This file holds ordering, gating and current state — nothing else.** The
 reasoning lives in each task file, the evidence in
@@ -37,15 +32,25 @@ parked deliberately, not waiting for a free session.
 
 ## Where we actually are
 
-**Production is `0.9.2-collapse-recovery`, revision `--0000034`** (deployed
-2026-08-02, Tier 1 4/4, zero guard fires on the four live pages), 2 vCPU / 4 GiB,
-`minReplicas: 0`, `maxReplicas: 30`, scale rule 2 concurrent/replica.
+**Shape, unchanged since 2026-08-02:** 2 vCPU / 4 GiB, `minReplicas: 0`,
+`maxReplicas: 30`, scale rule 2 concurrent/replica.
 
-**Production is `0.9.2-egress-dns-fix`, revision `--0000036`** (deployed
-2026-08-05, Tier 1 4/4). `main` and production are in sync again. It carries one
-**wire-status change**: a dead domain is `origin_unreachable` at 200, not an SSRF
-400. MAS has been told, in
-`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md` §0.
+**Production is `0.9.2-consent-guard`, revision `--0000037`** (deployed
+2026-08-06, Tier 1 4/4 pre-deploy, prod smoke green). `main` and production are
+in sync. It carries one **wire-status change**: a capture with no `<body>` is
+`render_defect` at 200 (terminal), not `render_error` at 500 (retried 3x).
+Pre-agreed with MAS; announced in `tmp/mas-repo-messages/22-…`, **which still
+needs relaying**.
+
+**`www.kubler.fi` is the proof and it is in production.** 15 bytes at HTTP 500
+before this image; **55,545 chars of markdown and 5 contact emails after**, with
+`av-cookies-no-cookie-consent` still on `<html>` and the guard's own log line
+naming it (`node=html structural=True chars=2634 pagechars=2634`). The site did
+not change; we did.
+
+`--0000036` (`0.9.2-egress-dns-fix`, 2026-08-05) is the rollback target. It
+carried its own wire-status change — a dead domain is `origin_unreachable` at
+200, not an SSRF 400 (`16-…` §0).
 
 **Revision `--0000035` is a burned tag** — it shipped a `NameError` and lasted
 8 minutes. Do not roll back to it; `--0000034` is the last good prior image.
@@ -316,8 +321,9 @@ see** (agreed in `tmp/mas-repo-messages/20-…` §6, accepted in `21-…` §4).
 
 | # | who | what | why here and not elsewhere |
 |---|---|---|---|
-| 1 | **us** | ~~Write~~ **Deploy** items 1 + 2 as one image. Code done 2026-08-06; remaining gate is **Tier 1 4/4, live** | It is the only thing that stops data loss, and a 50-company run is held on it. Everything else in this table is measurement. `accountor.com` is the live instrument for "did we break consent-wall removal" and this is the change that could |
-| 2 | **us, same image** | ~~Build~~ **Done.** The counter: `CONSENT DECLINED` / `CONSENT STRUCTURAL` / `CONSENT NAVIGATION`, each carrying the requested URL beside the current one | **A segment runs once.** Neither archive can hold this population — the element is deleted before capture — so segment 2 is the measurement, and a counter that misses this image waits for segment 3 |
+| ~~1~~ | **us** | **DONE 2026-08-06** — `0.9.2-consent-guard`, `--0000037`. Tier 1 4/4, prod smoke green, `kubler.fi` proved in production | It was the only thing that stopped data loss, and a 50-company run was held on it |
+| ~~2~~ | **us, same image** | **DONE.** `CONSENT DECLINED` / `CONSENT STRUCTURAL` / `CONSENT NAVIGATION`, each carrying the requested URL beside the current one — verified firing in production | **A segment runs once.** Neither archive can hold this population — the element is deleted before capture — so segment 2 is the measurement, and a counter that missed this image would have waited for segment 3 |
+| **now** | **Tero** | **Relay `tmp/mas-repo-messages/22-…`** | Nothing downstream can start without it. It carries the window, the wire-status change, and §3's correction to how the counter must be read |
 | 3 | **them, after our image** | The `remove_consent_popups` A/B, **three arms**: off / on-today / on-with-fix | A two-arm result answers "is the flag worth keeping", which does not change what we build. The third arm answers "does narrowing the selectors cost consent-wall coverage", which is the one thing our 7-host corpus cannot settle. Running it earlier burns a round of their traffic on the wrong question |
 | 4 | **them** | Segment 2, 50 companies, counter live, window announced first | 50 rather than 25 because our own measurement says the *activation count* costs, not the companies: 23 replicas for 25 companies, five of them serving 1–3 requests in an ~8-minute life, ~9 minutes of idle tail after the last render |
 | 5 | **us** | Read the counter and decide what it changed | Branches below — this is the step most likely to reorder everything after it |

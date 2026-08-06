@@ -2,7 +2,7 @@
 
 **Purpose:** Shared registry of Finnish SME websites for testing crawl4ai capabilities. Used by both `crawl4ai-aitosoft` and `aitosoft-platform` (MAS) repos.
 
-**Last Updated:** 2026-07-16
+**Last Updated:** 2026-08-06
 
 **CRITICAL SAFETY RULE:** never hit a site more than 1-2 times per session.
 Over-scraping got us permanently Cloudflare-blocked on talgraf.fi. Rotate sites.
@@ -46,6 +46,7 @@ tempted by exactly this list — don't.
 | **magicad.com** | 3 | challenge-family probe | `test_antibot_challenge_detection.py` (fixtures from MAS's stored samples) |
 | **savagroup.fi**, **palsatech.fi**, **pajala.fi**, **recset.fi** | 1 each | challenge-family probes, MAS-nominated | as above |
 | **anitamakela.com** | 1 | origin's own zero-byte Apache 500 | `test_failure_classification.py` |
+| **www.kubler.fi** | 1 (ours, 2026-08-06) | the confirmed Enfold host: `av-cookies-no-cookie-consent` on `<html>` made our own consent JS delete the document — 15 bytes at HTTP 500. One post-deploy request to prove the fix, and it did: 314,807 B of HTML, 55,545 chars of markdown, 5 contact emails, HTTP 200 | `test-aitosoft/fixture_origin.py` `/consent/{shape}` — the Enfold class verbatim on `<html>`, `<body>` and an inner wrapper, driven through the real production path. **There is nothing left to ask this host.** MAS also hit it 8 times in segment 1 |
 
 **Standing rule:** never live-test a host MAS has classified `blocked` or
 `challenge` in `tmp/crawl4ai-affected-hosts.txt`. Probing a host that is
