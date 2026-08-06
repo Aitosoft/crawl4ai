@@ -71,7 +71,7 @@ Test these when working on specific features:
 
 | Site | Purpose | What It Tests |
 |------|---------|---------------|
-| **accountor.com/fi/finland** | Cookie wall bypass | `remove_consent_popups: true` (NOT magic — magic removes content and is rejected by the v0.9.x server) |
+| **accountor.com/fi/finland** | Cookiebot CMP present; **NOT the "cookie wall bypass" case this row claimed** | Corrected 2026-08-06: the 2026-01 failure was our own `remove_overlay_elements` flag, not the CMP. Today no `CybotCookiebotDialog` **element** appears in any successful capture, `evästeet` appears 0 times in the markdown, and the site produces **zero** generic consent matches — so what this site actually tests is a large real page with CMP *scripts*. Still `optimal`. **NOT magic — because magic removes content; the server does not reject it** (`aitosoft_trust.py:44-49`). One request with `remove_consent_popups: false` would settle whether the flag does any work here |
 | **solwers.com** press releases | Press contact extraction | Phone in +358 format, press contact info |
 | **neuroliitto.fi** | Deep navigation | Contacts 3+ levels deep in site structure |
 

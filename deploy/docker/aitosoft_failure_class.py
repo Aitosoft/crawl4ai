@@ -191,10 +191,24 @@ _BLOCKED_RE = re.compile(
 #
 # The second is RENDER_ERROR's definition, not ORIGIN_BLOCKED's. MAS measured
 # the consequence on 2026-07-31: 4 of their 33 `origin_blocked` verdicts were
-# this, and the expensive one was `norex.com`, where the body was **our own**
-# `Crawl4AI Error: This page is not fully supported` placeholder in 15 bytes of
-# HTML — our pipeline's failure reported to the customer as the origin blocking
-# them. This module's documented bias (see "Classification bias" above) is that
+# this, and the expensive one was `norex.com`.
+#
+# `norex.com` is worth stating precisely, because the loose phrasing that used to
+# be here ("our own placeholder in 15 bytes of HTML") conflates TWO FIELDS and
+# cost four sessions, each of which went looking at the anti-bot tier when the
+# cause was our own DOM handling:
+#   * `html` was **15 bytes** — a bare `<!DOCTYPE html>`, because a script had
+#     removed `documentElement`. That is the *input*.
+#   * `Crawl4AI Error: This page is not fully supported` is what our **scraper
+#     generated from** those 15 bytes, once lxml raised `Document is empty`.
+#     That is the *output*, and it is not in the 15 bytes.
+# Both statements were individually true; read as one they describe a page that
+# never existed. The 2026-08-06 consent-guard work found the actual cause — our
+# own `remove_consent_popups.js` deleting the root (`tasks/done/
+# consent-scripts-delete-the-page.md`). Whatever the input, the outcome was our
+# pipeline's failure reported to the customer as the origin blocking them.
+#
+# This module's documented bias (see "Classification bias" above) is that
 # an unrecognised failure is ours and never an origin class, "precisely so that
 # a healthy site is never reported permanently broken". This was that guarantee
 # running backwards.

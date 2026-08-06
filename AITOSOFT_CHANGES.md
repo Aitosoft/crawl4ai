@@ -17,10 +17,20 @@ Keeping this log helps when syncing with upstream updates.
 > (`19-…` §1, `21-…` §1). Proof on the diagnosed host, the smoke, and how to
 > read the counter: the 2026-08-06 section below.
 >
-> **MAS's segment 2 (50 companies) is unblocked.**
-> `tmp/mas-repo-messages/22-to-mas-the-image-is-out-and-here-is-how-to-read-the-counter.md`
-> needs relaying — it carries the window, the wire-status change, and the
-> counter-reading guide.
+> **MAS's segment 2 RAN on 2026-08-06 (13:46–14:36 UTC) and is fully read** —
+> `tasks/done/segment-2-counter-readout.md`. 50 companies, 61 domains, **274
+> requests / 261 render admissions**, and the two repos reconcile
+> request-by-request. **No code change came out of it.** Headlines: 27 declined
+> root removals on 3 companies (12.9 % of stored pages) that were 15-byte
+> captures at 500 on the prior image; the silent inner channel **0**;
+> `CONSENT STRUCTURAL` **0**; genuine click-navigations **0**; 0 fence-504 /
+> janitor / memory refusal / collapse-guard fire, the **fourth** consecutive
+> clean workload. **All 12 of the run's 500s came from two URLs**, neither a real
+> render failure — that plus the patchright-retry waste are the only open items
+> (`tasks/README.md` 6–8), and both are cost, not data loss. Recap sent as
+> `tmp/mas-repo-messages/28-…`, which also corrects a shared premise: MAS's
+> `--concurrency 2` bounds **companies, not renders** (peak 7 in flight), and
+> **their flag is free up to ~15** against our 60-render fleet ceiling.
 >
 > **Deployed 2026-08-05: `0.9.2-egress-dns-fix`.** The egress-path work —
 > blocking DNS off the event loop, `RES_OPTIONS`, and two misattributions. It
@@ -460,9 +470,14 @@ was caught by review; both were caught by counting a second time.
    `chars` before the ratio — see the ratio caveat above.
 2. **`CONSENT STRUCTURAL` should appear never**, other than on Enfold-shaped
    hosts where the *generic* pass reports `structural=True`. A line naming one
-   of the 122 **named** vendor selectors means that list has the same defect the
+   of the **120** named vendor selectors means that list has the same defect the
    generic one had, and it wants looking at immediately rather than at the end
-   of the segment.
+   of the segment. **Segment 2 result: zero, across 261 renders** — the named
+   list holds. (This line said 122 until 2026-08-06, contradicting the
+   correction 26 lines above it. Counted by tokenizing the arrays: **86 + 12**
+   accept selectors, **120 named + 20 generic** containers = 140. Naive quote
+   regexes get this wrong because the selectors contain embedded quotes, e.g.
+   `'[class*="cookie-consent" i]'`.)
 3. `RESULT FAILURE … failure_class=render_defect` at **200**, not 500. If it
    fires at all after this image, a mechanism nobody has identified is still
    deleting documents — that is a new investigation, not a tuning exercise.
@@ -789,10 +804,18 @@ from its body; the gate change alone would not have caught it either.
 | we inferred it from shape | `Structural: minimal_text…`, `Near-empty content…` | *we* came back with nothing |
 
 The second is `render_error`'s definition. 4 of MAS's 33 `origin_blocked`
-verdicts were this, and the expensive one was **`norex.com`**, where the body
-was **our own** `Crawl4AI Error: This page is not fully supported` placeholder
-in 15 bytes of HTML — our pipeline's failure reported to the customer as the
-origin blocking them. This module's documented bias ("unrecognised failures are
+verdicts were this, and the expensive one was **`norex.com`**.
+
+**Stated precisely, because the phrasing that stood here until 2026-08-06
+conflated two fields and cost four sessions:** `html` was **15 bytes** — a bare
+`<!DOCTYPE html>`, a script having removed `documentElement` — and
+`Crawl4AI Error: This page is not fully supported` is what our scraper
+**generated from** those 15 bytes after lxml raised `Document is empty`. Input
+and output, not one thing. Read as one they describe a page that never existed,
+which is why four sessions inspected the anti-bot tier instead of our own DOM
+handling; the real cause turned out to be `remove_consent_popups.js` deleting
+the root (2026-08-06). Either way it was our pipeline's failure reported to the
+customer as the origin blocking them. This module's documented bias ("unrecognised failures are
 `render_error` and never an origin class, precisely so that a healthy site is
 never reported permanently broken") was running backwards.
 
@@ -1938,6 +1961,17 @@ defaults broke MAS's existing contract; we relax exactly those at import time:
    wall-clock deadline anyway).
 
 **Behavior changes MAS must know about** (see cross-repo message 2026-07-16):
+
+> **⚠ SUPERSEDED — two of the four bullets below are no longer true.** This is a
+> historical entry and is left intact on purpose, but a clean-context session
+> reading it will be misled, so: (1) `magic`, `simulate_user` and
+> `override_navigator` are **accepted**, not rejected — `aitosoft_trust.py:44-49`
+> un-forbids them for our trusted client, and `:51-63` **drops** falsy forbidden
+> fields rather than 400ing. `js_code` and proxy fields still 400 when truthy.
+> (2) Dead domains are **HTTP 200 + `failure_class: origin_unreachable`** since
+> 2026-08-05, not an SSRF 400. Current state: CLAUDE.md's untrusted-boundary
+> section, verified by executing `apply_trust_relaxations()` 2026-08-06.
+
 - `magic`, `simulate_user`, `override_navigator`, `js_code`, proxy fields,
   `session_id`, `shared_data` etc. in `crawler_config` now → HTTP 400
   **on presence, even with a falsy value** (`"magic": false` is rejected!).

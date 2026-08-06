@@ -43,11 +43,20 @@ CONFIGS = {
     # including cookie walls (remove_consent_popups handles OneTrust/Cookiebot/Didomi).
     "optimal": {
         "wait_until": "domcontentloaded",
-        # NOTE: no "magic" key. Since v0.9.x the server's untrusted-config
-        # boundary rejects the field on PRESENCE (even "magic": false) with
-        # HTTP 400. It was harmful on cookie sites anyway.
+        # NOTE: no "magic" key — because it is HARMFUL, not because the server
+        # stops you. Corrected 2026-08-06: `aitosoft_trust.py:44-49` un-forbids
+        # `magic`/`simulate_user`/`override_navigator` for our trusted client, so
+        # the boundary ACCEPTS them; `:51-63` drops falsy forbidden fields rather
+        # than 400ing. Verified by executing `apply_trust_relaxations()`. Four
+        # files claimed the opposite, which is the dangerous direction.
         "scan_full_page": False,
-        "remove_overlay_elements": False,  # Don't use - removes page!
+        # Don't use — it removes the page. `getComputedStyle().backgroundColor`
+        # defaults to the literal string "rgba(0, 0, 0, 0)", so the script's
+        # `.includes("rgba")` test was always true and the rule degenerated to
+        # "remove every visible fixed-or-absolute element". Alpha test fixed
+        # 2026-08-06, but the size rule still has appetite — keep this False.
+        # This flag, not Cookiebot, is what broke accountor.com in 2026-01.
+        "remove_overlay_elements": False,
         "remove_consent_popups": True,  # Aitosoft: CMP-aware cookie removal (v0.8.5+)
         "page_timeout": 60000,
         "delay_before_return_html": 2.0,

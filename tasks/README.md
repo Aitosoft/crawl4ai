@@ -5,17 +5,52 @@ MAS's segment 1 (25 companies) and a five-message exchange found a defect of our
 large enough to reorder the whole list; it is now fixed, deployed and **proved in
 production on the host it was diagnosed from**.
 
-**Read this first: we no longer gate MAS's sweep, and the ball is with them.**
-`0.9.2-consent-guard` is live as `--0000037`. What is outstanding on our side is
-**two relays**: `tmp/mas-repo-messages/22-…` (the image, the wire-status change,
-the counter-reading guide) and `24-…` (their questions answered — the verbatim
-selector lists they need before segment 2's join can work). Segment 2 cannot
-start until they have both.
+**Read this first: segment 2 ran on 2026-08-06 and the counter has been read.**
+`tasks/done/segment-2-counter-readout.md` is the result and it is the most
+load-bearing thing in this file right now. Both relays landed, MAS ran 261
+renders across 61 domains in 58 minutes, and **the consent guard was firing on
+real prospect sites throughout** — 27 pages on 3 Enfold domains that would each
+have been a 15-byte capture at HTTP 500 on the previous image.
 
-**Do not start anything large before that relay lands.** Segment 2 is the
-measurement the next several decisions branch on (see "What step 5 branches on"),
-it runs once, and reading it is the work. The cross-repo sequence with the
-reasoning behind each step is in "The plan across both repos" below.
+**The silent inner-element channel is CLOSED, and MAS closed it, not us.** Our
+counter could only bound it (0 of 261 renders, ≤~1.1 %). Because the fix lets those
+elements survive into storage, MAS *read* them: **95 matched containers, 0
+containing any contact information, across 34,533 characters**, checked with
+several wider nets and against a flat control. So the generic selectors removed no
+data even when they matched — **the only harm they ever did was the `<html>`
+collision.** Both sides independently count **27 roots on 3 companies**. Named
+selectors hit a root **zero** times; genuine click-navigations **zero**.
+
+**Read `27-…` and the readout together — MAS's message corrects us twice and we
+correct it twice**, which is the exchange working:
+
+- **Ours to fix:** the readout's first draft undercounted `origin_unreachable` by
+  **57 %** (9 of a true 21) because it keyed on the `RESULT FAILURE` *token*
+  instead of the `failure_class=` *field* — and `OVERNIGHT_PLAYBOOK.md` actively
+  told it to. Pre-admission DNS failures only ever emit `ORIGIN FAILURE`. Playbook
+  fixed; **the rule is now: key on `failure_class=`, never on the token.**
+- **Theirs to fix:** `kea.fi` is **not** blocking us — four successful pages, one
+  403 path, no HTTPS. Us-specific blocking is **1 of 50, not 2**, and they
+  pre-registered a segment-3 stop rule at ≥2 in 50. Also their §5a is our
+  documented correct behaviour (the discriminator is `success`, not the host) and
+  §5b is false as diagnosed (that result carries `status_code=None`, so no
+  status branch can fire).
+
+**And the premise both repos carried about load was wrong.** MAS's
+`--concurrency 2` limits **companies**, not fetches; 74 % of companies fan out to
+≥2 parallel pages and the run peaked at **7 in flight**, which is what produced the
+single 429 on a cold replica. The good consequence: **that ceiling is set by their
+flag, not by cohort size** — 50 companies or 15,000, the peak stays ~8. We have
+~7–8× headroom before `maxReplicas: 30`.
+
+**Verdict: ready to scale.** Nothing lost data, the capacity and memory families
+are at zero across **four** workloads, and both repos reconcile request-by-request
+(274 ingress = their 264 outcomes + 10 retries; four correlation ids match
+byte-for-byte). Items 6–8 below are **cost hygiene worth doing first because they
+are small** — together ~3.3 % of request volume — not blockers. The one genuine
+unknown is measurable on MAS's side today: the near-empty-*success* population,
+which neither our collapse guard nor our consent counter can see by construction
+(readout §5c).
 
 **This file holds ordering, gating and current state — nothing else.** The
 reasoning lives in each task file, the evidence in
@@ -284,6 +319,9 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 | ~~1~~ | ~~`consent-scripts-delete-the-page.md`~~ | M | **DONE 2026-08-06, undeployed.** `tasks/done/`. The diagnosis reproduced exactly; three things about the *fix* changed, and the first is the one to carry: dropping the 20 generic selectors would have deleted the measurement step 5 branches on, so they now **observe instead of removing** and log `chars`/`pagechars`. |
 | ~~2~~ | ~~`total-loss-is-permanent-not-transient.md`~~ | S | **DONE 2026-08-06, undeployed.** `tasks/done/`. Keyed on the **capture shape** (no `<body>`), not the reason string — one test covers both production signatures, which two reason strings could not. Nothing pinned the old 500, so it was a bug fix and not a contract change. |
 | 3 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 66 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some tests to change behaviour, and treat that as the payoff. The count moved from 54 to 66 with the `/consent/*` routes. |
+| 6 | **`render_error` must not be a retryable 500 when the origin served a non-page** — no file yet | S | **New, from segment 2.** 12 events on 2 domains were **100 % of that sweep's 500s**: a PDF Chromium renders in its own viewer (174 B, 0 visible chars → tier-3 `minimal_text`) and an 83-byte parked page at HTTP 200. Neither is a render failure; both cost ~30 s of a render slot × 3 MAS retries. The 2026-08-02 `unrenderable_content` fix only covers PDFs that trip Chromium's **download refusal**, which this one never reaches. **The axis is permanence, not ownership** — do *not* re-open the inference tier's byte bounds, which are deliberate. Evidence: `tasks/done/segment-2-counter-readout.md` §3 |
+| 8 | **Two `failure_class` log holes + a `render_mode` mislabel** — no file yet | XS | **New, from segment 2.** (a) `render_mode: "static"` failed fetches log at INFO with **no `failure_class` field** (`aitosoft_static_mode.py:301,307`) while `_static_error_result` defaults the class to `origin_unreachable` (`:164-179`) — so **no `failure_class` query can ever count them**, and the hole opens exactly when a host has already misbehaved enough for MAS to pivot it to static. ~6 lines mirroring `api.py:1033-1039`; no double-count risk (static returns at `api.py:770`, never traversing the full-mode loop). (b) `api.py:1198`'s `failed_result(...)` omits `render_mode`, which defaults to `"full"` (`aitosoft_failure_class.py:507`) — and because the seed check (`:760`) precedes the static short-circuit (`:764`), a **static** request to a dead domain is reported to MAS as `"full"`. One word, in a field they parse |
+| 7 | **The patchright tier retries classes already known permanent** — no file yet | S | **New, from segment 2.** `_is_blocked` (`aitosoft_patchright_fallback.py:163`) gates the retry on the block-marker **string**, not on classified permanence, so `render_defect` — which is in `NON_RETRYABLE_CLASSES` — still gets an internal retry leg. That leg then dies on upstream's `wait_for_selector("body", timeout=30000)` (`async_crawler_strategy.py:898`), i.e. it waits 30 s for **exactly the element whose absence defined the failure** and can never succeed. ~a few lines; saves 2 navigations + ~60 s per URL. Fold in the fragment-strip for `CONSENT NAVIGATION` (§2 of the same file). Also open and *not* answered: **why `delotec.fi` has no `<body>` at 2015 bytes** — two engines agree, it is not our JS, and MAS holds the bytes |
 | 4 | `guard-corpus-is-not-in-the-repo.md` | S | **After the sweep.** Real and verified — `test-aitosoft/artifacts/*` is gitignored, three tests fail on a fresh clone at `assert checked >= 30`. But its load-bearing sentence is **wrong**: "our only pre-deploy gate is the offline suite" is false (see corrections below), and it fails *loud*, in the safe direction. If ever done: 4–6 files into `artifacts/keep/`, the mechanism `.gitignore:14-17` already provides. Do **not** open its four-option sizing table before the sweep. **Item 1 raised its value slightly**: the 7-host corpus is load-bearing for a claim about consent selectors, and 2 of 2 CMP measurements is thin — though the `CONSENT DECLINED` counter now answers that from production instead. |
 | ~~5~~ | ~~`flaky-fence-test-margin.md`~~ | S | **DONE 2026-08-06.** `tasks/done/`. Diagnosed before it was fixed, as the file demanded: the fence unwinds in **0.05 s**, so the product-finding reading is refuted; the variance is a cold browser launch *outside* the fence (healthy control median 1.33 s, max 4.05 s). Fixed by `FENCE_STALL_S = 8`, which widens the gap rather than the assertion's meaning, and costs the suite nothing. |
 
@@ -324,10 +362,12 @@ see** (agreed in `tmp/mas-repo-messages/20-…` §6, accepted in `21-…` §4).
 |---|---|---|---|
 | ~~1~~ | **us** | **DONE 2026-08-06** — `0.9.2-consent-guard`, `--0000037`. Tier 1 4/4, prod smoke green, `kubler.fi` proved in production | It was the only thing that stopped data loss, and a 50-company run was held on it |
 | ~~2~~ | **us, same image** | **DONE.** `CONSENT DECLINED` / `CONSENT STRUCTURAL` / `CONSENT NAVIGATION`, each carrying the requested URL beside the current one — verified firing in production | **A segment runs once.** Neither archive can hold this population — the element is deleted before capture — so segment 2 is the measurement, and a counter that missed this image would have waited for segment 3 |
-| **now** | **Tero** | **Relay `tmp/mas-repo-messages/22-…` and `24-…`** | Nothing downstream can start without them. 22 carries the window, the wire-status change and §3's correction to how the counter must be read; 24 carries the verbatim selector lists, without which their half of the joint count measures a different population than ours |
-| 3 | **them, after our image** | The `remove_consent_popups` A/B, **three arms**: off / on-today / on-with-fix | A two-arm result answers "is the flag worth keeping", which does not change what we build. The third arm answers "does narrowing the selectors cost consent-wall coverage", which is the one thing our 7-host corpus cannot settle. Running it earlier burns a round of their traffic on the wrong question |
-| 4 | **them** | Segment 2, 50 companies, counter live, window announced first | 50 rather than 25 because our own measurement says the *activation count* costs, not the companies: 23 replicas for 25 companies, five of them serving 1–3 requests in an ~8-minute life, ~9 minutes of idle tail after the last render |
-| 5 | **us** | Read the counter and decide what it changed | Branches below — this is the step most likely to reorder everything after it |
+| ~~relay~~ | ~~Tero~~ | **DONE** — `22-…` and `24-…` landed; MAS ran the `raw://` consent probe at 13:27 on 2026-08-06, which is arm-check traffic and proves they had 24 | — |
+| ~~3~~ | **them** | The `remove_consent_popups` A/B — **arm-check probe seen in our logs 2026-08-06 13:27**, full result not yet relayed | A two-arm result answers "is the flag worth keeping", which does not change what we build. The third arm answers "does narrowing the selectors cost consent-wall coverage", which is the one thing our 7-host corpus cannot settle |
+| ~~4~~ | ~~them~~ | **DONE 2026-08-06 13:38–14:36 UTC.** 261 renders, 61 domains, 58 min | 50 rather than 25 because our own measurement says the *activation count* costs, not the companies |
+| **now** | **Tero** | **Relay `tmp/mas-repo-messages/28-…`** — the full segment-2 recap plus four corrections. **One is time-sensitive:** MAS pre-registered a "stop the sweep at ≥2 in 50 us-specific blocks" rule, and `kea.fi` is not one of them (it served us four pages, 403'd one path, has no HTTPS), so the real figure is **1 in 50** and the threshold must be re-derived *before* segment 3 or the sweep stops on an artefact | Nothing else is gating. 28 also hands them the scaling numbers: **`--concurrency` up to ~15 needs nothing from us**, above that our `maxReplicas` is the lever |
+| — | note | **`25-…` and `26-…` were never files** — that exchange happened as pasted markdown in a chat. Both are now reconstructed on disk and **flagged as possibly-inexact**; every checkable detail was verified against our logs and holds (the 13:47:16Z 429 with `2/2 rendering, 4 queued`, `c6d1302332b8`, delotec's two timestamps, the gatelesis window). **Prefer files over chat** — this is the second numbering/delivery gap in this thread |
+| ~~5~~ | ~~us~~ | **DONE — `tasks/done/segment-2-counter-readout.md`.** The loud channel is 3 domains of 61 (4.9 %) / 27 renders of 261 (10.3 %), all `node=html structural=True`; the silent channel is **0 of 261**; genuine click-navigations **0** (all 4 `CONSENT NAVIGATION` lines are a fragment-only false positive). Created two new items, 6 and 7 below | Branches below — it did reorder what follows, but *downward*: the consent family is closed pending one more segment, and the new work is cost, not data loss |
 | 6 | **us** | Upstream PR for both JS files | "Here are N occurrences in a production sweep" is a far stronger submission than a synthetic repro, and upstream `develop` moves slowly enough that waiting costs nothing |
 
 **Running in parallel on their side, blocking nothing:** persisting the final URL
@@ -377,7 +417,7 @@ delta is the attribution.
 
 | Task | Why parked | What would un-park it |
 |---|---|---|
-| `replica-memory-baseline-unexplained.md` | **CLOSE IT, do not leave it parked.** No symptom in two consecutive workloads (p95 39.8 % then **29.9 %**, max 33.7 %, against an 85 % guard), a fit its own author refuted, and the underlying data is not in the repo. A parked file with no symptom is an invitation | Nothing. If memory ever becomes a symptom again, that is a new file with new data |
+| ~~`replica-memory-baseline-unexplained.md`~~ | **CLOSED and moved to `tasks/done/` 2026-08-06.** It had been marked closed in its own header since 2026-08-05 but was still sitting in the open directory, which is the same invitation the row warned about. Now **four** consecutive workloads with no symptom (p95 39.8 % → 29.9 % → 43.6 %, peak 63.8 %, against an 85 % guard; zero memory refusals throughout) | Nothing. If memory ever becomes a symptom again, that is a new file with new data |
 | `cleaned-html-collapse-guard.md` — repair 1 (`unclosed-script`) | Purely prospective and **structurally uncountable**: zero production instances have ever been attributed to it, and the shape is invisible by construction. Its value is upstream PR quality, not our data | The segment-1 `COLLAPSE RECOVERED` / `RENDER DEFECT` split showing the shape actually occurs |
 | `static-fallback-within-fence.md` | 0 × 504 in two workloads now; the hang it was sized against was fixed in `done/render-retry-unbounded-hang.md` | A real 504 population in a sweep |
 | `blocked-host-retry-economy.md` | Cost optimisation, not a defect — and the 2026-08-01 run saw **0 blocks in 336 renders** | A sweep showing blocked-host cost actually hurts |

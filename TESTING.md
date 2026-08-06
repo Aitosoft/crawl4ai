@@ -22,8 +22,13 @@ Tier 1. If you see advice contradicting this file elsewhere, this file wins.
 2. **Tier 1 must pass 4/4 before any deploy** (quality gate).
 3. Source of truth for tier membership: `test-aitosoft/test_regression.py`
    (`TIER_1_SITES`). Site metadata: `TEST_SITES_REGISTRY.md`.
-4. Use the `optimal` config (matches MAS production). Never `magic` — it
-   removes content on cookie sites AND the server rejects it when truthy.
+4. Use the `optimal` config (matches MAS production). **Never `magic` — because it
+   removes content on cookie sites. Do NOT rely on the server to stop you: our
+   own `aitosoft_trust.py:44-49` un-forbids `magic`, `simulate_user` and
+   `override_navigator`, so the boundary ACCEPTS them** (verified by executing
+   `apply_trust_relaxations()` 2026-08-06). This file, `TEST_SITES_REGISTRY.md:74`
+   and `test_site.py:46-48` all said the server rejects it; that was true only
+   between upstream's `60886d1` and our `f7a0d74`.
 
 Why rule 0 outranks rule 1: rule 1 is a budget, and we had no way to spend it
 honestly. Every failure class diagnosed since 2026-04 was diagnosed against a
@@ -210,19 +215,27 @@ unaffected).
 
 | Finding | Detail |
 |---------|--------|
-| `remove_consent_popups: true` solves cookie walls | Accountor: 7811 tokens; magic was never needed |
+| ~~`remove_consent_popups: true` solves cookie walls~~ | **Wrong attribution, corrected 2026-08-06.** Accountor was never a cookie wall — it was our own `remove_overlay_elements` flag deleting the page, proven from stored January captures. The flag did not exist when accountor was unblocked. See CLAUDE.md's first three Key Findings rows |
 | Raw markdown > fit_markdown for contacts | PruningContentFilter drops contact blocks at threshold >= 0.35 |
-| `magic: true` is harmful | Removes real content on cookie-consent sites; also rejected by v0.9.x server |
+| `magic: true` is harmful | Removes real content on cookie-consent sites. **The server does NOT reject it** — we un-forbade it (`aitosoft_trust.py:44-49`). The harm argument is the only one that holds |
 | Blocked sites are IP-based, not fingerprint | Two different browser engines got identical blocks (2026-04-11 study) |
 | Playwright can hang pre-Python | Some hosts (roadscanners.com) hang the DevTools protocol; that's what `render_mode: "static"` is for |
 
 ## v0.9.x server behavior tests should expect
 
-- Forbidden config fields (`js_code`, proxy fields, `cookies`, …) → HTTP 400
-  when truthy; silently dropped when falsy (our tolerant boundary,
-  `aitosoft_entry.py`).
+- Forbidden config fields → HTTP 400 when truthy; silently dropped when falsy
+  (our tolerant boundary, **`aitosoft_trust.py`** — not `aitosoft_entry.py`,
+  which only calls it). **`magic`, `simulate_user` and `override_navigator` are
+  NOT forbidden here** — we un-forbid them for our single trusted client
+  (`aitosoft_trust.py:44-49`). `js_code` and proxy fields still 400. Note
+  `cookies` and `extra_args` are **BrowserConfig** fields, not
+  `CrawlerRunConfig`.
 - Unknown config fields → silently dropped.
-- Dead/unresolvable domains → HTTP 400 `URL blocked (SSRF protection)`.
+- **Dead/unresolvable domains → HTTP 200 + `success:false` +
+  `failure_class: origin_unreachable`.** Changed 2026-08-05; this line said
+  "HTTP 400 `URL blocked (SSRF protection)`" until 2026-08-06. A genuine SSRF
+  target (`169.254.169.254`, `127.0.0.1:8080`) **does** still 400 — only "there
+  is no address at all" moved out of that bucket.
 - Wall-clock timeout (config `limits.wall_clock_s`, 180s) → HTTP 504.
 - Every result carries `render_mode: "full" | "static"`.
 - Only `/health` is public; everything else needs the bearer token
