@@ -1132,7 +1132,9 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
 
             # Handle CMP/consent popup removal (before generic overlay removal)
             if config.remove_consent_popups:
-                await self.remove_consent_popups(page)
+                # Aitosoft: the *requested* URL, which is not page.url once our
+                # own consent click has navigated us somewhere else.
+                await self.remove_consent_popups(page, url)
 
             # Handle overlay removal
             if config.remove_overlay_elements:
@@ -1641,7 +1643,7 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
                 params={"error": str(e)},
             )
 
-    async def remove_consent_popups(self, page: Page) -> None:
+    async def remove_consent_popups(self, page: Page, url: str = "") -> None:
         """
         Removes GDPR/cookie consent popups from known CMP providers (OneTrust, Cookiebot,
         TrustArc, Quantcast, Didomi, Usercentrics, Sourcepoint, Klaro, Osano, Iubenda,
@@ -1656,17 +1658,36 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
 
         Args:
             page (Page): The Playwright page instance
+            url (str): The URL that was *requested*. Aitosoft: it is the join key
+                MAS reconciles on, and after a self-inflicted click-navigation it
+                is no longer `page.url`.
         """
         remove_consent_js = load_js_script("remove_consent_popups")
 
+        # Aitosoft 2026-08-06: this snippet can navigate the page. Phase 1 clicks
+        # 86 named CMP buttons, 12 generic attribute selectors, a text-content
+        # regex over every button and link, a shadow-DOM pass and an iframe pass;
+        # two of those five were measured selecting ordinary site buttons
+        # (`accept-terms-btn`, an `<a role="button">Got it!</a>`) whose default
+        # action is a navigation. The capture then returns a DIFFERENT PAGE, in
+        # full, at HTTP 200 with success:true — nothing downstream can tell.
+        #
+        # Detected here rather than in the snippet on purpose: a click that
+        # navigates destroys the JS execution context, so the snippet's own
+        # `location.href` comparison would never run and its return value would
+        # never arrive. `page.url` survives that, and it is the *consequence*, so
+        # it covers all five click surfaces including the two not enumerated.
+        url_before = page.url
+        report = None
+
         try:
-            await self.adapter.evaluate(page,
+            outcome = await self.adapter.evaluate(page,
                 f"""
                 (async () => {{
                     try {{
                         const removeConsent = {remove_consent_js};
-                        await removeConsent();
-                        return {{ success: true }};
+                        const report = await removeConsent();
+                        return {{ success: true, report }};
                     }} catch (error) {{
                         return {{
                             success: false,
@@ -1678,13 +1699,142 @@ class AsyncPlaywrightCrawlerStrategy(AsyncCrawlerStrategy):
             """,
                 timeout=OPTIONAL_DOM_STEP_TIMEOUT_S,
             )
-            await page.wait_for_timeout(500)  # Wait for any animations to complete
+            if isinstance(outcome, dict):
+                report = outcome.get("report")
         except Exception as e:
             self.logger.warning(
                 message="Failed to remove consent popups: {error}",
                 tag="SCRAPE",
                 params={"error": str(e)},
             )
+
+        # Aitosoft: moved out of the `try` above. The wait is for animations —
+        # and now also for a navigation we may have just caused, which is the one
+        # case where the evaluate raises and the wait used to be skipped, leaving
+        # `page.url` possibly still on the old document.
+        try:
+            await page.wait_for_timeout(500)
+        except Exception:
+            pass
+
+        try:
+            self._report_consent_pass(url, url_before, page.url, report)
+        except Exception as e:
+            # Instrumentation must never be able to fail a crawl. The logger
+            # renders through rich markup, so a class attribute or URL carrying
+            # a bracket is a real if remote way for a log call to raise.
+            self.logger.warning(
+                message="Consent-pass reporting failed: {error}",
+                tag="SCRAPE",
+                params={"error": str(e)},
+            )
+
+    def _report_consent_pass(
+        self, requested_url: str, url_before: str, url_after: str, report
+    ) -> None:
+        """Aitosoft 2026-08-06: the counter for what the consent pass did NOT do.
+
+        Three deliberately non-overlapping tokens, none a substring of another,
+        so a log query can size each population separately across images — the
+        same reason `COLLAPSE RECOVERED` and `RENDER DEFECT` are split:
+
+          CONSENT NAVIGATION  our own click moved the page. Everything captured
+                              after this belongs to a URL nobody asked for.
+          CONSENT DECLINED    a generic substring selector matched something we
+                              no longer remove. `chars`/`pagechars` is the whole
+                              question: a 200-character match was a banner and
+                              the removal was correct; a match holding a large
+                              share of the page was never a banner, and removing
+                              it is what silently cost MAS contact blocks.
+          CONSENT STRUCTURAL  a *named* vendor selector matched <html>, <body>
+                              or <head>. This should never fire. If it does, the
+                              named list has the same defect the generic list had
+                              and the census behind "122 named and precise" is
+                              wrong.
+
+        **Emitted through the stdlib `logging` module, not `self.logger`, and
+        that is the whole reason this method exists as a seam.** `AsyncLogger`
+        renders through a rich console, which does two things a counter cannot
+        survive:
+
+          - It prints only `if self.verbose or force_verbose`, and `verbose`
+            comes from `BrowserConfig` — which is in the untrusted-config
+            allow-list, so a client sending `browser_config: {"verbose": false}`
+            would silence the counter outright.
+          - It **wraps at the console width**. These lines run past 190
+            characters, so each one arrives in the container log as two records
+            and a query for `chars=` and `class=` on the same record silently
+            loses rows. Measured, not assumed — and it also eats brackets, which
+            deletes `[class*="cookie-notice" i]`, the single most diagnostic
+            field here.
+
+        `COLLAPSE RECOVERED`, `RENDER DEFECT` and `RESULT FAILURE` all go out
+        this way already (`deploy/docker/api.py`), so this is the channel the
+        existing Log Analytics queries target rather than a new one.
+
+        Logging only. There is no re-navigation and no removal fallback: MAS's
+        own archive puts the click channel at at most 0.046% of companies, which
+        makes measuring it the proportionate move and rebuilding navigation
+        state the disproportionate one. Revisit when the counter says otherwise
+        (tasks/done/consent-scripts-delete-the-page.md, "What step 5 branches on").
+        """
+        import logging
+
+        log = logging.getLogger(__name__)
+
+        def _v(value, limit: int = 200) -> str:
+            """One log-safe value: never None, never unbounded."""
+            return str(value if value is not None else "")[:limit]
+
+        if url_after and url_before and url_after != url_before:
+            log.warning(
+                "CONSENT NAVIGATION: requested=%s before=%s after=%s clicked=%s",
+                _v(requested_url or url_before),
+                _v(url_before),
+                _v(url_after),
+                # "?" when the click that navigated came from a surface that
+                # never got to report, or when something else moved the page.
+                _v((report or {}).get("acceptedBy") or "?"),
+            )
+
+        if not isinstance(report, dict):
+            return
+
+        for hit in report.get("structural") or []:
+            log.error(
+                "CONSENT STRUCTURAL: requested=%s url=%s selector=%s node=%s "
+                "id=%s class=%s",
+                _v(requested_url or url_after),
+                _v(url_after),
+                _v(hit.get("selector")),
+                _v(hit.get("node")),
+                _v(hit.get("id")),
+                _v(hit.get("cls")),
+            )
+
+        # The snippet tracks the widest match over ALL of them and samples only
+        # the first few — reading the widest out of the sample would
+        # systematically under-report the case this counter exists to find.
+        widest = report.get("declinedWidest")
+        if not widest:
+            return
+        log.warning(
+            # `n` counts every distinct match; the detail is the WIDEST one,
+            # because the population this exists to size is "an element that
+            # also held content", and that is the widest match by definition.
+            "CONSENT DECLINED: requested=%s url=%s n=%s chars=%s pagechars=%s "
+            "selector=%s node=%s id=%s class=%s structural=%s",
+            _v(requested_url or url_after),
+            _v(url_after),
+            report.get("declinedCount") or 1,
+            widest.get("chars"),
+            report.get("pageChars"),
+            _v(widest.get("selector")),
+            _v(widest.get("node")),
+            _v(widest.get("id")),
+            _v(widest.get("cls")),
+            bool(widest.get("structural")),
+        )
 
     async def export_pdf(self, page: Page) -> bytes:
         """

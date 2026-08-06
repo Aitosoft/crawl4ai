@@ -184,11 +184,33 @@ Two changes, both upstream defects (PRs pending):
 `page.evaluate` carries no protocol timeout, so it can wait forever on a frame
 whose execution context a navigation replaced. PR upstream pending.
 
-### crawl4ai/async_crawler_strategy.py (+95/−13)
+### crawl4ai/async_crawler_strategy.py (+240/−17)
 `_capture_html()`: bounded `page.content()` with settle-and-retry (same
 untimed-protocol-call problem). Plus explicit ceilings on the optional DOM
 steps, `page.close()` and virtual scroll, and the capture constants.
 PR upstream pending.
+
+Since 2026-08-06, also `remove_consent_popups(page, url)`: it takes the
+*requested* URL, reads the snippet's report and logs it, and detects a
+self-inflicted click-navigation by comparing `page.url` across the pass
+(`_report_consent_pass`). Detection is here rather than in the snippet because a
+click that navigates destroys the JS execution context.
+
+### crawl4ai/js_snippet/remove_consent_popups.js (+130/−25)
+The structural guard — `documentElement`, `body` and `head` are never removed,
+whatever matched them — and the 18 generic substring selectors moved from
+*removing* to *observing*. The snippet now returns a report. **This file was
+byte-identical to upstream until 2026-08-06**; it is the strongest upstream PR
+candidate we hold, because on Enfold sites the unguarded version deletes the
+document. `tasks/done/consent-scripts-delete-the-page.md`.
+
+### crawl4ai/js_snippet/remove_overlay_elements.js (+45/−8)
+Same structural guard, plus a real alpha test in place of
+`backgroundColor.includes("rgba")` — which is true for every element with a
+transparent background, i.e. essentially all of them, making the whole
+size-and-appearance clause a no-op. **Also byte-identical to upstream until
+2026-08-06.** MAS sends `remove_overlay_elements: false`; the flag is still not
+recommended.
 
 ### crawl4ai/async_configs.py (+11/−0)
 `CrawlerRunConfig.total_timeout` (ms, default None). Deliberately absent from

@@ -59,6 +59,8 @@ Routes (every default is a module constant; every one is overridable):
     /hydrate-after/{s}                    near-empty body that paints after N s
     /redirect-to/{route}                  301 into any route above
     /collapse/{shape}                     large body carrying one swallowing shape
+    /consent/{shape}                      a page OUR OWN consent/overlay JS breaks
+    /consent/elsewhere                    where a self-inflicted click lands
     /download/{kind}                      a resource that is not a web page
     /heavy                                a page the SHAPE of a real SME site
     /img/{w}x{h}.png                      a real decodable image of that size
@@ -716,6 +718,182 @@ def _image(m, query):
     return Reply(200, "", "image/png").with_bytes(_PNG_CACHE[key])
 
 
+#: `/consent/{shape}` — pages our OWN consent/overlay JS destroys.
+#:
+#: Every other route in this file reproduces something a third party does to us.
+#: This family reproduces what we do to a third party, which is why it has to
+#: exist as a route rather than as a unit test over the snippet: the damage
+#: happens in the browser, *before* `page.content()`, so nothing downstream —
+#: not the collapse guard, not MAS's archive, not ours — can see it after the
+#: fact. The only place it is visible is with a browser in the loop.
+#:
+#: `av-cookies-no-cookie-consent` is verbatim from the Enfold WordPress theme
+#: (confirmed on `kubler.fi`, `tmp/mas-repo-messages/18-…` §1). Enfold writes it
+#: onto <html> to mean **cookie consent is switched OFF on this site** — so the
+#: generic selector `[class*="cookie-consent" i]` matched a flag asserting there
+#: is no banner, and `el.remove()` deleted the document.
+#:
+#:   html     the Enfold shape. documentElement removed -> `page.content()`
+#:            serializes the doctype alone, 15 bytes, HTTP 500
+#:   body     <body> removed -> head only; near-empty at small sizes, and
+#:            `Structural: no <body> tag` once the <head> is padded
+#:   inner    THE SILENT ONE. The trigger sits on a wrapper that also holds the
+#:            contact block, so the page comes back at 200 / success:true with
+#:            almost all of its markdown and none of its contacts
+#:   banner   a REAL cookie banner, small, matching the same generic selector.
+#:            The control for `inner`: declining to remove this one costs a
+#:            paragraph of legalese (noise), and that asymmetry is the entire
+#:            argument for observing rather than removing
+#:   click    Phase 1 clicks an ordinary site button whose default action is a
+#:            navigation. We then capture a DIFFERENT PAGE, in full, at 200
+#:   click-link  the same via the text-content regex fallback (`Got it!`) on an
+#:            <a role="button">, which is a different one of Phase 1's five
+#:            click surfaces
+#:   overlay  for `remove_overlay_elements` (MAS sends false): an
+#:            absolutely-positioned hero holding the contacts. getComputedStyle
+#:            returns `rgba(0, 0, 0, 0)` for a transparent background, so that
+#:            script's `backgroundColor.includes("rgba")` test was ALWAYS true
+#:            and the rule degenerated to "remove every visible fixed-or-absolute
+#:            element"
+#:
+#: `?bytes=` pads the <head> (not the body), because that is what moves the
+#: `body` shape from `Near-empty content` to `Structural: no <body> tag` — the
+#: two reason strings that turn out to be the same defect counted separately.
+CONSENT_TRIGGER_CLASS = "av-cookies-no-cookie-consent"
+
+#: Where a self-inflicted consent click lands. Deliberately a full, healthy page
+#: with its own title: the failure is not "we got nothing", it is "we got
+#: something excellent that nobody asked for", and only the title distinguishes
+#: them.
+CONSENT_ELSEWHERE_TITLE = "Tuotteet ja hinnasto"
+CONSENT_ELSEWHERE_MARKER = "hinnasto@yritys.fi"
+
+#: Body text with no contact details in it, so `inner` can lose the contacts
+#: while keeping ~all of its markdown — the 99.5% that makes it invisible.
+CONSENT_BULK_HTML = "".join(
+    f"<h3>Osasto {i}</h3><p>Kunnossapitopalvelut ja projektitoimitukset "
+    f"teollisuudelle, osasto {i}. Toimitamme suunnittelun, asennuksen ja "
+    f"kayttoonoton avaimet kateen -periaatteella koko Suomen alueella.</p>"
+    for i in range(60)
+)
+
+
+def _consent_document(shape: str, pad: int) -> str:
+    head = f"<head><title>Yritys Oy</title>{_padding(pad)}</head>"
+
+    if shape == "html":
+        return (
+            "<!DOCTYPE html>"
+            f"<html lang='fi' class='html_stretched {CONSENT_TRIGGER_CLASS} "
+            f"av-no-preview'>{head}<body>{CONTENT_HTML}</body></html>"
+        )
+
+    if shape == "body":
+        return (
+            f"<!DOCTYPE html><html lang='fi'>{head}"
+            f"<body class='page cookie-consent-dismissed'>{CONTENT_HTML}"
+            "</body></html>"
+        )
+
+    if shape == "inner":
+        return (
+            f"<!DOCTYPE html><html lang='fi'>{head}<body>"
+            f"<main>{CONSENT_BULK_HTML}</main>"
+            "<footer class='site-footer cookie-notice-footer'>"
+            f"{CONTENT_HTML}</footer>"
+            "</body></html>"
+        )
+
+    if shape == "banner":
+        return (
+            f"<!DOCTYPE html><html lang='fi'>{head}<body>"
+            "<div class='cookie-notice-bar' style='position:fixed;bottom:0'>"
+            "<p>Kaytamme evasteita sivuston toiminnan varmistamiseksi ja "
+            "kavijamaaran mittaamiseen.</p>"
+            "<button class='evaste-ok'>Hyvaksy</button></div>"
+            f"<main>{CONTENT_HTML}</main></body></html>"
+        )
+
+    if shape == "click":
+        return (
+            f"<!DOCTYPE html><html lang='fi'>{head}<body>"
+            f"<main>{CONTENT_HTML}</main>"
+            "<button id='accept-terms-btn' "
+            "onclick=\"location.href='/consent/elsewhere'\">Accept</button>"
+            "</body></html>"
+        )
+
+    if shape == "click-link":
+        return (
+            f"<!DOCTYPE html><html lang='fi'>{head}<body>"
+            f"<main>{CONTENT_HTML}</main>"
+            "<a role='button' href='/consent/elsewhere'>Got it!</a>"
+            "</body></html>"
+        )
+
+    if shape == "named-root":
+        # A NAMED selector on a structural element. `#cookie-notice` is the
+        # Cookie Notice WordPress plugin's own id and is one of the 122 precise
+        # selectors — so this shape is untouched by dropping the generic list and
+        # can only be survived by the structural guard. Without it, the two fixes
+        # are indistinguishable in this suite.
+        return (
+            f"<!DOCTYPE html><html lang='fi'>{head}"
+            f"<body id='cookie-notice' class='page'>{CONTENT_HTML}</body></html>"
+        )
+
+    if shape == "overlay":
+        # Deliberately SMALL. `remove_overlay_elements` removes a visible
+        # fixed-or-absolute element that is also wide, or tall, or translucent,
+        # or faded — and the translucency test was always true, so the other
+        # three never mattered. A 280x160 box is under every size bound and
+        # opaque, which makes it removable *only* through the degenerate clause.
+        # A full-width hero would be removed by the size rule too and would
+        # prove nothing about the fix.
+        return (
+            f"<!DOCTYPE html><html lang='fi'>{head}<body>"
+            "<aside class='yhteystiedot' style='position:absolute;top:0;"
+            "right:0;width:280px;height:160px;overflow:hidden'>"
+            "<h2>Yhteystiedot</h2>"
+            "<p>Puhelin 010 123 4567, sahkoposti info@yritys.fi</p></aside>"
+            f"<main>{CONSENT_BULK_HTML}</main></body></html>"
+        )
+
+    # "none" and anything unknown: the healthy control, same shell.
+    return f"<!DOCTYPE html><html lang='fi'>{head}<body>{CONTENT_HTML}</body></html>"
+
+
+#: Which shapes carry a trigger the pre-2026-08-06 snippet would have removed,
+#: destroying the page. `banner` is deliberately absent: it matches the same
+#: generic selector and removing it is *correct*, which is what makes it the
+#: control for "what does declining actually cost".
+CONSENT_DESTRUCTIVE_SHAPES = frozenset({"html", "body", "inner", "named-root"})
+
+#: Of those, the ones the removal was declined on because the *element* is the
+#: document's structure, rather than because the *selector* is a generic guess.
+#: `named-root` is only in the first set through the structural guard.
+CONSENT_STRUCTURAL_SHAPES = frozenset({"html", "body", "named-root"})
+
+
+@_route(r"/consent/elsewhere")
+def _consent_elsewhere(_m, query):
+    """The destination of a self-inflicted consent click."""
+    return Reply(
+        200,
+        f"<!DOCTYPE html><html lang='fi'><head><title>{CONSENT_ELSEWHERE_TITLE}"
+        "</title></head><body>"
+        f"<h1>{CONSENT_ELSEWHERE_TITLE}</h1>"
+        "<p>Hinnasto ja toimitusehdot. Tilaukset: "
+        f"{CONSENT_ELSEWHERE_MARKER}, puhelin 010 123 4599.</p>"
+        f"<main>{CONSENT_BULK_HTML}</main></body></html>",
+    )
+
+
+@_route(r"/consent/([a-z-]+)")
+def _consent(m, query):
+    return Reply(200, _consent_document(m.group(1), int(_one(query, "bytes", 0))))
+
+
 @_route(r"/heavy")
 def _heavy(_m, query):
     """A page with the SHAPE of the pages MAS actually crawls.
@@ -901,6 +1079,45 @@ class FixtureOrigin:
 
 
 # ── the egress seam ──────────────────────────────────────────────────────
+
+
+@contextlib.contextmanager
+def consent_reports() -> Iterator[List[dict]]:
+    """Collect what the consent pass reported, for the duration of the block.
+
+    The counter this exists to test writes to `AsyncLogger`, which renders
+    through a rich console rather than the stdlib `logging` module — so
+    `caplog` cannot see it and a log-scraping test would be asserting on
+    formatting. Spying on `_report_consent_pass` instead asserts on the actual
+    arguments, which is both the stronger assertion and the one that fails when
+    the *data* regresses rather than when the wording changes.
+
+    Calls through, so the log lines are still produced and still exercised.
+    """
+    from crawl4ai.async_crawler_strategy import AsyncPlaywrightCrawlerStrategy
+
+    seen: List[dict] = []
+    original = AsyncPlaywrightCrawlerStrategy._report_consent_pass
+
+    def spy(self, requested_url, url_before, url_after, report):
+        seen.append(
+            {
+                "requested": requested_url,
+                "before": url_before,
+                "after": url_after,
+                # None when a click navigated and destroyed the execution
+                # context before the snippet could return anything.
+                "report": report,
+            }
+        )
+        return original(self, requested_url, url_before, url_after, report)
+
+    _cls: Any = AsyncPlaywrightCrawlerStrategy
+    _cls._report_consent_pass = spy
+    try:
+        yield seen
+    finally:
+        _cls._report_consent_pass = original
 
 
 @contextlib.contextmanager

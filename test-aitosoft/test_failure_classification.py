@@ -42,6 +42,7 @@ from aitosoft_failure_class import (  # noqa: E402
     ORIGIN_CLASSES,
     ORIGIN_HTTP_ERROR,
     ORIGIN_UNREACHABLE,
+    RENDER_DEFECT,
     RENDER_ERROR,
     RENDER_TIMEOUT,
     UNRENDERABLE_CONTENT,
@@ -532,16 +533,25 @@ def test_our_own_crash_still_raises_500(monkeypatch):
 #: theirs to make with 117,000 stored pages to compare against.
 MAS_DEFECT_B_CASES = [
     (
-        "norex.com — our own 'not fully supported' placeholder, 15 bytes at 200",
+        "norex.com — 15 bytes of bare doctype at 200: OUR OWN JS deleted <html>",
         {
             "success": False,
             "status_code": 200,
+            "html": "<!DOCTYPE html>",
             "error_message": (
                 "Blocked by anti-bot protection: "
                 "Near-empty content (15 bytes) with HTTP 200"
             ),
         },
-        RENDER_ERROR,
+        # Was RENDER_ERROR until 2026-08-06, and the label was worse than the
+        # verdict: five tracked files described this body as "our own
+        # `Crawl4AI Error:` placeholder in 15 bytes of HTML", conflating two
+        # fields. `html` is 15 bytes of bare doctype; the placeholder is what our
+        # scraper *generated from* it. Reading them as one sent four sessions to
+        # the anti-bot tier instead of to our own DOM cleanup — `norex.com` is
+        # one of only two hosts in the 30-day `Near-empty content (15 bytes)`
+        # population, and both were the consent-JS defect.
+        RENDER_DEFECT,
     ),
     (
         "jarvenkylamaatila.fi — a 1-character body",
@@ -714,3 +724,131 @@ def test_the_wire_status_follows_the_reclassification():
     assert http_status_for([RENDER_ERROR]) == 500
     assert http_status_for([ORIGIN_BLOCKED]) == 200
     assert http_status_for([ORIGIN_HTTP_ERROR]) == 200
+
+
+# ── a deleted document root is permanent ─────────────────────────────────
+#
+# tasks/done/total-loss-is-permanent-not-transient.md. `render_error` means
+# "transient, ours, try again"; nothing about a missing `documentElement` is
+# transient. At MAS's retry policy the old verdict cost four attempts, and under
+# the patchright tier each attempt is four navigations — 16 navigations for a
+# URL that will do exactly the same thing every time. Kübler paid it twice over
+# in segment 1: 32 navigations, 266 s, 26% of the whole run's render seconds for
+# one company of 25.
+#
+# The line these tests exist to hold is PERMANENCE, not emptiness. Collapsing
+# the two re-opens the `norex.com` inversion from the other side.
+
+ROOT_GONE_CASES = [
+    (
+        "documentElement removed: Playwright serializes the doctype alone",
+        "<!DOCTYPE html>",
+        RENDER_DEFECT,
+    ),
+    (
+        "<body> removed: head survives, and so does a padded <head>",
+        "<!DOCTYPE html><html><head><title>Yritys Oy</title></head></html>",
+        RENDER_DEFECT,
+    ),
+    (
+        "an empty 200 — structurally INTACT, and a retry might paint it",
+        "<html><head></head><body></body></html>",
+        RENDER_ERROR,
+    ),
+    (
+        "a JS shell that rendered nothing — also intact, also retryable",
+        '<html><head><script src="/app.js"></script></head><body>'
+        '<div id="root"></div></body></html>',
+        RENDER_ERROR,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "label,html,expected", ROOT_GONE_CASES, ids=[c[0][:40] for c in ROOT_GONE_CASES]
+)
+def test_a_deleted_root_is_permanent_and_an_empty_page_is_not(label, html, expected):
+    assert (
+        classify_result(
+            {
+                "success": False,
+                "status_code": 200,
+                "html": html,
+                "error_message": (
+                    "Blocked by anti-bot protection: "
+                    f"Near-empty content ({len(html)} bytes) with HTTP 200"
+                ),
+            }
+        )
+        == expected
+    ), label
+
+
+def test_the_byte_count_is_diagnostic_but_is_not_the_test():
+    """15 bytes means a deleted root and nothing else — an empty 200 serializes
+    to 39 and a body that *is* the string `<!DOCTYPE html>` to 54. Worth knowing
+    when reading a log line; deliberately NOT what the classifier keys on, since
+    a padded `<head>` puts the same defect at 20,087 bytes."""
+    assert len("<!DOCTYPE html>") == 15
+    assert len("<html><head></head><body></body></html>") == 39
+
+    padded = (
+        "<!DOCTYPE html><html><head>" + "<style>a{}</style>" * 1000 + "</head></html>"
+    )
+    assert len(padded) > 15_000
+    assert (
+        classify_result(
+            {
+                "success": False,
+                "status_code": 200,
+                "html": padded,
+                "error_message": (
+                    "Blocked by anti-bot protection: "
+                    f"Structural: no <body> tag ({len(padded)} bytes)"
+                ),
+            }
+        )
+        == RENDER_DEFECT
+    )
+
+
+def test_a_missing_capture_is_not_a_deleted_root():
+    """A crawl that never obtained a document is a different failure, and it is
+    the one a retry can genuinely clear. Absence of `html` must never be read as
+    evidence of deletion — that direction condemns transient failures as
+    permanent, which is the expensive way round."""
+    for result in (
+        {"success": False, "status_code": 200},
+        {"success": False, "status_code": 200, "html": ""},
+        {"success": False, "status_code": 200, "html": None},
+    ):
+        assert classify_result(result) == RENDER_ERROR, result
+
+
+def test_the_origin_still_outranks_the_shape():
+    """A root that vanished on a page the origin refused is still the origin's
+    verdict to give. The shape check sits below both origin branches on purpose;
+    inverting that order would start reporting 403s as our own defect."""
+    for status, expected in ((403, ORIGIN_BLOCKED), (404, ORIGIN_HTTP_ERROR)):
+        assert (
+            classify_result(
+                {
+                    "success": False,
+                    "status_code": status,
+                    "html": "<!DOCTYPE html>",
+                    "error_message": (
+                        "Blocked by anti-bot protection: "
+                        "Near-empty content (15 bytes) with HTTP 200"
+                    ),
+                }
+            )
+            == expected
+        )
+
+
+def test_a_deleted_root_is_terminal_on_the_wire():
+    """The point of the whole change: 200, not 500, so MAS stops at one attempt.
+    `render_defect` was already in NON_RETRYABLE_CLASSES, so this asserts the
+    mapping rather than adding to it."""
+    assert RENDER_DEFECT in NON_RETRYABLE_CLASSES
+    assert http_status_for([RENDER_DEFECT]) == 200

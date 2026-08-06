@@ -7,6 +7,88 @@ async () => {
     };
 
     // =========================================================================
+    // Guard rails and instrumentation (Aitosoft 2026-08-06)
+    // =========================================================================
+    // Phase 3 used to end with 18 generic substring selectors — `[class*=
+    // "cookie-consent" i]` and friends — and call `el.remove()` on whatever they
+    // matched, with no guard on WHAT they matched. The Enfold WordPress theme
+    // writes `av-cookies-no-cookie-consent` onto <html> to mean "cookie consent
+    // is switched OFF on this site", so the selector matched a flag asserting
+    // there is no banner and deleted the document because of it. `page.content()`
+    // then returns the serialized doctype alone: `<!DOCTYPE html>`, 15 bytes.
+    //
+    // Two rules come out of that, and they are different in kind:
+    //
+    //   1. Structural elements are never removed, whatever matched them. This
+    //      is unconditional and covers the 122 named selectors and every
+    //      pattern anyone adds later without reading this comment.
+    //   2. The generic substring selectors do not remove anything at all. They
+    //      are OBSERVED and reported instead. Across our stored corpus there is
+    //      no capture where a generic catch-all is the only thing that would
+    //      match — the named selectors do the work — and the failure direction
+    //      of keeping a banner is a paragraph of legalese in the markdown
+    //      (noise), while the failure direction of removing a wrapper that also
+    //      holds content is a green result with the contacts gone (loss).
+    //
+    // `report` is the instrument for rule 2: what we DECLINED to remove, how
+    // much text it held, and how much the page held. That ratio is the whole
+    // question — a 200-character banner is a correct removal we are now
+    // skipping, a 12,000-character wrapper was never a banner at all — and
+    // neither repo's archive can answer it retrospectively, because the element
+    // is deleted before anything is stored. See
+    // tasks/done/consent-scripts-delete-the-page.md.
+    const report = {
+        accepted: false,
+        acceptedBy: null,
+        removed: 0,
+        structuralCount: 0,
+        structural: [],
+        declinedCount: 0,
+        declinedMaxChars: 0,
+        // The single match that held the most text, tracked over ALL of them.
+        // `declined` below is only the first few, for context — reading the
+        // widest out of a truncated sample would systematically under-report the
+        // exact case this counter exists to find.
+        declinedWidest: null,
+        declined: [],
+        pageChars: 0,
+    };
+
+    const isStructural = (el) =>
+        !!el &&
+        (el === document.documentElement || el === document.body || el === document.head);
+
+    const describe = (el, selector) => ({
+        selector,
+        node: (el.tagName || "?").toLowerCase(),
+        id: (el.id || "").slice(0, 60),
+        cls: (typeof el.className === "string" ? el.className : "").slice(0, 120),
+    });
+
+    // innerText is layout-dependent and therefore expensive; it is only ever
+    // called on elements a selector already matched, plus <body> once.
+    const textLen = (el) => {
+        try {
+            return ((el.innerText || el.textContent || "").trim()).length;
+        } catch (e) {
+            return 0;
+        }
+    };
+
+    const removeUnlessStructural = (el, selector) => {
+        if (isStructural(el)) {
+            report.structuralCount += 1;
+            if (report.structural.length < 5) {
+                report.structural.push(describe(el, selector));
+            }
+            return false;
+        }
+        el.remove();
+        report.removed += 1;
+        return true;
+    };
+
+    // =========================================================================
     // Phase 1: Click "Accept All" buttons (fastest, cleanest dismissal)
     // =========================================================================
 
@@ -186,12 +268,18 @@ async () => {
             try {
                 const btn = document.querySelector(selector);
                 if (btn && isVisible(btn)) {
+                    // Recorded BEFORE the click: a click that navigates destroys
+                    // this execution context, so anything written afterwards is
+                    // lost. The caller compares page.url across the whole pass
+                    // and can then say which selector was in flight.
+                    report.acceptedBy = selector;
                     btn.click();
                     await new Promise(r => setTimeout(r, 300));
                     return true;
                 }
             } catch (e) { /* continue */ }
         }
+        report.acceptedBy = null;
         return false;
     };
 
@@ -218,6 +306,7 @@ async () => {
             if (text.length > 0 && text.length < 40) {
                 for (const pattern of acceptPatterns) {
                     if (pattern.test(text) && isVisible(btn)) {
+                        report.acceptedBy = "text:" + pattern.source;
                         btn.click();
                         accepted = true;
                         await new Promise(r => setTimeout(r, 300));
@@ -243,6 +332,7 @@ async () => {
                 if (host && host.shadowRoot) {
                     const btn = host.shadowRoot.querySelector(cfg.btn);
                     if (btn) {
+                        report.acceptedBy = "shadow:" + cfg.btn;
                         btn.click();
                         accepted = true;
                         await new Promise(r => setTimeout(r, 300));
@@ -277,6 +367,7 @@ async () => {
                     );
                     for (const btn of btns) {
                         if (btn.offsetParent !== null) {
+                            report.acceptedBy = "iframe:" + sel;
                             btn.click();
                             accepted = true;
                             await new Promise(r => setTimeout(r, 300));
@@ -334,6 +425,10 @@ async () => {
     // =========================================================================
     // Phase 3: Remove known CMP containers by selector
     // =========================================================================
+    // Every selector below is NAMED and precise — a vendor's own id or class,
+    // which nothing but that vendor's banner carries. The generic substring
+    // catch-alls that used to live at the end of this list are now a separate,
+    // non-removing list; see `genericContainerSelectors` after this loop.
     const cmpContainerSelectors = [
         // --- Tier 1: Enterprise CMPs ---
 
@@ -598,8 +693,30 @@ async () => {
 
         // Privacy Manager
         '#gdpr-consent-tool-wrapper',
+    ];
 
-        // --- Generic patterns (catch-all) ---
+    for (const selector of cmpContainerSelectors) {
+        try {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => removeUnlessStructural(el, selector));
+        } catch (e) { /* continue */ }
+    }
+
+    // --- Generic patterns: OBSERVED, NEVER REMOVED ---
+    //
+    // These are substring matches on cookie-shaped words. They match a real
+    // banner and they match, with equal confidence, a footer, a page wrapper,
+    // and a boolean flag on <html> that means the opposite of what the word
+    // suggests. `.cc-banner` / `.cc-window` are the same class of guess with a
+    // shorter name. What survives them is legalese in the markdown; what did
+    // not survive them was `kubler.fi`, twice, at HTTP 500, plus an unmeasured
+    // population of pages that came back green with the contact block missing.
+    //
+    // Kept and evaluated rather than deleted, because the one thing our own
+    // 7-host corpus cannot settle is whether they were ever carrying coverage
+    // the named selectors do not. Reporting costs one querySelectorAll pass and
+    // turns that question into a number MAS's next segment answers for free.
+    const genericContainerSelectors = [
         '[class*="cookie-consent" i]',
         '[id*="cookie-consent" i]',
         '[class*="cookie-banner" i]',
@@ -622,10 +739,25 @@ async () => {
         '.cc-window',
     ];
 
-    for (const selector of cmpContainerSelectors) {
+    report.pageChars = document.body ? textLen(document.body) : 0;
+
+    const seenGeneric = new Set();
+    for (const selector of genericContainerSelectors) {
         try {
-            const elements = document.querySelectorAll(selector);
-            elements.forEach(el => el.remove());
+            for (const el of document.querySelectorAll(selector)) {
+                if (seenGeneric.has(el)) continue;
+                seenGeneric.add(el);
+                const chars = textLen(el);
+                const entry = describe(el, selector);
+                entry.chars = chars;
+                entry.structural = isStructural(el);
+                report.declinedCount += 1;
+                if (!report.declinedWidest || chars > report.declinedMaxChars) {
+                    report.declinedMaxChars = chars;
+                    report.declinedWidest = entry;
+                }
+                if (report.declined.length < 5) report.declined.push(entry);
+            }
         } catch (e) { /* continue */ }
     }
 
@@ -652,17 +784,21 @@ async () => {
         try {
             const iframes = document.querySelectorAll(selector);
             iframes.forEach(iframe => {
-                // Also remove parent if it's a CMP wrapper (fixed/high-z)
+                // Also remove parent if it's a CMP wrapper (fixed/high-z).
+                // A page whose <body> holds one CMP iframe and nothing else
+                // satisfies `children.length <= 2`, so this branch can select
+                // the body itself — same defect as Phase 3's, one phase later.
                 const parent = iframe.parentElement;
-                if (parent && parent.children.length <= 2) {
+                if (parent && parent.children.length <= 2 && !isStructural(parent)) {
                     const style = window.getComputedStyle(parent);
                     if (style.position === 'fixed' || style.position === 'absolute' ||
                         parseInt(style.zIndex) > 999) {
                         parent.remove();
+                        report.removed += 1;
                         return;
                     }
                 }
-                iframe.remove();
+                removeUnlessStructural(iframe, selector);
             });
         } catch (e) { /* continue */ }
     }
@@ -671,15 +807,25 @@ async () => {
     // Phase 5: Restore body scroll and clean up CMP artifacts
     // =========================================================================
 
-    // Reset overflow on body and html
-    document.body.style.overflow = '';
-    document.body.style.overflowY = '';
-    document.body.style.position = '';
-    document.body.style.marginRight = '';
-    document.body.style.paddingRight = '';
-    document.documentElement.style.overflow = '';
-    document.documentElement.style.overflowY = '';
-    document.documentElement.style.position = '';
+    // Reset overflow on body and html.
+    //
+    // Null-guarded: the guards above stop US from removing <body>, but the
+    // page's own scripts can, and an unguarded `document.body.style` then
+    // throws a TypeError that aborts the whole snippet. Everything before this
+    // point has already happened, so the failure is silent and only shows up as
+    // a page that still cannot scroll.
+    if (document.body) {
+        document.body.style.overflow = '';
+        document.body.style.overflowY = '';
+        document.body.style.position = '';
+        document.body.style.marginRight = '';
+        document.body.style.paddingRight = '';
+    }
+    if (document.documentElement) {
+        document.documentElement.style.overflow = '';
+        document.documentElement.style.overflowY = '';
+        document.documentElement.style.position = '';
+    }
 
     // Remove known CMP body classes
     const cmpBodyClasses = [
@@ -704,7 +850,10 @@ async () => {
     ];
 
     for (const cls of cmpBodyClasses) {
-        document.body.classList.remove(cls);
-        document.documentElement.classList.remove(cls);
+        if (document.body) document.body.classList.remove(cls);
+        if (document.documentElement) document.documentElement.classList.remove(cls);
     }
+
+    report.accepted = accepted;
+    return report;
 };

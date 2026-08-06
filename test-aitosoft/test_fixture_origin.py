@@ -28,11 +28,16 @@ import pytest
 from fixture_origin import (
     BODY_SWALLOWING_SHAPES,
     COLLAPSE_SHAPES,
+    CONSENT_DESTRUCTIVE_SHAPES,
+    CONSENT_ELSEWHERE_TITLE,
+    CONSENT_STRUCTURAL_SHAPES,
+    CONSENT_TRIGGER_CLASS,
     CONTENT_MARKER,
     CONTENT_TAIL_MARKER,
     DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER,
     GUARD_BLIND_SHAPES,
     RECOVERABLE_SHAPES,
+    consent_reports,
     loopback_allowed,
 )
 
@@ -745,6 +750,210 @@ def test_a_download_costs_a_page_load_per_retry_round(fixture_origin, production
 
     assert fixture_origin.hits_for("/download/vcard") == MAS_MAX_RETRIES + 1
     assert outcome.result.get("crawl_stats", {}).get("attempts") == MAS_MAX_RETRIES + 1
+
+
+# ── our own consent JS (tasks/done/consent-scripts-delete-the-page.md) ────────
+#
+# Every other section here reproduces something done TO us. This one reproduces
+# what we do to a customer's page, and it is the only failure family in the file
+# that both repos' archives are blind to by construction: the element is removed
+# before `page.content()` runs, so the capture either side stores is already
+# post-deletion. A counter at the point of removal is the only instrument that
+# can see it, which is why these tests assert on the report and not only on the
+# markdown.
+
+
+@pytest.mark.parametrize("shape", sorted(CONSENT_DESTRUCTIVE_SHAPES))
+def test_our_consent_pass_no_longer_destroys_the_page(
+    shape, fixture_origin, production_path
+):
+    """The four shapes, one assertion: the page survives us.
+
+    Before 2026-08-06 these produced, in order — `<!DOCTYPE html>` at 15 bytes
+    and HTTP 500; a head-only capture at 500; and a green 200 carrying 99.5% of
+    the markdown with the contact block gone. The third is the one that matters:
+    `success: true`, `failure_class: "none"`, nothing anywhere in either repo
+    able to tell that anything was lost.
+    """
+    outcome = production_path.crawl(
+        fixture_origin.url(f"/consent/{shape}"), delay_before_return_html=SHORT_WAIT
+    )
+
+    assert outcome.success, f"{shape}: {outcome.error_message}"
+    assert outcome.http_status == 200
+    assert outcome.failure_class == "none"
+    assert len(outcome.html) > 100, f"{shape}: capture is {len(outcome.html)} bytes"
+    assert CONTENT_MARKER in outcome.markdown, f"{shape}: contacts deleted by us"
+    assert CONTENT_TAIL_MARKER in outcome.markdown, f"{shape}: tail deleted by us"
+
+
+def test_a_generic_selector_match_is_counted_not_removed(
+    fixture_origin, production_path
+):
+    """The counter, and the number it exists to produce.
+
+    `chars` over `pagechars` is the whole question. A cookie banner is a few
+    hundred characters of legalese and removing it was right; the `inner` shape
+    is a wrapper holding the entire contact block, and removing it is what cost
+    MAS data silently. Neither archive can separate those two after the fact,
+    so the ratio has to be recorded at the moment we decline.
+    """
+    with consent_reports() as reports:
+        outcome = production_path.crawl(
+            fixture_origin.url("/consent/inner"),
+            delay_before_return_html=SHORT_WAIT,
+        )
+
+    assert outcome.success
+    assert CONTENT_MARKER in outcome.markdown
+
+    assert reports, "the consent pass reported nothing at all"
+    report = reports[-1]["report"]
+    assert report, "no report came back from the snippet"
+    assert report["declinedCount"] >= 1
+    assert report["removed"] == 0
+    # `declinedWidest` is tracked over every match, not over the 5-entry sample
+    # in `declined` — and it is what the log line carries, so it is what the
+    # test has to assert on.
+    widest = report["declinedWidest"]
+    assert widest["chars"] == report["declinedMaxChars"]
+    assert widest["node"] == "footer"
+    assert "cookie-notice" in widest["cls"]
+    # The signature of the silent channel: a "banner" holding a large share of
+    # the page. Anything near this ratio in production was never a banner.
+    assert widest["chars"] > 400
+    assert report["pageChars"] > widest["chars"] > report["pageChars"] * 0.05
+
+
+@pytest.mark.parametrize("shape", sorted(CONSENT_STRUCTURAL_SHAPES))
+def test_the_structural_guard_reports_which_element_it_saved(
+    shape, fixture_origin, production_path
+):
+    """`html` and `body` carry the Enfold-shaped trigger and are caught by the
+    generic list being observation-only. `named-root` carries `#cookie-notice`,
+    one of the 122 *named* selectors, and is caught only by the structural
+    guard — so this parametrisation is what keeps the two fixes distinguishable.
+    A regression that reverted the guard alone would leave the first two green.
+    """
+    with consent_reports() as reports:
+        outcome = production_path.crawl(
+            fixture_origin.url(f"/consent/{shape}"),
+            delay_before_return_html=SHORT_WAIT,
+        )
+
+    assert outcome.success
+    assert CONTENT_MARKER in outcome.markdown
+
+    report = reports[-1]["report"]
+    assert report, f"{shape}: no report"
+
+    if shape == "named-root":
+        assert report["structuralCount"] >= 1, "a named selector hit <body>"
+        assert report["structural"][0]["node"] == "body"
+        assert report["structural"][0]["selector"] == "#cookie-notice"
+    else:
+        node = "html" if shape == "html" else "body"
+        hit = [d for d in report["declined"] if d["structural"]]
+        assert hit, f"{shape}: the document root was matched but not flagged"
+        assert hit[0]["node"] == node
+        assert (
+            CONSENT_TRIGGER_CLASS in hit[0]["cls"] or "cookie-consent" in hit[0]["cls"]
+        )
+
+
+def test_declining_a_real_banner_costs_noise_and_not_content(
+    fixture_origin, production_path
+):
+    """The price of the fix, asserted rather than assumed.
+
+    A genuine cookie bar whose class only a generic substring matches now
+    survives into the markdown. That is the whole downside of observing instead
+    of removing, and it is a paragraph of legalese next to a complete page —
+    against a failure mode that returned a green result with the contacts
+    missing. The asymmetry is the argument; this test is what stops it from
+    being a claim.
+    """
+    with consent_reports() as reports:
+        outcome = production_path.crawl(
+            fixture_origin.url("/consent/banner"),
+            delay_before_return_html=SHORT_WAIT,
+        )
+
+    assert outcome.success
+    assert CONTENT_MARKER in outcome.markdown, "the page itself must be intact"
+    assert "evasteita" in outcome.markdown, "the declined banner should be visible"
+
+    report = reports[-1]["report"]
+    assert report["declinedCount"] >= 1
+    # Small, which is exactly what a real banner looks like from the counter's
+    # side and how a production line will be read.
+    assert report["declinedMaxChars"] < report["pageChars"] * 0.25
+
+
+@pytest.mark.parametrize("shape", ["click", "click-link"])
+def test_a_self_inflicted_click_navigation_is_detected(
+    shape, fixture_origin, production_path
+):
+    """The fourth shape, and the one still UNFIXED on purpose.
+
+    Phase 1 clicks `button[id*="accept" i]` and any button or link whose text
+    matches `/^got\\s*it[!]?$/i`. Both match ordinary site furniture, both
+    navigate, and the capture then returns a different page in full at HTTP 200
+    with `success: true` — a wrong answer that looks better than a right one.
+
+    We detect and log; we do not re-navigate. MAS's own archive bounds this
+    channel at 0.046% of companies, which makes measuring it proportionate and
+    rebuilding navigation state disproportionate. **This test asserts today's
+    defect on purpose** — same contract as the padded-block tests — and the
+    thing that must not regress is the detection, because that is what will
+    tell us whether the 0.046% ceiling is anywhere near the real number.
+    """
+    with consent_reports() as reports:
+        outcome = production_path.crawl(
+            fixture_origin.url(f"/consent/{shape}"),
+            delay_before_return_html=SHORT_WAIT,
+        )
+
+    assert outcome.success
+    assert (
+        CONSENT_ELSEWHERE_TITLE in outcome.markdown
+    ), "the fixture no longer navigates; the detection below proves nothing"
+
+    assert reports, "no consent pass was reported"
+    seen = reports[-1]
+    assert seen["after"] != seen["before"], "the URL change was not noticed"
+    assert seen["requested"].endswith(f"/consent/{shape}"), (
+        "the requested URL must survive the navigation — it is the join key "
+        "MAS reconciles on, and page.url is no longer it"
+    )
+    assert "/consent/elsewhere" in seen["after"]
+
+
+def test_the_overlay_flag_no_longer_removes_an_opaque_element(
+    fixture_origin, production_path
+):
+    """`remove_overlay_elements` is off in production and this still belongs
+    here, because the reason it is off was never written down as a measurement.
+
+    `getComputedStyle(el).backgroundColor` is the literal string
+    `rgba(0, 0, 0, 0)` for every element with a transparent background — the
+    default — so `backgroundColor.includes("rgba")` was true for essentially
+    every element and the size-and-appearance clause was a no-op. What was left
+    was "remove every visible fixed-or-absolute element". The fixture's contact
+    box is 280x160 and opaque: under every size bound, so only the degenerate
+    clause could ever have removed it.
+    """
+    outcome = production_path.crawl(
+        fixture_origin.url("/consent/overlay"),
+        delay_before_return_html=SHORT_WAIT,
+        remove_overlay_elements=True,
+    )
+
+    assert outcome.success, outcome.error_message
+    assert (
+        CONTENT_MARKER in outcome.markdown
+    ), "an opaque, small, absolutely-positioned contact block was removed"
+    assert "Osasto 0" in outcome.markdown, "the ordinary page content is gone too"
 
 
 # ── our own faults (the wall-clock fence) ────────────────────────────────

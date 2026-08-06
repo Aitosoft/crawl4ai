@@ -1,6 +1,22 @@
 # File Upstream PRs
 
-**Status:** four filed, all awaiting upstream review.
+**Status:** four filed, all awaiting upstream review. **A fifth is written and
+deliberately unfiled** — see below.
+
+**The fifth: the consent snippet deletes documents.** `remove_consent_popups.js`
+(and, in the same family, `remove_overlay_elements.js`) is fixed on our fork as
+of 2026-08-06 and both files were byte-identical to upstream before that. This
+is the strongest submission we hold — stronger than #2114 — because the Enfold
+WordPress theme is sold in the hundreds of thousands and the failure is a
+deleted `documentElement` at HTTP 500, plus two silent variants that return a
+green result with content missing.
+
+**File it after MAS's segment 2, not before.** "This deletes documents on Enfold
+sites, here are N occurrences in a production sweep" beats a synthetic
+reproduction, the counter that produces N ships in the same image, and upstream
+`develop` moves slowly enough (see the cadence note below) that waiting costs
+nothing. Evidence and the four failure shapes:
+`tasks/done/consent-scripts-delete-the-page.md`.
 
 | PR | Branch | Filed | Fork patch |
 |---|---|---|---|

@@ -16,9 +16,19 @@ lives in other files; read those when needed.
 ## Task Tracking
 
 Work is tracked in `tasks/` as markdown files. Completed tasks move to `tasks/done/`.
-Each task file has: goal, status, plan, progress, learnings. **Start each session by
-reading `tasks/README.md`** — the ordered index of open work, with the gate on each.
-Ordering lives only there; the task files carry the reasoning.
+**Start each session by reading `tasks/README.md`** — the ordered index of open work,
+with the gate on each, plus the cross-repo sequence and what each step is conditional
+on. Ordering lives only there; the task files carry the reasoning.
+
+**A task file is written to a peer with a clean context — usually you — who will
+re-derive the diagnosis, orchestrate the change and dispatch a review.** So it needs
+status and size, the evidence with enough detail to re-run the measurements, where
+every fact came from, the design space with the reasoning, **the options the author
+talked themselves out of and why**, and an honest "what I am least sure of". What it
+does *not* need is an ordered checklist: a rigid step list narrows the implementing
+session's intelligence, and that session re-deriving things freely is exactly the
+mechanism that has caught nine consecutive task files being wrong about something
+load-bearing. `tasks/done/consent-scripts-delete-the-page.md` is the current model.
 
 ---
 
@@ -38,9 +48,9 @@ curl http://localhost:11235/health
 pre-commit run --all-files          # All hooks (black, ruff, mypy)
 
 # Testing (run from repo root — relative artifact paths; see TESTING.md)
-pytest test-aitosoft/            # ALL offline suites, 285 tests, ~240 s — no server, no customer site
-pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # pure-function subset, 231 tests, ~15 s
-pytest test-aitosoft/test_fixture_origin.py   # browser-driven, local fixture origin, 54 tests, ~220 s
+pytest test-aitosoft/            # ALL offline suites, 305 tests, ~270 s — no server, no customer site
+pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # pure-function subset, 239 tests, ~30 s
+pytest test-aitosoft/test_fixture_origin.py   # browser-driven, local fixture origin, 66 tests, ~235 s
 python test-aitosoft/test_regression.py --tier 1 --version <label>  # Tier 1 regression (live server)
 python test-aitosoft/test_site.py <domain> --page <path>            # Single site (live server)
 python test-aitosoft/test_fingerprint.py --label <label>            # Stealth diagnostic (live server)
@@ -131,9 +141,17 @@ whose value is `None` or `""`, and `max_retries` defaults to `0`.
 ### Key Findings
 | Finding | Detail |
 |---------|--------|
-| `remove_consent_popups: true` solves cookie walls | Accountor: 7811 tokens without magic mode |
+| `remove_consent_popups: true` solves cookie walls | Accountor: 7811 tokens without magic mode. It also **used to delete customer pages** — fixed 2026-08-06, read the next row before you change anything in that snippet |
+| **Our own consent JS deleted the page, and two of the three ways were silent** | `remove_consent_popups.js` Phase 3 ended with 18 generic substring selectors (`[class*="cookie-consent" i]`, …) and called `el.remove()` with no guard on what matched. Enfold puts `av-cookies-no-cookie-consent` on `<html>` **to mean consent is switched off**, so we deleted the document. Four shapes: `<html>` → 15 B → 500; `<body>` → head-only → 500; **an inner element holding content → 200, `success: true`, `failure_class: "none"`, 99.5 % of the markdown, contacts gone**; **a Phase-1 click that navigates → the wrong page in full, at 200**. Both JS files were byte-identical to upstream. Fixed 2026-08-06: structural guard + the generic selectors observe instead of removing. The click channel is **detected and logged, not fixed** (ceiling 0.046 % of companies). `tasks/done/consent-scripts-delete-the-page.md` |
+| The counter had to survive the fix, and nearly did not | The task file said "drop the 18 generic selectors". Dropping them would have thrown away the measurement the whole cross-repo plan branches on — a deleted selector cannot decline anything, and **neither archive can size this retrospectively** because the element is removed before either side's capture. They are kept and *evaluated*, removal-free: `CONSENT DECLINED` logs `chars`/`pagechars`, which is what separates "a banner we correctly removed" from "a wrapper that also held the contacts". Same reasoning as the `COLLAPSE RECOVERED` / `RENDER DEFECT` split |
+| A 15-byte capture is `<!DOCTYPE html>`, and it is diagnostic | Playwright's `content()` serializes the doctype alone when `documentElement` is gone. An empty 200 gives **39 B**, a body that *is* `<!DOCTYPE html>` gives **54 B** — so 15 means a script deleted the root, never an empty origin. lxml then raises `Document is empty`, which is where our `Crawl4AI Error: This page is not fully supported` placeholder comes from. Every `Near-empty content` event in 30 days was exactly 15 B. **The classifier keys on the shape, not the count** — a padded `<head>` puts the same defect at 20,087 B |
+| A guard cannot see a loss that happened **before** the capture | The collapse guard exits at line 1 for total loss (`if not success`) and at `produced ≥ 500` for partial loss — and could never fire on partial loss anyway, because the deletion precedes capture so visible-in and markdown-out shrink together. **Neither repo's archive can size this either**, for the same reason: the matching element is gone before anything is stored, so "we grepped and found zero" is the only possible result. Count at the point of removal, not at the outcome |
+| A capture with no `<body>` is permanent, an empty one is not | Chromium synthesises `<body>` for every document it parses, so its absence means a script removed it and no retry rebuilds it → `render_defect`, HTTP 200, terminal. A near-empty but structurally intact shell stays `render_error` at 500 — it might paint next time. Collapsing the two re-opens the `norex.com` inversion from the other side. The old 500 cost **16 navigations** per URL under MAS's retries × our patchright tier; Kübler paid it twice in segment 1 (32 navigations, 266 s, 26 % of the run) |
+| `getComputedStyle(el).backgroundColor` is `rgba(0,0,0,0)` by default | So `remove_overlay_elements.js`'s `backgroundColor.includes("rgba")` was **always true**, its size-and-appearance clause a no-op, and the rule degenerated to "remove every visible fixed-or-absolute element". Measured: it deleted an absolutely-positioned hero containing the contacts at `success: true`. Now tests the real alpha (`0 < a < 1`, a translucent scrim). MAS sends `false`; **still do not recommend this flag** — the fix removes one degenerate clause, not the rule's appetite |
+| A counter on the rich console is not a counter | `AsyncLogger` (crawl4ai's own, `self.logger`) fails three ways at once: it prints only `if self.verbose or force_verbose` and **`verbose` is client-settable** through `BrowserConfig`; it **wraps at the console width**, so a 190-char line becomes *two* Log Analytics records and a query on two fields loses rows; and it **eats `[`** — `_log` escapes the template but inserts values raw, and `[[` is not a rich escape, so `[class*="cookie-notice" i]` renders as the empty string. Use `logging.getLogger(__name__)`, which is what `COLLAPSE RECOVERED` / `RENDER DEFECT` / `RESULT FAILURE` already do. All three measured 2026-08-06, none guessed |
+| A fixture can pass for the wrong reason when two fixes overlap | With the generic selectors gone, the Enfold class matches nothing, so every `<html>`/`<body>` consent fixture stays green **with the structural guard reverted**. `/consent/named-root` (`<body id="cookie-notice">`, one of the *122 named* selectors) is the shape only the guard can pass. Likewise the overlay fixture had to be 280×160: a full-width hero is removed by that script's legitimate *size* rule and would prove nothing about the `rgba` fix |
 | Raw markdown > fit_markdown for contact extraction | PruningContentFilter removes contacts at threshold >= 0.35 |
-| Use `optimal` config by default | domcontentloaded + remove_consent_popups (2-4s) |
+| Use `optimal` config by default | domcontentloaded + remove_consent_popups (2-4s). That flag was a data-loss channel until 2026-08-06 — read the rows above before touching the snippet, and treat `CONSENT DECLINED` counts as the live measure of what it still costs |
 | Blocked sites are IP-based, not fingerprint-based | Confirmed: two different browser engines get identical blocks |
 | Block detection must use `redirected_status_code` | `status_code` is the FIRST redirect hop; the body is the LAST. Judging the 301 let every redirect-to-block page through as success (2026-07-30) |
 | `page.content()` / `page.evaluate()` have NO timeout | Sent to the driver with no timeout field ⇒ no timer armed; they wait on the frame's execution-context promise, which a navigation replaces forever. `page_timeout` does not cover them. Bounded in `browser_adapter.bounded_evaluate` + `_capture_html` |
@@ -332,7 +350,9 @@ unknown fields are silently dropped; `page_timeout` is clamped. See
 | `crawl4ai/antibot_detector.py` | +`effective_status()` — the final redirect hop is what block detection must judge (PR upstream pending) |
 | `crawl4ai/async_webcrawler.py` | 3× `is_blocked` fed the final hop; `total_timeout` deadline shared by every attempt (PR upstream pending) |
 | `crawl4ai/browser_adapter.py` | `bounded_evaluate()` + `timeout` kwarg — `page.evaluate` has no protocol timeout (PR upstream pending) |
-| `crawl4ai/async_crawler_strategy.py` | `_capture_html()` settle-and-retry for `page.content()`; bounds on optional DOM steps, `page.close()`, virtual scroll (PR upstream pending) |
+| `crawl4ai/async_crawler_strategy.py` | `_capture_html()` settle-and-retry for `page.content()`; bounds on optional DOM steps, `page.close()`, virtual scroll (PR upstream pending); `remove_consent_popups(page, url)` reads the snippet's report and logs it, and detects a self-inflicted click-navigation from `page.url` (`_report_consent_pass`) |
+| `crawl4ai/js_snippet/remove_consent_popups.js` | Structural guard (`documentElement`/`body`/`head` are never removed); the 18 generic substring selectors **observe instead of removing**; returns a report. **Was byte-identical to upstream** — fifth PR candidate, and the strongest we have |
+| `crawl4ai/js_snippet/remove_overlay_elements.js` | Same structural guard; `backgroundColor.includes("rgba")` → a real alpha test. **Was byte-identical to upstream** — sixth PR candidate |
 | `crawl4ai/async_configs.py` | +`CrawlerRunConfig.total_timeout` (default None, server-side only) (PR upstream pending) |
 | `crawl4ai/content_scraping_strategy.py` | +`strip_noscript()` before `document_fromstring` — a nested `<noscript>` makes libxml2 swallow the whole body (PR upstream pending) |
 | `deploy/docker/egress_proxy.py` | Both `resolve_and_pin` calls awaited off the loop; connect budget 30 s→15 s (`DEFAULT_CONNECT_TIMEOUT_S` + ctor arg); `http://` connect failure **closes** instead of replying `_BLOCKED`. **Was byte-identical to upstream** — new merge surface, fifth PR candidate |
@@ -358,7 +378,7 @@ Dropped in v0.9.2 upgrade (upstream superseded): browser_adapter stealth port
 | `deploy/docker/aitosoft_patchright_fallback.py` | Second-tier retry via patchright for blocked crawls |
 | `deploy/docker/aitosoft_admission.py` | RenderGate: per-replica render admission (capacity 2, bounded queue, 429 + Retry-After) |
 | `deploy/docker/aitosoft_trust.py` | Trusted-client relaxations of the untrusted-config boundary (pinned by test_mas_contract.py) |
-| `deploy/docker/aitosoft_failure_class.py` | `failure_class` taxonomy + transport mapping — the single place `net::ERR_*` / ACS-GOTO / download text is matched, and the single place a class becomes a wire status (`http_status_for`). Both `api.py`'s exception gate and `server._crawl_response` now ask it rather than testing set membership |
+| `deploy/docker/aitosoft_failure_class.py` | `failure_class` taxonomy + transport mapping — the single place `net::ERR_*` / ACS-GOTO / download text is matched, and the single place a class becomes a wire status (`http_status_for`). Both `api.py`'s exception gate and `server._crawl_response` now ask it rather than testing set membership. A capture with **no `<body>` element** is `render_defect` at 200, not `render_error` at 500 — permanence, not emptiness |
 | `deploy/docker/aitosoft_collapse_guard.py` | Detects a capture whose body vanished in our parse: **visible text chars in vs markdown chars out**, never an HTML-byte ratio. Thresholds measured against 37 stored real captures. Also **recovers** it — html2text over the same rendered HTML, accepted only if it clears both floors; recovered pages go out as ordinary successes |
 
 ### 100% Aitosoft Code (safe to modify freely)
@@ -419,3 +439,22 @@ Provisioning reference (scale rule, probes, env vars): `DEPLOYMENT_INFO.md`.
 This repo works alongside `aitosoft-platform` (main multi-agent system). Both have
 Claude as developer. To exchange information between repos, ask the business owner
 to relay messages. Use for: API contracts, deployment coordination, debugging shared issues.
+
+Messages live in gitignored `tmp/mas-repo-messages/`, numbered and
+direction-labelled. **Cite filenames, never integers** — the two repos' numbering
+has diverged before and a message sat unread for two days because of it.
+
+Three habits that have each paid out, with the reasoning so they can be broken
+when the situation differs:
+
+- **Divide work by what each side can physically see, not by who thought of it.**
+  We can see inside the browser; they can see 117,000 stored pages and the
+  agent's decisions. The 2026-08-06 defect was invisible to their archive *by
+  construction*, and their click-channel ceiling was invisible to ours. Written
+  up in `tmp/mas-repo-messages/20-…` §6.
+- **Verify their diagnosis before adopting it, and expect them to verify ours.**
+  They run several agents on a problem and their read moves between messages;
+  so does ours. Twice in one week each side corrected a claim of the other's
+  that had reached a right answer by a route that did not exist.
+- **Count headline numbers twice, from two instruments.** Cheap when both sides
+  have already counted, and it has caught an artefact on each side.

@@ -1,9 +1,25 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-05, after MAS's first deliberately-cold run and a
-five-thread research pass over the whole open list. Three open items were closed
-by *answering* them rather than building them; read "What the 2026-08-05 research
-settled" before picking anything up.
+**Updated:** 2026-08-06 (second update that day), after items 1 and 2 were
+implemented. MAS's segment 1 (25 companies) and a five-message exchange found a
+defect of ours large enough to reorder the whole list; the fix is now written,
+tested and **committed but not deployed**.
+
+**Read this first: we gate MAS's sweep, and the code half is done.** Segment 2
+(50 companies) is held until the consent-JS image is **out**, not until it is
+written — so the next action is a deploy decision, not a task file. Everything
+else in this file is downstream of that. The cross-repo sequence, with the
+reasoning behind each step, is in "The plan across both repos" below; it is the
+section to revisit first if something unexpected happens, because every later
+step is conditional on an earlier measurement.
+
+**Where step 1 stands.** `main` now carries the consent-JS fix and
+`render_defect` for a deleted root (`tasks/done/consent-scripts-delete-the-page.md`,
+`tasks/done/total-loss-is-permanent-not-transient.md`). Offline gate green: 239
+pure-function + 66 browser-driven, both halves verified **red without the fix**.
+Not yet done and required before the image ships: **Tier 1, 4/4, live** —
+`accountor.com` is the one live instrument for "did we break consent-wall
+removal", so it is not optional for this change in particular.
 
 **This file holds ordering, gating and current state — nothing else.** The
 reasoning lives in each task file, the evidence in
@@ -33,6 +49,48 @@ parked deliberately, not waiting for a free session.
 
 **Revision `--0000035` is a burned tag** — it shipped a `NameError` and lasted
 8 minutes. Do not roll back to it; `--0000034` is the last good prior image.
+
+---
+
+## 2026-08-06: segment 1, and the defect that gates segment 2
+
+MAS ran **25 companies, 165 requests, 27 min 58 s**, and told us the window
+afterwards. Two things came out of it, and they point in opposite directions.
+
+**The infrastructure is not the problem and is not close to being the problem.**
+0 × 429, 0 × 504, 0 memory refusals, 0 janitor force-closes, 0 `origin_blocked`,
+0 collapse-guard fires, max render-queue wait 3.5 s against the 15 s that
+produces a 429, max queue depth 0, p50 4.25 s / p90 6.32 s. **The accounting
+reconciles with MAS's exactly** — their 165 requests are our 157 render
+admissions plus 8 DNS failures refused before admission, and their 158 distinct
+URLs are our 150 plus the same 8. Nothing was lost or double-counted between the
+two repos.
+
+**Our own JS deletes customer pages, and two of the three ways are silent.**
+`remove_consent_popups.js` — which MAS sends on every request — removes any
+element whose class or id merely *contains* `cookie-consent`, `cookie-notice` and
+seven similar substrings, with no guard on what it matches. On the Enfold
+WordPress theme that class sits on `<html>`, so we delete the document. Full
+evidence, all four failure shapes and the design reasoning are in
+`tasks/done/consent-scripts-delete-the-page.md`; the classification net is
+`tasks/done/total-loss-is-permanent-not-transient.md`.
+
+The three things worth carrying at index level:
+
+1. **Two of the four shapes return a green result with data missing.** An inner
+   element carrying the class comes back `success: true`, `failure_class: "none"`,
+   HTTP 200, **99.5 % of the expected markdown**, and the contact block gone. A
+   Phase-1 click that navigates returns *a different page*, in full, at 200.
+   MAS confirmed from their side that nothing in their client or agent could
+   flag either.
+2. **Neither repo can size it retrospectively.** The matching element is deleted
+   *before* the capture either side stores, so both archives are post-deletion by
+   construction. MAS's "0 of 193 pages carry the trigger" is not weak evidence —
+   it is the only possible result. This is why the fix has to ship with a
+   counter at the point of removal, and why segment 2 is the measurement.
+3. **Both JS files are byte-identical to `upstream/develop`.** Fifth and sixth
+   upstream PR candidates, and the strongest we have — but file them *after*
+   segment 2, when we can attach production counts.
 
 **MAS ran ~30 prospect sites on the evening of 2026-08-01 — the first real
 workload this image has seen.** 336 renders, 328 distinct URLs, 38 hosts, read
@@ -155,11 +213,31 @@ rate is ~3,300 pages, and how many of those recovery returns is still unmeasured
 non-overlapping tokens — `COLLAPSE RECOVERED` (`api.py:948`) vs
 `RENDER DEFECT … html2text recovered %d chars` (`:965`). One Log Analytics query
 after segment 1 sizes both the population and the recovery yield, with zero
-traffic and zero code. **This is the highest-value activity around the sweep and
-it is not a task file.** Run it after segment 1 alongside `RESULT FAILURE` by
-`failure_class`, the 429/504/500 counts, and `origin_blocked` **per segment**
-(see the block-rate note in `tasks/done/mas-reply-owed-message-16.md` — a rate that climbs
-segment over segment is IP-reputation decay and should stop the sweep).
+traffic and zero code. Run it alongside `RESULT FAILURE` by `failure_class`, the
+429/504/500 counts, and `origin_blocked` **per segment** (see the block-rate note
+in `tasks/done/mas-reply-owed-message-16.md` — a rate that climbs segment over
+segment is IP-reputation decay and should stop the sweep).
+
+**Done for segment 1, 2026-08-06. Both tokens: zero.** 0 `COLLAPSE RECOVERED`,
+0 `RENDER DEFECT`, in **147 successful renders**. `origin_blocked` was also 0, and
+that is now the recorded per-segment baseline MAS will compare segment 2 against.
+
+Read the zero carefully, because it is two facts and only one of them is good:
+
+- At the 2026-08-01 rate of 2.74 %, P(0 fires in 147) ≈ **1.7 %**, so this is
+  real evidence the `<noscript>` collapse family is smaller on this cohort than
+  the original sample suggested. **Keep re-running it per segment** — it is one
+  query and it is the only tracking this family gets.
+- **It is not evidence that pages arrived intact.** The guard never saw the
+  consent-deletion family at all: total loss had already failed (guard is
+  successes-only) and partial loss is invisible to it by construction. A green
+  guard counter and a lost contact block are entirely compatible, which is the
+  whole reason `consent-scripts-delete-the-page.md` ships its own counter rather
+  than leaning on this one.
+
+MAS's archive supplies a floor for the empty-capture family from the other side:
+of 41 companies where every stored page is byte-identical, **26 have every page
+at 1 character** (`21-…` §2b, across 17,439 companies).
 
 ### Azure change made 2026-08-05
 
@@ -179,17 +257,13 @@ forward only, so MAS's first segment is the first thing it can describe.
 
 ## The open items, in order
 
-**Nothing in this repo gates MAS's sweep.** Message 14 was delivered and read
-(their ledger lost it for two days; they have fixed that), and its §3 released
-their gate. `main` == production in code — every commit since the deployed image
-is documentation. So "is our pre-deploy gate sound?" is currently a moot
-question, which is what deflates items 3 and 4 below.
+**Items 1 and 2 are the sweep gate. Everything below them was already parked or
+deflated and stays that way** — do not let a free session pull item 3 forward
+while segment 2 is held.
 
-**Deployed and announced. The ball is with Tero to relay:**
-`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`.
-Its source material — every citation and measurement behind it — is
-`tasks/done/mas-reply-owed-message-16.md`; argue from that file, not the message,
-if MAS pushes back. **Its §0 is the deploy gate.**
+`main` == production in code; every commit since the deployed image is
+documentation. Message 16 was relayed and answered (MAS's 17), so nothing is
+waiting on Tero except the relay of `20-…` and whatever we send next.
 
 **Old items 1 and 2 shipped together on 2026-08-02** as `0.9.2-collapse-recovery`
 — collapse recovery and `unrenderable_content`. Both task files carry what the
@@ -201,9 +275,11 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 
 | # | Task | Size | What to know |
 |---|------|------|--------------|
-| 1 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | **New 2026-08-05.** `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 54 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some of the 54 to change behaviour, and treat that as the payoff. |
-| 2 | `guard-corpus-is-not-in-the-repo.md` | S | **After the sweep.** Real and verified — `test-aitosoft/artifacts/*` is gitignored, three tests fail on a fresh clone at `assert checked >= 30`. But its load-bearing sentence is **wrong**: "our only pre-deploy gate is the offline suite" is false (see corrections below), and it fails *loud*, in the safe direction. If ever done: 4–6 files into `artifacts/keep/`, the mechanism `.gitignore:14-17` already provides. Do **not** open its four-option sizing table before the sweep. |
-| 3 | `flaky-fence-test-margin.md` | S | **After the sweep.** The 1-in-3 figure is stale — it is **1 failure in 9** recorded full runs (0/3 on 08-02, 0/3 on 08-05). Its "this might be a product finding about the 240 s ingress limit" fear is **refuted from code**: the unwind is bounded at 10 s by our own `PAGE_CLOSE_TIMEOUT_S` (`async_crawler_strategy.py:49`), so worst case is 180 + ≤10 ≈ 190 s, ~50 s inside the limit. The test also moved — it is `test_fixture_origin.py:748`, not `:640`. Fix is to raise `stall` and the assertion together. |
+| ~~1~~ | ~~`consent-scripts-delete-the-page.md`~~ | M | **DONE 2026-08-06, undeployed.** `tasks/done/`. The diagnosis reproduced exactly; three things about the *fix* changed, and the first is the one to carry: dropping the 18 generic selectors would have deleted the measurement step 5 branches on, so they now **observe instead of removing** and log `chars`/`pagechars`. |
+| ~~2~~ | ~~`total-loss-is-permanent-not-transient.md`~~ | S | **DONE 2026-08-06, undeployed.** `tasks/done/`. Keyed on the **capture shape** (no `<body>`), not the reason string — one test covers both production signatures, which two reason strings could not. Nothing pinned the old 500, so it was a bug fix and not a contract change. |
+| 3 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 66 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some tests to change behaviour, and treat that as the payoff. The count moved from 54 to 66 with the `/consent/*` routes. |
+| 4 | `guard-corpus-is-not-in-the-repo.md` | S | **After the sweep.** Real and verified — `test-aitosoft/artifacts/*` is gitignored, three tests fail on a fresh clone at `assert checked >= 30`. But its load-bearing sentence is **wrong**: "our only pre-deploy gate is the offline suite" is false (see corrections below), and it fails *loud*, in the safe direction. If ever done: 4–6 files into `artifacts/keep/`, the mechanism `.gitignore:14-17` already provides. Do **not** open its four-option sizing table before the sweep. **Item 1 raised its value slightly**: the 7-host corpus is load-bearing for a claim about consent selectors, and 2 of 2 CMP measurements is thin — though the `CONSENT DECLINED` counter now answers that from production instead. |
+| 5 | `flaky-fence-test-margin.md` | S | **After the sweep.** Now **1 failure in 10** recorded full runs — it fired again on 2026-08-06 at `elapsed_s == 3.78` against `< 3`, and passed on re-run. Its "this might be a product finding about the 240 s ingress limit" fear is **refuted from code**: the unwind is bounded at 10 s by our own `PAGE_CLOSE_TIMEOUT_S` (`async_crawler_strategy.py:49`), so worst case is 180 + ≤10 ≈ 190 s, ~50 s inside the limit. The line number moved again, to `test_fixture_origin.py:974` — it has now been wrong in this table twice, which is an argument for citing the test name and not the line. Fix is to raise `stall` and the assertion together. **Deliberately not bundled into the consent image**: a parked test-margin fix does not belong in a gating deploy. |
 
 **Old items 1 and 2 are gone.** Item 1 (`content_source="raw_html"`) was priced
 2026-08-05 and the answer is no — it is recorded in
@@ -229,6 +305,67 @@ thing to fix in the same change.
 
 ---
 
+## The plan across both repos, and why it is in this order
+
+Both repos are ours, both deploy into the same Azure, and MAS is our only
+consumer. The steps below are sequenced by **what each measurement unblocks**,
+not by convenience — so if a result comes back unexpected, the thing to re-read
+is the reasoning attached to that step rather than the whole list. Each step
+names who runs it, because the split follows **what each side can physically
+see** (agreed in `tmp/mas-repo-messages/20-…` §6, accepted in `21-…` §4).
+
+| # | who | what | why here and not elsewhere |
+|---|---|---|---|
+| 1 | **us** | ~~Write~~ **Deploy** items 1 + 2 as one image. Code done 2026-08-06; remaining gate is **Tier 1 4/4, live** | It is the only thing that stops data loss, and a 50-company run is held on it. Everything else in this table is measurement. `accountor.com` is the live instrument for "did we break consent-wall removal" and this is the change that could |
+| 2 | **us, same image** | ~~Build~~ **Done.** The counter: `CONSENT DECLINED` / `CONSENT STRUCTURAL` / `CONSENT NAVIGATION`, each carrying the requested URL beside the current one | **A segment runs once.** Neither archive can hold this population — the element is deleted before capture — so segment 2 is the measurement, and a counter that misses this image waits for segment 3 |
+| 3 | **them, after our image** | The `remove_consent_popups` A/B, **three arms**: off / on-today / on-with-fix | A two-arm result answers "is the flag worth keeping", which does not change what we build. The third arm answers "does narrowing the selectors cost consent-wall coverage", which is the one thing our 7-host corpus cannot settle. Running it earlier burns a round of their traffic on the wrong question |
+| 4 | **them** | Segment 2, 50 companies, counter live, window announced first | 50 rather than 25 because our own measurement says the *activation count* costs, not the companies: 23 replicas for 25 companies, five of them serving 1–3 requests in an ~8-minute life, ~9 minutes of idle tail after the last render |
+| 5 | **us** | Read the counter and decide what it changed | Branches below — this is the step most likely to reorder everything after it |
+| 6 | **us** | Upstream PR for both JS files | "Here are N occurrences in a production sweep" is a far stronger submission than a synthetic repro, and upstream `develop` moves slowly enough that waiting costs nothing |
+
+**Running in parallel on their side, blocking nothing:** persisting the final URL
+and failure reason on every capture (the gap behind two questions neither of us
+could answer this week), the trailing-slash double fetch, and turning the
+sub-page queueing condition from a prompt line into a real gate.
+
+**Optional, theirs, and the only retrospective handle on the silent channel:**
+contact-shaped URL paths (`yhteystiedot`, `contact`, …) that returned
+substantial markdown and **zero** emails and zero phones. It cannot attribute
+cause — but measured before our image and again on the same cohort after, the
+delta is the attribution.
+
+### What step 5 branches on
+
+- **Declined-removal counter fires often** → the silent inner-element channel was
+  real and possibly large. Ask whether dropping the generic selectors was enough,
+  or whether the *named* ones need the structural guard too.
+- **Counter fires ~never** → the loud channel was the whole thing. Say so in the
+  upstream PR, and stop treating the silent channel as an open risk.
+- **URL-change counter fires** → decide whether to build re-navigation after a
+  self-inflicted click. Below some rate, logging is the whole answer; MAS's
+  measured ceiling is 0.046 % of companies, so the prior is "logging".
+- **`render_defect` (item 2) fires at all after the JS fix** → something we have
+  not identified is still deleting documents. That is a new investigation, not a
+  tuning exercise.
+
+### What would invalidate this plan
+
+- **MAS's A/B showing the generic selectors do carry coverage.** Then item 1's
+  "drop them" becomes "gate them", and the gate should be *positional* (a real
+  banner is fixed or sticky; a footer is not) rather than text-proportion, which
+  a 43.3 % measurement already killed.
+- **A further message changing the diagnosis.** MAS runs several agents on this
+  and their read has moved between messages — twice they corrected a claim of
+  their own, and once we corrected a mechanism of theirs that reached the right
+  answer by a route that does not exist. **Verify before adopting**, in both
+  directions; that habit has paid out every time it was used this week.
+- **Segment 2 finding a failure class we have not seen.** The capacity and memory
+  families are settled to zero across three workloads; a new class would most
+  likely be another content-fidelity defect, which is where our blind spots have
+  consistently been.
+
+---
+
 ## Parked on purpose — do not pick these up unasked
 
 | Task | Why parked | What would un-park it |
@@ -241,7 +378,7 @@ thing to fix in the same change.
 | `static-mode-tls-impersonation.md` | Hardens a path nothing currently falls back to | `residential-egress-retry-path.md` |
 | `base-config-boolean-defaults-never-applied.md` | `simulate_user` has never taken effect and nothing has missed it. "Delete the line" is the likely right answer | Someone wanting a boolean in `base_config` to work |
 | `preflight-batch-endpoint.md` | **MAS said do not build speculatively.** Their words | MAS asks |
-| `file-upstream-prs.md` | Standing tracker, four PRs open. Upstream `develop` is **one commit past v0.9.2** (a Docker IPv6 fix, checked 2026-08-02) — core behavioural changes sit for months and waiting for them is not a plan | Nothing — check occasionally |
+| `file-upstream-prs.md` | Standing tracker, four PRs open and **a fifth written but deliberately unfiled** (the consent snippet — file it after segment 2, when it can carry production counts). Upstream `develop` is **one commit past v0.9.2** (a Docker IPv6 fix, checked 2026-08-02) — core behavioural changes sit for months and waiting for them is not a plan | Nothing — check occasionally |
 | `waa-eval-2026-07-30-forensics.md` | **Reference, not a task.** Never close it | — |
 
 **Do not re-expand this list without a reason that arrives from outside** — a MAS
@@ -285,12 +422,53 @@ request**, and check `test-aitosoft/artifacts/` before you add a route. The
 2026-08-01 image, the 2026-08-02 pool work and the 2026-08-02 production
 forensics cost **zero live crawl requests** between them.
 
-**Eight consecutive sessions have found the previous session's task file
+**Count headline numbers twice, from two instruments, on purpose.** MAS proposed
+this (`21-…` §4) after our two repos reconciled segment 1 independently and
+agreed to the request — that validated *both* instruments and cost nothing,
+because both sides had already counted. It earned itself twice in the same week:
+**three of MAS's four flagged segment-1 findings turned out to be artefacts of
+their own measuring tools**, and **our "two hosts in 30 days" figure came from
+asking the logs one question instead of two** (`Near-empty content` is gated on
+HTTP 200, so the same 15-byte capture at any other status lands under
+`Structural: no <body> tag`; the real count is 2 + 11 hosts). Neither was caught
+by review. Both would have been caught by a second count. This is cheap
+specifically for numbers that decide something — do not turn it into ceremony
+for every figure.
+
+**Nine consecutive sessions have found the previous session's task file
 materially wrong about something load-bearing** — that is the separation of roles
 working (CLAUDE.md principle 6), not a quality problem. Verify the diagnosis, not
 just the plan, and **check the arithmetic**, not just the logic. The sharpest
 case: the record said 8 browsers at 165 MB "is the whole 4 GiB budget". That is
 ~36 %. Four sessions read past it.
+
+The ninth (2026-08-06, the consent JS) is the first where **the diagnosis
+survived intact** — every shape, every number and the branch trace reproduced
+through the browser on the first attempt. What did not survive was the *design*,
+in a way worth naming because it is new here:
+
+- **A fix can delete the measurement the plan depends on.** The file said "drop
+  the 18 generic selectors", and dropping them is correct as a fix — but step 5
+  of the plan above branches on how often the declined-removal counter fires,
+  and a deleted selector cannot decline anything. They are kept and *evaluated*
+  instead. **When a plan's next step is a measurement, check that the current
+  step leaves the instrument attached.**
+- **Two fixes covering one symptom need a fixture only one of them can pass.**
+  With the generics gone, the Enfold class matches nothing, so every
+  `<html>`/`<body>` consent test would have stayed green with the structural
+  guard reverted — the suite would have asserted one fix twice and called it
+  two. `/consent/named-root` is the shape that separates them.
+- **A fixture shaped like the measurement can still be wrong.** The overlay
+  measurement describes a full-width hero; a full-width element is removed by
+  that script's *legitimate* size rule, which survives the fix. The route serves
+  a 280×160 box, which only the degenerate clause could ever have removed. Same
+  family as `/block/padded-403` — third time now.
+- **Print the log line and read it.** The counters nearly shipped on
+  `AsyncLogger`, which prints only when `verbose` is set (and `verbose` is
+  *client-settable*), wraps at the console width so a 190-character line becomes
+  two Log Analytics records, and eats `[` — deleting the CSS selector, the most
+  diagnostic field in the line. Two minutes of looking; a segment's worth of
+  measurement. Tests asserted the *data* and were green throughout.
 
 The eighth (2026-08-05, the egress work) produced the largest count yet — ten
 corrections — and the shape is worth naming: **every error was in the framing
@@ -338,6 +516,26 @@ measured.
 called the 2026-08-01 run clean; 9 of its pages came back with nothing in them.
 They were not careless — the failure is invisible from their side by
 construction. Record what we measured, not what we were told.
+
+---
+
+## Corrections to the record, 2026-08-06
+
+1. **"Nothing in this repo gates MAS's sweep" is no longer true.** It was true on
+   2026-08-05 and is false now. Fixed at the top of this file.
+2. **The `norex.com` class was never a detector problem.** Five tracked files
+   (`AITOSOFT_CHANGES.md:423`, `aitosoft_failure_class.py:191`,
+   `tasks/done/antibot-minimal-text-false-positive.md:6`,
+   `tasks/done/detector-round3-evidence-vs-inference.md:148`,
+   `test_failure_classification.py:535`) say the body "was our own
+   `Crawl4AI Error:` placeholder in 15 bytes of HTML". That conflates two fields:
+   `html` is 15 bytes of bare doctype, and the placeholder is what our *scraper
+   generated from* those 15 bytes. Both statements were individually true, and
+   reading them as one sent four sessions looking at the anti-bot tier instead of
+   at our own DOM cleanup. Worth fixing in those files when someone is next in
+   them.
+3. **Our 30-day population count was an undercount, in the reassuring
+   direction.** See the standing rule above. Query both reason strings.
 
 ---
 
@@ -402,12 +600,29 @@ message and it is worth honouring: their ledger numbers diverged from ours (our
 "13" is their "11"; they have no 12 or 13), and the mismatch is part of why our
 14 sat unread for two days.
 
-**The ball is with Tero: relay
-`tmp/mas-repo-messages/16-to-mas-a-dead-domain-was-never-an-ssrf-refusal.md`.**
-Their message it answers is
-`tmp/mas-repo-messages/15-from-us-your-answer-sat-here-two-days-and-the-run-went-cold.md`.
-Ours asks for one blocking answer (§0, the 400 → 200 wire-status change) and
-five non-blocking ones.
+**The 2026-08-05/06 exchange (`17-…` through `21-…`) is the densest we have had
+and most of it is settled.** Read `20-…` if you read one — it is ours, it carries
+every measurement behind `consent-scripts-delete-the-page.md`, and its §6 is the
+division of labour both sides then agreed to. What closed:
+
+- **`16-…` §0 landed and works.** Three genuinely dead domains came back
+  `origin_unreachable` and MAS's agent filed them as *"this company has no
+  website"* rather than as our refusal. One of them (Provesta) then found the
+  company's real site and captured it fully. `SSRF` appears zero times in the run.
+- **`failure_class: null` on our 500s was never ours.** Their `parseErrorBody`
+  returned a display string and never lifted the field onto the result object.
+  `server.py:529-539` was correct throughout. They have fixed it, and have
+  withdrawn the ask that was built on it.
+- **`failure_class: "none"` on 404 / 400 / 522 is one mechanism, not three.**
+  Those pages genuinely rendered; the status codes are the *origin's* own, and
+  the 522 proves it since we cannot emit a Cloudflare status. Complaint withdrawn.
+- **Raw Unicode hostnames work end to end.** Our offline test (`getaddrinfo`
+  IDNA-encodes; Chromium sends the punycode `Host`) and their live production
+  probe agree byte-for-byte. Their probe went through the pinning proxy, so this
+  is measured and not inferred. **Closed, nothing to build.**
+- **Their `max_retries` is 1**, confirmed from their config, and **their sub-page
+  queueing "condition" was agent judgment, not code** (`19-…` §2) — so revert to
+  worst-case sizing for dead-but-resolving hosts until they tell us it shipped.
 
 **Message 14 was delivered and read** (2026-08-05, after sitting unread in their
 repo since 08-03 — their thread ledger had no row for it; they have fixed that
@@ -452,9 +667,20 @@ Still genuinely open, and only their corpus can answer:
 | | question | why it still matters |
 |---|---|---|
 | (b) | do the four padded-403 hosts now come back `origin_blocked`? | If they still return content, the new block-notice tier does not fire on the real page — a real defect, and the fixture was already unfaithful once on exactly this axis |
-| (c) | how many hosts moved to `render_error` at 500 (the `norex.com` class)? | If it is a large population, **do not change the wire status** — make the *inference tier* less eager instead |
-| (f) | residual empty-capture count | Sizes the population our own 2.7 % only samples |
 | (g) | count of interstitials carrying no marker, no prose and no notice | We deliberately do not catch this class and cannot count it. A number lets us stop wondering |
+
+**(c) is answered and the answer reframes it.** The `render_error`-at-500
+population is **2 hosts in 30 days** (`kubler.fi`, `norex.com`) — and *both were
+this bug*. The class we created to stop mislabelling `norex.com` was treating a
+symptom of a defect we had not yet found. So the old advice ("if the population
+is large, make the inference tier less eager") is moot: the right change is the
+JS, not the tier.
+
+**(f) has a partial answer from MAS's own archive** (`21-…` §2b): of 41 companies
+where every stored page is byte-identical, **26 have every page at 1 character**
+— the known empty-capture class, our `<noscript>` family. That is a floor for the
+population, measured across 17,439 companies, and it is a different bug from the
+consent one.
 
 Answered from our side on 2026-08-01/02, so do not re-ask:
 

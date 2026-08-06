@@ -71,7 +71,11 @@ ORIGIN_BLOCKED = "origin_blocked"  # anti-bot / WAF / edge block
 ORIGIN_UNREACHABLE = "origin_unreachable"  # DNS / TCP / TLS never got there
 RENDER_TIMEOUT = "render_timeout"  # our wall-clock fence fired
 RENDER_ERROR = "render_error"  # our browser/pipeline broke, transiently
-RENDER_DEFECT = "render_defect"  # our parse lost the body — ours and PERMANENT
+# Ours and PERMANENT. Originally "our parse lost the body"; widened 2026-08-06
+# to "the body is gone and we are the reason", which also covers our own
+# injected JS having removed the document root. Keyed on the shape of the
+# damage, not on the mechanism, so the next mechanism lands here too.
+RENDER_DEFECT = "render_defect"
 UNRENDERABLE_CONTENT = "unrenderable_content"  # served fine; it is not a page
 
 # Normally envelope-level (no result exists to carry them).
@@ -258,6 +262,43 @@ _TIMEOUT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A capture that has no <body> element at all.
+#
+# Chromium synthesises <body> for every HTML document it parses — there is no
+# markup, however malformed, that renders without one. So a non-empty capture
+# with no <body> means a script *removed* it after parse, and the only script
+# on that page we control is our own consent/overlay cleanup. That is
+# permanent: the same markup produces the same deletion on every attempt.
+_BODY_TAG_RE = re.compile(r"<body\b", re.IGNORECASE)
+
+
+def _document_root_is_gone(result: dict) -> bool:
+    """True when the capture we are holding has lost its document root.
+
+    Two production signatures, and they are the same fact at different depths:
+
+        <!DOCTYPE html>                     15 bytes — <html> itself removed,
+                                            after which Playwright's `content()`
+                                            serializes the doctype and nothing
+                                            else
+        <!DOCTYPE html><html><head>…</head> head only — <body> removed; 87 bytes
+        </html>                             bare, 20,087 with a padded <head>
+
+    Both come back with no ``<body>``, which is the test. **The byte count is
+    not the test**, though 15 is diagnostic on its own: an empty 200 serializes
+    to 39 bytes (``<html><head></head><body></body></html>``) and a body that
+    literally *is* the string ``<!DOCTYPE html>`` to 54, so nothing but a
+    removed ``documentElement`` produces exactly 15.
+
+    An empty or absent ``html`` field is deliberately NOT root-gone. A crawl
+    that never obtained a document is a different failure, and it is the one
+    that genuinely might work on a retry.
+    """
+    html = result.get("html")
+    if not isinstance(html, str) or not html.strip():
+        return False
+    return not _BODY_TAG_RE.search(html)
+
 
 def classify_error_text(
     error_message: Optional[str],
@@ -388,8 +429,36 @@ def classify_result(result: dict) -> str:
     if status and status >= 400:
         return ORIGIN_HTTP_ERROR
 
-    # No error text, no origin status: we came back with nothing and cannot say
-    # why. That is ours until proven otherwise.
+    # A capture with no document root left. Ours, and PERMANENT — which is the
+    # axis, not ownership. `render_error` at 500 buys MAS three more attempts at
+    # a page that will lose its root identically every time: Kübler paid 32
+    # navigations and 266 s of render time for two URLs in segment 1, 26% of the
+    # entire run for one company of 25.
+    #
+    # This sits BELOW the origin branches on purpose. If the origin said 403 or
+    # served a 500, that is evidence about the origin and it outranks a verdict
+    # we derived from the shape of what came back — the same ordering
+    # `classify_error_text`'s inference branch already uses. What reaches here is
+    # a document that arrived fine and then lost its root, which since 2026-08-06
+    # we know is usually *our own* consent cleanup deleting it
+    # (tasks/done/consent-scripts-delete-the-page.md).
+    #
+    # `render_defect`'s name says "our parse lost the body" and the mechanism
+    # here is our injected JS rather than our parser. The name is still right —
+    # both are ours, both are permanent, and permanence is what the status keys
+    # on — but the class is now wider than its original sentence, deliberately:
+    # it keys on the SHAPE OF THE DAMAGE, which is what makes it survive the
+    # next mechanism. This is the third distinct thing to produce a body-shaped
+    # hole (the <noscript> family, the four markup shapes in
+    # cleaned-html-collapse-guard.md, and now our own JS).
+    if _document_root_is_gone(result):
+        return RENDER_DEFECT
+
+    # No error text, no origin status, a document that still has a root: we came
+    # back with nothing and cannot say why. That is ours, and it is the case a
+    # retry can genuinely clear — a JS shell that rendered nothing this time may
+    # render next time. Keeping it apart from the branch above is what stops the
+    # `norex.com` inversion re-opening from the other side.
     return RENDER_ERROR
 
 

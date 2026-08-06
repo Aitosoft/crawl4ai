@@ -59,7 +59,7 @@ Keeping this log helps when syncing with upstream updates.
 > we cannot buy.
 
 ### Version
-- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below)
+- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below). **`main` is one image ahead of production**: the consent-JS fix + `render_defect` for a deleted root are committed and undeployed (2026-08-06)
 - **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result + the egress-path work (deployed 2026-08-05)
 - **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-egress-dns-fix` (revision `crawl4ai-service--0000036`, deployed 2026-08-05)
 - **Previous**: `0.9.2-collapse-recovery` (revision `--0000034`, deployed 2026-08-02, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`). **Revision `--0000035` (`0.9.2-egress-dns`) is a burned tag** — it shipped a `NameError` and lasted 8 minutes; do not roll back to it.
@@ -94,9 +94,212 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- **`pytest test-aitosoft/` = 285 tests, ~240 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
-- Pure-function subset: **231 tests, ~15 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
-- Browser-driven subset: test_fixture_origin.py (54), against a local fixture origin, ~220 s
+- **`pytest test-aitosoft/` = 305 tests, ~270 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
+- Pure-function subset: **239 tests, ~30 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
+- Browser-driven subset: test_fixture_origin.py (66), against a local fixture origin, ~235 s
+- **`test_the_wall_clock_fence_is_a_504_and_ours` is a known flake** and it is now
+  **1 failure in 10** recorded full runs (it failed the 2026-08-06 run at
+  `elapsed_s == 3.78` against a `< 3` assertion, and passed on re-run).
+  Diagnosis and the two-constant fix: `tasks/flaky-fence-test-margin.md`. Left
+  parked on purpose — it is a test margin, it fails loud and in the safe
+  direction, and it is not worth adding to a gating image. Re-run it before
+  reading a red suite as a regression. Its line number moved again, to
+  `test_fixture_origin.py:974`.
+
+---
+
+## Our own consent JS deleted customer pages (2026-08-06)
+
+**Committed, NOT deployed.** One wire-status change; see "The contract change"
+below. MAS is holding segment 2 (50 companies) on this image.
+
+`crawl4ai/js_snippet/remove_consent_popups.js` — which MAS sends on **every**
+request — ended with 18 generic substring selectors (`[class*="cookie-consent"
+i]` and friends) and called `el.remove()` on whatever they matched, with no
+guard on *what*. The Enfold WordPress theme writes `av-cookies-no-cookie-consent`
+onto `<html>` to mean **cookie consent is switched off on this site**, so we
+matched a flag asserting there is no banner and deleted the document.
+`page.content()` then serializes the doctype alone: `<!DOCTYPE html>`, 15 bytes.
+
+Four failure shapes, and **two of them were silent** — a green 200 with data
+missing, invisible to both repos by construction, because the element is removed
+*before* the capture either side stores. Full evidence:
+`tasks/done/consent-scripts-delete-the-page.md`.
+
+### What changed
+
+| file | change |
+|---|---|
+| `crawl4ai/js_snippet/remove_consent_popups.js` | **Structural guard** — `documentElement`, `body` and `head` are never removed, whatever matched them (Phases 3 and 4). **The 18 generic selectors no longer remove anything**: they are a separate list that is *observed* and reported. Phase 5's `document.body.style` accesses are null-guarded. The snippet now **returns a report** |
+| `crawl4ai/js_snippet/remove_overlay_elements.js` | Same structural guard. `backgroundColor.includes("rgba")` replaced with a real alpha test — see below. Null-guarded `document.body` |
+| `crawl4ai/async_crawler_strategy.py` | `remove_consent_popups(page, url)` takes the *requested* URL, reads the snippet's report, and logs it (`_report_consent_pass`). Detects a self-inflicted click-navigation by comparing `page.url` across the pass. The animation wait moved out of the `try` |
+| `deploy/docker/aitosoft_failure_class.py` | A capture with **no `<body>` element** is `render_defect` (200, terminal), not `render_error` (500, retried 3×) |
+| `test-aitosoft/fixture_origin.py` | `/consent/{shape}` + `/consent/elsewhere`, and `consent_reports()` |
+
+### The three counters, and why they are worth an image on their own
+
+Neither repo's archive can size this retrospectively — MAS's "0 of 193 pages
+carry `av-cookies-*`" is not weak evidence, it is *the only possible result*.
+So the fix ships with the instrument:
+
+```
+CONSENT DECLINED    a generic selector matched something we no longer remove.
+                    chars/pagechars is the whole question: a 200-character match
+                    was a banner and removing it was right; a match holding a
+                    large share of the page was never a banner, and removing it
+                    is what silently cost MAS contact blocks
+CONSENT STRUCTURAL  a *named* vendor selector matched <html>/<body>/<head>.
+                    Should never fire. If it does, the named list has the same
+                    defect the generic list had
+CONSENT NAVIGATION  our own Phase-1 click moved the page. Everything captured
+                    after it belongs to a URL nobody asked for
+```
+
+Non-overlapping tokens, none a substring of another — the same reason
+`COLLAPSE RECOVERED` and `RENDER DEFECT` are split. Every line carries the
+**requested** URL beside the current one, which is the join key MAS reconciles on
+(`tmp/mas-repo-messages/21-…` §6) and which is no longer `page.url` once a click
+has navigated.
+
+**They go out through the stdlib `logging` module, not `self.logger`** — the one
+place this change deviates from the surrounding upstream file's idiom, and it is
+deliberate. `AsyncLogger` renders through a rich console, which fails a counter
+three ways, all measured rather than assumed:
+
+- It prints only `if self.verbose or force_verbose`, and `verbose` comes from
+  `BrowserConfig` — which is in the untrusted-config allow-list. A client
+  sending `browser_config: {"verbose": false}` would silence the counter.
+- It **wraps at the console width**. These lines run past 190 characters, so
+  each one would arrive in the container log as *two* records, and a query for
+  `chars=` and `class=` on the same record would silently lose rows.
+- It **eats brackets**: `AsyncLogger._log` escapes the message template
+  (`"[" → "[["`) but inserts param values raw, and `[[` is not an escape in rich
+  — it renders as `[]`. An unescaped `[class*="cookie-notice" i]` reached the
+  console as **the empty string**, deleting the most diagnostic field in the
+  line.
+
+`COLLAPSE RECOVERED`, `RENDER DEFECT` and `RESULT FAILURE` already use this
+channel (`api.py`), so this is the one the existing Log Analytics queries target
+rather than a new one. **A segment runs once**, and a counter that can read zero
+for four different reasons is not a counter.
+
+### The click channel is detected and NOT fixed, deliberately
+
+Phase 1 clicks 86 named CMP buttons, 12 generic attribute selectors, a
+text-content regex over every button and link, a shadow-DOM pass and an iframe
+pass. Two of those five were measured selecting ordinary site furniture —
+`accept-terms-btn`, `<a role="button">Got it!</a>` — whose default action is a
+navigation, after which we capture a **different page, in full, at 200**.
+
+We log it. We do not re-navigate. MAS's archive bounds this channel at **0.046 %
+of companies**, which makes measuring it proportionate and rebuilding navigation
+state disproportionate. `test_a_self_inflicted_click_navigation_is_detected`
+asserts today's defect on purpose, the same way the padded-block tests did.
+
+Detection is in **Python, not the snippet**: a click that navigates destroys the
+JS execution context, so the snippet's own `location.href` comparison would never
+run and its return value would never arrive. `page.url` survives that, and it is
+the *consequence*, so it covers all five click surfaces including the two the
+fixture does not reproduce.
+
+### `remove_overlay_elements`: the size clause was a no-op for years
+
+`getComputedStyle(el).backgroundColor` is the literal string `rgba(0, 0, 0, 0)`
+for every element with a transparent background — the default. So
+`backgroundColor.includes("rgba")` was **true for essentially every element**,
+the whole size-and-appearance clause was dead, and the rule degenerated to
+"remove every visible fixed-or-absolute element". Now tests the actual alpha
+(`0 < a < 1`, i.e. a translucent scrim, which is the clause's evident intent).
+
+MAS sends `false`, so this is not on the critical path — it is in this image
+because it is the same defect family and the same upstream PR. **Still do not
+recommend the flag.**
+
+### The contract change
+
+A capture whose document root is gone was `render_error` at **HTTP 500**, which
+MAS retries three times. Four attempts × four navigations under the patchright
+tier = **16 navigations for a URL that will do exactly the same thing every
+time.** Kübler paid it twice over in segment 1: 32 navigations, 266 s, **26.1 %
+of the whole run's render seconds** for 1 company of 25.
+
+It is now `render_defect` — ours, **permanent**, HTTP 200, `success: false`,
+already in `NON_RETRYABLE_CLASSES`. Pre-agreed with MAS
+(`tmp/mas-repo-messages/19-…` §1, `21-…` §1), so it does not need announcing
+before it ships, but it is a wire-status change and gets the usual care.
+
+**The line that must survive:** permanence, not emptiness.
+
+| shape | verdict | why |
+|---|---|---|
+| no `<body>` element in the capture | `render_defect`, 200 | Chromium synthesises `<body>` for every document it parses, so its absence means a script removed it. No retry rebuilds a deleted root |
+| near-empty but structurally intact | stays `render_error`, 500 | a JS shell that painted nothing this time may paint next time |
+
+Keyed on the **shape**, not on the byte count — a padded `<head>` puts the same
+defect at 20,087 bytes. 15 bytes is still diagnostic when reading a log line: an
+empty 200 serializes to **39** and a body that *is* the string `<!DOCTYPE html>`
+to **54**, so exactly 15 is a removed `documentElement` and nothing else.
+
+`render_defect`'s docstring said "our parse lost the body"; it is now "the body
+is gone and we are the reason". Widened on purpose — it keys on the shape of the
+damage, which is what makes it survive the next mechanism. This is the third
+distinct thing to produce a body-shaped hole (the `<noscript>` family, the four
+markup shapes in `cleaned-html-collapse-guard.md`, now our own JS).
+
+### What the implementing session found wrong in the task files
+
+Three things, all small — the diagnosis itself reproduced exactly:
+
+1. **The task file proposed dropping the 18 generic selectors. Dropping them
+   silently would have thrown away the measurement the whole plan depends on.**
+   Step 5 of the cross-repo plan branches on "declined-removal counter fires
+   often / ~never", and a deleted selector cannot decline anything. They are kept
+   and evaluated, removal-free — one `querySelectorAll` pass we were already
+   doing — which also answers MAS's third A/B arm from our own logs.
+2. **The structural guard and the generic drop were indistinguishable in test.**
+   With the generics gone, the Enfold class matches nothing, so every
+   `<html>`/`<body>` fixture would pass with the guard reverted. Added the
+   `named-root` shape (`<body id="cookie-notice">`, one of the *122 named*
+   selectors) so the guard has a test only it can pass.
+3. **The overlay fixture had to be small.** A full-width absolutely-positioned
+   hero is removed by that script's *size* rule, which is legitimate — it would
+   have proved nothing about the `rgba` fix. The route serves a 280×160 opaque
+   box, which only the degenerate clause could ever have removed.
+
+Not wrong, but worth recording: `classify_error_text` never sees `html`, so the
+root-gone check lives in `classify_result` and is **below** both origin branches.
+A root that vanished on a page the origin refused is still the origin's verdict
+to give; inverting that order would start reporting 403s as our own defect.
+
+### Tests
+
+- `test-aitosoft/test_fixture_origin.py` — 12 new browser-driven tests over
+  `/consent/{shape}`: the four destructive shapes survive; the counter reports
+  `chars`/`pagechars`; the structural guard names the element it saved; a real
+  banner surviving costs noise and not content; both click surfaces are detected;
+  the overlay flag no longer removes an opaque element.
+- `test-aitosoft/test_failure_classification.py` — 8 new: a deleted root is
+  permanent and an empty page is not, a missing capture is not a deleted root,
+  the origin still outranks the shape, the wire status is 200.
+- The `norex.com` row in `MAS_DEFECT_B_CASES` now carries its real 15-byte
+  capture and expects `render_defect`. Its old label — "our own
+  `Crawl4AI Error:` placeholder in 15 bytes of HTML" — conflated two fields
+  (`html` is bare doctype; the placeholder is what our scraper *generated from*
+  it) and is the sentence that sent four sessions to the anti-bot tier instead of
+  to our own DOM cleanup.
+
+### To check first after deploy
+
+1. A crawl of `/consent/inner`'s real-world equivalent is not available, so use
+   the log split instead: `CONSENT DECLINED` should appear at a non-trivial rate
+   in the first sweep segment, and `CONSENT STRUCTURAL` should appear **never**.
+   A `CONSENT STRUCTURAL` line means a named vendor selector is also unsafe.
+2. `kubler.fi` — the confirmed Enfold host, and the one live check worth the
+   request. Expect HTTP 200, `success: true`, real markdown. Before this image it
+   was 15 bytes at 500, twice per sweep, for 26 % of a run's render seconds.
+3. `RESULT FAILURE … failure_class=render_defect` at **200**, not 500. If it
+   fires at all after this image, a mechanism nobody has identified is still
+   deleting documents — that is a new investigation, not a tuning exercise.
 
 ---
 

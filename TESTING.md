@@ -54,7 +54,7 @@ python test-aitosoft/test_soak.py --duration-min 30                 # leak hunti
 Everything pytest collects is OFFLINE — no server, no customer site:
 
 ```bash
-pytest test-aitosoft/          # 285 tests, ~240 s
+pytest test-aitosoft/          # 305 tests, ~270 s
 ```
 
 That splits in two, and the split matters when you are choosing where to put a
@@ -62,8 +62,8 @@ new test:
 
 | | Suites | Tests | Time | Covers |
 |---|---|---:|---|---|
-| Pure-function | the twelve below | 231 | ~15 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the config boundary, the gate |
-| Browser-driven | `test_fixture_origin.py` | 54 | ~220 s | **time, navigation and the browser** — challenge resolution, hydration races, redirect chains, the wall-clock fence |
+| Pure-function | the twelve below | 239 | ~30 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the config boundary, the gate |
+| Browser-driven | `test_fixture_origin.py` | 66 | ~235 s | **time, navigation and the browser** — challenge resolution, hydration races, redirect chains, the wall-clock fence |
 
 ```bash
 pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py test-aitosoft/test_collapse_guard.py test-aitosoft/test_egress_dns_offload.py
@@ -242,7 +242,7 @@ unaffected).
 | Failure-classification test (`pytest test-aitosoft/test_failure_classification.py`) | before every deploy; after any change to `failure_class`, the error-text matching, or the 200/500/504 mapping | 34/34 pass — offline, pins MAS's Q2 contract: origin-caused ⇒ 200 + `success:false`, 5xx reserved for us, `failure_class` on every result |
 | Noscript-collapse test (`pytest test-aitosoft/test_noscript_body_collapse.py`) | before every deploy; after any change to `strip_noscript()` or the scraping strategy | 11/11 pass — offline, pins that a nested `<noscript>` no longer swallows the body |
 | Challenge-detection test (`pytest test-aitosoft/test_antibot_challenge_detection.py`) | before every deploy; after any `antibot_detector` pattern change | 18/18 pass — offline, pins both measured challenge families at HTTP 200 and the Shopify `Access Denied` false positive |
-| Fixture-origin test (`pytest test-aitosoft/test_fixture_origin.py`) | before every deploy; after any change to the capture path, block detection, `failure_class` or the fence | **54/54 pass — offline but browser-driven (~220 s)**, measured 3× consecutively on 2026-08-05 (221.6 / 220.0 / 219.8 s). The "23/23, ~50 s" this row claimed was stale by a wide margin. Three of its tests pin defects **on purpose** (padded block at 202, unmarked interstitial, unclosed `<noscript>`); when the owning task ships, invert them, don't delete them. Note `MAS_MAX_RETRIES = 2` in this file models a request shape MAS has **never** sent (production is 1) — see `tasks/README.md` corrections |
+| Fixture-origin test (`pytest test-aitosoft/test_fixture_origin.py`) | before every deploy; after any change to the capture path, block detection, `failure_class`, **the consent/overlay snippets** or the fence | **66/66 pass — offline but browser-driven (~235 s)**, measured on 2026-08-06 (the 54/~220 s figure held 3× consecutively on 2026-08-05 before the `/consent/*` routes). The "23/23, ~50 s" this row once claimed was stale by a wide margin. **Four** of its tests pin defects on purpose (padded block at 202, unmarked interstitial, unclosed `<noscript>`, and now the self-inflicted consent click); when the owning task ships, invert them, don't delete them. `MAS_MAX_RETRIES` is now 1, matching production. **`test_the_wall_clock_fence_is_a_504_and_ours` is a known flake, 1 in 10 full runs** — re-run before reading a red suite as a regression (`tasks/flaky-fence-test-margin.md`) |
 | Tier 1 regression | before every deploy | 4/4 pass |
 | Fingerprint diagnostic | after stealth/browser changes | no regressions vs `test-aitosoft/stealth-v4/` |
 | Soak test | after pool/leak-related changes | flat memory over 30 min |
