@@ -24,9 +24,19 @@ service" / similar, read this file and use `ScheduleWakeup` to loop.
   `az monitor log-analytics workspace list --query "[?name=='workspace-aitosoftprodnCsc'].customerId | [0]" -o tsv`.
 - Capacity model (since 2026-07-17, image `0.9.2-render-gate`): each replica
   admits 2 concurrent full renders (RenderGate), queues ≤4 for ≤15s, then
-  429 + Retry-After: 5. ACA scale rule `http-renders` (2 concurrent/replica)
-  boots replicas to match load. **Warm-replica pinning is RETIRED** —
-  `batch-scale.sh` is an emergency valve only, not a pre-batch step.
+  429 + Retry-After: 5. ACA scale rule `http-renders` boots replicas; its
+  trigger is **6** since 2026-08-08 and is **not** the same quantity as
+  RenderGate's capacity of 2 (see `tasks/autoscaler-ratchets-to-the-cap.md`).
+  **Warm-replica pinning is RETIRED** — `batch-scale.sh` is an emergency valve
+  only, not a pre-batch step.
+- **Watching a sweep after the 2026-08-08 scale change:** the number to read is
+  the replica high-water against what the load justified, plus the 429 count.
+  `ContainerAppHTTPLogs` is the only table with `RequestDuration`, and it also
+  carries `StartTime` (= arrival) so true in-flight concurrency can be swept
+  from overlaps rather than approximated by per-minute bins. Also check
+  `ResponseFlags != "-"` and `UpstreamRequestAttemptCount > 1`: the 30-day
+  baseline for both is 0 and 1 respectively, and a raced upstream close would
+  appear there as **503/`UC`**, never as a 502.
 
 ## Tick checks (run in parallel)
 

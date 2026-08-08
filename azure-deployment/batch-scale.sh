@@ -3,7 +3,7 @@
 #
 # RETIRED as a routine pre-batch step (2026-07-17). Capacity is now managed
 # by the render-admission gate (aitosoft_admission.py, 429 + Retry-After) and
-# the `http-renders` ACA scale rule (2 concurrent renders/replica) — replicas
+# the `http-renders` ACA scale rule (a trigger, NOT render capacity) — replicas
 # scale with load automatically. See DEPLOYMENT_INFO.md "Scaling".
 #
 # Keep for emergencies: if KEDA misbehaves mid-batch (e.g. the 2026-04-14
@@ -19,21 +19,37 @@ set -euo pipefail
 
 APP_NAME="crawl4ai-service"
 RESOURCE_GROUP="aitosoft-prod"
-MAX_REPLICAS=30  # keep in sync with prod scale config (DEPLOYMENT_INFO.md)
+
+# NOTE (2026-08-08): this script used to carry `MAX_REPLICAS=30` and pass
+# `--max-replicas "$MAX_REPLICAS"` on BOTH `up` and `down`. That silently
+# reverted maxReplicas to a stale hardcoded value on every invocation — and by
+# then production was at 45 (raised for MAS's ~18,000-company plan). The
+# emergency valve would therefore have cut the fleet ceiling by a third at
+# exactly the moment someone reached for it because the fleet was under stress.
+#
+# The fix is to not mention max-replicas at all: `az containerapp update
+# --min-replicas N` changes only min and leaves the rest of the scale block
+# untouched. A constant that must "keep in sync" with live infrastructure by
+# hand is a defect waiting to happen; the live value is the source of truth.
+
+show_scale() {
+    az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" \
+        --query "properties.template.scale" -o json
+}
 
 action="${1:-status}"
 
 case "$action" in
     up)
         min="${2:-1}"
-        echo "Scaling $APP_NAME min-replicas to $min (max=$MAX_REPLICAS)..."
+        echo "Scaling $APP_NAME min-replicas to $min (maxReplicas left untouched)..."
         az containerapp update \
             --name "$APP_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --min-replicas "$min" \
-            --max-replicas "$MAX_REPLICAS" \
             --output none
         echo "✅ Done. Warm replicas held at $min until you call 'batch-scale.sh down'."
+        echo "Resulting scale block:"; show_scale
         ;;
     down)
         echo "Scaling $APP_NAME back to min=0 (scale-to-zero on idle)..."
@@ -41,9 +57,9 @@ case "$action" in
             --name "$APP_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --min-replicas 0 \
-            --max-replicas "$MAX_REPLICAS" \
             --output none
         echo "✅ Done. Replicas will scale to zero when idle."
+        echo "Resulting scale block:"; show_scale
         ;;
     status)
         az containerapp show \

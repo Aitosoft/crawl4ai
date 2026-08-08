@@ -1,0 +1,387 @@
+// cold_burst_probe.kql — server-side half of the acceptance measurement for
+// tasks/autoscaler-ratchets-to-the-cap.md
+//
+// The client-side script (cold_burst_probe.py) records what MAS would feel:
+// 429s and latency. It CANNOT see the replica curve, which is the thing the
+// change is actually about. These queries are that half. Run them ~5 minutes
+// after the burst (Log Analytics ingestion lags; measured 2026-08-08, our own
+// /health probes were not queryable for several minutes) and again ~30 minutes
+// later to capture the ramp-DOWN, which is the half of the curve the ratchet
+// lives in.
+//
+// ── how to run ────────────────────────────────────────────────────────────
+//   export LAW_ID=$(...)          # from PRIVATE.md — never inline it here
+//   az monitor log-analytics query -w "$LAW_ID" --analytics-query "<one query>" -o table
+//
+// Substitute the window from the artifact's `kql_window` block. For the
+// ramp-down queries push T1 out by ~30 minutes.
+//
+//   let T0 = datetime(2026-08-08T00:00:00Z);
+//   let T1 = datetime(2026-08-08T00:30:00Z);
+//
+// ── SCHEMA WARNING, and it has bitten before ──────────────────────────────
+// The three tables do NOT share a naming convention. Verified 2026-08-08 by
+// querying each:
+//   ContainerAppHTTPLogs        -> UNSUFFIXED: ContainerAppName, Path, StatusCode,
+//                                  RequestDuration, ReplicaName, UserAgent
+//   ContainerAppSystemLogs_CL   -> SUFFIXED:   ContainerAppName_s, Reason_s, Log_s
+//   ContainerAppConsoleLogs_CL  -> SUFFIXED:   ContainerAppName_s, ContainerGroupName_s, Log_s
+// Using `ContainerAppName_s` against ContainerAppHTTPLogs fails with the
+// unhelpful `BadArgumentError: The request had some invalid properties`, not a
+// column error. If you get that, check the suffix before anything else.
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1. THE HEADLINE: replica high-water mark, binned at 1 MINUTE
+// ═══════════════════════════════════════════════════════════════════════════
+// This is the number the whole change is judged on. Compare before/after.
+//
+// CLAUDE.md's warning applies directly: a `dcount` of replica names at
+// 10-minute resolution reports NAME CHURN as if it were concurrency — it said
+// 30 where a 1-minute bin said 6. Bin at 1 minute. A real ramp shows PLATEAUS
+// (6,6,6 / 12,12,12); churn shows a jagged saw.
+//
+// Caveat: this counts replicas that LOGGED in the bin, so it is a lower bound —
+// an idle replica is invisible. That is the right direction for a "did we stop
+// over-provisioning" question (it cannot overstate the win) and the wrong
+// direction for "did we have enough capacity". Cross-check §2.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName_s == "crawl4ai-service"
+| summarize replicas = dcount(ContainerGroupName_s) by bin(TimeGenerated, 1m)
+| order by TimeGenerated asc
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2. THE SCALER RAMP — SuccessfulRescale, up and down
+// ═══════════════════════════════════════════════════════════════════════════
+// The independent record of what KEDA decided. Read three things:
+//   (a) the peak value,
+//   (b) time from first request to peak (scale-up aggression),
+//   (c) the timestamp of the first "All metrics below target" (scale-down lag —
+//       this was 05:10:41 for a run that ended at 05:05, i.e. the ratchet).
+ContainerAppSystemLogs_CL
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName_s == "crawl4ai-service"
+| where Reason_s in ("SuccessfulRescale", "TriggeredScaleUp", "KEDAScalerFailed")
+| project TimeGenerated, Reason_s, Log_s
+| order by TimeGenerated asc
+
+// Same thing, counted — for a one-line before/after diff.
+ContainerAppSystemLogs_CL
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName_s == "crawl4ai-service"
+| summarize events = count(), first = min(TimeGenerated), last = max(TimeGenerated)
+    by Reason_s
+| order by events desc
+// Expect AssigningReplicaFailed ("Waiting for infrastructure to be ready") and
+// ReplicaUnhealthy ("Readiness probe failed ... connection refused") in the
+// output. Both are normal scale-out noise — the probe arriving before gunicorn
+// binds. Do NOT spend an hour on them; a previous session already did.
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3. INGRESS STATUS HISTOGRAM — the 429 count, from the far side
+// ═══════════════════════════════════════════════════════════════════════════
+// The client script counts 429s too. Count them twice, from two instruments —
+// this has caught an artefact on each side before. They must agree exactly;
+// if they do not, the client hit a retry or a connection was reset before Envoy
+// logged it, and you need to know that before quoting either number.
+ContainerAppHTTPLogs
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName == "crawl4ai-service"
+| summarize requests = count() by Path, StatusCode
+| order by requests desc
+
+// Per-minute, so you can see WHEN in the burst the 429s landed. A cold-start
+// 429 is structural and arrives in the first minute; a capacity 429 arrives at
+// the peak. They mean opposite things and the decision table treats them
+// differently.
+ContainerAppHTTPLogs
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+| summarize total = count(),
+            n429 = countif(StatusCode == 429),
+            n5xx = countif(StatusCode >= 500),
+            n200 = countif(StatusCode == 200)
+    by bin(TimeGenerated, 1m)
+| order by TimeGenerated asc
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. TRUE CONCURRENCY — the only table that can produce it
+// ═══════════════════════════════════════════════════════════════════════════
+// concurrency = sum(duration)/window. RequestDuration lives ONLY in the HTTP
+// table; our own `RenderGate ADMIT` lines log admission but never release, so
+// the console logs cannot produce this figure. Segment 3's headline (~1.2
+// concurrent against 30 replicas) came from exactly this query.
+//
+// This is also the CONTROL for the whole experiment: it proves the before and
+// after arms presented the same load. With the raw:// instrument and a pinned
+// `delay_before_return_html` this should be near-identical across arms — if it
+// is not, the arms are not comparable and nothing else in the run means
+// anything. Check this BEFORE reading the replica curve.
+ContainerAppHTTPLogs
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+| extend d = toreal(RequestDuration) / 1000.0
+| summarize reqs = count(), busy_seconds = round(sum(d), 1),
+            concurrency = round(sum(d) / 60.0, 2),
+            p50 = round(percentile(d, 50), 2), p90 = round(percentile(d, 90), 2)
+    by bin(TimeGenerated, 1m)
+| order by TimeGenerated asc
+
+// Whole-window rollup.
+ContainerAppHTTPLogs
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+| extend d = toreal(RequestDuration) / 1000.0
+| summarize n = count(), mean = round(avg(d), 2),
+            p50 = round(percentile(d, 50), 2), p90 = round(percentile(d, 90), 2),
+            p99 = round(percentile(d, 99), 2), max = round(max(d), 2),
+            mean_concurrency = round(sum(d) / toreal(datetime_diff('second', T1, T0)), 2)
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. RENDERGATE — ADMIT / REJECT, and how the load spread across replicas
+// ═══════════════════════════════════════════════════════════════════════════
+// Exact emitted formats (aitosoft_admission.py, verified from source):
+//   "RenderGate ADMIT url=%s waited=%.1fs in_use=%d/%d queued=%d"
+//   "RenderGate REJECT (queue full): in_use=%d/%d queued=%d"
+//   "RenderGate REJECT (wait timeout %.0fs): in_use=%d/%d queued=%d"
+// Both REJECT variants become a 429 + Retry-After: 5 at the wire.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName_s == "crawl4ai-service"
+| where Log_s contains "RenderGate"
+| extend kind = case(Log_s contains "ADMIT", "ADMIT",
+                     Log_s contains "REJECT (queue full)", "REJECT-queue-full",
+                     Log_s contains "REJECT (wait timeout", "REJECT-wait-timeout",
+                     Log_s contains "initialized", "init",
+                     "other")
+| summarize n = count() by kind, bin(TimeGenerated, 1m)
+| order by TimeGenerated asc
+
+// Queue wait per admission — the leading indicator of a 429 that has not
+// happened yet. `waited=0.0s` everywhere means the gate never queued and there
+// is headroom to spare; waits creeping toward 15 s mean the next burst 429s.
+// THIS is the early-warning signal the decision table's AMBER row keys on.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName_s == "crawl4ai-service"
+| where Log_s contains "RenderGate ADMIT"
+| extend waited = toreal(extract(@"waited=([0-9.]+)s", 1, Log_s))
+| extend in_use = toint(extract(@"in_use=(\d+)/", 1, Log_s))
+| summarize admits = count(), queued_at_all = countif(waited > 0.0),
+            p50_wait = round(percentile(waited, 50), 2),
+            p90_wait = round(percentile(waited, 90), 2),
+            max_wait = round(max(waited), 2),
+            max_in_use = max(in_use)
+
+// How evenly Envoy spread the burst. A burst of 12 across 6 replicas at 2 each
+// is the healthy shape; 12 landing on 2 replicas means the load balancer had
+// nowhere to put them and is why a 429 appeared.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName_s == "crawl4ai-service"
+| where Log_s contains "RenderGate ADMIT"
+| summarize admits = count() by ContainerGroupName_s
+| summarize replicas_that_rendered = count(), total_admits = sum(admits),
+            max_per_replica = max(admits), min_per_replica = min(admits)
+
+// Gate configuration as the DEPLOYED replica actually sees it. config.yml in
+// the repo is what we think we shipped; this is what booted. One line per
+// replica start: "RenderGate initialized: {'capacity': 2, 'in_use': 0, ...}".
+// Worth a glance whenever a 429 count surprises you.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName_s == "crawl4ai-service"
+| where Log_s contains "RenderGate initialized"
+| summarize boots = count(), sample = any(Log_s) by RevisionName_s
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6. THE FREE SECOND INSTRUMENT — pre-admission refusals
+// ═══════════════════════════════════════════════════════════════════════════
+// ingress /crawl requests  −  RenderGate ADMIT lines  =  pre-admission
+// refusals + 429s. Exact on segment 3 (274 − 261 = 12 + 1). For a raw:// burst
+// there are no pre-admission refusals possible (no DNS, no SSRF check — see
+// utils.py:354), so this difference should equal the 429 count EXACTLY. If it
+// does not, something else is rejecting requests and you must find out what
+// before reading the run.
+let ingress = toscalar(
+    ContainerAppHTTPLogs
+    | where TimeGenerated between (T0 .. T1)
+    | where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+    | count);
+let admits = toscalar(
+    ContainerAppConsoleLogs_CL
+    | where TimeGenerated between (T0 .. T1)
+    | where ContainerAppName_s == "crawl4ai-service"
+    | where Log_s contains "RenderGate ADMIT"
+    | count);
+let n429 = toscalar(
+    ContainerAppHTTPLogs
+    | where TimeGenerated between (T0 .. T1)
+    | where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+        and StatusCode == 429
+    | count);
+print ingress_crawl = ingress, rendergate_admits = admits,
+      unaccounted = ingress - admits, http_429 = n429,
+      reconciles = iff(ingress - admits == n429, "YES", "NO — investigate")
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 7. FAILURE CLASSES — nothing here should be interesting for a raw:// burst
+// ═══════════════════════════════════════════════════════════════════════════
+// A raw:// render touches no origin, so every origin-side class is impossible.
+// Any RESULT FAILURE line at all means the instrument itself misfired (most
+// likely the collapse guard on a payload that produced too little markdown) —
+// treat it as a broken probe, not as data about the scaler.
+// Count by `failure_class=`, never by the log token: RESULT FAILURE (api.py)
+// and ORIGIN/TERMINAL FAILURE are disjoint paths and no request emits both.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName_s == "crawl4ai-service"
+| where Log_s contains "failure_class="
+| extend fc = extract(@"failure_class=([a-z_]+)", 1, Log_s)
+| summarize n = count() by fc
+| order by n desc
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8. COST — replica-minutes, the actual thing being bought
+// ═══════════════════════════════════════════════════════════════════════════
+// The task file's €0.30/run is list-price arithmetic, not an invoice, and it
+// flags itself as order-of-magnitude only. Replica-minutes is the honest unit
+// and it is what changes between arms. If the before/after difference here is
+// small, option C (do nothing) gets much stronger — say so rather than shipping
+// a change that buys nothing.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (T0 .. T1)
+| where ContainerAppName_s == "crawl4ai-service"
+| summarize replicas = dcount(ContainerGroupName_s) by bin(TimeGenerated, 1m)
+| summarize replica_minutes = sum(replicas), peak = max(replicas),
+            minutes_observed = count(), mean_replicas = round(avg(replicas), 2)
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRE-REGISTERED DECISION TABLE
+// Write this down BEFORE running. Per tasks/README.md "what step 5 branches
+// on": a criterion invented after seeing the numbers is not a criterion.
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// METRICS (symbol -> query above)
+//   R  replica high-water mark                         §1
+//   M  replica-minutes over the window                 §8
+//   Z  HTTP 429 count (client AND §3 — must agree)     §3
+//   W  max RenderGate queue wait, seconds              §5
+//   C  mean true concurrency  — THE CONTROL            §4
+//
+// BASELINE, re-derived from stored data 2026-08-08 (segment 3, 04:54–05:25Z):
+//   C = 1.13   R = 30   M = 624 replica-minutes over 31 min (mean 20.13)
+//   Z = 0      admits = 290, of which 7 QUEUED, W = 9.9 s, max in_use 2/2
+//
+//   ^ W = 9.9 s is NOT in the task file and it changes the risk story. At
+//   30 replicas for a 1.2-concurrency load, Envoy still concentrated bursts
+//   onto single replicas hard enough to queue 7 times and come within 5.1 s of
+//   the 15 s timeout. The zero-429 record was not comfortable; it was 66 % of
+//   the way to a rejection. Any change that reduces replicas eats exactly this
+//   margin. Treat W, not Z, as the primary safety metric — Z is a step function
+//   that reads 0 right up until it doesn't.
+//
+// ─── ROW 0: IS THE RUN EVEN READABLE? (check first, always) ───────────────
+//   INVALID if any of:
+//     * C differs by >10 % between the before and after arms
+//     * §6 reconciles = NO
+//     * any failure_class in §7
+//   ACTION: discard and re-run. Do not read R or Z from an invalid run.
+//   With a pinned raw:// payload C should match to within a few percent; if it
+//   does not, the two arms did not present the same load and nothing else means
+//   anything.
+//
+// ─── ROW 1: NO-OP — the task file's own #1 risk ───────────────────────────
+//   R within ±15 % of the before arm AND M within ±15 %.
+//   MEANING: the ACA HTTP scale metric is not what its name says. Design
+//   space A is dead.
+//   ACTION: REVERT to 2. Do NOT try a larger number — see the ordering note
+//   below, which is designed so this row is reached on the FIRST run, not the
+//   third. Move to design space B (cooldownPeriod / scale-down damping) or
+//   close as option C. Record the no-op as the finding; it answers "what I am
+//   least sure of #1" and is worth more than the change would have been.
+//
+// ─── ROW 2: GREEN — keep the value ────────────────────────────────────────
+//   R drops ≥25 %  AND  Z = 0  AND  W ≤ 5 s.
+//   ACTION: keep. Then repeat at N=16 before declaring; a value that is green
+//   at 12 and red at 16 is red, because MAS is moving to flag 4.
+//
+// ─── ROW 3: AMBER — keep this step, take no further step ──────────────────
+//   R drops ≥25 %  AND  Z = 0  BUT  W > 10 s.
+//   MEANING: the margin is gone even though nothing was rejected. This is
+//   materially worse than the 9.9 s baseline and it is the state that produces
+//   a 429 on the first burst that is 1 request larger.
+//   ACTION: keep the current value, do not raise further, and pre-agree
+//   `minReplicas: 1` for sweep windows as the mitigation if MAS reports any
+//   429. Tell MAS the margin narrowed — they have a within-run control for
+//   cold-start 429s and can confirm it cheaply.
+//
+// ─── ROW 4: RED — revert immediately ──────────────────────────────────────
+//   Any ONE of:
+//     * Z > 0 at N = 8. Non-negotiable: MAS's measured peak in-flight is 7
+//       (their flag × per-company fan-out). A 429 at 8 means we reject their
+//       real traffic with no margin at all.
+//     * Z > 1 at N = 12.
+//     * Any 429 landing AFTER the first minute (§3 per-minute query). A
+//       cold-start 429 is structural and self-limiting; a 429 once KEDA has
+//       scaled is a steady-state capacity failure and it grows with the cohort.
+//       MAS's own within-run control separates these: 3 crossings inside the
+//       first minute produced 1 × 429, 7 crossings after scaling produced none.
+//   ACTION: revert to 2 the same session. Do not "tune it down one step" on
+//   the same run's evidence.
+//
+// ─── ROW 5: EXACTLY ONE COLD-START 429 ────────────────────────────────────
+//   Z = 1 at N = 12 or 16, in the FIRST MINUTE only, Retry-After honoured.
+//   MEANING: the structural cold-start rejection MAS already measured and
+//   absorbs with a 5 s retry (their rejected page succeeded 19.3 s later).
+//   ACTION: acceptable ONLY if M drops ≥40 %. Otherwise treat as RED — we are
+//   spending MAS's retry budget to save a small amount of money.
+//
+// ─── ROW 6: COST FLOOR — close as option C ────────────────────────────────
+//   Best candidate's M drop < 30 %.
+//   MEANING: the saving does not justify the risk, whatever the 429 column says.
+//   ACTION: close the task as "do nothing, deliberately" — CLAUDE.md principle
+//   7 lists this as a legitimate answer and the task file asks for it to be
+//   said EXPLICITLY rather than left open as a background worry.
+//   Baseline for the arithmetic: 624 replica-minutes for a workload that
+//   justifies ~31. The waste is ~95 %, so a change that cannot recover a third
+//   of it is not worth a regression risk.
+//
+// ─── ORDERING: TEST 6 FIRST, AND DO NOT SHIP IT ───────────────────────────
+// The task file argues for the smallest step first (2 -> 3). I recommend the
+// opposite ORDER for the first run only, because the dominant uncertainty is
+// row 1, not row 2:
+//
+//   Run 1: concurrentRequests = 6, N = 12.  A DISCRIMINATOR, not a candidate.
+//          If 6 does not move R, nothing in design space A will, and row 1
+//          fires after ONE run instead of three.
+//          If 6 does move R, you have also bracketed the effect size.
+//   Run 2+: bisect DOWN (4, then 3) to the smallest value that is green, and
+//          ship that. Never ship the discriminator value on its own evidence.
+//
+// This costs the same as one arm of the task file's plan and answers the
+// bigger question first. It is only safe because the instrument is raw:// —
+// with a live target, a deliberately aggressive setting would mean more
+// third-party traffic, which is precisely why the task file reached for the
+// cautious ordering.
+//
+// ─── SEQUENCING AGAINST MAS ───────────────────────────────────────────────
+// The confound the task file names is real: maxReplicas moved 30 -> 45 AND MAS
+// is moving to --concurrency 4. Ship the scale-rule change and there are three
+// variables in their next run.
+//   1. Run the synthetic BEFORE arm now (controlled, independent of MAS).
+//   2. Let MAS's flag-4 run happen with the scale rule UNCHANGED — that keeps
+//      their natural experiment at two variables and preserves its value.
+//   3. Change the rule, run the synthetic AFTER arm.
+// The synthetic arms are the attribution; MAS's run is the confirmation. Do
+// not invert that — their run cannot isolate the scale rule and was never
+// going to.

@@ -25,8 +25,26 @@ Design (agreed with MAS 2026-07-17):
     one slot. Slots are granted atomically (no partial holds -> no
     deadlock between two batches).
 
-The ACA scale rule must match: concurrency target == render_capacity, so
-Azure adds replicas exactly when a replica is at render capacity.
+The ACA scale rule is a SEPARATE number and must NOT be pinned to this one.
+This docstring used to say "concurrency target == render_capacity, so Azure
+adds replicas exactly when a replica is at render capacity". That is a
+category error, corrected 2026-08-08 (tasks/autoscaler-ratchets-to-the-cap.md):
+
+  * `render_capacity` is a hard in-process cap on simultaneous renders. It is
+    the safety mechanism. It cannot be exceeded.
+  * ACA's `concurrentRequests` is only the autoscaler's TRIGGER. It protects
+    nothing, and it is not in the same units -- Microsoft documents it as
+    "requests in the past 15 seconds divided by 15", i.e. a rate, while
+    naming it concurrency.
+
+Two numbers in different units cannot meaningfully be equal, and pinning them
+made the trigger as twitchy as possible: it fired the instant any replica was
+busy. Raising the trigger cannot oversubscribe a replica, because this gate,
+not the scaler, is what bounds renders.
+
+The measured over-provisioning factor is deliberately NOT repeated here -- it
+lives once, in the task file, with the run it was measured from. A derived
+number copied into four files is how `max_retries: 2` stayed wrong for weeks.
 
 Static-mode requests (httpx, no browser) bypass the gate. /md, /screenshot,
 /pdf, /html and streaming remain governed only by upstream's GLOBAL_SEM —

@@ -36,10 +36,12 @@ NEVER set env vars during rollback).
   (`config.yml crawler.pool.render_capacity`), queues up to 4 waiters for
   ≤15s, then returns **429 + Retry-After: 5**. The 180s wall-clock fence
   starts AFTER a render slot is granted. Static mode bypasses the gate.
-- **Explicit ACA scale rule** `http-renders`: `concurrentRequests: 2`
-  (replaces the default 10/replica that caused the 2026-07-16 504 incident).
-  `minReplicas: 0` (scale-to-zero kept), `maxReplicas: 30`.
-  ⚠️ If `render_capacity` in config.yml changes, change the scale rule too.
+- **Explicit ACA scale rule** `http-renders`: `concurrentRequests: 6`
+  (ACA's own default is 10, which caused the 2026-07-16 504 incident; this was
+  2 from 2026-07-17 until 2026-08-08). `minReplicas: 0` (scale-to-zero kept),
+  `maxReplicas: 45`.
+  ⚠️ It is **NOT** tied to `render_capacity` and must not be pinned to it —
+  see "Scaling" below and `tasks/autoscaler-ratchets-to-the-cap.md`.
 - **Probes** (were null/TCP defaults): HTTP Startup + Readiness on `/health`
   — lifespan pre-warms the browser before serving, so passing readiness ==
   browser-pool-ready. Liveness is TCP with generous thresholds (never kills
@@ -210,17 +212,82 @@ old deploy script): `CRAWL4AI_API_TOKEN` (Bearer token, MAS holds the value),
 `GUNICORN_BIND=0.0.0.0:11235` (upstream's entrypoint otherwise binds `[::]`),
 `ENVIRONMENT`, `LOG_LEVEL`, `MAX_CONCURRENT_REQUESTS`.
 
-**Scale rule** — MUST match `render_capacity` in `deploy/docker/config.yml`:
+**Scale rule** — deliberately **decoupled** from `render_capacity` since
+2026-08-08. They are different quantities in different units:
+
+| | what it is | units | protects anything? |
+|---|---|---|---|
+| `render_capacity` (config.yml) | hard cap on simultaneous renders per replica, enforced in-process by RenderGate | concurrent renders | **yes — this is the safety mechanism** |
+| `concurrentRequests` (ACA) | the autoscaler's trigger: when Azure adds a replica | Microsoft defines it as "requests in the past 15 s ÷ 15", i.e. a **rate** | no |
+
+Pinning them equal made the trigger maximally twitchy and over-provisioned the
+fleet 44× in replica-minutes on MAS's segment 3. Raising the trigger **cannot**
+oversubscribe a replica — the gate, not the scaler, bounds renders.
+
+```bash
+az containerapp update --name crawl4ai-service --resource-group aitosoft-prod \
+  --scale-rule-name http-renders --scale-rule-type http \
+  --scale-rule-http-concurrency 6
+
+# Verify (deploy-image.sh does this automatically against its ACA_SCALE_TRIGGER):
+az containerapp show --name crawl4ai-service --resource-group aitosoft-prod \
+  --query "properties.template.scale.rules[?name=='http-renders'].http.metadata.concurrentRequests | [0]" -o tsv
+```
+
+**Revert, if MAS reports 429s they did not expect** (one command, no image
+rebuild, takes effect on the next KEDA poll):
 ```bash
 az containerapp update --name crawl4ai-service --resource-group aitosoft-prod \
   --scale-rule-name http-renders --scale-rule-type http \
   --scale-rule-http-concurrency 2
-
-# Verify the invariant after any config.yml change:
-az containerapp show --name crawl4ai-service --resource-group aitosoft-prod \
-  --query "properties.template.scale.rules[?name=='http-renders'].http.metadata.concurrentRequests | [0]" -o tsv
-grep render_capacity deploy/docker/config.yml   # must print the same number
 ```
+Then set `ACA_SCALE_TRIGGER` back to 2 in `azure-deployment/deploy-image.sh`,
+or the next deploy will fail its drift check.
+
+### ⚠️ Never change the template while the fleet is large — measured 2026-08-08
+
+**Any** `az containerapp update` that touches `properties.template` — the image
+(so `deploy-image.sh` too), the scale block, env vars, probes — **mints a new
+revision, and the new revision needs its OWN replicas while the old one is still
+draining.** Both count against the environment's 100-core quota at 2 vCPU each.
+
+We hit this for real while measuring this task. The fleet was at **38 replicas
+(76 cores)** when the scale rule was changed; the new revision could not create
+pods:
+
+```
+FailedCreate ×25: pods "crawl4ai-service--0000039-…" is forbidden:
+  exceeded quota: consumption, requested: cpu=2k, used: 98250, limited: 100k
+```
+
+The new revision sat in **`ActivationFailed` / `Unhealthy` with 0 replicas while
+holding 100 % of the traffic weight** for ~8 minutes. Production stayed up only
+because ACA kept routing to the old revision's surviving replicas — `/health`
+returned 200 throughout. That is the platform being forgiving, not a margin to
+rely on: had the old revision finished draining first, the app would have been
+down with no replicas on either side.
+
+**Rule: check the replica count before any deploy.** If the fleet is above ~20
+replicas (40 cores), wait for it to drain, or the deploy can strand the new
+revision. This is a live risk during a MAS sweep, which is exactly when someone
+would want to ship a fix.
+
+```bash
+az containerapp replica list -n crawl4ai-service -g aitosoft-prod --query 'length(@)'
+az containerapp env list-usages --ids <env-id> -o table   # ManagedEnvironmentConsumptionCores
+```
+
+It is also an independent argument for keeping the fleet small: at the old
+trigger of 2 a routine sweep put us within one deploy of this failure.
+
+**Knobs that do NOT exist here, so nobody re-investigates them** (verified
+2026-08-08 against the ARM spec and Microsoft's docs): `pollingInterval` is
+settable but *"doesn't apply to HTTP and TCP scale rules"*; `cooldownPeriod` is
+settable but only governs the final replica → 0 transition; and the 300 s
+**scale-down stabilization window**, which is what actually damps scale-in, has
+**no configuration surface anywhere in ACA** (`microsoft/azure-container-apps`
+#1418, open since 2025-02). The only levers are `maxReplicas`, `minReplicas`
+and `concurrentRequests`.
 
 **Probes** (live values): Startup = HTTP `/health` every 2s, timeout 2s,
 failure threshold 30, initial delay 2s; Readiness = HTTP `/health` every 5s,

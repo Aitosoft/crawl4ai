@@ -134,8 +134,10 @@ to get the same effect: ~267 render-hours per MAS sweep),
 timeout for static mode), `crawler.base_config.total_timeout: 100000` (per-`arun`
 fetch budget; must stay under `wall_clock_s` and above the largest client
 `page_timeout`), render admission (`render_capacity: 2` —
-MUST match the ACA `http-renders` scale rule, `admission_queue: 4`,
-`admission_max_wait_s: 15`).
+**deliberately decoupled** from the ACA `http-renders` scale rule since
+2026-08-08; the gate is a hard cap on concurrent renders, the scale rule is
+only the autoscaler's trigger and is measured in a different unit),
+`admission_queue: 4`, `admission_max_wait_s: 15`.
 
 ### deploy/docker/supervisord.conf (1 line)
 gunicorn target `aitosoft_entry:app`.

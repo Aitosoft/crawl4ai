@@ -90,12 +90,23 @@ parked deliberately, not waiting for a free session.
 
 ## Where we actually are
 
-**Shape, unchanged since 2026-08-02:** 2 vCPU / 4 GiB, `minReplicas: 0`,
-`maxReplicas: 30`, scale rule 2 concurrent/replica.
+**Shape:** 2 vCPU / 4 GiB, `minReplicas: 0`, `maxReplicas: 45` (raised from 30
+on 2026-08-08), ACA scale trigger `http-renders` **6** (raised from 2 on
+2026-08-08; ACA's own default is 10). **The trigger is NOT `render_capacity` and
+must never be pinned to it again** — different quantities, different units; see
+`tasks/autoscaler-ratchets-to-the-cap.md`. RenderGate still hard-caps renders at
+2/replica and that is the safety mechanism.
 
-**Production is `0.9.2-consent-guard`, revision `--0000037`** (deployed
-2026-08-06, Tier 1 4/4 pre-deploy, prod smoke green). `main` and production are
-in sync. It carries one **wire-status change**: a capture with no `<body>` is
+**Production is `0.9.2-consent-guard`, revision `--trigger6`** (image unchanged
+since 2026-08-06; the revision was minted 2026-08-08 by the scale-trigger change,
+which is a template edit and therefore mints one). `main` and production are in
+sync. Post-change smoke green: `/health` 200, bad token 401, `raw://` render
+`success:true` / `failure_class:none` / markdown extracted.
+
+**Note the revision-name break:** `--trigger6` came from
+`az containerapp update --revision-suffix trigger6`, used to recover a revision
+stranded in `ActivationFailed` (see item 9). Numbering resumes at `--0000041`
+on the next ordinary deploy; do not read the name as a rollback target. It carries one **wire-status change**: a capture with no `<body>` is
 `render_defect` at 200 (terminal), not `render_error` at 500 (retried 3x).
 Pre-agreed with MAS; announced in `tmp/mas-repo-messages/22-…`, **which still
 needs relaying**.
@@ -340,7 +351,7 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 
 | # | Task | Size | What to know |
 |---|------|------|--------------|
-| 9 | `autoscaler-ratchets-to-the-cap.md` | M | **New, from segment 3 (2026-08-08). Do this before MAS goes past `--concurrency 4`.** The fleet scaled to `maxReplicas` on a workload whose **true concurrency was ~1.2 requests** (299 requests, p50 4.95 s, measured from `ContainerAppHTTPLogs.RequestDuration` — our console logs *cannot* produce this figure, they log admission but never release). Scale-up fires on every small burst, scale-down is damped, so the count tracks accumulated peaks, not load. **It is not a cost-only cleanup: the over-provisioning is what has been absorbing MAS's bursts, and their zero-429 record partly rests on it** — the task is a cost/429 trade and both sides must be measured. The likely edit is one number (ACA `concurrentRequests`, currently pinned to `render_capacity: 2` by a `config.yml` comment that becomes wrong). **The acceptance measurement is a synthetic cold-start burst against `example.com`** — self-targeting is correctly refused by our own SSRF guard (verified, 400), and it also settles the question MAS's warm-up left open at zero cohort cost. Health-probe feedback was the leading root cause and is **refuted** (0 `/health` requests through ingress). Confound to inherit: `maxReplicas` moved 30 → 45 on 2026-08-08, so a flag-4 run is not comparable to segment 3 |
+| ~~9~~ | ~~`autoscaler-ratchets-to-the-cap.md`~~ | M | **SHIPPED 2026-08-08, acceptance pending.** Trigger 2 → 6; `deploy-image.sh` drift check replaces the category-error invariant (it would have hard-failed every future deploy *after* the image landed); `batch-scale.sh` no longer silently reverts `maxReplicas` 45 → 30. **Five things in the original file did not survive**, and the sharpest is that a *controlled* run refuted the headline: uniform traffic at segment 3's exact arrival rate produced **1 replica and zero scale-up events**, so the scaler is correct on smooth load and the defect is specific to MAS's traffic *shape*. Also: "ratchet" is refuted (segment 2 ran longer and peaked lower, and both earlier runs scaled *down* mid-run); option B does not exist (no stabilization-window surface in ACA at all); the cost was **10× low, not high** (€3.00/run at list, €0 cash — Sponsored subscription); and the cost/429 trade is largely illusory because the ingress is **round-robin** and the 429 window is cold start, where there is 1 replica regardless. **The acceptance measurement is MAS's next run**, watched live — revert criteria pre-registered in the file. **`raw://` is now the load instrument** and should be reached for before any live host |
 | ~~1~~ | ~~`consent-scripts-delete-the-page.md`~~ | M | **DONE 2026-08-06, undeployed.** `tasks/done/`. The diagnosis reproduced exactly; three things about the *fix* changed, and the first is the one to carry: dropping the 20 generic selectors would have deleted the measurement step 5 branches on, so they now **observe instead of removing** and log `chars`/`pagechars`. |
 | ~~2~~ | ~~`total-loss-is-permanent-not-transient.md`~~ | S | **DONE 2026-08-06, undeployed.** `tasks/done/`. Keyed on the **capture shape** (no `<body>`), not the reason string — one test covers both production signatures, which two reason strings could not. Nothing pinned the old 500, so it was a bug fix and not a contract change. |
 | 3 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 66 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some tests to change behaviour, and treat that as the payoff. The count moved from 54 to 66 with the `/consent/*` routes. |
