@@ -27,14 +27,61 @@ RESOURCE_GROUP="aitosoft-prod"
 # emergency valve would therefore have cut the fleet ceiling by a third at
 # exactly the moment someone reached for it because the fleet was under stress.
 #
-# The fix is to not mention max-replicas at all: `az containerapp update
-# --min-replicas N` changes only min and leaves the rest of the scale block
-# untouched. A constant that must "keep in sync" with live infrastructure by
-# hand is a defect waiting to happen; the live value is the source of truth.
+# The first fix — drop `--max-replicas` entirely — broke `down` instead, and
+# silently, which is worse than what it replaced. Verified 2026-08-08 in the
+# installed CLI source (`azext_containerapp/containerapp_decorator.py`):
+#
+#   :791  update_map['scale'] = min_replicas or max_replicas or scale_rule_name
+#   :983  if update_map["scale"]:        # <- the only writer of minReplicas
+#   :986      if min_replicas is not None: ...scale["minReplicas"] = min_replicas
+#
+# The INNER logic handles 0 correctly (`is not None`); the OUTER gate is plain
+# truthiness. So `--min-replicas 0` alone gives `0 or None or None` -> None ->
+# falsy -> the scale block is never added to the PATCH body at all. `up N`
+# worked only because N>=1 is truthy. `down` printed its success line and did
+# nothing — the valve could be opened and not closed.
+#
+# So we must pass a second, truthy scale argument, and it must not be a
+# hardcoded constant (that was the original defect). Read maxReplicas live and
+# hand it straight back: the gate goes truthy, max is written to the value it
+# already had, and there is no constant to drift.
+#
+# Both branches verify afterwards rather than trusting the exit code, because
+# the failure mode this comment documents is a SILENT no-op that exits 0.
 
 show_scale() {
     az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" \
         --query "properties.template.scale" -o json
+}
+
+live_max() {
+    az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" \
+        --query "properties.template.scale.maxReplicas" -o tsv
+}
+
+# set_min <target> — write minReplicas and prove it landed.
+set_min() {
+    local target="$1" max
+    max="$(live_max)"
+    if [[ -z "$max" || ! "$max" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: could not read live maxReplicas (got '${max}'). Refusing to guess." >&2
+        exit 1
+    fi
+    az containerapp update \
+        --name "$APP_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --min-replicas "$target" \
+        --max-replicas "$max" \
+        --output none
+
+    local now
+    now="$(az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" \
+        --query "properties.template.scale.minReplicas" -o tsv)"
+    if [[ "$now" != "$target" ]]; then
+        echo "ERROR: minReplicas is '${now}', expected '${target}'. The update did NOT apply." >&2
+        exit 1
+    fi
+    echo "Verified: minReplicas=${now}, maxReplicas=${max} (unchanged)."
 }
 
 action="${1:-status}"
@@ -43,21 +90,13 @@ case "$action" in
     up)
         min="${2:-1}"
         echo "Scaling $APP_NAME min-replicas to $min (maxReplicas left untouched)..."
-        az containerapp update \
-            --name "$APP_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --min-replicas "$min" \
-            --output none
+        set_min "$min"
         echo "✅ Done. Warm replicas held at $min until you call 'batch-scale.sh down'."
         echo "Resulting scale block:"; show_scale
         ;;
     down)
         echo "Scaling $APP_NAME back to min=0 (scale-to-zero on idle)..."
-        az containerapp update \
-            --name "$APP_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --min-replicas 0 \
-            --output none
+        set_min 0
         echo "✅ Done. Replicas will scale to zero when idle."
         echo "Resulting scale block:"; show_scale
         ;;
