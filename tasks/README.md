@@ -1,6 +1,28 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-06 (third update that day), after items 1 and 2 shipped.
+**Updated:** 2026-08-08, after MAS's segment 3 and one Azure scale change.
+
+**Segment 3 (2026-08-08, `--concurrency 3`, 50 companies) was clean, and the
+consent guard held.** 292 renders / 281 distinct URLs, **0 × 429**, 3.9 % retry
+amplification, 0 collapse events, 0 render defects. 14 `CONSENT DECLINED`, all
+`structural=False` on genuine banners or a stylesheet `<link>` at `chars=0` —
+**zero content loss**. Three things came out of reading it, and only the first is
+ours: (a) **item 9**, the autoscaler ratchet — we ran the whole segment at
+`maxReplicas` on a ~1.2-concurrency load; (b) **our 404 count is not an
+instrument** — `RESULT FAILURE` only fires for *failed* results, so a 404 that
+renders a normal page logs nothing at all, and MAS's envelope-side `>= 400`
+cross-check is the complete count (they saw 26, we saw 2, and **they are right**);
+(c) MAS's agent constructs URLs it never saw — 12 distinct guessed Teboil paths
+reached render admission, and 15 requests went to Ecolab for one Finnish company,
+which is ~9 % of renders and **theirs to fix, already in progress**.
+
+**Azure change, 2026-08-08: `maxReplicas` 30 → 45**, revision `--0000038`, for
+MAS's ~18,000-company plan (~80 concurrent renders vs our previous 60 ceiling).
+Verified read-only first: environment quota is **100 consumption cores** and MAS's
+own app in the same environment is 0.25, so **50 replicas is the hard ceiling**.
+Post-change invariants checked — image, `minReplicas`, scale rule, CPU/memory and
+all five env vars unchanged; bad token still 401. It is *not* part of item 9's
+fix, but it moves item 9's baseline.
 MAS's segment 1 (25 companies) and a five-message exchange found a defect of ours
 large enough to reorder the whole list; it is now fixed, deployed and **proved in
 production on the host it was diagnosed from**.
@@ -298,9 +320,11 @@ forward only, so MAS's first segment is the first thing it can describe.
 
 ## The open items, in order
 
-**Items 1 and 2 are the sweep gate. Everything below them was already parked or
-deflated and stays that way** — do not let a free session pull item 3 forward
-while segment 2 is held.
+**Items 1 and 2 shipped; the current gate is item 9.** Segment 3 ran clean at
+`--concurrency 3` (292 renders, 0 × 429), and MAS's next rung is 4, then a
+~18,000-company run at roughly 20 companies in flight. Item 9 is the one thing
+worth settling before that scale, and it is the only new task from segment 3.
+**Everything else below was already parked or deflated and stays that way.**
 
 `main` == production in code; every commit since the deployed image is
 documentation. Message 16 was relayed and answered (MAS's 17), so nothing is
@@ -316,6 +340,7 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 
 | # | Task | Size | What to know |
 |---|------|------|--------------|
+| 9 | `autoscaler-ratchets-to-the-cap.md` | M | **New, from segment 3 (2026-08-08). Do this before MAS goes past `--concurrency 4`.** The fleet scaled to `maxReplicas` on a workload whose **true concurrency was ~1.2 requests** (299 requests, p50 4.95 s, measured from `ContainerAppHTTPLogs.RequestDuration` — our console logs *cannot* produce this figure, they log admission but never release). Scale-up fires on every small burst, scale-down is damped, so the count tracks accumulated peaks, not load. **It is not a cost-only cleanup: the over-provisioning is what has been absorbing MAS's bursts, and their zero-429 record partly rests on it** — the task is a cost/429 trade and both sides must be measured. The likely edit is one number (ACA `concurrentRequests`, currently pinned to `render_capacity: 2` by a `config.yml` comment that becomes wrong). **The acceptance measurement is a synthetic cold-start burst against `example.com`** — self-targeting is correctly refused by our own SSRF guard (verified, 400), and it also settles the question MAS's warm-up left open at zero cohort cost. Health-probe feedback was the leading root cause and is **refuted** (0 `/health` requests through ingress). Confound to inherit: `maxReplicas` moved 30 → 45 on 2026-08-08, so a flag-4 run is not comparable to segment 3 |
 | ~~1~~ | ~~`consent-scripts-delete-the-page.md`~~ | M | **DONE 2026-08-06, undeployed.** `tasks/done/`. The diagnosis reproduced exactly; three things about the *fix* changed, and the first is the one to carry: dropping the 20 generic selectors would have deleted the measurement step 5 branches on, so they now **observe instead of removing** and log `chars`/`pagechars`. |
 | ~~2~~ | ~~`total-loss-is-permanent-not-transient.md`~~ | S | **DONE 2026-08-06, undeployed.** `tasks/done/`. Keyed on the **capture shape** (no `<body>`), not the reason string — one test covers both production signatures, which two reason strings could not. Nothing pinned the old 500, so it was a bug fix and not a contract change. |
 | 3 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 66 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some tests to change behaviour, and treat that as the payoff. The count moved from 54 to 66 with the `/consent/*` routes. |
