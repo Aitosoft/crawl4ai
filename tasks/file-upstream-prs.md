@@ -68,11 +68,16 @@ WordPress theme is sold in the hundreds of thousands and the failure is a
 deleted `documentElement` at HTTP 500, plus two silent variants that return a
 green result with content missing.
 
-**File it after MAS's segment 2, not before.** "This deletes documents on Enfold
-sites, here are N occurrences in a production sweep" beats a synthetic
-reproduction, the counter that produces N ships in the same image, and upstream
-`develop` moves slowly enough (see the cadence note below) that waiting costs
-nothing. Evidence and the four failure shapes:
+~~**File it after MAS's segment 2, not before.**~~ **THAT GATE HAS FIRED — it is
+fileable now, and it is the last open cross-repo step.** Segment 2 ran
+2026-08-06 and three workloads have since supplied N: **27 roots on 3 companies**
+(segment 2), **266 declined removals of which 103 were structural roots on 19
+domains** (segment 5), **124 declined with 56 % hitting a `<script>` or `<style>`
+element** (batch 1) — that last figure strengthens the root-collision argument
+rather than the data-loss one, which is the argument to lead with. MAS also
+measured the other side: **95 matched containers, 0 containing any contact data**,
+so do **not** argue "this destroys banner data" — argue the root collision, which
+needs neither repo's corpus. Evidence and the four failure shapes:
 `tasks/done/consent-scripts-delete-the-page.md`.
 
 | PR | Branch | Filed | Fork patch |

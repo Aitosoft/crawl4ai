@@ -2,8 +2,18 @@
 
 **Status:** Open, not started. Opened 2026-08-02 while deploying
 `0.9.2-collapse-recovery`, by checking a claim rather than by a failure.
-**Priority:** Medium. Nothing is broken in production; what is broken is our
-only pre-deploy gate, on any machine that is not this one.
+**Priority:** Low-Medium. Nothing is broken in production.
+
+> **The load-bearing sentence of this file is wrong, and it stayed wrong in the
+> file after being corrected in the index (2026-08-05).** It said the corpus is
+> *"our only pre-deploy gate"*. It is not: `TESTING.md` golden rule 2 and
+> CLAUDE.md principle 4 both make **Tier 1, 4/4, live** a gate, and Tier 1
+> re-fetches exactly the hosts this corpus is made of — which the 2026-08-09
+> deploy exercised (4/4, plus a `caverna.fi` byte-comparison across the deploy).
+> What the gap actually costs is **offline threshold re-derivation** on a fresh
+> clone, not false-positive protection, and the three affected tests fail
+> **loud**, in the safe direction. Read the rest of this file with that
+> correction applied; it inflates the priority throughout.
 **Effort:** S, but the sizing decision is the whole task.
 **Risk:** Low.
 **Evidence:** `git clone` of this repo into a temp dir — `test-aitosoft/artifacts/`

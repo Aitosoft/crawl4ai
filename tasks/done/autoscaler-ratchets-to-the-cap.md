@@ -1,11 +1,30 @@
 # The autoscaler over-provisions the fleet by ~44× on MAS's traffic shape
 
-**Status:** **SHIPPED AND MEASURED 2026-08-08** — ACA scale trigger
-`concurrentRequests` 2 → 6, validated by a controlled synthetic A/B against
-production (below): **replica plateau 38 → 5, zero 429s in both arms, max queue
-wait 5.3 s of the 15 s budget.** MAS's next run (50–100 companies at
-`--concurrency 4`) is the confirmation, not the primary evidence. Revert is one
-`az` command, no image rebuild.
+> **CLOSED 2026-08-09 — the confirmation ran, twice, and passed. Do not re-run
+> the acceptance experiment; it is already in production data.**
+>
+> This header said the confirmation was still owed, and because CLAUDE.md
+> principle 9 makes the task file win over the index, a clean-context reader was
+> being pointed at the one document claiming a measurement was outstanding. Both
+> runs happened *before* this file was updated:
+>
+> - **Segment 5** (2026-08-08, 318 companies at `--concurrency 4`, 1,987
+>   requests, 3 h 14 m — 6× the load the trigger change was validated on):
+>   **max 9 replicas of 45** for a true concurrency of mean 1.31 / p95 2.96 /
+>   max 5.25. 3 × 429, 0 × 504.
+> - **Batch 1** (2026-08-09, 200 companies at `--concurrency 5`, 1,364
+>   requests): **max 10 replicas of 45**, concurrency mean 1.49 / p95 2.69.
+>   3 × 429, 0 × 504.
+>
+> **No revert criterion was met in either.** Against segment 3's 30 replicas for
+> a ~1.2-concurrency workload, that is the change working. Nothing here is
+> pending.
+
+**Status:** **SHIPPED 2026-08-08, ACCEPTANCE PASSED 2026-08-08/09, CLOSED** — ACA
+scale trigger `concurrentRequests` 2 → 6, validated by a controlled synthetic A/B
+against production (below): **replica plateau 38 → 5, zero 429s in both arms, max
+queue wait 5.3 s of the 15 s budget** — then confirmed on two real workloads (see
+the closing note above). Revert is one `az` command, no image rebuild.
 **Size:** M as estimated. The edit really was one number; the measurement really
 was the work — and it went somewhere the plan did not anticipate.
 

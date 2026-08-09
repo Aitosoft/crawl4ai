@@ -3,8 +3,12 @@
 Everything in this directory describes the **January 2026 talgraf.fi
 reliability investigation**, which is complete. It predates the stealth
 package, the v0.9.x untrusted-config boundary, and the render-admission
-gate. Configs shown in these files (e.g. `magic: true`) are rejected by
-the current server, and talgraf.fi is a **retired test site** (permanently
+gate. Configs shown in these files (e.g. `magic: true`) are **accepted** by
+the current server and must not be used anyway — `magic` removes content on
+cookie sites, and `aitosoft_trust.py:44-49` un-forbids it for our trusted
+client, so nothing stops you (this line said "rejected" until 2026-08-09, which
+was wrong in the dangerous direction). talgraf.fi is a **retired test site**
+(permanently
 Cloudflare-blocked by the over-scraping this very study performed — see
 the site-safety rules in TESTING.md). Kept as history only.
 

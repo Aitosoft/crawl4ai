@@ -2,7 +2,7 @@
 
 **Status:** IMPLEMENTED 2026-08-06 in the same image as
 `tasks/done/consent-scripts-delete-the-page.md`, which is the actual fix.
-Committed, not deployed.
+Committed 2026-08-06, **deployed 2026-08-06 as `0.9.2-consent-guard`**.
 **Size:** planned S, delivered S. One branch in `classify_result`, one helper,
 eight tests. **No contract-test row needed changing** — see below.
 

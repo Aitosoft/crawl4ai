@@ -371,8 +371,10 @@ filtered — forbidden fields give HTTP 400, unknown fields are silently dropped
 - **`magic`, `simulate_user` and `override_navigator` are ACCEPTED, not rejected.**
   `aitosoft_trust.py:44-49` discards them from the forbidden set and adds them to
   the allowlist for our single trusted client. Four files still say the server
-  rejects `magic` (this one, `TESTING.md:25-26,215`,
-  `TEST_SITES_REGISTRY.md:74`, `test_site.py:46-48`) — **and that is the dangerous
+  rejects `magic`. **All of those were fixed 2026-08-06 to 2026-08-09** —
+  `TESTING.md`, `TEST_SITES_REGISTRY.md` and `test_site.py` now say the server
+  accepts it and that the ban is about page damage. If you find another copy,
+  it is stale — **and that is the dangerous
   direction**: a session could send `magic: true` believing the boundary would
   stop it. It would not, and January is what `magic` does to a page. The *harm*
   argument stands on its own; the "server rejects it" argument does not.
@@ -398,11 +400,11 @@ fields; this file listed them as if they were `CrawlerRunConfig`.
 | `crawl4ai/async_webcrawler.py` | 3× `is_blocked` fed the final hop; `total_timeout` deadline shared by every attempt (PR upstream pending) |
 | `crawl4ai/browser_adapter.py` | `bounded_evaluate()` + `timeout` kwarg — `page.evaluate` has no protocol timeout (PR upstream pending) |
 | `crawl4ai/async_crawler_strategy.py` | `_capture_html()` settle-and-retry for `page.content()`; bounds on optional DOM steps, `page.close()`, virtual scroll (PR upstream pending); `remove_consent_popups(page, url)` reads the snippet's report and logs it, and detects a self-inflicted click-navigation from `page.url` (`_report_consent_pass`) |
-| `crawl4ai/js_snippet/remove_consent_popups.js` | Structural guard (`documentElement`/`body`/`head` are never removed); the 20 generic selectors (18 substring patterns + `.cc-banner`/`.cc-window`) **observe instead of removing**; returns a report. **Was byte-identical to upstream** — fifth PR candidate, and the strongest we have |
+| `crawl4ai/js_snippet/remove_consent_popups.js` | Structural guard (`documentElement`/`body`/`head` are never removed); the 20 generic selectors (18 substring patterns + `.cc-banner`/`.cc-window`) **observe instead of removing**; returns a report. **Was byte-identical to upstream** — **fifth** PR candidate, written and now *fileable* (its "wait for segment 2" gate fired on 2026-08-06; see `tasks/file-upstream-prs.md`) |
 | `crawl4ai/js_snippet/remove_overlay_elements.js` | Same structural guard; `backgroundColor.includes("rgba")` → a real alpha test. **Was byte-identical to upstream** — sixth PR candidate |
 | `crawl4ai/async_configs.py` | +`CrawlerRunConfig.total_timeout` (default None, server-side only) (PR upstream pending) |
 | `crawl4ai/content_scraping_strategy.py` | +`strip_noscript()` before `document_fromstring` — a nested `<noscript>` makes libxml2 swallow the whole body (PR upstream pending); +`MEDIA_DESCRIPTION_MAX_CHARS = 200` capping `find_closest_parent_with_useful_text` — an image's `desc` was an ancestor's whole subtree text, i.e. the whole page, copied per image and per srcset variant (**seventh PR candidate, and the cleanest**) |
-| `deploy/docker/egress_proxy.py` | Both `resolve_and_pin` calls awaited off the loop; connect budget 30 s→15 s (`DEFAULT_CONNECT_TIMEOUT_S` + ctor arg); `http://` connect failure **closes** instead of replying `_BLOCKED`. **Was byte-identical to upstream** — new merge surface, fifth PR candidate |
+| `deploy/docker/egress_proxy.py` | Both `resolve_and_pin` calls awaited off the loop; connect budget 30 s→15 s (`DEFAULT_CONNECT_TIMEOUT_S` + ctor arg); `http://` connect failure **closes** instead of replying `_BLOCKED`. **Was byte-identical to upstream** — new merge surface, and an unnumbered PR candidate (this row said "fifth" too; `tasks/file-upstream-prs.md` is the numbering, and it gives fifth to the consent snippet) |
 | `deploy/docker/egress_broker.py` | `_resolve` docstring only: it is blocking, callers on a loop must offload it. **Was byte-identical to upstream** |
 | `deploy/docker/utils.py` | unchanged — deliberately. Its opaque 400 is right for the seven non-crawl endpoints that share it |
 | `crawl4ai/antibot_detector.py` | +challenge tier (`robot-suspicion`, browser-check prose); `Access Denied` tightened to title/heading |

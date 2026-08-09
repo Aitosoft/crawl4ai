@@ -176,7 +176,8 @@ correct it twice**, which is the exchange working:
 ≥2 parallel pages and the run peaked at **7 in flight**, which is what produced the
 single 429 on a cold replica. The good consequence: **that ceiling is set by their
 flag, not by cohort size** — 50 companies or 15,000, the peak stays ~8. We have
-~7–8× headroom before `maxReplicas: 30`.
+~7–8× headroom before `maxReplicas` (**45** since 2026-08-08, was 30 when this
+was written).
 
 **Verdict: ready to scale.** Nothing lost data, the capacity and memory families
 are at zero across **four** workloads, and both repos reconcile request-by-request
@@ -207,7 +208,7 @@ parked deliberately, not waiting for a free session.
 on 2026-08-08), ACA scale trigger `http-renders` **6** (raised from 2 on
 2026-08-08; ACA's own default is 10). **The trigger is NOT `render_capacity` and
 must never be pinned to it again** — different quantities, different units; see
-`tasks/autoscaler-ratchets-to-the-cap.md`. RenderGate still hard-caps renders at
+`tasks/done/autoscaler-ratchets-to-the-cap.md`. RenderGate still hard-caps renders at
 2/replica and that is the safety mechanism.
 
 **Production is `0.9.2-desc-cap`, revision `--0000040`, deployed 2026-08-09
@@ -321,8 +322,10 @@ What that run *found*:
 2. **One URL burned four renders and produced every 500 of the run.** A vCard
    endpoint; Chromium refuses to navigate to a download. Fixed 2026-08-02 —
    `unrenderable_content` at 200. The cost was worse than recorded: upstream
-   retries on any exception, so at MAS's `max_retries: 2` those four requests
-   were **8–12 page loads**, not 4.
+   retries on any exception, so those four requests were **8 page loads**, not 4.
+   (Written as `max_retries: 2` → "8–12". **Their value is 1**, measured
+   2026-08-05 across 213 log lines, so 12 was never reachable — see the
+   2026-08-05 corrections.)
 
 Both were read out of Log Analytics again on 2026-08-02, which also settled the
 one open question from the first read: the 12 guard firings over 9 URLs are 3
@@ -454,10 +457,11 @@ forward only, so MAS's first segment is the first thing it can describe.
 
 ## The open items, in order
 
-**Nothing here is gating. The only open thread is a deploy window.** Items 10, 6
-and the parked `base-config` file all closed on 2026-08-09 — see the top of this
-file. Item 9's acceptance passed at 6× the load. What remains below is item 3
-(the fixture-origin proxy gap) and items 7, 8 and 4, all cost or hygiene.
+**Nothing here is gating, and nothing is waiting on a deploy — the `desc` cap
+went out 2026-08-09 14:31 UTC.** Items 10, 6, 9 and the parked `base-config`
+file all closed on 2026-08-08/09. What remains below is item 3 (the
+fixture-origin proxy gap) and items 7, 8 and 4, all cost or hygiene, plus the
+fifth upstream PR whose gate has now fired (see the parked table).
 
 **`main` == production**, as of the 2026-08-09 14:31 UTC deploy. This sentence
 has been false twice this week in both directions, so **check it against
@@ -478,11 +482,11 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 
 | # | Task | Size | What to know |
 |---|------|------|--------------|
-| ~~9~~ | ~~`autoscaler-ratchets-to-the-cap.md`~~ | M | **SHIPPED 2026-08-08, acceptance pending.** Trigger 2 → 6; `deploy-image.sh` drift check replaces the category-error invariant (it would have hard-failed every future deploy *after* the image landed); `batch-scale.sh` no longer silently reverts `maxReplicas` 45 → 30. **Five things in the original file did not survive**, and the sharpest is that a *controlled* run refuted the headline: uniform traffic at segment 3's exact arrival rate produced **1 replica and zero scale-up events**, so the scaler is correct on smooth load and the defect is specific to MAS's traffic *shape*. Also: "ratchet" is refuted (segment 2 ran longer and peaked lower, and both earlier runs scaled *down* mid-run); option B does not exist (no stabilization-window surface in ACA at all); the cost was **10× low, not high** (€3.00/run at list, €0 cash — Sponsored subscription); and the cost/429 trade is largely illusory because the ingress is **round-robin** and the 429 window is cold start, where there is 1 replica regardless. **The acceptance measurement is MAS's next run**, watched live — revert criteria pre-registered in the file. **`raw://` is now the load instrument** and should be reached for before any live host |
-| ~~1~~ | ~~`consent-scripts-delete-the-page.md`~~ | M | **DONE 2026-08-06, undeployed.** `tasks/done/`. The diagnosis reproduced exactly; three things about the *fix* changed, and the first is the one to carry: dropping the 20 generic selectors would have deleted the measurement step 5 branches on, so they now **observe instead of removing** and log `chars`/`pagechars`. |
-| ~~2~~ | ~~`total-loss-is-permanent-not-transient.md`~~ | S | **DONE 2026-08-06, undeployed.** `tasks/done/`. Keyed on the **capture shape** (no `<body>`), not the reason string — one test covers both production signatures, which two reason strings could not. Nothing pinned the old 500, so it was a bug fix and not a contract change. |
-| 3 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 66 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some tests to change behaviour, and treat that as the payoff. The count moved from 54 to 66 with the `/consent/*` routes. |
-| ~~10~~ | ~~`media-desc-duplicates-the-page-per-image.md`~~ | S | **SHIPPED into `main` 2026-08-09, undeployed — Tier 1 then Tero's deploy window is all that remains.** `MEDIA_DESCRIPTION_MAX_CHARS = 200` + upstream's own `truncate()` helper (`utils.py:3004`) in `find_closest_parent_with_useful_text`, `tasks/done/`. Measured: `media` **231,708,619 → 538,747 B (430×)**, `cleaned_html` and markdown **byte-identical by md5**, all **1,160** entries kept, offline suite **312 green**. **The diagnosis survived to the byte; eight peripheral things did not**, and three are worth carrying: the walk **never reaches `<html>`** in 78 real captures (lxml leaves `html.text` `None`); the pathological population was undercounted (**19 of 78** captures — 12 jpond *plus 7 accountor* — not 12 of 68); and "the cap is faster" was a single timing inside its own noise — `scrap()` gains ~8 %, **the 330× is `json.dumps` (0.655 s → 0.002 s)**. Also **`grumblo.com` is confirmed the same mechanism**, which the file listed as its largest uncertainty: one plain GET shows 272 images carrying **1,524,174 chars of `desc`, 88 % of its media payload**. **Do not read this as "response size is now bounded"** — the cap bounds `desc` only; `alt` is copied per variant, and **`media.tables` multiplies cell text by an unvalidated `colspan`** (a 4,624-byte page reaches 4,504,226 B of media; `colspan="2000000"` costs +91 MB RSS from 905 bytes of HTML). Neither is built; both need pathological markup and neither has ever been seen in production. That is what turns §3c from *unnecessary* into *parked* |
+| ~~9~~ | ~~`autoscaler-ratchets-to-the-cap.md`~~ | M | **CLOSED 2026-08-09, `tasks/done/`. Shipped 2026-08-08 and the acceptance PASSED TWICE** — segment 5 (318 companies at `--concurrency 4`) peaked at **9 replicas of 45**, batch 1 (200 companies at 5) at **10 of 45**, against segment 3's 30 replicas for a ~1.2-concurrency load. No revert criterion met. **Do not re-run the acceptance experiment.** Trigger 2 → 6; `deploy-image.sh` drift check replaces the category-error invariant (it would have hard-failed every future deploy *after* the image landed); `batch-scale.sh` no longer silently reverts `maxReplicas` 45 → 30. **Five things in the original file did not survive**, and the sharpest is that a *controlled* run refuted the headline: uniform traffic at segment 3's exact arrival rate produced **1 replica and zero scale-up events**, so the scaler is correct on smooth load and the defect is specific to MAS's traffic *shape*. Also: "ratchet" is refuted (segment 2 ran longer and peaked lower, and both earlier runs scaled *down* mid-run); option B does not exist (no stabilization-window surface in ACA at all); the cost was **10× low, not high** (€3.00/run at list, €0 cash — Sponsored subscription); and the cost/429 trade is largely illusory because the ingress is **round-robin** and the 429 window is cold start, where there is 1 replica regardless. ~~**The acceptance measurement is MAS's next run**~~ — it ran, twice, and passed; criteria were pre-registered and none fired. **`raw://` is now the load instrument** and should be reached for before any live host |
+| ~~1~~ | ~~`consent-scripts-delete-the-page.md`~~ | M | **DONE and DEPLOYED 2026-08-06** (`0.9.2-consent-guard`). `tasks/done/`. The diagnosis reproduced exactly; three things about the *fix* changed, and the first is the one to carry: dropping the 20 generic selectors would have deleted the measurement step 5 branches on, so they now **observe instead of removing** and log `chars`/`pagechars`. |
+| ~~2~~ | ~~`total-loss-is-permanent-not-transient.md`~~ | S | **DONE and DEPLOYED 2026-08-06** (`0.9.2-consent-guard`). `tasks/done/`. Keyed on the **capture shape** (no `<body>`), not the reason string — one test covers both production signatures, which two reason strings could not. Nothing pinned the old 500, so it was a bug fix and not a contract change. |
+| 3 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 67 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some tests to change behaviour, and treat that as the payoff. The count moved 54 → 66 with the `/consent/*` routes and is **67** as of 2026-08-09. |
+| ~~10~~ | ~~`media-desc-duplicates-the-page-per-image.md`~~ | S | **DONE and DEPLOYED 2026-08-09 14:31 UTC** (`0.9.2-desc-cap`, revision `--0000040`; Tier 1 4/4 pre-deploy, prod smoke green, `caverna.fi` byte-identical across the deploy). `MEDIA_DESCRIPTION_MAX_CHARS = 200` + upstream's own `truncate()` helper (`utils.py:3004`) in `find_closest_parent_with_useful_text`, `tasks/done/`. Measured: `media` **231,708,619 → 538,747 B (430×)**, `cleaned_html` and markdown **byte-identical by md5**, all **1,160** entries kept, offline suite **312 green**. **The diagnosis survived to the byte; eight peripheral things did not**, and three are worth carrying: the walk **never reaches `<html>`** in 78 real captures (lxml leaves `html.text` `None`); the pathological population was undercounted (**19 of 78** captures — 12 jpond *plus 7 accountor* — not 12 of 68); and "the cap is faster" was a single timing inside its own noise — `scrap()` gains ~8 %, **the 330× is `json.dumps` (0.655 s → 0.002 s)**. Also **`grumblo.com` is confirmed the same mechanism**, which the file listed as its largest uncertainty: one plain GET shows 272 images carrying **1,524,174 chars of `desc`, 88 % of its media payload**. **Do not read this as "response size is now bounded"** — the cap bounds `desc` only; `alt` is copied per variant, and **`media.tables` multiplies cell text by an unvalidated `colspan`** (a 4,624-byte page reaches 4,504,226 B of media; `colspan="2000000"` costs +91 MB RSS from 905 bytes of HTML). Neither is built; both need pathological markup and neither has ever been seen in production. That is what turns §3c from *unnecessary* into *parked* |
 | ~~6~~ | ~~`inference-tier-500s-are-not-retryable.md`~~ | S | **CLOSED UNFIXED 2026-08-09, `tasks/done/`. Do not re-open without a page MAS can show has never succeeded.** The measurement was sound — 89 % of batch 1's 500s, 84 % of 14 days' `render_error` — but the *fix* is refuted by the only corpus that could refute it: `www.ktth.fi` returned **14,542 chars on 2026-04-17**, and the `laatutrio.fi` apex paths **21,234 and 14,564 chars on 2026-08-08**, the day this file called them deterministic. Marking them permanently dead converts a recoverable miss into **silent permanent loss on live sites** — the exact direction the taxonomy exists to prevent. MAS asked us not to build it and priced the cost as theirs and small (~1.5 % of a batch's wall clock). **PDFs are settled too:** MAS removes them at dispatch, and their April corpus shows PDF text extraction is a **regression, not a limitation** — though *what* produced that text is **not established** and their attribution to us is inference. **Four findings were rehomed, not lost:** the `browser_manager.py` channel downgrade + the CI gap (CLAUDE.md row, TESTING.md, two test comments), `response_headers` is the first redirect hop with **no final-hop field** (CLAUDE.md row beside `redirected_status_code`), `unrenderable_content` has fired **zero times ever** (the corrected download row + `aitosoft_failure_class.py`), and the untrusted-reachable `PDFContentScrapingStrategy` (`file-upstream-prs.md`). The fixture work its §7 argued for **survives on its own** — it is test work and never needed the classification change |
 | 8 | **Two `failure_class` log holes + a `render_mode` mislabel** — no file yet | XS | **New, from segment 2.** (a) `render_mode: "static"` failed fetches log at INFO with **no `failure_class` field** (`aitosoft_static_mode.py:301,307`) while `_static_error_result` defaults the class to `origin_unreachable` (`:164-179`) — so **no `failure_class` query can ever count them**, and the hole opens exactly when a host has already misbehaved enough for MAS to pivot it to static. ~6 lines mirroring `api.py:1033-1039`; no double-count risk (static returns at `api.py:770`, never traversing the full-mode loop). (b) `api.py:1198`'s `failed_result(...)` omits `render_mode`, which defaults to `"full"` (`aitosoft_failure_class.py:507`) — and because the seed check (`:760`) precedes the static short-circuit (`:764`), a **static** request to a dead domain is reported to MAS as `"full"`. One word, in a field they parse |
 | 7 | **The patchright tier retries classes already known permanent** — no file yet | S | **Re-justify it before starting: item 6 is closed, and item 7's saving can no longer be counted against it.** `render_error` is **not** in `NON_RETRYABLE_CLASSES` (`aitosoft_failure_class.py:129-133`), so item 7 as written would have saved **zero** of batch 1's 18 events — the two were listed as independent and were coupled. What remains is the `render_defect` leg alone, whose production population is small. The cost model, if it is worth having: one URL in this class measured `admits=8 fetches=32 completes=16 patchright=8`, i.e. 4 wire attempts × ~29.5 s = **32 navigations for one URL**. Original text follows. **New, from segment 2.** `_is_blocked` (`aitosoft_patchright_fallback.py:163`) gates the retry on the block-marker **string**, not on classified permanence, so `render_defect` — which is in `NON_RETRYABLE_CLASSES` — still gets an internal retry leg. That leg then dies on upstream's `wait_for_selector("body", timeout=30000)` (`async_crawler_strategy.py:898`), i.e. it waits 30 s for **exactly the element whose absence defined the failure** and can never succeed. ~a few lines; saves 2 navigations + ~60 s per URL. Fold in the fragment-strip for `CONSENT NAVIGATION` (§2 of the same file). Also open and *not* answered: **why `delotec.fi` has no `<body>` at 2015 bytes** — two engines agree, it is not our JS, and MAS holds the bytes |
@@ -591,7 +595,7 @@ delta is the attribution.
 | `static-mode-tls-impersonation.md` | Hardens a path nothing currently falls back to | `residential-egress-retry-path.md` |
 | ~~`base-config-boolean-defaults-never-applied.md`~~ | **CLOSED 2026-08-09, `tasks/done/`.** Its un-park trigger is moot: `CrawlerRunConfig.set_defaults()` sets booleans today *and* honours an explicit client `false`, which the file's proposed merge-rule fix explicitly could not. The `config.yml` line is commented out with the reason inline — left in place it was a landmine, since fixing the merge rule would have turned user simulation on for every request | Someone wanting user simulation on, which is a **measurement**, not a merge-rule change |
 | `preflight-batch-endpoint.md` | **MAS said do not build speculatively.** Their words | MAS asks |
-| `file-upstream-prs.md` | Standing tracker, four PRs filed, **a fifth written but deliberately unfiled**, and since 2026-08-09 three more candidates (the `desc` cap — the cleanest we hold — the `browser_manager` channel downgrade, and a latent upstream *security* report) (the consent snippet — file it after segment 2, when it can carry production counts). Upstream `develop` is **one commit past v0.9.2** (a Docker IPv6 fix, checked 2026-08-02) — core behavioural changes sit for months and waiting for them is not a plan | Nothing — check occasionally |
+| `file-upstream-prs.md` | **Un-parked in part: the fifth PR's gate has fired.** It was held "until after segment 2, when it can carry production counts" — segment 2 ran 2026-08-06 and the counts are in hand (27 roots / 3 companies; segment 5: 266 declined, **103 structural on 19 domains**; batch 1: 124, **56 % hitting `<script>`/`<style>`**). Nothing is holding it now, and it is the last open cross-repo step. Standing tracker otherwise: four PRs filed, a fifth written and now **fileable**, and since 2026-08-09 three more candidates (the `desc` cap — the cleanest we hold — the `browser_manager` channel downgrade, and a latent upstream *security* report) (the consent snippet — file it after segment 2, when it can carry production counts). Upstream `develop` is **one commit past v0.9.2** (a Docker IPv6 fix, checked 2026-08-02) — core behavioural changes sit for months and waiting for them is not a plan | Nothing — check occasionally |
 | `waa-eval-2026-07-30-forensics.md` | **Reference, not a task.** Never close it | — |
 
 **Do not re-expand this list without a reason that arrives from outside** — a MAS
@@ -614,9 +618,15 @@ profiles bill continuously and would end `minReplicas: 0` economics) — and at
 **cost per fetch would double for zero throughput gain**. Not approved, and no
 longer needed: memory refusals are at zero.
 
-**`render_capacity` stays 2** — fixed by 2 vCPU. If it ever moves, change the ACA
-scale rule *first*: `deploy-image.sh` verifies that invariant **after** updating
-the image, so it is a post-hoc alarm, not a gate.
+**`render_capacity` stays 2** — fixed by 2 vCPU. **The instruction that used to
+follow this line ("if it ever moves, change the ACA scale rule first") is
+refuted and deleted.** The two are independent: `render_capacity` is a hard
+in-process cap on concurrent renders, the ACA trigger is only when Azure adds a
+replica, and they are measured in different units. Pinning them is what produced
+38 replicas on a ~1.2-concurrency load. The trigger lives in
+`deploy-image.sh:ACA_SCALE_TRIGGER` (6) and changing one implies nothing about
+the other. `deploy-image.sh` drift-checks the trigger and `maxReplicas` **after**
+the image swap, so both are post-hoc alarms, not gates.
 
 **Still Tero's, and cheap:** `minReplicas: 1` for a sweep window removes the
 scale-from-zero burst behind every 500 we have ever seen. It is a scale setting,
@@ -907,8 +917,17 @@ message and it is worth honouring: their ledger numbers diverged from ours (our
 "13" is their "11"; they have no 12 or 13), and the mismatch is part of why our
 14 sat unread for two days.
 
-**`22-to-mas-the-image-is-out-and-here-is-how-to-read-the-counter.md` is written
-and needs relaying.** It announces the image and the one wire-status change
+**The only message awaiting a relay is
+`41-to-mas-deploy-timestamp.md`** — the 2026-08-09 14:31 UTC deploy timestamp
+and nothing else, because MAS asked for exactly that and for silence otherwise
+(`40-…` §5). **Do not append status to it.**
+
+**Everything else has landed.** `22-…` and `24-…` were relayed 2026-08-06, and
+`31-…` through `40-…` all followed; this paragraph claimed 22 still needed
+relaying until 2026-08-09, which is the second time a "needs relaying" line has
+outlived its relay. **When you relay something, strike the line that asked for
+it.** What 22 said, kept as history: it announced the image and the one
+wire-status change
 (`render_defect` at 200 for a deleted root), delivers their `21-…` §6 ask (the
 requested URL beside the current one in every counter line), and asks for two
 things: the **three-arm** A/B (off / on-today / on-with-this-image — arm 3 is
@@ -1015,8 +1034,11 @@ Answered from our side on 2026-08-01/02, so do not re-ask:
 - **(h) the sweep's shape** — being handled by process instead: MAS will notify
   before heavier scraping so it can be watched live.
 
-**Two agreed changes are unblocked and unshipped**, both additive, both waiting
-only on a reason to open an image: the `fodbar.fi` "content was present despite
+**Two agreed changes are unblocked and unshipped**, both additive. They were
+waiting "only on a reason to open an image" — **an image was opened on 2026-08-09
+and neither shipped, deliberately**: that deploy was single-purpose, and bundling
+unrelated additions into it would have made a clean before/after comparison
+impossible for the one thing it existed to change. They are: the `fodbar.fi` "content was present despite
 the origin status" field (MAS names it), and flipping envelope `success` to the
 aggregate — which must ship **alone**, since it breaks a pinned contract
 (`test_static_mode.py:257`) and buys no behaviour.

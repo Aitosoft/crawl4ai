@@ -45,8 +45,9 @@ been updated**.
 activating an old revision** — this app is in `activeRevisionsMode: Single`, and
 `az containerapp revision list` returns **exactly one** row (checked 2026-08-09:
 only the live revision exists). Old revisions are deactivated and garbage-collected,
-so every "the rollback target is revision `--0000036`" line in this repo names
-something you cannot activate. The **image tags** are what survive, in ACR:
+so a revision name is not a rollback target. Every such line has been rewritten
+(2026-08-09); if you find another, it is stale. The **image tags** are what
+survive, in ACR:
 
 ```bash
 az acr repository show-tags --name aitosoftacr \
@@ -83,7 +84,7 @@ gets broken).
   2 from 2026-07-17 until 2026-08-08). `minReplicas: 0` (scale-to-zero kept),
   `maxReplicas: 45`.
   ⚠️ It is **NOT** tied to `render_capacity` and must not be pinned to it —
-  see "Scaling" below and `tasks/autoscaler-ratchets-to-the-cap.md`.
+  see "Scaling" below and `tasks/done/autoscaler-ratchets-to-the-cap.md`.
 - **Probes** (were null/TCP defaults): HTTP Startup + Readiness on `/health`
   — lifespan pre-warms the browser before serving, so passing readiness ==
   browser-pool-ready. Liveness is TCP with generous thresholds (never kills
@@ -204,9 +205,12 @@ az containerapp logs show \
 ```
 
 This is the ONLY supported deploy path. It builds in ACR (no local Docker),
-swaps the image without touching env vars (MAS's token survives), verifies
-the `render_capacity` ↔ `http-renders` scale-rule invariant, and prints the
-active revision. Equivalent manual steps, if you need them piecemeal:
+swaps the image without touching env vars (MAS's token survives), verifies the
+live `http-renders` trigger and `maxReplicas` against the constants declared in
+the script itself (a **drift** check — deliberately **not** tied to
+`render_capacity`, which is a different quantity; the old coupling was a category
+error, retired 2026-08-08), and prints the active revision. Note both checks run
+**after** the image is already swapped, so they are an alarm, not a gate. Equivalent manual steps, if you need them piecemeal:
 
 ```bash
 az acr build --registry aitosoftacr --image crawl4ai-service:<tag> --file Dockerfile .
@@ -364,7 +368,10 @@ template with `az containerapp show` if you ever need to recreate them.
 
 Warm-replica pinning before WAA batches is **no longer needed**. The
 render-admission gate + the explicit `http-renders` scale rule
-(`concurrentRequests: 2`) make scale-out track real render load: bursts get
+(`concurrentRequests: 2` when this was written; **6 since 2026-08-08** — and the
+"track real render load" framing is the category error that change retired: the
+rule triggers scale-out, it does not track or cap load) make scale-out respond to
+real traffic: bursts get
 fast 429s (absorbed by MAS client retries) while ACA boots replicas in
 ~10–50s. `batch-scale.sh` is kept ONLY as an emergency valve if scaling
 misbehaves:
@@ -412,8 +419,12 @@ the websocket URL**, so anything over roughly 300 characters fails with
 
 ## Cost Optimization
 
-Current configuration (updated 2026-04-04):
-- **Replicas**: 0-30 (scales to zero when idle, scales out under load via http-renders rule at 2 concurrent renders/replica)
+Current configuration (**re-checked against live 2026-08-09** — this block said
+`0-30` and `2 concurrent renders/replica` for a day after both changed, which is
+exactly the paste-hazard warned about under "Scaling" above):
+- **Replicas**: 0-45 (scales to zero when idle; scales out via the `http-renders`
+  rule at **trigger 6**, which is *when Azure adds a replica* — **not** a cap.
+  The cap is RenderGate's `render_capacity: 2`, in-process.)
 - **CPU**: 2.0 cores per replica
 - **Memory**: 4.0 GiB per replica
 - **max_pages**: 5 per replica (horizontal scaling strategy)
@@ -422,9 +433,12 @@ Current configuration (updated 2026-04-04):
 
 Scaling history: the 2026-04-04 incident (1 CPU / 2 GiB starvation) and the
 2026-07-16 504 incident (default 10-concurrent scale rule) are narrated in
-AITOSOFT_CHANGES.md; the current model is capacity-matched scaling — 2
-renders per 2-vCPU replica, enforced twice (RenderGate in-process,
-`http-renders` rule at the scaler).
+AITOSOFT_CHANGES.md. **"Capacity-matched scaling, enforced twice" was a category
+error and is retired** (2026-08-08): the two numbers are different quantities in
+different units, so they can never meaningfully be equal. RenderGate enforces a
+hard cap of 2 concurrent renders per replica; the ACA rule only *triggers*
+scale-out and Microsoft defines its metric as a rate. See "Scaling" above and
+`tasks/done/autoscaler-ratchets-to-the-cap.md`.
 
 To monitor costs: Azure Portal > Cost Management. Most time is at 0 replicas
 (zero cost).

@@ -3,7 +3,10 @@
 #
 # This is the ONLY supported deploy path for image updates. It never touches
 # env vars (so MAS's CRAWL4AI_API_TOKEN survives), replica limits, probes, or
-# scale rules — it swaps the image and verifies the render-capacity invariant.
+# scale rules — it swaps the image, then drift-checks the live `http-renders`
+# trigger and maxReplicas against the constants declared below. Those are NOT
+# tied to `render_capacity`; that coupling was a category error, retired
+# 2026-08-08.
 #
 # Usage:
 #   ./azure-deployment/deploy-image.sh <tag>     # e.g. 0.9.3-fix-foo
@@ -39,7 +42,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # traffic weight. The app stayed up only because ACA kept routing to the old
 # revision's surviving replicas -- that is the platform being forgiving, not a
 # margin to rely on. This is a live risk mid-sweep, i.e. exactly when someone
-# wants to ship a fix. See tasks/autoscaler-ratchets-to-the-cap.md.
+# wants to ship a fix. See tasks/done/autoscaler-ratchets-to-the-cap.md.
 DEPLOY_REPLICA_CEILING=20
 live_replicas=$(az containerapp replica list --name "$APP_NAME" \
     --resource-group "$RESOURCE_GROUP" --query 'length(@)' -o tsv 2>/dev/null || echo "")
@@ -72,7 +75,7 @@ az containerapp update \
 
 echo "==> Verifying scale-trigger invariant (repo intent vs live ACA scale rule)..."
 # This check used to require `render_capacity == concurrentRequests`, and that
-# was WRONG -- corrected 2026-08-08, see tasks/autoscaler-ratchets-to-the-cap.md.
+# was WRONG -- corrected 2026-08-08, see tasks/done/autoscaler-ratchets-to-the-cap.md.
 #
 # The two are different quantities in different units. `render_capacity` is a
 # hard in-process cap on concurrent renders (the safety mechanism).
@@ -100,7 +103,7 @@ if [[ "$rule_trigger" != "$ACA_SCALE_TRIGGER" ]]; then
     echo "!! DRIFT: ACA http-renders rule=$rule_trigger but this repo expects $ACA_SCALE_TRIGGER." >&2
     echo "!! Someone changed the scale rule outside the repo, or ACA_SCALE_TRIGGER in this" >&2
     echo "!! script is stale. Reconcile before running traffic -- see DEPLOYMENT_INFO.md" >&2
-    echo "!! 'Scaling' and tasks/autoscaler-ratchets-to-the-cap.md." >&2
+    echo "!! 'Scaling' and tasks/done/autoscaler-ratchets-to-the-cap.md." >&2
     exit 1
 fi
 echo "    OK: http-renders trigger=$rule_trigger (render_capacity is separate, and deliberately so)."

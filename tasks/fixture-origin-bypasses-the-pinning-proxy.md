@@ -1,4 +1,8 @@
-# All 54 fixture tests run on a network path production does not use
+# All 67 fixture tests run on a network path production does not use
+
+> **The count in this title has been 54, then 66, and is 67 as of 2026-08-09.**
+> It moves whenever a route is added, so treat it as "all of them", not as a
+> number to check against.
 
 **Status:** open, not started. Written 2026-08-05 by the session that shipped
 `done/egress-proxy-blocks-the-event-loop.md`, from a reviewer's finding.

@@ -1,9 +1,16 @@
 # Testing Framework
 
 Rewritten 2026-07-16 (v0.9.2 upgrade). The old version of this file predated
-the stealth package and recommended `magic: true` configs — which the v0.9.x
-server now REJECTS (untrusted-boundary 400) — and listed retired sites as
-Tier 1. If you see advice contradicting this file elsewhere, this file wins.
+the stealth package, recommended `magic: true` configs, and listed retired sites
+as Tier 1. If you see advice contradicting this file elsewhere, this file wins.
+
+**Corrected 2026-08-09:** this paragraph used to say the v0.9.x server *rejects*
+`magic` with a 400. **It does not** — `aitosoft_trust.py:44-49` un-forbids it for
+our trusted client, verified by executing `apply_trust_relaxations()`. That was
+both wrong and the dangerous direction (a session could send it believing the
+boundary would stop them), and it contradicted golden rule 4 twenty lines below
+in this same file. `magic` is banned **because of what it does to a page**, not
+because anything prevents it.
 
 ---
 
@@ -271,7 +278,7 @@ unaffected).
 | Failure-classification test (`pytest test-aitosoft/test_failure_classification.py`) | before every deploy; after any change to `failure_class`, the error-text matching, or the 200/500/504 mapping | 34/34 pass — offline, pins MAS's Q2 contract: origin-caused ⇒ 200 + `success:false`, 5xx reserved for us, `failure_class` on every result |
 | Noscript-collapse test (`pytest test-aitosoft/test_noscript_body_collapse.py`) | before every deploy; after any change to `strip_noscript()` or the scraping strategy | 11/11 pass — offline, pins that a nested `<noscript>` no longer swallows the body |
 | Challenge-detection test (`pytest test-aitosoft/test_antibot_challenge_detection.py`) | before every deploy; after any `antibot_detector` pattern change | 18/18 pass — offline, pins both measured challenge families at HTTP 200 and the Shopify `Access Denied` false positive |
-| Fixture-origin test (`pytest test-aitosoft/test_fixture_origin.py`) | before every deploy; after any change to the capture path, block detection, `failure_class`, **the consent/overlay snippets** or the fence | **66/66 pass — offline but browser-driven (~235 s)**, measured on 2026-08-06 (the 54/~220 s figure held 3× consecutively on 2026-08-05 before the `/consent/*` routes). The "23/23, ~50 s" this row once claimed was stale by a wide margin. **Four** of its tests pin defects on purpose (padded block at 202, unmarked interstitial, unclosed `<noscript>`, and now the self-inflicted consent click); when the owning task ships, invert them, don't delete them. `MAS_MAX_RETRIES` is now 1, matching production. **The fence test's flake is fixed** (2026-08-06): the fence unwinds in 0.05 s, so the product-finding reading is refuted; the variance was a cold browser launch *outside* the fence. `FENCE_STALL_S = 8` widens the gap rather than the assertion (`tasks/done/flaky-fence-test-margin.md`) |
+| Fixture-origin test (`pytest test-aitosoft/test_fixture_origin.py`) | before every deploy; after any change to the capture path, block detection, `failure_class`, **the consent/overlay snippets** or the fence | **67/67 pass — offline but browser-driven (~235 s)**, measured on 2026-08-06 (the 54/~220 s figure held 3× consecutively on 2026-08-05 before the `/consent/*` routes). The "23/23, ~50 s" this row once claimed was stale by a wide margin. **Four** of its tests pin defects on purpose (padded block at 202, unmarked interstitial, unclosed `<noscript>`, and now the self-inflicted consent click); when the owning task ships, invert them, don't delete them. `MAS_MAX_RETRIES` is now 1, matching production. **The fence test's flake is fixed** (2026-08-06): the fence unwinds in 0.05 s, so the product-finding reading is refuted; the variance was a cold browser launch *outside* the fence. `FENCE_STALL_S = 8` widens the gap rather than the assertion (`tasks/done/flaky-fence-test-margin.md`) |
 | Tier 1 regression | before every deploy | 4/4 pass |
 | Fingerprint diagnostic | after stealth/browser changes | no regressions vs `test-aitosoft/stealth-v4/` |
 | Soak test | after pool/leak-related changes | flat memory over 30 min |

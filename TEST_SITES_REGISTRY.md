@@ -196,7 +196,7 @@ Test these when working on specific features:
     "multi_country_site"
   ],
   "test_priority": "tier_1",
-  "notes": "CRITICAL TEST CASE: cookie wall returns only 32 tokens without handling. Solved by `remove_consent_popups: true` (the optimal config). Do NOT use `magic` — it removes content and the v0.9.x server rejects the field with HTTP 400."
+  "notes": "CRITICAL TEST CASE: cookie wall returns only 32 tokens without handling. Solved by `remove_consent_popups: true` (the optimal config). Do NOT use `magic` — it removes content. **The server does NOT stop you** (`aitosoft_trust.py:44-49` un-forbids it for our trusted client, verified 2026-08-06); this note claimed a 400 that does not happen."
 }
 ```
 
@@ -236,7 +236,7 @@ Test these when working on specific features:
 
 | Pattern | Sites Affected | Solution | Test Command |
 |---------|----------------|----------|--------------|
-| **Cookiebot wall** (blocks content) | accountor.com | `remove_consent_popups: true` (in the optimal config; `magic` is rejected by the v0.9.x server) | `test_site.py accountor.com --page fi/finland` |
+| **Cookiebot wall** (blocks content) | accountor.com | `remove_consent_popups: true` (in the optimal config; **do not use `magic` — the server accepts it, it is banned for what it does to the page**) | `test_site.py accountor.com --page fi/finland` |
 | **Cookiebot tracking** (pixel only) | neuroliitto.fi, showell.com | `removeCommonDomains` cleaning | Check for cookiebot.com URLs |
 | **Finnish popup** (text at end) | talgraf.fi (retired) | No truncation needed - let LLM see it | Check tokens don't bloat >5k |
 | **No consent** | caverna.fi (monidor.fi retired) | Works with defaults | Fast baseline |

@@ -26,7 +26,7 @@ service" / similar, read this file and use `ScheduleWakeup` to loop.
   admits 2 concurrent full renders (RenderGate), queues ≤4 for ≤15s, then
   429 + Retry-After: 5. ACA scale rule `http-renders` boots replicas; its
   trigger is **6** since 2026-08-08 and is **not** the same quantity as
-  RenderGate's capacity of 2 (see `tasks/autoscaler-ratchets-to-the-cap.md`).
+  RenderGate's capacity of 2 (see `tasks/done/autoscaler-ratchets-to-the-cap.md`).
   **Warm-replica pinning is RETIRED** — `batch-scale.sh` is an emergency valve
   only, not a pre-batch step.
 - **Watching a sweep after the 2026-08-08 scale change:** the number to read is
