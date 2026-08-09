@@ -607,7 +607,9 @@ DOWNLOAD_PDF_LINES = (
 #:
 #: `vcard` is the grantthornton.fi `GetVCard` shape verbatim — the URL that
 #: produced every HTTP 500 of MAS's 2026-08-01 run. The other four vary one axis
-#: each, and **all five behave identically today**.
+#: each. **All five behave identically on the browser this suite actually runs,
+#: and four of the five behave identically on the one production runs** — see
+#: DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER below.
 DOWNLOAD_KINDS: Dict[str, Tuple[str, str, bool]] = {
     "vcard": ("text/vcard; charset=utf-8", "vcf", True),
     "vcard-inline": ("text/vcard; charset=utf-8", "vcf", False),
@@ -618,9 +620,27 @@ DOWNLOAD_KINDS: Dict[str, Tuple[str, str, bool]] = {
 
 #: Measured through the browser 2026-08-02: every kind above raises
 #: `Page.goto: Download is starting`. Named as a set anyway, so that a kind
-#: which starts rendering (a real-Chrome PDF viewer is the live candidate —
-#: this devcontainer has no Chrome binary and production runs
-#: `chrome_channel: chrome`) fails the suite rather than quietly leaving it.
+#: which starts rendering fails the suite rather than quietly leaving it.
+#:
+#: **That tripwire never had a chance to fire, and the candidate it named is
+#: real.** It said "a real-Chrome PDF viewer is the live candidate — this
+#: devcontainer has no Chrome binary", and concluded the question could not be
+#: settled here. It can: `_resolve_channel()` below falls back to `"chromium"`,
+#: and `crawl4ai/browser_manager.py:1123-1128` — a *Windows* workaround applied
+#: on every platform — then **drops the channel entirely**, so Playwright
+#: launches `chromium_headless_shell`, which has no PDF viewer. Passing
+#: `CRAWL4AI_FIXTURE_CHANNEL=chromium` cannot rescue it: that is the same string
+#: line 1127 discards. Launching with `channel="chromium"` explicitly (the full
+#: build, which IS installed here) reproduces production on this arm64 machine.
+#:
+#: Re-measured on both arms 2026-08-09: 4 of the 5 kinds are identical, and
+#: **`pdf-inline` alone diverges** — real Chrome renders it into a 174-byte
+#: viewer shell at HTTP 200, byte-identical to the production capture, which
+#: tier-3 structural inference then calls a block (`render_error`, 500). So on
+#: production's browser this set is really the other four. It is left whole
+#: because these tests run on the shell, where all five do refuse; **the fix is
+#: to run the arm production runs, not to edit the set.** See the CLAUDE.md row
+#: "The browser suite has never run production's browser".
 DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER = frozenset(DOWNLOAD_KINDS)
 
 

@@ -1,11 +1,39 @@
 # `config.yml` `base_config` silently drops every boolean setting
 
-> **PARKED 2026-08-02 by the coordinator scope cut — do not pick this up unasked.**
-> `simulate_user` has never taken effect and nothing has missed it. "Delete the line from config.yml" is the likely right answer and costs nothing to defer. **What un-parks it: someone actually wanting a boolean in `base_config` to work.**
-> The reasoning is in `tasks/README.md` "The scope cut" and CLAUDE.md principle 7;
-> the analysis below is preserved and still believed correct — it is the
-> *priority* that changed, not the diagnosis. If you think it should be un-parked,
-> say why in this file rather than just starting.
+> **CLOSED 2026-08-09 — diagnosis confirmed, fix §1 obsolete, `config.yml` line
+> commented out. Do not re-open to change the merge rule.**
+>
+> The diagnosis below is correct and was re-verified by execution on 2026-08-09
+> (`api.py:876-880`; `False == None` is False and `False == ""` is False, so a
+> boolean can never be applied). What changed is that **its entire "Fix §1"
+> premise — that the merge rule is the lever — is wrong.**
+>
+> `CrawlerRunConfig` is decorated `@_with_defaults` (`async_configs.py:1329`),
+> the same mechanism `aitosoft_entry.py:40` already uses for `BrowserConfig`. So
+> **`CrawlerRunConfig.set_defaults(simulate_user=True)` sets the boolean today**,
+> with no change to `api.py` at all — and it is *better* than the proposed fix,
+> because `_with_defaults` keys on presence in `kwargs` rather than truthiness,
+> so a client's explicit `false` still wins. The §1 redesign's own stated cost
+> ("a client explicitly sending `simulate_user: false` becomes
+> indistinguishable from not sending it") is simply avoided. Verified end to end
+> through `CrawlerRunConfig.load(body, provenance=UNTRUSTED)`, including
+> `clone()` preservation and per-instance deep-copy of default objects.
+>
+> **Decision 2 is unchanged and still unanswered: nobody has measured whether
+> `simulate_user` should be on, and nobody has missed it in the ~10 months it
+> has been off.** So the line is not being restored by another route. It is
+> **commented out** in `deploy/docker/config.yml` with the reason inline —
+> deliberately not deleted, so the next reader finds the history rather than a
+> blank. Commenting it out also removes a landmine: as written, anyone who
+> "fixed" the merge rule would silently turn user simulation on for every
+> request on a 2 vCPU replica.
+>
+> **What would re-open this:** someone wanting user simulation on, which is
+> decision 2 and needs a measurement, not a merge-rule change. Do it with
+> `set_defaults`.
+>
+> Nothing about `total_timeout` changed — it is `None`-defaulted, it applied all
+> along, and it is still the only key in `base_config`.
 
 **Status:** Open — diagnosed and proven, fix deliberately NOT bundled with the
 2026-07-30 deploy (see "Why not now").

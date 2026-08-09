@@ -25,6 +25,7 @@ from .utils import (
     extract_metadata_using_lxml,
     extract_page_context,
     calculate_link_intrinsic_score,
+    truncate,
 )
 from lxml import etree
 from lxml import html as lhtml
@@ -42,6 +43,33 @@ NOSCRIPT_ELEMENT_REGEX = re.compile(
     r"<noscript\b[^>]*>[\s\S]*?</noscript\s*>", re.IGNORECASE
 )
 NOSCRIPT_TAG_REGEX = re.compile(r"</?noscript\b[^>]*>", re.IGNORECASE)
+
+# Upper bound on a media item's ``desc``, applied in
+# find_closest_parent_with_useful_text().
+#
+# ``desc`` is documented as "a snippet of nearby text or a short description"
+# (docs/md_v2/core/link-media.md), but it is produced by walking *up* from the
+# element until an ancestor has enough words and then returning that ancestor's
+# **entire subtree text**. Image containers hold no words of their own, so on a
+# grid layout the walk passes every one of them and stops at whichever container
+# also holds the page prose: the whole page becomes one image's "description",
+# and ``add_variant`` copies it into every srcset/<picture> variant. Payload is
+# then O(variants x page_text) — observed at 232 MB for a single page.
+#
+# The tell that this is a bug and not a design: the stop condition ANDs ``.text``
+# (the element's *direct* text node, so indentation whitespace is truthy) with
+# ``text_content()`` (the whole subtree), so the *same document* yields
+# ``desc: None`` minified and the whole page pretty-printed — measured 52x apart.
+#
+# 200 matches the existing bound on an over-long value
+# (``preprocess_html_for_schema(attr_value_threshold=200)``), and ``truncate()``
+# is the existing helper, so a cut snippet is visibly cut rather than silently
+# short.
+#
+# This bounds ``desc`` only. ``alt`` is copied into every variant by the same
+# ``add_variant``, and ``media.tables`` multiplies cell text by an unvalidated
+# ``colspan``; both are separate and neither is addressed here.
+MEDIA_DESCRIPTION_MAX_CHARS = 200
 
 
 def strip_noscript(html: str) -> str:
@@ -425,7 +453,11 @@ class LXMLWebScrapingStrategy(ContentScrapingStrategy):
                 and len(current.text_content().split())
                 >= image_description_min_word_threshold
             ):
-                return current.text_content().strip()
+                # This is an ancestor's *whole subtree* text, which on a grid
+                # layout is the whole page — see MEDIA_DESCRIPTION_MAX_CHARS.
+                return truncate(
+                    current.text_content().strip(), MEDIA_DESCRIPTION_MAX_CHARS
+                )
             current = current.getparent()
         return None
 

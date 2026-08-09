@@ -168,11 +168,25 @@ stealth mode). Still broken upstream — PR tracked in `tasks/file-upstream-prs.
 5. `_normalized_visible_text` — whitespace-collapsed, so this module and
    `aitosoft_collapse_guard` agree about what counts as text on a page.
 
-### crawl4ai/content_scraping_strategy.py (+39/−0)
-`strip_noscript()` before `document_fromstring`. `<noscript>` cannot nest, so a
-nested one leaves the outer element unclosed and libxml2 swallows the whole
-body — 312 KB of HTML became 1 B of markdown at HTTP 200 `success:true`, across
-70 hosts. PR upstream pending (#2114).
+### crawl4ai/content_scraping_strategy.py (+65/−1)
+Two changes, both upstream defects.
+
+1. `strip_noscript()` before `document_fromstring`. `<noscript>` cannot nest, so
+   a nested one leaves the outer element unclosed and libxml2 swallows the whole
+   body — 312 KB of HTML became 1 B of markdown at HTTP 200 `success:true`,
+   across 70 hosts. PR upstream pending (#2114).
+2. `MEDIA_DESCRIPTION_MAX_CHARS = 200`, applied in
+   `find_closest_parent_with_useful_text` via upstream's own `truncate()`
+   helper. That function returns an *ancestor's whole subtree text* as an
+   image's `desc`; image containers hold no words, so on a catalogue grid it
+   returns the whole page, and `add_variant` copies it into every srcset
+   variant. One page produced **231,708,619 bytes of `media`** — 1,104 of 1,160
+   entries carrying the same 154,798-char string — and returned ~232 MB four
+   times at HTTP 200 `success: true` with no log line anywhere. Capped:
+   **538,747 B (430×)**, `cleaned_html` and markdown byte-identical, every entry
+   kept. Seventh PR candidate. Note it bounds `desc` **only** — `alt` and
+   `media.tables` have their own unbounded paths, both left alone deliberately.
+   `test-aitosoft/test_media_desc_cap.py` pins it.
 
 ### crawl4ai/async_webcrawler.py (+55/−6)
 Two changes, both upstream defects (PRs pending):

@@ -7,8 +7,36 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-08-06
+**Last Updated**: 2026-08-09
 
+> **BUILT AND UNDEPLOYED, 2026-08-09: the image `desc` cap.** One page returned
+> **232 MB four times** at HTTP 200 `success: true` with no log line anywhere;
+> an image's `desc` was an ancestor's whole subtree text, copied per image and
+> per srcset variant. Capped at 200 chars: `media` 231,708,619 → **538,747 B
+> (430×)**, `cleaned_html` and markdown **byte-identical**, every entry kept.
+> Suite 312 green. **Held only for a deploy window** — MAS is running an
+> ~18,000-company sweep and Tero decides when it goes out; MAS themselves say
+> the change is invisible to them and can land any time. The section below is
+> the full account, including what it does **not** bound.
+>
+> **Two task files closed the same day without code:**
+> `inference-tier-500s-are-not-retryable.md` **closed unfixed** — MAS's corpus
+> refutes its premise (`www.ktth.fi` returned 14,542 chars on 2026-04-17; the
+> `laatutrio.fi` apex paths 21,234 and 14,564 on 2026-08-08), so marking those
+> pages permanently dead would have been silent data loss on live sites. Its four
+> surviving findings were rehomed, not lost.
+> `base-config-boolean-defaults-never-applied.md` **closed** — its proposed fix
+> is obsolete because `CrawlerRunConfig.set_defaults()` exists.
+>
+> **One correction to this file's own record, and it is the dangerous direction:**
+> the claim that an inline `application/pdf` behaves exactly like a
+> `Content-Disposition: attachment` download is **false in production**. Real
+> Chrome renders it into a 174-byte viewer shell at HTTP 200 which tier-3
+> inference calls a block. Re-measured on both browser arms 2026-08-09: 4 of 5
+> download kinds identical, `pdf-inline` alone diverges. **`unrenderable_content`
+> has therefore fired zero times in production, ever.** See the 2026-08-02 §2
+> entry below, which is corrected in place.
+>
 > **Deployed 2026-08-06: `0.9.2-consent-guard` (revision `--0000037`).** Our own
 > consent JS was deleting customer pages; the fix, its three counters, and
 > `render_defect` at 200 for a deleted root. **One wire-status change**: a
@@ -82,7 +110,7 @@ Keeping this log helps when syncing with upstream updates.
 > we cannot buy.
 
 ### Version
-- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below). **`main` is one image ahead of production**: the consent-JS fix + `render_defect` for a deleted root are committed and undeployed (2026-08-06)
+- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below). **`main` is one image ahead of production**: the image `desc` cap is committed and undeployed (2026-08-09). It is the *only* undeployed behaviour change — the consent-JS work went out as `--0000037`
 - **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result + the egress-path work + **the consent-JS guard and its counters** (deployed 2026-08-06)
 - **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-consent-guard` (revision `crawl4ai-service--0000037`, deployed 2026-08-06, digest `sha256:4ad6e11634a5c14b07faac9ba434cef73ff120a89f579b80ecf4be37f325c215`)
 - **Previous**: `0.9.2-egress-dns-fix` (revision `--0000036`, deployed 2026-08-05) — the rollback target. Before that, `0.9.2-collapse-recovery` (revision `--0000034`, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`). **Revision `--0000035` (`0.9.2-egress-dns`) is a burned tag** — it shipped a `NameError` and lasted 8 minutes; do not roll back to it.
@@ -117,9 +145,16 @@ Keeping this log helps when syncing with upstream updates.
 - **Key Tools**: Node.js 20, Azure CLI, GitHub CLI, Claude Code
 
 ### Tests
-- **`pytest test-aitosoft/` = 306 tests, ~250 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
-- Pure-function subset: **239 tests, ~30 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
+- **`pytest test-aitosoft/` = 312 tests, ~260 s, all offline, zero live requests** (the four live CLI scripts are no longer collected; see `test-aitosoft/conftest.py`)
+- Pure-function subset: **245 tests, ~30 s** (`--ignore=test-aitosoft/test_fixture_origin.py`)
 - Browser-driven subset: test_fixture_origin.py (67), against a local fixture origin, ~215 s
+- **The browser-driven subset has never run production's browser, and no CI
+  workflow runs `test-aitosoft/` at all.** `browser_manager.py:1123-1128` drops
+  `channel` whenever `chrome_channel == "chromium"` (a Windows workaround applied
+  everywhere), so Playwright launches `chromium_headless_shell`. Found 2026-08-09
+  when an inline-PDF claim turned out to be true only on the shell. Not a
+  hypothetical: it is why five download tests pass while exercising the wrong
+  arm. TESTING.md's arm64 section carries the detail and the two possible fixes
 - **The fence test's flake is FIXED (2026-08-06)** after being diagnosed rather
   than tolerated. It had reached 1 failure in 10 full runs. Measured: the fence
   fires at 1.00 s and the request returns at 1.04-1.07 s, so **unwind costs
@@ -130,6 +165,165 @@ Keeping this log helps when syncing with upstream updates.
   launch. Fixed by `FENCE_STALL_S = 8`, which widens the gap between fence and
   origin rather than the assertion's meaning, and costs the suite nothing.
   `tasks/done/flaky-fence-test-margin.md`.
+
+---
+
+## One page produced a 232 MB response, four times, at HTTP 200 `success: true` (2026-08-09)
+
+**Built, tested, and held for a deploy window — MAS is running an ~18,000-company
+sweep and Tero greenlights the deploy.** MAS's own instruction is that the change
+is invisible to them and can land any time, including mid-sweep; we are not
+deploying into it anyway.
+
+### What changed
+
+One constant and one call, in a file we already patch:
+
+```python
+# crawl4ai/content_scraping_strategy.py
+MEDIA_DESCRIPTION_MAX_CHARS = 200
+...
+# in find_closest_parent_with_useful_text()
+return truncate(current.text_content().strip(), MEDIA_DESCRIPTION_MAX_CHARS)
+```
+
+`truncate()` is **upstream's own helper** (`utils.py:3004`, literally
+`value[:threshold] + '...'`) and 200 is **upstream's own constant** for bounding
+an over-long value (`preprocess_html_for_schema(attr_value_threshold=200)`). So
+the patch adds no idiom of ours, and what we ship is what we would PR.
+
+### The defect
+
+`find_closest_parent_with_useful_text` walks **up** from an `<img>` until an
+ancestor has enough words, then returns **that ancestor's entire subtree text**.
+Image containers hold no words of their own, so on a product-catalogue grid the
+walk passes every one of them and stops at whichever container also holds the
+page prose. `add_variant` then copies that string into every srcset/`<picture>`
+variant, so the payload is O(variants × page_text).
+
+`https://www.thermokon.fi`, four requests on 2026-08-08:
+
+| | |
+|---|---|
+| media entries | **1,160** (= 580 distinct images × 2.0 fan-out) |
+| distinct `desc` strings | 19 |
+| entries carrying the *same* 154,798-char string | **1,104** |
+| `media` as JSON | **231,708,619 B** — 56× everything else in the result combined |
+| on the wire | 137, 136, 145, 146 MB, HTTP 200, `success: true`, `failure_class` absent |
+| outcome | 216 s each, Envoy `DC` — MAS's 210 s per-attempt client timeout fired |
+
+**Nothing logged anything.** `[COMPLETE] ✓`, no `RESULT FAILURE`, no
+`failure_class`, no collapse-guard fire. The only surface that recorded it is
+`ContainerAppHTTPLogs.BytesSent`, which nothing read until 2026-08-09.
+
+### Measured effect
+
+Re-derived independently against the stored render, and against 78 stored
+captures in `test-aitosoft/artifacts/`:
+
+| | baseline | shipped |
+|---|---:|---:|
+| `media` JSON | 231,708,619 | **538,747 (430×)** |
+| media entries kept | 1,160 | **1,160** |
+| `cleaned_html` | 989,759 | **identical (md5)** |
+| markdown | 761,365 | **identical (md5)** |
+| `json.dumps(media)` | 0.655 s | **0.002 s** |
+| `scrap()` | 1.485 s | 1.366 s (~8 %, p = 0.0014 over 9 interleaved reps) |
+
+**The win is serialization, not scraping.** The walk still builds each
+ancestor's `text_content()` before the slice, so do not repeat the earlier
+"the cap makes scraping faster" framing — it was a single timing inside its own
+noise, and the 330× is somewhere else.
+
+### Why it is safe, verified from both sides and not from the summary
+
+- **Nothing in this repo reads `desc`.** Exhaustive search of the dict-key and
+  attribute forms across all Python: written at `content_scraping_strategy.py`
+  and at `utils.py:1330` (a legacy scraper whose only in-tree caller is a
+  **commented-out line**, `crawl4ai/legacy/web_crawler.py:232`), declared once as
+  `MediaItem.desc`. **Zero readers.** Nothing in `deploy/` reads `.media` at all.
+- **Markdown does not come from `media`** — `generate_markdown` takes
+  `input_html`, and image `score` is computed *before* `desc` exists.
+- **MAS never reads `media`**, per-field, verified by grep across their tree
+  (`tmp/mas-repo-messages/40-…` §1). They take `markdown`, `cleaned_html`,
+  `html`, `title`, `links` and the redirect URL.
+- **No test asserted on it** — `test_mas_contract.py` contains literally zero
+  `media`/`desc`/`image` references, and upstream's own tests assert only
+  `src`/`alt`/`type`/`score`. The pre-existing 306 offline tests passed unchanged.
+- **The cap covers every client-reachable path.** `scraping_strategy` is on the
+  untrusted allowlist, but `UNTRUSTED_ALLOWED_TYPES` holds exactly two scraping
+  strategies — `LXMLWebScrapingStrategy` (patched) and `PDFContentScrapingStrategy`.
+  Patching the **class** shuts the hole; an injected default would have been
+  replaceable by a client-sent strategy object. That is what decided (a1) over
+  the `CrawlerRunConfig.set_defaults()` route.
+- **`desc` is documented to MAS as "a snippet of nearby text or a short
+  description (optional)"** (`c4ai-doc-context.md:3565`, served by `/ask`), and
+  the doc's own example value is already elided. A 200-char cap contradicts no
+  promise this repo has made.
+
+### n ≥ 2, and the second one succeeded
+
+`grumblo.com` returned **22.1 MB at HTTP 200 with `ResponseFlags = -`** on
+2026-08-09 — i.e. MAS stored it. The task file listed it as "consistent with,
+not proven". Settled with **one plain `httpx` GET** (no crawler, dev-container
+egress, recorded in `TEST_SITES_REGISTRY.md`): on the **static** HTML alone, 272
+images carry **1,524,174 chars of `desc` — 88 % of a 1,732,603-byte `media`
+payload** — 60 of them sharing one 24,293-char string. Cap → 107,772 B, 16×,
+`cleaned_html` byte-identical. The rendered DOM production saw is necessarily
+larger.
+
+**That is the case neither side counts:** thermokon failed loudly and grumblo
+succeeded, so MAS has been storing multi-megabyte payloads that no instrument on
+either side flags.
+
+### What this does NOT fix, stated because it is easy to overclaim
+
+The cap bounds **`desc`**, not a media entry, and the response body is still
+unbounded:
+
+- **`alt`** is copied into every variant by the same `add_variant` — one `<img>`
+  with a 50,000-char `alt` and 5 srcset entries gives 300,879 B of media from a
+  50,244 B document. Linear in the document.
+- **`media.tables` is worse and is on by default.** `table_extraction.py` does
+  `row_data.extend([text] * colspan)` with `colspan = int(cell.get("colspan", 1))`,
+  unvalidated. `<th colspan="50000">` on a **4,624-byte** page yields
+  **4,504,226 B** of `media`; `colspan="2000000"` leaves the wire unchanged but
+  costs **+91 MB RSS from 905 bytes of HTML in 0.12 s**; `colspan="auto"` makes
+  `int()` raise and the table vanishes at `success: true`.
+
+**Neither is being built.** Both need pathological markup, no production instance
+has ever been seen, and the `desc` bug fired on ordinary catalogue HTML. The
+response-size guard (`tasks/done/media-desc-…` §3c) is therefore **parked, not
+unnecessary** — `limits.max_body_bytes` bounds the *request*, and nothing
+anywhere bounds a response.
+
+### Tests
+
+`test-aitosoft/test_media_desc_cap.py`, 6 tests, offline, 1.2 s. Suite is now
+**312** (was 306). The uncapped arm is produced by raising the constant, so both
+arms run the real production code path.
+
+The one that matters is `test_the_cap_changes_only_desc`: it asserts
+`cleaned_html` and `links` are byte-identical between arms, no image is dropped,
+and every non-`desc` field is unchanged — the safety argument in executable form.
+`test_the_variant_fanout_cannot_re_multiply_the_string` deliberately uses an
+**absolute** byte bound rather than a multiple of the constant, because the first
+draft of this suite had a threshold that moved with the value it was testing and
+therefore could not fail when the truncation was removed (found by reverting the
+constant and watching only 2 of 6 tests go red).
+
+### What the implementing session found wrong in the task file
+
+The diagnosis survived to the byte. Eight peripheral things did not, and three
+are worth carrying: **the walk never reaches `<html>`** in 78 real captures (lxml
+leaves `html.text` `None`, so the conjunction cannot fire there); **the
+pathological corpus population was undercounted** (19 of 78 captures, 12 jpond
+*plus 7 accountor*, not 12 of 68); and **the file's own cap ladder mixes two
+units** (images-only vs whole-`media`, a 54-byte delta). Also: the `"..."` marker
+costs 3 bytes per entry, so the shipped figure is 538,747 / 430× and not the
+535,435 / 433× a bare slice gives — the code comment said the wrong one until it
+was re-measured. Full list in
+`tasks/done/media-desc-duplicates-the-page-per-image.md`.
 
 ---
 
@@ -687,6 +881,48 @@ Three corrections to the diagnosis, all measured offline:
   question: yes, on bundled Chromium. Production runs real Chrome, which ships a
   PDF viewer, so the inline-PDF row could differ there; the attachment rows
   cannot.
+
+  > **CORRECTED 2026-08-09: it does differ, and that caveat was published here
+  > and then dropped by every downstream reader — including CLAUDE.md's Key
+  > Findings row, which stated the opposite as fact for a week.** Re-measured on
+  > both browser arms against `fixture_origin`, zero live traffic: **4 of the 5
+  > download kinds are identical and `pdf-inline` alone diverges.** Any Chromium
+  > carrying the PDF-viewer extension — production's real Chrome, and
+  > `channel="chromium"` locally — *renders* an inline PDF into a **174-byte
+  > viewer shell** at HTTP 200 with no visible text and no `<embed>` (shadow
+  > DOM), which the detector's tier-3 structural inference calls a block →
+  > `render_error` → 500, retried.
+  >
+  > **Consequence: `unrenderable_content` has fired ZERO times in production,
+  > ever.** Its trigger phrase appears 16 times in the archive, all on
+  > 2026-08-01 — the vCard incident that motivated the class, the day *before*
+  > the class shipped. Since 2026-08-02: zero. The class is correct for the four
+  > kinds it does cover; it simply never covered PDFs.
+  >
+  > **Why it took a week: the tests could not see it.**
+  > `crawl4ai/browser_manager.py:1123-1128` is a *Windows* workaround applied on
+  > every platform that drops `channel` whenever `chrome_channel == "chromium"`,
+  > so the browser suite launches `chromium_headless_shell` — which has no PDF
+  > viewer. Five download tests have always exercised the download arm, and
+  > `pdf-inline` passes for the wrong reason. See TESTING.md's arm64 section.
+  >
+  > **PDFs used to work, and that is a regression, not a limitation** — MAS holds
+  > April captures with 11,101–45,118 chars of extracted PDF text
+  > (`tmp/mas-repo-messages/40-…` §3). **What produced that text is NOT
+  > established, and MAS's attribution to us is their inference, not a provenance
+  > check:** `pypdf` is not in the image (`INSTALL_TYPE=default`, and
+  > `deploy/docker/requirements.txt` does not list it), so
+  > `PDFContentScrapingStrategy` cannot have run; there is no PDF branch anywhere
+  > in the crawl path; and neither browser arm yields PDF text (pre-2026-04-11
+  > config had no channel at all → headless shell → the download error).
+  > `render_mode: static` is the only in-repo candidate and it does not fit —
+  > `aitosoft_static_mode.py` has no content-type gate, so over an uncompressed
+  > PDF it emits the PDF *source* (`%PDF-1.4 1 0 obj …`) and over a compressed
+  > one mojibake. **Nobody needs PDFs today** (MAS is removing them at dispatch)
+  > and nothing is being built. Recorded so a future user's request is not
+  > treated as a novelty — and so the claim is not repeated as established. One
+  > stored April row's `render_mode` plus the first 200 chars of its markdown
+  > would settle it.
 - **"Charged four renders" undercounts.** Upstream retries on *any* exception,
   not only on a detected block, so one client request at MAS's `max_retries: 2`
   is three navigations. Four client requests were 8–12 page loads.

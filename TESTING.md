@@ -59,7 +59,7 @@ python test-aitosoft/test_soak.py --duration-min 30                 # leak hunti
 Everything pytest collects is OFFLINE — no server, no customer site:
 
 ```bash
-pytest test-aitosoft/          # 306 tests, ~250 s
+pytest test-aitosoft/          # 312 tests, ~260 s
 ```
 
 That splits in two, and the split matters when you are choosing where to put a
@@ -67,11 +67,11 @@ new test:
 
 | | Suites | Tests | Time | Covers |
 |---|---|---:|---|---|
-| Pure-function | the twelve below | 239 | ~30 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the config boundary, the gate |
+| Pure-function | the thirteen below | 245 | ~30 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the `desc` cap, the config boundary, the gate |
 | Browser-driven | `test_fixture_origin.py` | 67 | ~215 s | **time, navigation and the browser** — challenge resolution, hydration races, redirect chains, the wall-clock fence |
 
 ```bash
-pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py test-aitosoft/test_collapse_guard.py test-aitosoft/test_egress_dns_offload.py
+pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py test-aitosoft/test_collapse_guard.py test-aitosoft/test_egress_dns_offload.py test-aitosoft/test_media_desc_cap.py
 ```
 
 This list drifts, three times now: it said "seven suites, 64 tests" three suites
@@ -193,6 +193,22 @@ arm64 caveat (this devcontainer): real Chrome doesn't exist for linux/arm64 —
 temporarily comment the `chrome_channel`/`channel` lines in
 `deploy/docker/config.yml` for local runs (NEVER commit that). The deployed
 amd64 image has real Chrome.
+
+**That caveat is understated: it is a coverage hole, not a nuisance.** The
+browser suite has **never** run production's browser, and it cannot on this
+machine by the route it takes. `fixture_origin._resolve_channel()` falls back to
+`"chromium"` when no `google-chrome` binary is on PATH, and
+`crawl4ai/browser_manager.py:1123-1128` — a *Windows* workaround applied on
+every platform — then drops the channel entirely, so Playwright launches
+`chromium_headless_shell`. `CRAWL4AI_FIXTURE_CHANNEL=chromium` does not help;
+it is the same string line 1127 discards. The full `chromium` build **is**
+installed here and reproduces production's behaviour when launched with
+`channel="chromium"` explicitly, which is how the inline-PDF divergence was
+finally measured (2026-08-09). Compounding it: **no workflow in
+`.github/workflows/` runs `test-aitosoft/` at all** — only
+`deploy/docker/tests/test_security_*.py` — so this suite executes nowhere but
+this devcontainer. Known consequence so far: five download tests exercise the
+*download* arm, and `pdf-inline` passes for the wrong reason.
 
 PyJWT caveat: a stale `jwt` 1.4.0 package can shadow PyJWT and break server
 boot locally — `pip uninstall jwt` fixes it (the image installs fresh and is

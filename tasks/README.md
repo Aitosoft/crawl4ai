@@ -1,6 +1,111 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-08, after MAS's segment 3 and one Azure scale change.
+**Updated:** 2026-08-09 (third update that day), after **implementing item 10 and closing
+items 6 and the parked `base-config` file without code**. Read "Corrections to the record,
+2026-08-09" before picking anything up.
+
+**Where this leaves us: one undeployed change, waiting only on a deploy window.**
+
+- **Item 10 SHIPPED into `main`, undeployed.** The image `desc` cap:
+  `MEDIA_DESCRIPTION_MAX_CHARS = 200` + upstream's own `truncate()` in
+  `find_closest_parent_with_useful_text`. `media` **231,708,619 → 538,747 B (430×)**,
+  `cleaned_html` and markdown **byte-identical (md5)**, all 1,160 entries kept. Offline
+  suite **312 green** (306 + 6 new). **Tier 1 is the remaining gate, then Tero.** MAS's
+  own instruction: it is invisible to them, do not bundle or hold anything for them, and
+  **tell them the deploy timestamp — that is the only reply they want.**
+- **Item 6 CLOSED UNFIXED.** MAS's corpus refutes it: `www.ktth.fi` returned **14,542
+  chars on 2026-04-17** and the `laatutrio.fi` apex paths **21,234 and 14,564 on
+  2026-08-08**, the day the file called them deterministic. Marking them permanently dead
+  would have converted a recoverable miss into silent permanent loss. **Four findings
+  inside it were rehomed rather than lost** — see the file's closing header for where each
+  went. PDFs are settled too: MAS removes them at dispatch.
+- **`base-config-boolean-defaults-never-applied.md` CLOSED.** Its "fix the merge rule"
+  premise is obsolete — `CrawlerRunConfig.set_defaults()` sets booleans today and honours
+  an explicit client `false`, which the proposed fix could not. `simulate_user: true` is
+  **commented out** of `config.yml` (it never applied, and left in place it was a landmine
+  for whoever "fixed" the merge rule).
+- **Two upstream PR candidates gained, one lost.** Gained: the `desc` cap (seventh, and
+  the cleanest we hold) and the `browser_manager.py` channel downgrade (eighth). Also a
+  latent upstream *security* report, now tracked in `file-upstream-prs.md` instead of a
+  corrections list. Lost: nothing — item 6's PR angle was always weak.
+
+**Superseded:** the second 2026-08-09 update's claim that "nothing new is worth deploying
+for on its own". The cap is worth a deploy on its own; it is the only thing that has cost
+a customer's data outright since the consent JS.
+
+**Previous update (2026-08-09, second):** after reading **batch 1** out of Log
+Analytics and running a five-thread research pass plus a second-opinion review over the
+whole open list. **The review found load-bearing errors in all three conclusions it was
+given, including two of this file's own.**
+
+**Batch 1 (2026-08-09 08:54–10:40 UTC, `--concurrency 5`, 200 companies, cold) is the
+first known-resolving cohort, and that makes it the only run that resembles the real
+sweep.** 1,364 `/crawl` at the ingress → 1,343 × 200, **18 × 500**, 3 × 429, 0 × 504.
+1,358 RenderGate admissions + 3 pre-admission DNS refusals + 3 rejects = 1,364, exact.
+True concurrency mean **1.49**, p95 2.69, max 4.99, on max **10 replicas of 45**. Latency
+p50 5.32 s / p90 9.42 s / p99 31.4 s. **0 collapse fires, 0 render defects, 0 memory
+refusals, 0 janitor force-closes.** 124 `CONSENT DECLINED`, **`structural=True`: zero** —
+the exact inverse of segment 2, and **70 of 124 (56 %) matched a `<script>` or `<style>`
+element**, which strengthens the upstream root-collision argument.
+
+**Three things came out of it:**
+
+- **Item 6 now has a file and it absorbed the PDF question.**
+  `inference-tier-500s-are-not-retryable.md`. **16 of 18 of batch 1's 500s (89 %)** are one
+  defect: the tier-3 structural inference calling a structurally-intact *non-page*
+  "blocked", which at origin status 200 falls through to `render_error` → 500 → retried.
+  PDFs are **12 %** of that class, not a separate problem.
+- **Item 10's fix moved from "needs a deploy and a MAS workaround" to "~5 lines in files
+  we own, and it is faster than what we do today."**
+- **Nothing new is worth deploying for on its own.** The one genuinely new risk found
+  (pool memory) is a **do-nothing** after measurement — see the corrections.
+
+**Two process items, both for Tero, neither blocking code:**
+
+- **Messages 34 and 37 are missing from `tmp/mas-repo-messages/`** (29 and 30 too).
+  `37-…` is where MAS answered the six asks in `36-…` §8 — the 215 s client-timeout
+  confirmation, the `exclude_all_images` decision, and **whether to bundle a deploy**.
+  That last answer is currently unknowable from this repo. **Ask for a re-relay before any
+  deploy decision.**
+- **The correlation id is the largest untracked promise.** Committed twice (`33-…` §5,
+  `36-…` §7) and tracked nowhere. It is minted only at `server.py:530` on a 500;
+  `api.py:721`'s `request_id` never leaves the process. It closes three MAS asks at once
+  and cannot regress anything.
+
+**Segment 5 (2026-08-08, `--concurrency 4`, 318 companies, 3 h 14 m, cold on
+purpose) is the largest workload either repo has run, by 6×, and the
+infrastructure was never the constraint.** Our side: 1,987 `/crawl` requests →
+1,914 × 200, 70 × 500, **3 × 429**; 1,902 render admissions + 84 pre-admission
+DNS refusals reconcile to the request. **True concurrency (`sum(RequestDuration)
+/ 60 s`, 1-minute bins) was mean 1.31, p95 2.96, max 5.25**, on **max 9 replicas
+of 45**. Queue: 50 of 1,902 waited at all, max logged wait 7.7 s against the
+15 s that rejects, max depth 3 of 4. Latency p50 5.12 s / p90 10.22 s / p99
+38.65 s. **0 collapse-guard fires, 0 render defects, 0 memory refusals, 0
+janitor force-closes, 0 × 504.** The consent guard declined **266** removals and
+**103 of them were structural roots on 19 domains** — 103 pages that were
+15-byte captures at HTTP 500 on the pre-2026-08-06 image.
+
+**Item 9's acceptance run passed.** The trigger change held at 6× the load:
+9 replicas for a ~1.3-concurrency workload, against 30 replicas for segment 3's
+~1.2. No revert criterion was met.
+
+**Two things came out of reading it, and one is new:**
+
+- **Item 10** — `www.thermokon.fi` returned a **232 MB** response four times at
+  HTTP 200 `success: true` with **no log line anywhere**, and MAS's client
+  timed out at 216 s on each. Deterministic data loss, invisible to every
+  instrument either repo has, and 35 % of our 14-day egress. New file.
+- **Item 6 is no longer a 12-event curiosity** — it is **78 % of segment 5's
+  500s** (54 of 69, 7 hosts). Its row below carries the new evidence.
+
+**The two capacity numbers worth carrying forward:** the pool touched **80.9 %
+memory** against the 85 % guard (p50 46.9, p95 66.1) with 6/6 browsers resident
+— the tightest we have run, though nothing refused; and **538 of 1,432
+consecutive same-host request pairs (37.6 %) arrived within 1 second of each
+other**, median gap 1.5 s. The second is the only *irreversible* risk in the
+programme and it lives on MAS's dispatcher, not ours.
+
+**Superseded below:** the 2026-08-08 note that opens with segment 3.
 
 **Segment 3 (2026-08-08, `--concurrency 3`, 50 companies) was clean, and the
 consent guard held.** 292 renders / 281 distinct URLs, **0 × 429**, 3.9 % retry
@@ -355,9 +460,10 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 | ~~1~~ | ~~`consent-scripts-delete-the-page.md`~~ | M | **DONE 2026-08-06, undeployed.** `tasks/done/`. The diagnosis reproduced exactly; three things about the *fix* changed, and the first is the one to carry: dropping the 20 generic selectors would have deleted the measurement step 5 branches on, so they now **observe instead of removing** and log `chars`/`pagechars`. |
 | ~~2~~ | ~~`total-loss-is-permanent-not-transient.md`~~ | S | **DONE 2026-08-06, undeployed.** `tasks/done/`. Keyed on the **capture shape** (no `<body>`), not the reason string — one test covers both production signatures, which two reason strings could not. Nothing pinned the old 500, so it was a bug fix and not a contract change. |
 | 3 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 66 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some tests to change behaviour, and treat that as the payoff. The count moved from 54 to 66 with the `/consent/*` routes. |
-| 6 | **`render_error` must not be a retryable 500 when the origin served a non-page** — no file yet | S | **New, from segment 2.** 12 events on 2 domains were **100 % of that sweep's 500s**: a PDF Chromium renders in its own viewer (174 B, 0 visible chars → tier-3 `minimal_text`) and an 83-byte parked page at HTTP 200. Neither is a render failure; both cost ~30 s of a render slot × 3 MAS retries. The 2026-08-02 `unrenderable_content` fix only covers PDFs that trip Chromium's **download refusal**, which this one never reaches. **The axis is permanence, not ownership** — do *not* re-open the inference tier's byte bounds, which are deliberate. Evidence: `tasks/done/segment-2-counter-readout.md` §3 |
+| ~~10~~ | ~~`media-desc-duplicates-the-page-per-image.md`~~ | S | **SHIPPED into `main` 2026-08-09, undeployed — Tier 1 then Tero's deploy window is all that remains.** `MEDIA_DESCRIPTION_MAX_CHARS = 200` + upstream's own `truncate()` helper (`utils.py:3004`) in `find_closest_parent_with_useful_text`, `tasks/done/`. Measured: `media` **231,708,619 → 538,747 B (430×)**, `cleaned_html` and markdown **byte-identical by md5**, all **1,160** entries kept, offline suite **312 green**. **The diagnosis survived to the byte; eight peripheral things did not**, and three are worth carrying: the walk **never reaches `<html>`** in 78 real captures (lxml leaves `html.text` `None`); the pathological population was undercounted (**19 of 78** captures — 12 jpond *plus 7 accountor* — not 12 of 68); and "the cap is faster" was a single timing inside its own noise — `scrap()` gains ~8 %, **the 330× is `json.dumps` (0.655 s → 0.002 s)**. Also **`grumblo.com` is confirmed the same mechanism**, which the file listed as its largest uncertainty: one plain GET shows 272 images carrying **1,524,174 chars of `desc`, 88 % of its media payload**. **Do not read this as "response size is now bounded"** — the cap bounds `desc` only; `alt` is copied per variant, and **`media.tables` multiplies cell text by an unvalidated `colspan`** (a 4,624-byte page reaches 4,504,226 B of media; `colspan="2000000"` costs +91 MB RSS from 905 bytes of HTML). Neither is built; both need pathological markup and neither has ever been seen in production. That is what turns §3c from *unnecessary* into *parked* |
+| ~~6~~ | ~~`inference-tier-500s-are-not-retryable.md`~~ | S | **CLOSED UNFIXED 2026-08-09, `tasks/done/`. Do not re-open without a page MAS can show has never succeeded.** The measurement was sound — 89 % of batch 1's 500s, 84 % of 14 days' `render_error` — but the *fix* is refuted by the only corpus that could refute it: `www.ktth.fi` returned **14,542 chars on 2026-04-17**, and the `laatutrio.fi` apex paths **21,234 and 14,564 chars on 2026-08-08**, the day this file called them deterministic. Marking them permanently dead converts a recoverable miss into **silent permanent loss on live sites** — the exact direction the taxonomy exists to prevent. MAS asked us not to build it and priced the cost as theirs and small (~1.5 % of a batch's wall clock). **PDFs are settled too:** MAS removes them at dispatch, and their April corpus shows PDF text extraction is a **regression, not a limitation** — though *what* produced that text is **not established** and their attribution to us is inference. **Four findings were rehomed, not lost:** the `browser_manager.py` channel downgrade + the CI gap (CLAUDE.md row, TESTING.md, two test comments), `response_headers` is the first redirect hop with **no final-hop field** (CLAUDE.md row beside `redirected_status_code`), `unrenderable_content` has fired **zero times ever** (the corrected download row + `aitosoft_failure_class.py`), and the untrusted-reachable `PDFContentScrapingStrategy` (`file-upstream-prs.md`). The fixture work its §7 argued for **survives on its own** — it is test work and never needed the classification change |
 | 8 | **Two `failure_class` log holes + a `render_mode` mislabel** — no file yet | XS | **New, from segment 2.** (a) `render_mode: "static"` failed fetches log at INFO with **no `failure_class` field** (`aitosoft_static_mode.py:301,307`) while `_static_error_result` defaults the class to `origin_unreachable` (`:164-179`) — so **no `failure_class` query can ever count them**, and the hole opens exactly when a host has already misbehaved enough for MAS to pivot it to static. ~6 lines mirroring `api.py:1033-1039`; no double-count risk (static returns at `api.py:770`, never traversing the full-mode loop). (b) `api.py:1198`'s `failed_result(...)` omits `render_mode`, which defaults to `"full"` (`aitosoft_failure_class.py:507`) — and because the seed check (`:760`) precedes the static short-circuit (`:764`), a **static** request to a dead domain is reported to MAS as `"full"`. One word, in a field they parse |
-| 7 | **The patchright tier retries classes already known permanent** — no file yet | S | **New, from segment 2.** `_is_blocked` (`aitosoft_patchright_fallback.py:163`) gates the retry on the block-marker **string**, not on classified permanence, so `render_defect` — which is in `NON_RETRYABLE_CLASSES` — still gets an internal retry leg. That leg then dies on upstream's `wait_for_selector("body", timeout=30000)` (`async_crawler_strategy.py:898`), i.e. it waits 30 s for **exactly the element whose absence defined the failure** and can never succeed. ~a few lines; saves 2 navigations + ~60 s per URL. Fold in the fragment-strip for `CONSENT NAVIGATION` (§2 of the same file). Also open and *not* answered: **why `delotec.fi` has no `<body>` at 2015 bytes** — two engines agree, it is not our JS, and MAS holds the bytes |
+| 7 | **The patchright tier retries classes already known permanent** — no file yet | S | **Re-justify it before starting: item 6 is closed, and item 7's saving can no longer be counted against it.** `render_error` is **not** in `NON_RETRYABLE_CLASSES` (`aitosoft_failure_class.py:129-133`), so item 7 as written would have saved **zero** of batch 1's 18 events — the two were listed as independent and were coupled. What remains is the `render_defect` leg alone, whose production population is small. The cost model, if it is worth having: one URL in this class measured `admits=8 fetches=32 completes=16 patchright=8`, i.e. 4 wire attempts × ~29.5 s = **32 navigations for one URL**. Original text follows. **New, from segment 2.** `_is_blocked` (`aitosoft_patchright_fallback.py:163`) gates the retry on the block-marker **string**, not on classified permanence, so `render_defect` — which is in `NON_RETRYABLE_CLASSES` — still gets an internal retry leg. That leg then dies on upstream's `wait_for_selector("body", timeout=30000)` (`async_crawler_strategy.py:898`), i.e. it waits 30 s for **exactly the element whose absence defined the failure** and can never succeed. ~a few lines; saves 2 navigations + ~60 s per URL. Fold in the fragment-strip for `CONSENT NAVIGATION` (§2 of the same file). Also open and *not* answered: **why `delotec.fi` has no `<body>` at 2015 bytes** — two engines agree, it is not our JS, and MAS holds the bytes |
 | 4 | `guard-corpus-is-not-in-the-repo.md` | S | **After the sweep.** Real and verified — `test-aitosoft/artifacts/*` is gitignored, three tests fail on a fresh clone at `assert checked >= 30`. But its load-bearing sentence is **wrong**: "our only pre-deploy gate is the offline suite" is false (see corrections below), and it fails *loud*, in the safe direction. If ever done: 4–6 files into `artifacts/keep/`, the mechanism `.gitignore:14-17` already provides. Do **not** open its four-option sizing table before the sweep. **Item 1 raised its value slightly**: the 7-host corpus is load-bearing for a claim about consent selectors, and 2 of 2 CMP measurements is thin — though the `CONSENT DECLINED` counter now answers that from production instead. |
 | ~~5~~ | ~~`flaky-fence-test-margin.md`~~ | S | **DONE 2026-08-06.** `tasks/done/`. Diagnosed before it was fixed, as the file demanded: the fence unwinds in **0.05 s**, so the product-finding reading is refuted; the variance is a cold browser launch *outside* the fence (healthy control median 1.33 s, max 4.05 s). Fixed by `FENCE_STALL_S = 8`, which widens the gap rather than the assertion's meaning, and costs the suite nothing. |
 
@@ -459,7 +565,7 @@ delta is the attribution.
 | `blocked-host-retry-economy.md` | Cost optimisation, not a defect — and the 2026-08-01 run saw **0 blocks in 336 renders** | A sweep showing blocked-host cost actually hurts |
 | `residential-egress-retry-path.md` | Population is floor 6 / ceiling 29, costs money, and 0 blocks were seen in the only recent traffic | A real count, then Tero |
 | `static-mode-tls-impersonation.md` | Hardens a path nothing currently falls back to | `residential-egress-retry-path.md` |
-| `base-config-boolean-defaults-never-applied.md` | `simulate_user` has never taken effect and nothing has missed it. "Delete the line" is the likely right answer | Someone wanting a boolean in `base_config` to work |
+| ~~`base-config-boolean-defaults-never-applied.md`~~ | **CLOSED 2026-08-09, `tasks/done/`.** Its un-park trigger is moot: `CrawlerRunConfig.set_defaults()` sets booleans today *and* honours an explicit client `false`, which the file's proposed merge-rule fix explicitly could not. The `config.yml` line is commented out with the reason inline — left in place it was a landmine, since fixing the merge rule would have turned user simulation on for every request | Someone wanting user simulation on, which is a **measurement**, not a merge-rule change |
 | `preflight-batch-endpoint.md` | **MAS said do not build speculatively.** Their words | MAS asks |
 | `file-upstream-prs.md` | Standing tracker, four PRs open and **a fifth written but deliberately unfiled** (the consent snippet — file it after segment 2, when it can carry production counts). Upstream `develop` is **one commit past v0.9.2** (a Docker IPv6 fix, checked 2026-08-02) — core behavioural changes sit for months and waiting for them is not a plan | Nothing — check occasionally |
 | `waa-eval-2026-07-30-forensics.md` | **Reference, not a task.** Never close it | — |
@@ -599,6 +705,96 @@ measured.
 called the 2026-08-01 run clean; 9 of its pages came back with nothing in them.
 They were not careless — the failure is invisible from their side by
 construction. Record what we measured, not what we were told.
+
+---
+
+## Corrections to the record, 2026-08-09
+
+Found by a five-thread research pass and a second-opinion review, none by a failure. **The
+review was given three conclusions and found load-bearing errors in all three** — which is
+the tenth and eleventh consecutive time this has happened, and it happened here *before*
+any code was written rather than during implementation.
+
+> **Resolution pass, 2026-08-09 (third update):** 1 is acted on (CLAUDE.md Key Findings
+> row + `base-config-…` closed + `config.yml` line commented out). 2 is **fixed in four
+> places** and turned out to be sharper than stated — 4 of 5 download kinds are identical
+> and only `pdf-inline` diverges, re-measured on both browser arms. 3 stands as written,
+> unchanged, still do-nothing. 7 has moved from this list to `file-upstream-prs.md`,
+> because a corrections section is a changelog and not a backlog. 4, 5, 6, 8, 9 and 10 are
+> untouched and still apply.
+>
+> **The twelfth consecutive session found the previous file materially wrong**, and this
+> time the implementing session found errors in **its own** work too: the code comment
+> quoted the pre-marker figure (535,435 instead of 538,747), one test's threshold moved
+> with the constant it was testing so it could not fail when the fix was removed, and a
+> brand-new CLAUDE.md row asserting `media.tables` is "linear in the document" was refuted
+> by the second-opinion pass within the hour. **All three were caught by review, none by a
+> test** — which is the argument for running the review *after* writing, not only before.
+
+1. **`CrawlerRunConfig.set_defaults()` exists, and this repo has been reasoning as though
+   it does not.** `async_configs.py:1329-1330` decorates it `@_with_defaults` — the same
+   upstream mechanism `aitosoft_entry.py:40` already uses for `BrowserConfig` and that
+   CLAUDE.md calls our key technique. The **`base_config`** merge at `api.py:876-880`
+   genuinely cannot set a non-`None`/non-`""` default (the `max_retries` trap), but that
+   is *one route*. Consequences: item 10's fix needs no MAS coordination, and
+   **`base-config-boolean-defaults-never-applied.md` is un-parked by the same one-liner**
+   (`simulate_user` would start working). Worth a CLAUDE.md row next to the `BrowserConfig`
+   one.
+2. **CLAUDE.md's "inline `application/pdf` behaves exactly like `Content-Disposition:
+   attachment`" is false in production**, and the task file that shipped the class said so
+   at the time (`done/download-navigation-is-not-a-render-error.md:27-30`) — the caveat was
+   written, published, and then dropped by every downstream reader including that row.
+   Real Chrome ships a PDF viewer; bundled headless does not. **Fix the row.**
+3. **The pool memory guard is NOT unreachable, and the upward trend is our own scale
+   change.** Both claims were mine and both are wrong. The guard
+   (`crawler_pool.py:410-411`) is a **new-browser admission check by design** and it *has*
+   run — 441 creates on 08-09 — it has simply **never read ≥85.0** since 2026-08-01 (max
+   at-guard **84.8**, missed by 0.2). On 2026-07-31 it read up to 95.6 and **fired 9
+   times**. The "7 minutes above the guard" is ~**140 s** interval-weighted (2.2 % of that
+   replica's life), and the 63.8 → 80.9 → 86.7 % trend across segment 2 / segment 5 /
+   batch 1 tracks **admits per replica: 9.1 → 95 → 97** — i.e. our own ACA scale-trigger
+   change 2 → 6, not cohort size. **Cohort size cannot be the driver**; per-replica load is
+   bounded by MAS's fan-out, which this file already records as independent of cohort size.
+   Also: `get_container_memory_percent` subtracts only `inactive_file` (16 MB at the peak)
+   while ~566 MB of *active*, reclaimable file cache stays charged, so nominal headroom of
+   545 MiB is really ~1.1 GB; and the janitor's adaptive interval (10 s >80 %, 30 s >60 %,
+   60 s otherwise) **self-selects dense sampling in high-memory states**, overstating "time
+   above 85 %" by **5.3×** (1.38 % of samples vs 0.26 % interval-weighted). **Max is
+   unbiased; p50/p95 and time-above-X are not.** 14 days: no `OOMKilled`, no exit 137, no
+   `Evicted`. **Verdict: do nothing to behaviour. Fix the instrument** (move the janitor's
+   memory read after the sleep; interval-weight the readout). **Re-open only if the
+   guard's own `Creating new browser … mem=` reading crosses 85, or an OOM appears** — and
+   do **not** make the guard fire on pool-hit paths, which would 429 requests that need no
+   allocation.
+4. **`ContainerAppHTTPLogs` has no `_CL` suffix.** The `_CL` name errors. It also retains
+   ~5 days against the console table's longer window, so date-bound any query against it.
+5. **A naive `countif` on a log substring overcounts events.** `DNS: host does not resolve`
+   emits **four** lines per refusal (the `Crawl error:` line, two traceback lines, the
+   `ORIGIN FAILURE` line): 12 lines for **3 events** in batch 1, 336 lines for **84 events**
+   in segment 5. Same family as the `failure_class=`-not-the-token rule already recorded —
+   **count events, not lines.**
+6. **The `[ANTIBOT]` log line truncates the URL and drops the extension.** A query
+   filtering `.pdf` finds `admits=8, fetches=32` but `antibot=0`. Never filter anti-bot
+   lines on anything at the end of a URL. Same family as the known `AsyncLogger` defects.
+7. **`PDFContentScrapingStrategy` is reachable from an untrusted request body.** It is in
+   `UNTRUSTED_ALLOWED_TYPES` and `scraping_strategy` is in
+   `UNTRUSTED_FIELD_ALLOWLIST["CrawlerRunConfig"]` (`async_configs.py:194`, `:238`), and its
+   `_get_pdf_path` does a blocking `requests.get(url, stream=True, timeout=(20, 600))`
+   **on the event loop**, bypassing `validate_url_destination` and the pinning egress
+   proxy. Latent, not live — our only client is trusted and token-gated — but it is a real
+   hole in upstream's own boundary. Upstream report + a one-line tightening in
+   `aitosoft_trust.py`.
+8. **`www.wtwco.com` returned HTTP 429 to us in batch 1** after MAS's intra-company fan-out
+   hit it three times within 2 seconds. That is the **first direct evidence for the
+   per-host spacer** we have been asking for, and it is invisible from MAS's side because
+   the pages eventually succeeded. Their spacer is built and lands in batch 2 — **verify
+   from our logs that it actually landed**, which is one query.
+9. **MAS's batch-1 500 count (14) is 4 low** — two of our instruments say **18**. Every
+   repeated URL got a fourth attempt they did not list.
+10. **MAS's dispatch-side PDF gate had not shipped as of batch 1.** Their `aitosoft-edge`
+    has been on `v0970-dispatch-egress-guards` since 2026-08-08 09:36, and at 10:34 on
+    08-09 both PDF URLs were still dispatched and retried 4× each. Treat "they are fixing
+    it" as an intention, not an observed fact.
 
 ---
 

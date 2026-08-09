@@ -251,12 +251,26 @@ _INFERRED_BLOCK_RE = re.compile(
 # escaped exceptions — see the note in `classify_exception`.
 #
 # The header is NOT the trigger — that was the first guess and it was wrong.
-# `Content-Disposition: attachment`, an inline `application/pdf` and an
+# `Content-Disposition: attachment`, an inline `text/vcard` and an
 # `application/octet-stream` all produce the byte-identical failure, measured
 # through the browser against `fixture_origin` `/download/{kind}` on 2026-08-02.
 # The rule is "Chromium will not render this inline", so this class is a shape of
 # MAS's corpus (contact and people pages are where vCard exports and PDF
 # brochures live) and not one odd URL.
+#
+# CORRECTION 2026-08-09: an inline `application/pdf` is the ONE exception, and
+# this comment claimed the opposite for a week. The 2026-08-02 measurement ran
+# on Playwright's bundled headless shell, which has no PDF viewer;
+# `browser_manager.py:1123-1128` silently drops `channel="chromium"`, so the test
+# arm and production's real Chrome are different binaries. Re-measured on both
+# arms 2026-08-09: 4 of the 5 download kinds are identical, `pdf-inline` alone
+# diverges — real Chrome RENDERS it into a 174-byte viewer shell at HTTP 200,
+# which never reaches this function at all. It is classified by the tier-3
+# structural inference as a block, i.e. `render_error` at 500. Consequence:
+# `unrenderable_content` has fired ZERO times in production since it shipped
+# (30-day query 2026-08-09; the 16 `Download is starting` lines in the archive
+# are all from 2026-08-01, the day before the class existed). The class is
+# correct for the four kinds it does cover; it simply does not cover PDFs.
 # Anchored to Playwright's own `Page.goto:` prefix, which is present in all three
 # wrappers and in the verbatim production line, and which costs nothing. The one
 # way page text could ever reach this function is upstream's `Code context:`

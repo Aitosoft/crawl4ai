@@ -1,7 +1,60 @@
 # File Upstream PRs
 
 **Status:** four filed, all awaiting upstream review. **A fifth is written and
-deliberately unfiled** — see below.
+deliberately unfiled**, and three more candidates now exist — see below.
+
+**The seventh, and it is the cleanest we have: an image `desc` can be the whole
+page.** Shipped on our fork 2026-08-09 in `crawl4ai/content_scraping_strategy.py`
+(`MEDIA_DESCRIPTION_MAX_CHARS`). `find_closest_parent_with_useful_text` walks up
+from an `<img>` and returns an ancestor's *entire subtree text*; image containers
+have no words, so on a grid layout it stops at whatever container also holds the
+page prose, and `add_variant` copies that into every srcset variant. Production:
+**231,708,619 bytes of `media` from one page, 1,104 of 1,160 entries carrying the
+same 154,798-char string**, four times, at HTTP 200 `success: true`.
+
+Three things make it unusually arguable, and none of them need our corpus:
+
+- **The same document yields `desc: None` on minified markup and the whole page
+  on pretty-printed markup** — the stop condition is a conjunction of `.text`
+  (the direct text node, so indentation whitespace is truthy) and
+  `text_content()` (the whole subtree). Payload differing by 52× on whitespace
+  alone is a bug by inspection.
+- **No comparable extractor manufactures an image description by walking the DOM
+  upward.** Firecrawl, Scrapy, trafilatura, readability, unstructured and
+  html2text all use the `alt` attribute or nothing.
+- **Upstream's own documented contract calls `desc` "a snippet of nearby text or
+  a short description", and its own example value is elided with an ellipsis.**
+  The bug is visible in the documentation.
+
+Prior art for the constant is upstream's own
+`preprocess_html_for_schema(attr_value_threshold=200)`. Blast radius verified
+zero: upstream's tests assert only `src`/`alt`/`type`/`score`.
+**Argue it as "`desc` is now bounded", not "media entries are now bounded"** —
+`alt` and `media.tables` are still unbounded, both linear in the document.
+Evidence: `tasks/done/media-desc-duplicates-the-page-per-image.md`.
+
+**The eighth, small and honest: a Windows workaround makes `channel="chromium"`
+unreachable everywhere.** `crawl4ai/browser_manager.py:1123-1128` drops the
+`channel` kwarg whenever `chrome_channel == "chromium"` — a documented config
+value — so Playwright silently launches `chromium_headless_shell` instead of the
+full build on every platform. The two binaries differ in ways that change crawl
+outcomes: the shell has no PDF viewer, so an inline `application/pdf` raises
+`Download is starting` on one and renders a 174-byte viewer shell at HTTP 200 on
+the other. Fix is `sys.platform == "win32"` on that condition. Inert for us
+(production sends `chrome_channel: chrome`), so this one is charity, not need —
+but it is the reason our own browser suite has never run production's browser.
+
+**Not a PR — an upstream security report:** `PDFContentScrapingStrategy` is in
+`UNTRUSTED_ALLOWED_TYPES` and `scraping_strategy` is in
+`UNTRUSTED_FIELD_ALLOWLIST["CrawlerRunConfig"]` (`async_configs.py:194`, `:238`),
+so an untrusted request body can select it — and its `_get_pdf_path` does a
+blocking `requests.get(url, stream=True, timeout=(20, 600))` **on the event
+loop**, bypassing `validate_url_destination` and the pinning egress proxy. That
+is an SSRF path through upstream's own untrusted-config boundary. **Latent for
+us** — our single client is trusted and token-gated — and the one-line local
+tightening is to drop it from the allowed types in `aitosoft_trust.py`. Not done,
+because it is not live and this repo is trying to ship only what is needed;
+recorded here so it outlives the corrections list it was found in.
 
 **The fifth: the consent snippet deletes documents.** `remove_consent_popups.js`
 (and, in the same family, `remove_overlay_elements.js`) is fixed on our fork as

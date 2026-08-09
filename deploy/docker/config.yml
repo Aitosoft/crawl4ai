@@ -78,7 +78,18 @@ security:
 # Crawler Configuration
 crawler:
   base_config:
-    simulate_user: true
+    # Aitosoft 2026-08-09: `simulate_user: true` lived here and NEVER APPLIED.
+    # api.py's base_config pass only fills a key whose current value is None or
+    # "" — every CrawlerRunConfig boolean defaults to False, which is neither.
+    # Diagnosed 2026-07-30, parked, and now commented out rather than left as a
+    # line that reads like production behaviour. It is also a live landmine as
+    # written: anyone "fixing" that merge rule would silently turn simulate_user
+    # on for every request, which is an unmeasured behaviour change nobody has
+    # asked for. If it is ever wanted, the working lever is
+    # `CrawlerRunConfig.set_defaults(simulate_user=True)` in aitosoft_entry.py
+    # (verified 2026-08-09) — not this file.
+    #   simulate_user: true
+    #
     # Aitosoft 2026-07-30: hard budget for the fetch phase of one arun() — all
     # anti-bot attempts and proxy retries share it. Without it a page that keeps
     # renavigating wedges an untimed Playwright call (page.content /

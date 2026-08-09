@@ -703,9 +703,17 @@ def test_a_download_is_not_a_retryable_server_error(
 
     Parameterised over five kinds because the first draft of this fixture
     assumed `Content-Disposition: attachment` was the trigger. It is not: an
-    inline `text/vcard`, an inline `application/pdf` and an
-    `application/octet-stream` all fail identically. That answers the task
-    file's open question — the class is a shape of MAS's corpus, not one URL.
+    inline `text/vcard` and an `application/octet-stream` fail identically. The
+    class is a shape of MAS's corpus, not one URL.
+
+    **`pdf-inline` passes here for the wrong reason, and it is the only one.**
+    These tests run on Playwright's bundled headless shell — see
+    `fixture_origin.DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER` for why the channel
+    never reaches production's real Chrome — and the shell has no PDF viewer.
+    Real Chrome *renders* an inline PDF into a 174-byte viewer shell at HTTP
+    200, which never reaches this class at all. Measured on both arms
+    2026-08-09. Green here is therefore not evidence about production for that
+    one kind.
 
     `max_retries` is MAS's production value on purpose: at the default of 0 the
     error text reads `Unexpected error in _crawl_web …` and at 1 or more it
