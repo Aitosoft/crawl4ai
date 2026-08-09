@@ -9,15 +9,15 @@ Keeping this log helps when syncing with upstream updates.
 
 **Last Updated**: 2026-08-09
 
-> **BUILT AND UNDEPLOYED, 2026-08-09: the image `desc` cap.** One page returned
-> **232 MB four times** at HTTP 200 `success: true` with no log line anywhere;
-> an image's `desc` was an ancestor's whole subtree text, copied per image and
-> per srcset variant. Capped at 200 chars: `media` 231,708,619 → **538,747 B
-> (430×)**, `cleaned_html` and markdown **byte-identical**, every entry kept.
-> Suite 312 green. **Held only for a deploy window** — MAS is running an
-> ~18,000-company sweep and Tero decides when it goes out; MAS themselves say
-> the change is invisible to them and can land any time. The section below is
-> the full account, including what it does **not** bound.
+> **DEPLOYED 2026-08-09 14:31 UTC: `0.9.2-desc-cap` (revision `--0000040`).**
+> One page returned **232 MB four times** at HTTP 200 `success: true` with no log
+> line anywhere; an image's `desc` was an ancestor's whole subtree text, copied
+> per image and per srcset variant. Capped at 200 chars: `media` 231,708,619 →
+> **538,747 B (430×)**, `cleaned_html` and markdown **byte-identical**, every
+> entry kept. **No wire-status change and no contract change** — MAS verified
+> per-field that they never read `media` at all, so this is invisible to them.
+> Nothing else in the image changed. The section below is the full account,
+> including what it does **not** bound.
 >
 > **Two task files closed the same day without code:**
 > `inference-tier-500s-are-not-retryable.md` **closed unfixed** — MAS's corpus
@@ -110,10 +110,15 @@ Keeping this log helps when syncing with upstream updates.
 > we cannot buy.
 
 ### Version
-- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below). **`main` is one behaviour change ahead of production** — the image `desc` cap, committed and undeployed (2026-08-09). No image has been built or pushed for it, so do not go looking for a tag. It is the *only* undeployed behaviour change — the consent-JS work went out as `--0000037`
-- **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result + the egress-path work + **the consent-JS guard and its counters** (deployed 2026-08-06)
-- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-consent-guard` (revision `crawl4ai-service--0000037`, deployed 2026-08-06, digest `sha256:4ad6e11634a5c14b07faac9ba434cef73ff120a89f579b80ecf4be37f325c215`)
-- **Previous**: `0.9.2-egress-dns-fix` (revision `--0000036`, deployed 2026-08-05) — the rollback target. Before that, `0.9.2-collapse-recovery` (revision `--0000034`, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`). **Revision `--0000035` (`0.9.2-egress-dns`) is a burned tag** — it shipped a `NameError` and lasted 8 minutes; do not roll back to it.
+- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below). **`main` == production** as of 2026-08-09 14:31 UTC — the `desc` cap is deployed. Verify with `az containerapp revision list`, never by trusting this line
+- **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result + the egress-path work + the consent-JS guard and its counters + **the image `desc` cap** (deployed 2026-08-09)
+- **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-desc-cap` (revision `crawl4ai-service--0000040`, deployed 2026-08-09 14:31 UTC, digest `sha256:d2221b43b0621e8dec4d79dc46f807ae2c17e67f387817e4520005e560ffba84`). **Revision numbering resumed at `--0000040`, not the `--0000041` `tasks/README.md` predicted** — `--trigger6` was a named suffix, not a number, so it consumed no ordinal.
+- **Previous**: `0.9.2-consent-guard` (deployed 2026-08-06, live as `--trigger6` from 2026-08-08) — **the rollback target, and roll back by re-deploying the TAG**: this app is `activeRevisionsMode: Single` and old revisions are garbage-collected, so a revision name is not something you can activate. Before that, `0.9.2-egress-dns-fix` (deployed 2026-08-05). Before that, `0.9.2-collapse-recovery` (revision `--0000034`, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`). **Revision `--0000035` (`0.9.2-egress-dns`) is a burned tag** — it shipped a `NameError` and lasted 8 minutes; do not roll back to it.
+- **Prod smoke 2026-08-09 (desc-cap)**: revision `--0000040` **`Running` at 100 % with `--trigger6` `Deprovisioning` — checked BEFORE any crawl**, per the 2026-07-30 mid-cutover lesson ✅. health 200 (0.42 s) ✅, bad token → 401 ✅, no token → 401 ✅, `169.254.169.254` → **400 `URL blocked (SSRF protection)`** ✅ (the negative check: the cap touches nothing security-related and must not appear to), lapsed domain → **HTTP 200 / `success:false` / `origin_unreachable` / `DNS: host does not resolve` / 0.41 s** ✅ — the probe that caught `--0000035`'s `NameError` eight minutes after that deploy, and it costs no third party a request. **Tier 1 4/4 pre-deploy** against a local server running this exact code ✅.
+  **The two checks that actually prove this image**, both worth copying:
+  - **A `raw://` catalogue page — the defect's own shape, at zero egress.** 40 images fanning out to **120 media entries** against a 5,000-char body: `success:true`, `failure_class:none`, **max `desc` 203, all 120 truncated, `media` 41,950 B**. Uncapped that payload is ~600 KB. This exercises RenderGate, the pool, a real Chromium launch and the consent pass — and contacts nobody. Reach for it before a live host.
+  - **`caverna.fi` byte-compared against the pre-deploy local capture.** `markdown` md5 `832e87f5…`, 532 chars, **identical**; `media` identical; 1 image, `desc` 203, `media` 417 B. So the deployed image and the tested code produce the *same bytes on a real page*, which is a stronger statement than "the smoke returned 200".
+  **One expectation this corrected:** the historic smoke line "caverna.fi → 1210 B markdown" is a 2026-07-30/08-01 figure and the site has changed since. 532 B is current and healthy on both sides of the deploy. Do not treat an old smoke's byte count as a current expectation — compare against a capture you took, not against the changelog.
 - **Prod smoke 2026-08-05 (egress-dns-fix)**: health 200 (0.20 s) ✅, unauthenticated POST /crawl → 401 ✅, render-capacity invariant ✅, revision `--0000036` **Running at 100 % with `--0000035` Deprovisioning — checked before the crawl** ✅. **Tier 1 regression 4/4** ✅.
   **The check that was worth running, and it is now a habit:** a crawl of a *lapsed* domain — HTTP 200, `success:false`, `failure_class: origin_unreachable`, `"DNS: host does not resolve"`, 0.23 s. It exercises the whole egress path and **contacts no third party**, because the name does not resolve. It is also what caught the `NameError` in `--0000035` eight minutes after that deploy, when four green test suites and a green CI run had not.
   **The negative check matters as much:** `169.254.169.254` and `127.0.0.1:8080` both still return 400 `URL blocked (SSRF protection)`. The change moved *only* "there is no address at all" out of that bucket; the security verdict is untouched.
@@ -170,10 +175,13 @@ Keeping this log helps when syncing with upstream updates.
 
 ## One page produced a 232 MB response, four times, at HTTP 200 `success: true` (2026-08-09)
 
-**Built, tested, and held for a deploy window — MAS is running an ~18,000-company
-sweep and Tero greenlights the deploy.** MAS's own instruction is that the change
-is invisible to them and can land any time, including mid-sweep; we are not
-deploying into it anyway.
+**DEPLOYED 2026-08-09 14:31 UTC as `0.9.2-desc-cap`, revision `--0000040`.** The
+window was clean: MAS's sweep had not started, and the fleet was at **0 replicas**,
+which is the safest possible state for a revision transition (a new revision needs
+its own replicas while the old one drains, and both count against the environment's
+100-core quota — that is what stranded a revision in `ActivationFailed` on
+2026-08-08). MAS's own instruction was that the change is invisible to them and
+could land any time, including mid-sweep; we did not need to use that latitude.
 
 ### What changed
 

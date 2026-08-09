@@ -4,15 +4,15 @@
 items 6 and the parked `base-config` file without code**. Read "Corrections to the record,
 2026-08-09" before picking anything up.
 
-**Where this leaves us: one undeployed change, waiting only on a deploy window.**
+**Where this leaves us: nothing open is gating, and production is current.**
 
-- **Item 10 SHIPPED into `main`, undeployed.** The image `desc` cap:
-  `MEDIA_DESCRIPTION_MAX_CHARS = 200` + upstream's own `truncate()` in
-  `find_closest_parent_with_useful_text`. `media` **231,708,619 → 538,747 B (430×)**,
-  `cleaned_html` and markdown **byte-identical (md5)**, all 1,160 entries kept. Offline
-  suite **312 green** (306 + 6 new). **Tier 1 is the remaining gate, then Tero.** MAS's
-  own instruction: it is invisible to them, do not bundle or hold anything for them, and
-  **tell them the deploy timestamp — that is the only reply they want.**
+- **Item 10 SHIPPED AND DEPLOYED** — `0.9.2-desc-cap`, revision `--0000040`,
+  **2026-08-09 14:31 UTC**. `MEDIA_DESCRIPTION_MAX_CHARS = 200` + upstream's own
+  `truncate()` in `find_closest_parent_with_useful_text`. `media`
+  **231,708,619 → 538,747 B (430×)**, `cleaned_html` and markdown **byte-identical
+  (md5)**, all 1,160 entries kept. Tier 1 **4/4** pre-deploy, offline suite **312 green**,
+  prod smoke green, and `caverna.fi` byte-identical across the deploy. MAS told, one line,
+  timestamp only — which is all they asked for.
 - **Item 6 CLOSED UNFIXED.** MAS's corpus refutes it: `www.ktth.fi` returned **14,542
   chars on 2026-04-17** and the `laatutrio.fi` apex paths **21,234 and 14,564 on
   2026-08-08**, the day the file called them deterministic. Marking them permanently dead
@@ -210,19 +210,27 @@ must never be pinned to it again** — different quantities, different units; se
 `tasks/autoscaler-ratchets-to-the-cap.md`. RenderGate still hard-caps renders at
 2/replica and that is the safety mechanism.
 
-**Production is `0.9.2-consent-guard`, revision `--trigger6`** (image unchanged
-since 2026-08-06; the revision was minted 2026-08-08 by the scale-trigger change,
-which is a template edit and therefore mints one). `main` and production are in
-sync. Post-change smoke green: `/health` 200, bad token 401, `raw://` render
-`success:true` / `failure_class:none` / markdown extracted.
+**Production is `0.9.2-desc-cap`, revision `--0000040`, deployed 2026-08-09
+14:31 UTC.** `main` and production are in sync. It carries **one change** — the
+image `desc` cap — with **no wire-status change and no contract change**: MAS
+verified per-field that they never read `media`, so it is invisible to them.
+Smoke green, and two checks are worth repeating rather than the health ping: a
+`raw://` catalogue page (120 media entries, max `desc` 203, `media` 41,950 B
+against ~600 KB uncapped, **zero egress**), and `caverna.fi` byte-compared
+against the pre-deploy local capture — markdown md5 identical, media identical.
 
-**Note the revision-name break:** `--trigger6` came from
-`az containerapp update --revision-suffix trigger6`, used to recover a revision
-stranded in `ActivationFailed` (see item 9). Numbering resumes at `--0000041`
-on the next ordinary deploy; do not read the name as a rollback target. It carries one **wire-status change**: a capture with no `<body>` is
-`render_defect` at 200 (terminal), not `render_error` at 500 (retried 3x).
-Pre-agreed with MAS; announced in `tmp/mas-repo-messages/22-…`, **which still
-needs relaying**.
+**Note the revision numbering.** `--trigger6` was a *named* suffix
+(`--revision-suffix trigger6`, used 2026-08-08 to recover a revision stranded in
+`ActivationFailed`), so it consumed no ordinal and numbering resumed at
+**`--0000040`**, not the `--0000041` this file predicted. Do not read a revision
+name as a rollback target for a second reason too: the app is
+`activeRevisionsMode: Single` and old revisions are garbage-collected —
+`az containerapp revision list` returns one row. **Rollback is re-deploying an
+image TAG.**
+
+The 2026-08-06 image carried one **wire-status change**: a capture with no
+`<body>` is `render_defect` at 200 (terminal), not `render_error` at 500
+(retried 3x). Pre-agreed with MAS; announced in `tmp/mas-repo-messages/22-…`.
 
 **`www.kubler.fi` is the proof and it is in production.** 15 bytes at HTTP 500
 before this image; **55,545 chars of markdown and 5 contact emails after**, with
@@ -230,12 +238,14 @@ before this image; **55,545 chars of markdown and 5 contact emails after**, with
 naming it (`node=html structural=True chars=2634 pagechars=2634`). The site did
 not change; we did.
 
-`--0000036` (`0.9.2-egress-dns-fix`, 2026-08-05) is the rollback target. It
-carried its own wire-status change — a dead domain is `origin_unreachable` at
-200, not an SSRF 400 (`16-…` §0).
+**The rollback target is the image tag `0.9.2-consent-guard`** (2026-08-06), not
+a revision name. Below it, `0.9.2-egress-dns-fix` (2026-08-05) carried its own
+wire-status change — a dead domain is `origin_unreachable` at 200, not an SSRF
+400 (`16-…` §0).
 
-**Revision `--0000035` is a burned tag** — it shipped a `NameError` and lasted
-8 minutes. Do not roll back to it; `--0000034` is the last good prior image.
+**`0.9.2-egress-dns` is a burned tag** — it shipped a `NameError` and lasted
+8 minutes. Do not roll back to it. Full rollback runbook, including the tags that
+actually still exist in ACR: `DEPLOYMENT_INFO.md`.
 
 ---
 
@@ -449,12 +459,10 @@ and the parked `base-config` file all closed on 2026-08-09 — see the top of th
 file. Item 9's acceptance passed at 6× the load. What remains below is item 3
 (the fixture-origin proxy gap) and items 7, 8 and 4, all cost or hygiene.
 
-**`main` is one behaviour change ahead of production** — the `desc` cap, commit
-`bf348ac`, Tier 1 4/4 and 312 offline tests green, waiting only on Tero's window.
-That sentence used to read "`main` == production in code; every commit since the
-deployed image is documentation", which was true until this commit and is the
-kind of line that goes quietly false. Check it against
-`az containerapp revision list` rather than believing it.
+**`main` == production**, as of the 2026-08-09 14:31 UTC deploy. This sentence
+has been false twice this week in both directions, so **check it against
+`az containerapp revision list` rather than believing it** — it is exactly the
+kind of line that goes quietly stale.
 
 *(Historic, kept for the reasoning: item 9 was the gate before segment 3, whose
 next rung was concurrency 4, then a ~18,000-company run at roughly 20 companies
@@ -524,8 +532,8 @@ see** (agreed in `tmp/mas-repo-messages/20-…` §6, accepted in `21-…` §4).
 | ~~relay~~ | ~~Tero~~ | **DONE** — 28 was relayed; `31-…` through `40-…` all landed after it. Original text follows. ~~**Relay `tmp/mas-repo-messages/28-…`**~~ — the full segment-2 recap plus four corrections. **One is time-sensitive:** MAS pre-registered a "stop the sweep at ≥2 in 50 us-specific blocks" rule, and `kea.fi` is not one of them (it served us four pages, 403'd one path, has no HTTPS), so the real figure is **1 in 50** and the threshold must be re-derived *before* segment 3 or the sweep stops on an artefact | Nothing else is gating. 28 also hands them the scaling numbers: **`--concurrency` up to ~15 needs nothing from us**, above that our `maxReplicas` is the lever |
 | — | note | **`25-…` and `26-…` were never files** — that exchange happened as pasted markdown in a chat. Both are now reconstructed on disk and **flagged as possibly-inexact**; every checkable detail was verified against our logs and holds (the 13:47:16Z 429 with `2/2 rendering, 4 queued`, `c6d1302332b8`, delotec's two timestamps, the gatelesis window). **Prefer files over chat** — this is the second numbering/delivery gap in this thread |
 | ~~5~~ | ~~us~~ | **DONE — `tasks/done/segment-2-counter-readout.md`.** The loud channel is 3 domains of 61 (4.9 %) / 27 renders of 261 (10.3 %), all `node=html structural=True`; the silent channel is **0 of 261**; genuine click-navigations **0** (all 4 `CONSENT NAVIGATION` lines are a fragment-only false positive). Created two new items, 6 and 7 below | Branches below — it did reorder what follows, but *downward*: the consent family is closed pending one more segment, and the new work is cost, not data loss |
-| **next** | **Tero, then us** | **Deploy the `desc` cap.** Gate is a window, not a test: Tier 1 is **4/4** and the offline suite is **312 green**, both against the local server with this change. MAS is running an ~18,000-company sweep over ~3 days at 2 processes × concurrency 5 (~40 peak renders against our 90 ceiling) and **we do not deploy into it**. MAS's own position (`40-…` §5): the change is invisible to them, do not bundle anything for their benefit, do not hold anything for them, it can land any time including mid-sweep. We are holding anyway | `./azure-deployment/deploy-image.sh <tag>`, then prod smoke + the lapsed-domain probe (the check that caught `--0000035`'s `NameError` in 8 minutes) |
-| **then** | **us** | **Send MAS the deploy timestamp. That is the entire message.** They asked for exactly one thing and explicitly asked for silence otherwise: *"if you deploy anything, tell us the timestamp. Not to coordinate around — just so a change in our numbers has a date to sit next to."* and *"please do not reply to this unless something is wrong."* **Do not append status, do not re-open settled questions, do not send the measurements** — both repos have spent more on correspondence than on the work it coordinates, and that is now an explicit standing agreement, not a preference | The one thing worth watching afterwards costs no message: `ContainerAppHTTPLogs` p99/max `BytesSent` on `/crawl` before vs after. It is the instrument that found this defect and nothing had ever read it |
+| ~~next~~ | ~~Tero, then us~~ | **DONE 2026-08-09 14:31 UTC — `0.9.2-desc-cap`, revision `--0000040`.** Deployed into a **0-replica fleet**, which is the safest revision transition available (a new revision needs its own replicas while the old drains, both against a 100-core quota). Pre-deploy: Tier 1 4/4, 312 offline tests. Post-deploy: health/401/SSRF-400/lapsed-domain-200 all green, a `raw://` catalogue proving the cap at zero egress, and `caverna.fi` **byte-identical** to the pre-deploy capture | The deploy script's own invariant checks passed (`http-renders` trigger 6, `maxReplicas` 45) — they run *after* the image swap, so they are an alarm, not a gate |
+| ~~then~~ | ~~us~~ | **DONE — `tmp/mas-repo-messages/41-to-mas-deploy-timestamp.md`.** The deploy timestamp, and nothing else. They asked for exactly one thing and explicitly asked for silence otherwise: *"if you deploy anything, tell us the timestamp. Not to coordinate around — just so a change in our numbers has a date to sit next to."* **Needs relaying by Tero** | The one thing worth watching afterwards costs no message: `ContainerAppHTTPLogs` p99/max `BytesSent` on `/crawl` before vs after. It is the instrument that found this defect and nothing had ever read it |
 | 6 | **us** | Upstream PR for both JS files | "Here are N occurrences in a production sweep" is a far stronger submission than a synthetic repro, and upstream `develop` moves slowly enough that waiting costs nothing |
 
 **Running in parallel on their side, blocking nothing:** persisting the final URL

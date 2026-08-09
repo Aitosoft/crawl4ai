@@ -1,11 +1,11 @@
 # Crawl4AI Production Deployment
 
-**Last Updated**: 2026-08-08
+**Last Updated**: 2026-08-09
 **Location**: West Europe (co-located with MAS)
-**Status**: ✅ Running `0.9.2-consent-guard` (image deployed 2026-08-06; live
-revision `crawl4ai-service--trigger6`, 2026-08-08 — same image, scale trigger
-`concurrentRequests` 2 → 6). **`AITOSOFT_CHANGES.md` "Current State" is the
-authoritative record**; this file is the runbook and its version line drifts.
+**Status**: ✅ Running `0.9.2-desc-cap` (revision `crawl4ai-service--0000040`,
+deployed 2026-08-09 14:31 UTC — the image `desc` cap; no wire-status or contract
+change). **`AITOSOFT_CHANGES.md` "Current State" is the authoritative record**;
+this file is the runbook and its version line drifts.
 `az containerapp revision list` beats both.
 
 **Sizing is at its ceiling.** 2 vCPU / 4 GiB is the maximum this managed
@@ -26,8 +26,9 @@ before doing it — their retry branch reads the wire status, not the body.
 
 ### Rollback — read the cost before you type it
 
-**Most incidents do not want an image rollback.** Since 2026-08-06 the image has
-not changed; the only production change is the **scale trigger**. If the symptom
+**Most incidents do not want an image rollback.** Between 2026-08-06 and
+2026-08-09 the image did not change at all; the only production change in that
+window was the **scale trigger**. If the symptom
 is capacity, cost or replica count, roll back *that*, not the image:
 
 ```bash
@@ -40,8 +41,27 @@ Then update `ACA_SCALE_TRIGGER` in `azure-deployment/deploy-image.sh` to match,
 or the **next deploy hard-fails its invariant check after the image has already
 been updated**.
 
-**Image rollback (last resort):** the previous image is
-`0.9.2-detector-round3` (revision `--0000032`, 2026-08-01, Tier 1 4/4).
+**Image rollback (last resort).** **Roll back by re-deploying the TAG, never by
+activating an old revision** — this app is in `activeRevisionsMode: Single`, and
+`az containerapp revision list` returns **exactly one** row (checked 2026-08-09:
+only the live revision exists). Old revisions are deactivated and garbage-collected,
+so every "the rollback target is revision `--0000036`" line in this repo names
+something you cannot activate. The **image tags** are what survive, in ACR:
+
+```bash
+az acr repository show-tags --name aitosoftacr \
+  --repository crawl4ai-service --orderby time_desc -o tsv   # what you can go back to
+./azure-deployment/deploy-image.sh <older-tag>               # the actual rollback
+```
+
+Verified present 2026-08-09: `0.9.2-consent-guard`, `0.9.2-egress-dns-fix`,
+`0.9.2-egress-dns` (**burned — shipped a `NameError`, do not use**),
+`0.9.2-collapse-recovery`, `0.9.2-pool-cap`, `0.9.2-detector-round3`,
+`0.9.2-failure-class`, and older.
+
+The **previous good image is `0.9.2-consent-guard`** (2026-08-06). Below it,
+`0.9.2-detector-round3` (2026-08-01, Tier 1 4/4) is the last image before the
+egress and consent work.
 
 > ⚠️ **It reverts the consent guard, and that is not theoretical.** Segment 4
 > (2026-08-08) logged 23 × `CONSENT DECLINED node=html structural=True` in ~300
@@ -118,9 +138,11 @@ All resources are in the `aitosoft-prod` resource group (West Europe):
 | `crawl4ai-service` | Container App | The crawl4ai service |
 | `workspace-aitosoftprodnCsc` | Log Analytics | Monitoring & logs |
 
-**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-pool-cleanup`
-(digest `sha256:24662e39ae5526f4eaa3e66331156f7853c4f67633da5cb4d211fc42c356c362`,
-revision `crawl4ai-service--0000029`)
+**Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-desc-cap`
+(digest `sha256:d2221b43b0621e8dec4d79dc46f807ae2c17e67f387817e4520005e560ffba84`,
+revision `crawl4ai-service--0000040`, deployed 2026-08-09 14:31 UTC). This line
+was **eleven images stale** until 2026-08-09 (it still named `0.9.2-pool-cleanup`
+/ `--0000029`); prefer `az containerapp show` over any tracked copy of it.
 
 ---
 
