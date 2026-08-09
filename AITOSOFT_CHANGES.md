@@ -58,7 +58,7 @@ Keeping this log helps when syncing with upstream updates.
 > (`tasks/README.md` 6–8), and both are cost, not data loss. Recap sent as
 > `tmp/mas-repo-messages/28-…`, which also corrects a shared premise: MAS's
 > `--concurrency 2` bounds **companies, not renders** (peak 7 in flight), and
-> **their flag is free up to ~15** against our 60-render fleet ceiling.
+> **their flag is free up to ~15** against our fleet ceiling (60 then, **90** since `maxReplicas` 30 → 45 on 2026-08-08).
 >
 > **Deployed 2026-08-05: `0.9.2-egress-dns-fix`.** The egress-path work —
 > blocking DNS off the event loop, `RES_OPTIONS`, and two misattributions. It
@@ -110,7 +110,7 @@ Keeping this log helps when syncing with upstream updates.
 > we cannot buy.
 
 ### Version
-- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below). **`main` is one image ahead of production**: the image `desc` cap is committed and undeployed (2026-08-09). It is the *only* undeployed behaviour change — the consent-JS work went out as `--0000037`
+- **Local**: v0.9.2 (upstream/develop 2026-07-16) + Aitosoft patches (see entries below). **`main` is one behaviour change ahead of production** — the image `desc` cap, committed and undeployed (2026-08-09). No image has been built or pushed for it, so do not go looking for a tag. It is the *only* undeployed behaviour change — the consent-JS work went out as `--0000037`
 - **Production**: the above + collapse recovery + `unrenderable_content` + a log line on every failed result + the egress-path work + **the consent-JS guard and its counters** (deployed 2026-08-06)
 - **Docker Image**: `aitosoftacr.azurecr.io/crawl4ai-service:0.9.2-consent-guard` (revision `crawl4ai-service--0000037`, deployed 2026-08-06, digest `sha256:4ad6e11634a5c14b07faac9ba434cef73ff120a89f579b80ecf4be37f325c215`)
 - **Previous**: `0.9.2-egress-dns-fix` (revision `--0000036`, deployed 2026-08-05) — the rollback target. Before that, `0.9.2-collapse-recovery` (revision `--0000034`, digest `sha256:70cd89720a1b546f62690d0da99a9485ef1f5649ee34b85650b0a91b1c52de3d`). **Revision `--0000035` (`0.9.2-egress-dns`) is a burned tag** — it shipped a `NameError` and lasted 8 minutes; do not roll back to it.

@@ -1,7 +1,7 @@
 # One page produced a 232 MB response, four times, and every instrument said success
 
-> **IMPLEMENTED 2026-08-09. Option (a1): `MEDIA_DESCRIPTION_MAX_CHARS = 200` plus a
-> 3-line truncation in `find_closest_parent_with_useful_text`
+> **IMPLEMENTED 2026-08-09. Option (a1): `MEDIA_DESCRIPTION_MAX_CHARS = 200` plus one
+> call to upstream's own `truncate()` helper in `find_closest_parent_with_useful_text`
 > (`crawl4ai/content_scraping_strategy.py`), pinned by
 > `test-aitosoft/test_media_desc_cap.py` (6 tests). Offline suite 312 green.**
 >
@@ -26,8 +26,11 @@
 >    `DefaultTableExtraction`, so production extracts on every request) and
 >    **`alt`**, which `add_variant` copies into every variant exactly as it copies
 >    `desc` — measured, one `<img>` with a 50,000-char `alt` and 5 srcset entries
->    gives 300,879 B of media from a 50,244 B document. Both are **linear in the
->    document**, so neither can reach the 433× regime and neither justifies more
+>    gives 300,879 B of media from a 50,244 B document. `alt` is **linear in the
+>    document**; **`media.tables` is not** — it multiplies cell text by an
+>    unvalidated `colspan`, so it is superlinear in an *attribute value* (see the
+>    §3c note below, added after the second-opinion pass refuted an earlier draft
+>    of this very bullet). Neither reaches the 430× regime and neither justifies
 >    code today. **But "media entries are now bounded" is false, and the upstream
 >    PR must not claim it.** Recorded in the code comment.
 > 2. **`grumblo.com` is the same mechanism — the file's largest uncertainty, now
@@ -154,7 +157,8 @@ substantially rewritten the same day after five research threads and a second-op
 which found five load-bearing errors in the first draft)
 **Size:** S
 **Gate:** none. It is the only defect segment 5 surfaced that costs a customer's data
-outright, the fix is ~5 lines in files we own, and it is *faster* than what we do today
+outright, the fix is ~5 lines in files we own, and it is ~~*faster* than what we do
+today~~ — **see correction 5: `scrap()` gains ~8 %, the 330× is in serialization**
 **Upstream PR candidate:** yes, the seventh, and the strongest one we have — see §6
 
 ---
@@ -368,9 +372,18 @@ Measured against the stored thermokon HTML:
 
 Cap ladder: 1,000 chars → 1,755,301 · 500 → 984,709 · **200 → 535,381**.
 
-**The cap is faster than what we do today** (it stops building 232 MB of strings), keeps
+~~**The cap is faster than what we do today**~~ (it stops building 232 MB of strings), keeps
 every image's `src`/`alt`/`score`, and leaves `cleaned_html` and the markdown MAS
 actually reads **byte-identical**.
+
+> **Corrected — see correction 5 in the closing header.** The `scrap()` column above is
+> single-shot and inside its own noise; over 9 interleaved reps the gain is **~8 %**
+> (1.485 → 1.366 s), because the walk still builds each ancestor's `text_content()`
+> before the slice. **The real win is `json.dumps`: 0.655 s → 0.002 s.** The
+> byte-identical and every-image-retained claims are confirmed by md5. The 535,435 /
+> 433× figures are the bare-slice ones; shipped (with the `"..."` marker) is
+> **538,747 / 430×**. And "55 of 68 captures" is really **65 of 78** — the corpus is
+> larger than this file counted.
 
 **The honest safety argument is not the obvious one.** A tempting claim — "healthy pages
 have short descs, so a cap is a no-op" — is **false, measured**: a 200-char cap changes
@@ -584,11 +597,14 @@ only catches whatever the next cause turns out to be.
   Finnish page with non-Latin-1 characters makes the intermediate `str` 2× larger than the
   final `bytes`, pushing the factor toward 4–5×. The production step measurements
   (600–980 MB) are the better number.
-- **Whether 216 s is MAS's client timeout.** Consistent across four attempts, well under
-  ACA's 240 s ingress timeout, and `DC` means the downstream closed — so it is theirs. We
-  asked in `36-…` §8 and **the answer is in message 37, which is not on disk** (see §7).
-- **Whether the corpus generalises.** 68 captures but only **5 distinct hosts**, all
-  Tier-1 Finnish B2B sites, and **not one product catalogue among them**. "The cap changes
+- ~~**Whether 216 s is MAS's client timeout.**~~ **ANSWERED (`40-…` §1): 210,000 ms,
+  applied per attempt.** The reasoning here was right — `DC` means the downstream closed,
+  so it is theirs — and the 216 s observed is ~6 s of overshoot *they* cannot explain
+  either. Message 37 never arrived; 40 answered it anyway. Do not chase 37.
+- **Whether the corpus generalises.** ~~68~~ **78** captures but only **5 distinct
+  hosts** (see correction 4), all
+  Tier-1 Finnish B2B sites, and **not one product catalogue among them** — which is why
+  `grumblo.com` was worth one live GET (correction 2). "The cap changes
   55/68 captures" is trustworthy; "healthy traffic maxes at 43 KB of `media`" is 5 hosts,
   not a population.
 
@@ -641,7 +657,13 @@ before any deploy decision** — the bundle answer is currently unknowable from 
 
 **MAS's `37-…` §3 counter-proposal is answered by (a), better than by what they asked
 for.** They want `media` suppressed without losing `cleaned_html` to
-`exclude_all_images`. The `desc` cap gives them exactly that — 433× smaller `media`,
+`exclude_all_images`. The `desc` cap gives them exactly that — 430× smaller `media`,
 `cleaned_html` byte-identical, every image's `src`/`alt`/`score` retained — and it costs
-them nothing and requires no change on their side. **Tell them the cap value and the
-field before it ships**, per their `38-…` §7 ask.
+them nothing and requires no change on their side. ~~**Tell them the cap value and the
+field before it ships**, per their `38-…` §7 ask.~~
+
+> **Superseded by `40-…` §1 and §5.** They answered per-field that they never read
+> `media` at all, so this is not a contract change and needs no pre-announcement — and
+> they confirmed §3's counter-proposal is exactly what the cap delivers. **The only thing
+> they want is the deploy timestamp, and they explicitly asked for silence otherwise.**
+> Do not send the measurements. `tasks/README.md`'s plan table carries the step.

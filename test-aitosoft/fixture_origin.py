@@ -536,12 +536,17 @@ def _collapse(m, query):
 #:
 #: **The trigger is not the header.** The task file (and this route's first
 #: draft) assumed `Content-Disposition: attachment` was what made Chromium
-#: refuse. Measured 2026-08-02: an inline `text/vcard`, an inline
-#: `application/pdf` and an `application/octet-stream` all raise the byte-identical
+#: refuse. Measured 2026-08-02: an inline `text/vcard` and an
+#: `application/octet-stream` raise the byte-identical
 #: `Page.goto: Download is starting`. The rule is "Chromium will not render this
 #: inline", and a fixture that varied only the header would have sized the
 #: population wrong — the same unfaithful-fixture failure the padded-403 route
 #: already cost us once.
+#:
+#: **An inline `application/pdf` is the exception and this comment said otherwise
+#: for a week** — it holds only on the headless shell these tests actually run.
+#: See DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER below, and CLAUDE.md's row "The
+#: browser suite has never run production's browser".
 DOWNLOAD_VCARD = (
     "BEGIN:VCARD\r\n"
     "VERSION:3.0\r\n"

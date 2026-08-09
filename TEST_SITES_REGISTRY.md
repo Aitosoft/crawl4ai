@@ -2,7 +2,7 @@
 
 **Purpose:** Shared registry of Finnish SME websites for testing crawl4ai capabilities. Used by both `crawl4ai-aitosoft` and `aitosoft-platform` (MAS) repos.
 
-**Last Updated:** 2026-08-06
+**Last Updated:** 2026-08-09
 
 **CRITICAL SAFETY RULE:** never hit a site more than 1-2 times per session.
 Over-scraping got us permanently Cloudflare-blocked on talgraf.fi. Rotate sites.

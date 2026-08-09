@@ -371,8 +371,9 @@ The probes are **committed**, in `test-aitosoft/`:
 | `cold_burst_probe.py` | N concurrent from cold — the **safety** side (429s, TTFB, queue pressure) |
 | `cold_burst_probe.kql` | server-side readback: rescale ramp, replica high-water, status histogram, RenderGate ADMIT/REJECT |
 
-Neither is collected by pytest (no `test_` prefix; verified — the suite still
-collects 306). They read the token from `CRAWL4AI_API_TOKEN` and never print or
+Neither is collected by pytest (no `test_` prefix; verified — the suite collected
+306 at the time, 312 since 2026-08-09; the point is that adding these two did not
+change it). They read the token from `CRAWL4AI_API_TOKEN` and never print or
 store it, refuse a warm app without `--allow-warm`, and cap `--n`/`--rounds`/
 `--rate-per-min`/`--duration-min`.
 

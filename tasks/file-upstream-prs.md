@@ -27,10 +27,14 @@ Three things make it unusually arguable, and none of them need our corpus:
   The bug is visible in the documentation.
 
 Prior art for the constant is upstream's own
-`preprocess_html_for_schema(attr_value_threshold=200)`. Blast radius verified
+`preprocess_html_for_schema(attr_value_threshold=200)` — though be honest in the PR that
+200 is that function's *signature default* and both in-tree callers override the sibling
+`text_threshold` to 500, so it is precedent for bounding an over-long value, not for this
+exact number. Blast radius verified
 zero: upstream's tests assert only `src`/`alt`/`type`/`score`.
 **Argue it as "`desc` is now bounded", not "media entries are now bounded"** —
-`alt` and `media.tables` are still unbounded, both linear in the document.
+`alt` and `media.tables` are still unbounded. `alt` is linear in the document;
+**`media.tables` is superlinear in an unvalidated `colspan`** (`row_data.extend([text] * colspan)`), which is a separate upstream defect.
 Evidence: `tasks/done/media-desc-duplicates-the-page-per-image.md`.
 
 **The eighth, small and honest: a Windows workaround makes `channel="chromium"`

@@ -168,7 +168,7 @@ stealth mode). Still broken upstream — PR tracked in `tasks/file-upstream-prs.
 5. `_normalized_visible_text` — whitespace-collapsed, so this module and
    `aitosoft_collapse_guard` agree about what counts as text on a page.
 
-### crawl4ai/content_scraping_strategy.py (+65/−1)
+### crawl4ai/content_scraping_strategy.py (+72/−1)
 Two changes, both upstream defects.
 
 1. `strip_noscript()` before `document_fromstring`. `<noscript>` cannot nest, so
@@ -267,4 +267,4 @@ Post-merge checklist (beyond Tier 1 + the diff check):
   genuinely needed on the Container App. Verified 2026-07-17 — details in
   `tasks/done/tls-broken-cert-regression-2026-07-17.md`.
 - Offline gates: `pytest test-aitosoft/` — everything pytest collects here is
-  offline (153 tests, ~60 s), so there is no list to keep in sync.
+  offline (312 tests, ~260 s), so there is no list to keep in sync.

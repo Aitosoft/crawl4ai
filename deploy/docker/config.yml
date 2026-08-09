@@ -78,18 +78,31 @@ security:
 # Crawler Configuration
 crawler:
   base_config:
-    # Aitosoft 2026-08-09: `simulate_user: true` lived here and NEVER APPLIED.
-    # api.py's base_config pass only fills a key whose current value is None or
+    # Aitosoft 2026-08-09: this was `true` and it NEVER APPLIED. api.py's
+    # base_config pass (:876-880) only fills a key whose current value is None or
     # "" — every CrawlerRunConfig boolean defaults to False, which is neither.
-    # Diagnosed 2026-07-30, parked, and now commented out rather than left as a
-    # line that reads like production behaviour. It is also a live landmine as
-    # written: anyone "fixing" that merge rule would silently turn simulate_user
-    # on for every request, which is an unmeasured behaviour change nobody has
-    # asked for. If it is ever wanted, the working lever is
-    # `CrawlerRunConfig.set_defaults(simulate_user=True)` in aitosoft_entry.py
-    # (verified 2026-08-09) — not this file.
-    #   simulate_user: true
+    # Diagnosed 2026-07-30, parked, closed 2026-08-09
+    # (tasks/done/base-config-boolean-defaults-never-applied.md).
     #
+    # It is `false` rather than deleted, and that is the whole point. Deleting or
+    # commenting it out changes NOTHING: utils.py:63's DEFAULT_CONFIG carries
+    # `base_config: {simulate_user: True}` and load_config() deep-merges this file
+    # ON TOP of it, so an absent key inherits True. Verified by executing
+    # load_config(), after a first attempt that checked `yaml.safe_load` of this
+    # file alone and read False — the wrong layer, which is this repo's own
+    # recorded lesson about patching below the layer you test.
+    #
+    # So an explicit `false` is what actually defuses the landmine: if anyone ever
+    # "fixes" that merge rule, it sets False instead of silently turning user
+    # simulation on for every request on a 2 vCPU replica. Zero behaviour change
+    # today either way — the merge cannot set a boolean at all.
+    #
+    # If user simulation is ever wanted, the working lever is
+    # `CrawlerRunConfig.set_defaults(simulate_user=True)` in aitosoft_entry.py
+    # (verified 2026-08-09) — not this file. But that is a measurement nobody has
+    # made, not a config edit.
+    simulate_user: false
+
     # Aitosoft 2026-07-30: hard budget for the fetch phase of one arun() — all
     # anti-bot attempts and proxy retries share it. Without it a page that keeps
     # renavigating wedges an untimed Playwright call (page.content /

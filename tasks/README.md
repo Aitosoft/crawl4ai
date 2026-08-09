@@ -50,23 +50,31 @@ element**, which strengthens the upstream root-collision argument.
 
 **Three things came out of it:**
 
-- **Item 6 now has a file and it absorbed the PDF question.**
-  `inference-tier-500s-are-not-retryable.md`. **16 of 18 of batch 1's 500s (89 %)** are one
+- **Item 6 now has a file and it absorbed the PDF question.** *(That file is now
+  `tasks/done/inference-tier-500s-are-not-retryable.md`, closed unfixed the same day —
+  the sizing below stands, the fix does not.)* **16 of 18 of batch 1's 500s (89 %)** are one
   defect: the tier-3 structural inference calling a structurally-intact *non-page*
   "blocked", which at origin status 200 falls through to `render_error` → 500 → retried.
   PDFs are **12 %** of that class, not a separate problem.
 - **Item 10's fix moved from "needs a deploy and a MAS workaround" to "~5 lines in files
-  we own, and it is faster than what we do today."**
-- **Nothing new is worth deploying for on its own.** The one genuinely new risk found
-  (pool memory) is a **do-nothing** after measurement — see the corrections.
+  we own, and it is faster than what we do today."** *(Both halves were later refined:
+  it is 1 line plus a constant using upstream's own helper, and "faster" is ~8 % on
+  `scrap()` — the 330× is in serialization. See the third update at the top.)*
+- **Nothing new is worth deploying for on its own.** ~~The one genuinely new risk found
+  (pool memory) is a **do-nothing** after measurement — see the corrections.~~
+  **Superseded within the day:** the pool-memory half stands, but the headline does not —
+  item 10 is worth a deploy on its own and is now built.
 
 **Two process items, both for Tero, neither blocking code:**
 
 - **Messages 34 and 37 are missing from `tmp/mas-repo-messages/`** (29 and 30 too).
-  `37-…` is where MAS answered the six asks in `36-…` §8 — the 215 s client-timeout
-  confirmation, the `exclude_all_images` decision, and **whether to bundle a deploy**.
-  That last answer is currently unknowable from this repo. **Ask for a re-relay before any
-  deploy decision.**
+  `37-…` is where MAS answered the six asks in `36-…` §8 — the client-timeout
+  confirmation (**answered since: 210 s configured per attempt, 216 s observed on the
+  wire**, `40-…` §1), the `exclude_all_images` decision, and **whether to bundle a deploy**.
+  That last answer is currently unknowable from this repo. ~~**Ask for a re-relay before any
+  deploy decision.**~~ **Answered 2026-08-09 by `40-…` §5 without a re-relay:** *"Do not
+  bundle a deploy for our benefit and do not hold anything for us"*, plus one ask — tell
+  them the deploy timestamp. **Do not hold the deploy for this.**
 - **The correlation id is the largest untracked promise.** Committed twice (`33-…` §5,
   `36-…` §7) and tracked nowhere. It is minted only at `server.py:530` on a 500;
   `api.py:721`'s `request_id` never leaves the process. It closes three MAS asks at once
@@ -436,15 +444,21 @@ forward only, so MAS's first segment is the first thing it can describe.
 
 ## The open items, in order
 
-**Items 1 and 2 shipped; the current gate is item 9.** Segment 3 ran clean at
-`--concurrency 3` (292 renders, 0 × 429), and MAS's next rung is 4, then a
-~18,000-company run at roughly 20 companies in flight. Item 9 is the one thing
-worth settling before that scale, and it is the only new task from segment 3.
-**Everything else below was already parked or deflated and stays that way.**
+**Nothing here is gating. The only open thread is a deploy window.** Items 10, 6
+and the parked `base-config` file all closed on 2026-08-09 — see the top of this
+file. Item 9's acceptance passed at 6× the load. What remains below is item 3
+(the fixture-origin proxy gap) and items 7, 8 and 4, all cost or hygiene.
 
-`main` == production in code; every commit since the deployed image is
-documentation. Message 16 was relayed and answered (MAS's 17), so nothing is
-waiting on Tero except the relay of `20-…` and whatever we send next.
+**`main` is one behaviour change ahead of production** — the `desc` cap, commit
+`bf348ac`, Tier 1 4/4 and 312 offline tests green, waiting only on Tero's window.
+That sentence used to read "`main` == production in code; every commit since the
+deployed image is documentation", which was true until this commit and is the
+kind of line that goes quietly false. Check it against
+`az containerapp revision list` rather than believing it.
+
+*(Historic, kept for the reasoning: item 9 was the gate before segment 3, whose
+next rung was concurrency 4, then a ~18,000-company run at roughly 20 companies
+in flight.)*
 
 **Old items 1 and 2 shipped together on 2026-08-02** as `0.9.2-collapse-recovery`
 — collapse recovery and `unrenderable_content`. Both task files carry what the
@@ -507,9 +521,11 @@ see** (agreed in `tmp/mas-repo-messages/20-…` §6, accepted in `21-…` §4).
 | ~~relay~~ | ~~Tero~~ | **DONE** — `22-…` and `24-…` landed; MAS ran the `raw://` consent probe at 13:27 on 2026-08-06, which is arm-check traffic and proves they had 24 | — |
 | ~~3~~ | **them** | The `remove_consent_popups` A/B — **arm-check probe seen in our logs 2026-08-06 13:27**, full result not yet relayed | A two-arm result answers "is the flag worth keeping", which does not change what we build. The third arm answers "does narrowing the selectors cost consent-wall coverage", which is the one thing our 7-host corpus cannot settle |
 | ~~4~~ | ~~them~~ | **DONE 2026-08-06 13:38–14:36 UTC.** 261 renders, 61 domains, 58 min | 50 rather than 25 because our own measurement says the *activation count* costs, not the companies |
-| **now** | **Tero** | **Relay `tmp/mas-repo-messages/28-…`** — the full segment-2 recap plus four corrections. **One is time-sensitive:** MAS pre-registered a "stop the sweep at ≥2 in 50 us-specific blocks" rule, and `kea.fi` is not one of them (it served us four pages, 403'd one path, has no HTTPS), so the real figure is **1 in 50** and the threshold must be re-derived *before* segment 3 or the sweep stops on an artefact | Nothing else is gating. 28 also hands them the scaling numbers: **`--concurrency` up to ~15 needs nothing from us**, above that our `maxReplicas` is the lever |
+| ~~relay~~ | ~~Tero~~ | **DONE** — 28 was relayed; `31-…` through `40-…` all landed after it. Original text follows. ~~**Relay `tmp/mas-repo-messages/28-…`**~~ — the full segment-2 recap plus four corrections. **One is time-sensitive:** MAS pre-registered a "stop the sweep at ≥2 in 50 us-specific blocks" rule, and `kea.fi` is not one of them (it served us four pages, 403'd one path, has no HTTPS), so the real figure is **1 in 50** and the threshold must be re-derived *before* segment 3 or the sweep stops on an artefact | Nothing else is gating. 28 also hands them the scaling numbers: **`--concurrency` up to ~15 needs nothing from us**, above that our `maxReplicas` is the lever |
 | — | note | **`25-…` and `26-…` were never files** — that exchange happened as pasted markdown in a chat. Both are now reconstructed on disk and **flagged as possibly-inexact**; every checkable detail was verified against our logs and holds (the 13:47:16Z 429 with `2/2 rendering, 4 queued`, `c6d1302332b8`, delotec's two timestamps, the gatelesis window). **Prefer files over chat** — this is the second numbering/delivery gap in this thread |
 | ~~5~~ | ~~us~~ | **DONE — `tasks/done/segment-2-counter-readout.md`.** The loud channel is 3 domains of 61 (4.9 %) / 27 renders of 261 (10.3 %), all `node=html structural=True`; the silent channel is **0 of 261**; genuine click-navigations **0** (all 4 `CONSENT NAVIGATION` lines are a fragment-only false positive). Created two new items, 6 and 7 below | Branches below — it did reorder what follows, but *downward*: the consent family is closed pending one more segment, and the new work is cost, not data loss |
+| **next** | **Tero, then us** | **Deploy the `desc` cap.** Gate is a window, not a test: Tier 1 is **4/4** and the offline suite is **312 green**, both against the local server with this change. MAS is running an ~18,000-company sweep over ~3 days at 2 processes × concurrency 5 (~40 peak renders against our 90 ceiling) and **we do not deploy into it**. MAS's own position (`40-…` §5): the change is invisible to them, do not bundle anything for their benefit, do not hold anything for them, it can land any time including mid-sweep. We are holding anyway | `./azure-deployment/deploy-image.sh <tag>`, then prod smoke + the lapsed-domain probe (the check that caught `--0000035`'s `NameError` in 8 minutes) |
+| **then** | **us** | **Send MAS the deploy timestamp. That is the entire message.** They asked for exactly one thing and explicitly asked for silence otherwise: *"if you deploy anything, tell us the timestamp. Not to coordinate around — just so a change in our numbers has a date to sit next to."* and *"please do not reply to this unless something is wrong."* **Do not append status, do not re-open settled questions, do not send the measurements** — both repos have spent more on correspondence than on the work it coordinates, and that is now an explicit standing agreement, not a preference | The one thing worth watching afterwards costs no message: `ContainerAppHTTPLogs` p99/max `BytesSent` on `/crawl` before vs after. It is the instrument that found this defect and nothing had ever read it |
 | 6 | **us** | Upstream PR for both JS files | "Here are N occurrences in a production sweep" is a far stronger submission than a synthetic repro, and upstream `develop` moves slowly enough that waiting costs nothing |
 
 **Running in parallel on their side, blocking nothing:** persisting the final URL
@@ -567,7 +583,7 @@ delta is the attribution.
 | `static-mode-tls-impersonation.md` | Hardens a path nothing currently falls back to | `residential-egress-retry-path.md` |
 | ~~`base-config-boolean-defaults-never-applied.md`~~ | **CLOSED 2026-08-09, `tasks/done/`.** Its un-park trigger is moot: `CrawlerRunConfig.set_defaults()` sets booleans today *and* honours an explicit client `false`, which the file's proposed merge-rule fix explicitly could not. The `config.yml` line is commented out with the reason inline — left in place it was a landmine, since fixing the merge rule would have turned user simulation on for every request | Someone wanting user simulation on, which is a **measurement**, not a merge-rule change |
 | `preflight-batch-endpoint.md` | **MAS said do not build speculatively.** Their words | MAS asks |
-| `file-upstream-prs.md` | Standing tracker, four PRs open and **a fifth written but deliberately unfiled** (the consent snippet — file it after segment 2, when it can carry production counts). Upstream `develop` is **one commit past v0.9.2** (a Docker IPv6 fix, checked 2026-08-02) — core behavioural changes sit for months and waiting for them is not a plan | Nothing — check occasionally |
+| `file-upstream-prs.md` | Standing tracker, four PRs filed, **a fifth written but deliberately unfiled**, and since 2026-08-09 three more candidates (the `desc` cap — the cleanest we hold — the `browser_manager` channel downgrade, and a latent upstream *security* report) (the consent snippet — file it after segment 2, when it can carry production counts). Upstream `develop` is **one commit past v0.9.2** (a Docker IPv6 fix, checked 2026-08-02) — core behavioural changes sit for months and waiting for them is not a plan | Nothing — check occasionally |
 | `waa-eval-2026-07-30-forensics.md` | **Reference, not a task.** Never close it | — |
 
 **Do not re-expand this list without a reason that arrives from outside** — a MAS
@@ -739,7 +755,11 @@ any code was written rather than during implementation.
    is *one route*. Consequences: item 10's fix needs no MAS coordination, and
    **`base-config-boolean-defaults-never-applied.md` is un-parked by the same one-liner**
    (`simulate_user` would start working). Worth a CLAUDE.md row next to the `BrowserConfig`
-   one.
+   one. *(Done 2026-08-09: CLAUDE.md row added; the base-config file is **closed** in
+   `tasks/done/` rather than un-parked — the lever existing is not a reason to pull it,
+   and whether user simulation should be on is still an unmeasured question. Note item
+   10 chose to patch the class instead, because `scraping_strategy` is client-settable
+   and a default object would be replaceable.)*
 2. **CLAUDE.md's "inline `application/pdf` behaves exactly like `Content-Disposition:
    attachment`" is false in production**, and the task file that shipped the class said so
    at the time (`done/download-navigation-is-not-a-render-error.md:27-30`) — the caveat was

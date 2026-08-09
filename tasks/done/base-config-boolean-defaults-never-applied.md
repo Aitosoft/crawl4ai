@@ -35,8 +35,8 @@
 > Nothing about `total_timeout` changed — it is `None`-defaulted, it applied all
 > along, and it is still the only key in `base_config`.
 
-**Status:** Open — diagnosed and proven, fix deliberately NOT bundled with the
-2026-07-30 deploy (see "Why not now").
+**Status:** CLOSED 2026-08-09 (was: open, then parked) — diagnosed and proven, fix
+superseded rather than shipped; see the header above.
 **Priority:** Medium. Nothing is broken today; one setting we believe is on has
 been off since it was added, and the next boolean anyone adds will be too.
 **Effort:** S (fix) + M (verifying what turning `simulate_user` on actually

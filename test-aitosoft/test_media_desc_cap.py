@@ -3,8 +3,8 @@ A media `desc` must not be the whole page — OFFLINE, no server, no network.
 
 Regression for the 2026-08-08 incident: https://www.thermokon.fi returned ~232 MB
 four times, at HTTP 200 `success: true`, with no log line anywhere saying
-anything was wrong. MAS's client gave up at 216 s on each attempt, so the company
-was unrecoverable.
+anything was wrong. MAS's client budget is 210 s per attempt and each attempt ran
+216 s on the wire before they closed it, so the company was unrecoverable.
 
 Cause is upstream's `find_closest_parent_with_useful_text`, which walks *up* from
 an `<img>` until an ancestor has enough words and then returns that ancestor's
@@ -101,7 +101,7 @@ def test_the_variant_fanout_cannot_re_multiply_the_string():
     `MEDIA_DESCRIPTION_MAX_CHARS`: a test whose threshold moves with the value
     it is testing cannot fail when the truncation is lost. 40 images fan out to
     120 entries against a 5,000-character body, so the uncapped payload is
-    ~600 KB and the capped one ~30 KB.
+    ~600 KB and the capped one ~42 KB against the 64 KB bound below.
     """
     result = scrape(catalogue())
     images = result.media.model_dump()["images"]
@@ -150,8 +150,8 @@ def test_truncation_is_marked():
     """A truncated snippet must be *visibly* truncated — a consumer, or a future
     session reading a stored capture, has to be able to tell a cut description
     from a short one. The page is Finnish because production is: the cap counts
-    codepoints, so 200 chars is ~211 UTF-8 bytes here. Never size a byte budget
-    from this constant."""
+    codepoints, so this fixture's 203-char value is 254 UTF-8 bytes. Never size a
+    byte budget from this constant."""
     html = (
         "<html>\n<body>\n  <div>\n    <img src='/kuva.jpg' width='600' "
         "height='400' alt='Kuva'>\n"

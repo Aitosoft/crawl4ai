@@ -28,6 +28,21 @@ recovery. Opened the same day from production logs.
 >    **yes**, on Playwright's bundled Chromium. Production runs real Chrome,
 >    which ships a PDF viewer, so the inline-PDF row could differ there; the
 >    attachment rows cannot.
+>
+>    > **2026-08-09: it does differ, and this caveat is the most-ignored sentence
+>    > in the repo.** It was written here, published, and then dropped by every
+>    > downstream reader — CLAUDE.md's Key Findings row went on to state the
+>    > opposite as fact for a week. Re-measured on both browser arms: **4 of the 5
+>    > download kinds are identical and `pdf-inline` alone diverges.** Real Chrome
+>    > renders it into a 174-byte viewer shell at HTTP 200, which tier-3
+>    > structural inference then calls a block. **`unrenderable_content` has
+>    > therefore fired zero times in production, ever.** The reason it took a week
+>    > is that the tests could not see it: `browser_manager.py:1123-1128` drops
+>    > `channel` whenever `chrome_channel == "chromium"`, so the suite has always
+>    > run the headless shell. **The lesson is not "we were wrong" — it is that a
+>    > correctly-hedged caveat does not survive being summarised.** If a claim has
+>    > a condition on it, the condition has to travel in the same sentence as the
+>    > claim, or the claim arrives alone.
 > 3. **"Charged four renders" undercounts.** Upstream's attempt loop retries on
 >    **any** exception, not only on a detected block, so one client request at
 >    MAS's `max_retries: 2` is **three** navigations. Four client requests were
