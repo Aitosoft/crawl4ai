@@ -336,6 +336,103 @@ broken line.
 
 ---
 
+## 8b. The weekend sweep's first 40 minutes, watched live (17:56 → 18:35 UTC)
+
+Added after the fact. **Four of this file's claims were re-tested against a
+second, independent run and all four held; one new behaviour appeared that is
+worth more than any of them.**
+
+**Cold start is the whole 429 story and it self-clears in ~4 minutes.**
+
+| bin | requests | 429 | p50 |
+|---|---|---|---|
+| 17:56 | 50 | **14** | 8,716 ms |
+| 17:58 | 46 | 3 | 5,646 ms |
+| 18:00 | 47 | **0** | 4,552 ms |
+| 18:02 | 52 | **0** | 5,840 ms |
+
+All of it landed while the fleet was at 1 replica. The second replica arrived at
+17:59 and the 429s stopped. **The fleet settled at 2 again** — same equilibrium
+as MAS's bounded run, so it reproduces.
+
+**§2's efficiency result reproduced and came in better:** browser launches per
+admit **0.122** (0.132 in the bounded run, 0.369 at 12 replicas), hot-pool hit
+rate **67.7 %** (60.5 % / 26.6 %). Steady-state p50 4.3–5.0 s, i.e. *below* MAS's
+pre-change 4,840 ms.
+
+### ⚡ The new thing: a memory pressure episode, and the loop closed by itself
+
+`anon` on the two replicas warms over ~20 minutes and then **diverges** — one
+replica took the heavier diet:
+
+| 5-min bin | `tskmm` max | `sfxlw` max |
+|---|---|---|
+| 18:10 | 3,378 (82.5 %) | 3,276 (80.0 %) |
+| 18:15 | 3,539 (86.4 %) | 3,175 (77.5 %) |
+| **18:20** | **3,754 (91.7 %)** | 2,833 (69.2 %) |
+| 18:25 | 3,360 (82.0 %) | 2,857 (69.8 %) |
+| 18:30 | 3,336 (81.4 %) | 2,728 (66.6 %) |
+
+**3,754 MB is the highest `anon` ever recorded at this fleet size** — above the
+84.35 % this file quotes from the bounded run, and past where a "corrected" guard
+reading `anon` at 85 % would trip. Against it, in the same bins:
+
+| 5-min bin | admits | RenderGate 429 | memory 429 |
+|---|---|---|---|
+| 18:15 | 80 | 2 | **11** |
+| 18:20 | **57** | **8** | 5 |
+| 18:25 | **96** | **0** | 1 |
+| 18:30 | 57 | 0 | 2 |
+
+**Read the two tables together, because that is the finding.** Memory climbs →
+the guard refuses → 429s → MAS's ladder backs off → admits drop 111 → 57 →
+memory falls → admits recover to 96 and the 429s go to zero. **A closed loop that
+settled on its own in about ten minutes, with no intervention and no lost page.**
+
+Three things follow, and they change the emphasis of §4 without changing its
+conclusion:
+
+1. **The guard is load-bearing at 2 replicas, not merely noisy.** §4 is right that
+   it fires on cache noise at the median. It is also, at the tail, the only thing
+   holding a replica off 4 GiB — and the tail is now reached within 25 minutes of
+   a run starting, not twice a day. **Shipping the metric fix without a companion
+   bound would have removed the brake during this exact episode.** The decision
+   not to ship it was correct for a reason better than the one recorded.
+2. **The two replicas diverge by ~900 MB.** Envoy is round-robin per request, so
+   this is page weight, not routing — one replica drew the heavier companies. Any
+   future threshold must survive the *unlucky* replica, not the fleet mean.
+3. **`max_browsers` as the companion looks better than it did.** The episode is a
+   per-replica browser-population event, which is exactly what that cap bounds and
+   exactly what a percentage threshold does not.
+
+### A second host in the `render_error` family, in one evening
+
+`https://www.celerit.fi/?page=Palvelut` and `?page=Referenssit` — **4,060 bytes
+with 9 characters of visible text** and 3,514 bytes with 12 — took the same route
+as `koodikarhu.fi` in §6: tier-3 `minimal_text on small page` → patchright agrees
+→ `render_error` → 500 → four attempts each, 8 of the window's 12 500s.
+
+**Two hosts in one evening, where the previous 5-day sweep averaged ~1.1 % of
+requests, is worth counting rather than assuming.** The plausible reason is the
+cohort: MAS switched to their never-scraped prospect pool, which is older and
+more JS-only than the refresh cohort. **If this class is materially higher on
+prospect traffic, item 6's closure ("do not re-open without a page MAS can show
+has never succeeded") gets its falsifier** — the cost is 4 wire attempts × 2
+renders each, and at 4 render slots that is no longer rounding. Count it over the
+weekend before proposing anything.
+
+**Everything else at 40 minutes:** 0 render defects, 0 collapse recoveries, 0
+fence-504s, 0 OOM kills, 0 `AssigningReplicaFailed`, health 200, fleet 2. The
+other failures were dead domains (`dinhjalp.com`, `finnpool.fi`,
+`lostinlapland.fi`) — `origin_unreachable` at HTTP 200, refused pre-admission,
+costing no render slot. Expected in a prospect pool.
+
+**Escalation line set while watching, and not reached:** `anon` above ~3,850 MB
+(94 %) sustained across two 5-minute bins, or any `Reason_s == "OOMKilled"` /
+exit 137. The 91.7 % spike is a single bin that recovered.
+
+---
+
 ## 9. What I am least sure of
 
 - **The contractive-loop model in §3 is a fit with one free parameter, same as
