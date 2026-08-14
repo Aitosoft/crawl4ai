@@ -25,10 +25,29 @@ service" / similar, read this file and use `ScheduleWakeup` to loop.
 - Capacity model (since 2026-07-17, image `0.9.2-render-gate`): each replica
   admits 2 concurrent full renders (RenderGate), queues ≤4 for ≤15s, then
   429 + Retry-After: 5. ACA scale rule `http-renders` boots replicas; its
-  trigger is **6** since 2026-08-08 and is **not** the same quantity as
-  RenderGate's capacity of 2 (see `tasks/done/autoscaler-ratchets-to-the-cap.md`).
+  trigger is **12 since 2026-08-14** (was 6; revision `--0000042`) and is **not**
+  the same quantity as RenderGate's capacity of 2 (see
+  `tasks/done/autoscaler-ratchets-to-the-cap.md`).
   **Warm-replica pinning is RETIRED** — `batch-scale.sh` is an emergency valve
   only, not a pre-batch step.
+- **⚡ What the 2026-08-14 trigger change did to "normal", because it changes what
+  a tick should alarm on.** The fleet now runs **2 replicas** on MAS's full sweep
+  load, not 12. **A replica count of 2–3 under heavy traffic is correct**, not a
+  scaling failure. `RenderGate REJECT` at ~1–2 % of requests is the designed price
+  and MAS's retry ladder absorbs it. Slot utilisation is ~54 % against 7 % before.
+  **The fleet will not surge for you** — one scale-up event in 30 minutes of real
+  load, and a synthetic arm at 1.44× that rate held **1 replica for 12 minutes**
+  through 38 rejections — so do not wait for replicas to appear as confirmation
+  that a burst was handled. `tasks/done/trigger-12-readout-2026-08-14.md`.
+  **The revert, if it is ever needed, is the trigger and NOT `--max-replicas`**
+  (that was the command the cost file carried, and `maxReplicas` was already 20,
+  so it is a no-op that reads as a successful revert at 03:00):
+  `az containerapp update -n crawl4ai-service -g aitosoft-prod --scale-rule-name
+  http-renders --scale-rule-type http --scale-rule-http-concurrency 6`, then edit
+  `ACA_SCALE_TRIGGER` in `azure-deployment/deploy-image.sh` to match or the next
+  deploy hard-fails. It creates a new revision: every replica restarts and every
+  in-flight render dies. **Do not revert on a 429 rate alone** — split the two
+  gates first, and only `RenderGate REJECT` is a capacity signal.
 - **Watching a sweep after the 2026-08-08 scale change:** the number to read is
   the replica high-water against what the load justified, plus the 429 count.
   `ContainerAppHTTPLogs` is the only table with `RequestDuration`, and it also
@@ -145,6 +164,7 @@ ContainerAppConsoleLogs_CL
 | Signal | Meaning | Action |
 |---|---|---|
 | GATE-429 ("RenderGate REJECT") bursts at batch ramp-up | Replicas full; MAS client retries (5/10/20/30s) absorb while ACA scales out | **None** if replica count rises within ~1 min (check `SuccessfulRescale` events). Sustained 429s with replicas pegged at max = genuine capacity ceiling — talk to Tero about maxReplicas. |
+| **An ingress 429 is NOT a RenderGate 429 — split the count before reading anything into it** | Two mechanisms emit 429, and the row above covers only one. `RenderGate REJECT` = concurrency. `refusing new browser` (`crawler_pool`) = the memory guard. **They have opposite fixes and the memory one is far larger in practice.** | Measured overnight 2026-08-09/10: **434 × 429 at the ingress, of which RenderGate rejected 25** — the other ~409 were the memory guard, at a true concurrency of **1.3** against ~26 render slots and replicas at **20 of 45**. Reading that as a capacity ceiling would have sent someone at `maxReplicas`, which was never the constraint. Count both tokens, always. |
 | FENCE-504 ("WALL-CLOCK FENCE 504: url=… deadline_s=… elapsed_s=… gate=…") | 180s wall-clock fence fired and the render slot released cleanly (the gate snapshot in the line still counts the fenced request; it releases immediately after). One line per 504, with URL — deployed 0.9.2-fence-obs 2026-07-17. | Expect 0–10 per window during cold-ramp bursts, then zero. **Investigate only if they cluster POST-ramp** (replica count stable for >2 min and FENCE-504 still firing) or the rate grows across windows — that escalates tasks/done/504-fence-observability-2026-07-17.md to a code fix. Pair each with its "RenderGate ADMIT url=…" line to get the replica and queue wait. |
 | ORIGIN-FAIL ("ORIGIN FAILURE: url=… failure_class=… error=…") | The origin broke, not us — the request returns **HTTP 200 with `success:false`** and a `failure_class`, by MAS's Q2 contract. New in `0.9.2-failure-class` (2026-07-30). | **None, and expect a lot of them at first.** This population used to be invisible: it arrived as our HTTP 500 and MAS retried it three times. Seeing it is the fix working. Investigate only if a *single host* dominates the bucket (worth telling MAS — it may be a dead customer site in their list) or if `failure_class=render_error` climbs, which is genuinely ours. **Read the next row too: this token is rarer than it looks.** |
 | RESULT-FAIL ("RESULT FAILURE: url=… failure_class=… status=… error=…") | **Every failed *result* that is not a collapse** — origin blocks, origin 4xx/5xx, hosts that resolve but do not connect, downloads (`unrenderable_content`), our own render errors. New 2026-08-02. | Expect many; act only if one host dominates or `render_error` climbs. Sibling token **`TERMINAL FAILURE`** covers the exception path's non-origin permanent failures and its 504s; rare, so read it when it appears. **This row used to say "this is the row to count from, and ORIGIN-FAIL is not". That was wrong and it cost a real measurement — see the next row.** |
@@ -154,11 +174,11 @@ ContainerAppConsoleLogs_CL
 | COLLAPSE-RECOVERED ("COLLAPSE RECOVERED: url=… content collapsed in our parse: …; recovered N chars via html2text") | Same collapse, but the html2text fallback returned the body. Served as an **ordinary success** — `failure_class: none` — carrying the recovered markdown. New in `0.9.2-collapse-recovery` 2026-08-02. | **None. This is data we used to lose.** Count it, do not act on it. **The 2026-08-01 baseline of 2.7 % of pages / 18 % of hosts (9 URLs of 328) is now the sum of these two tokens, not RENDER DEFECT alone** — the tokens are deliberately disjoint strings so the split is countable, but a drop in RENDER DEFECT on its own no longer means what it used to. The split itself is the measurement worth reporting: it is the first real-traffic evidence of which collapse mechanism our 7 affected hosts actually hit, which is still unknown. |
 | MAS success rate drops after 2026-07-30 | Not a log signal — expect it in MAS's own counters | **Do not roll back for this.** Challenge screens, redirect-blocked hosts and origin 5xx all used to be stored as successes. They now fail honestly. `AITOSOFT_CHANGES.md` 2026-07-30 entry has the expected direction. |
 | PW-NAV-TIMEOUT ("Page.goto: Timeout 90000ms exceeded") | Playwright's own 90s nav timeout | **None.** Normal for slow/SPA sites. MAS pivots to static after 2 consecutive 504s per host. |
-| OOM / MemoryError "refusing new browser" | **Our pool guard**, not OS-OOM. Replica hit ~85%+ and refused a new browser spawn. | Peek pool mem% timeline (`Pool: hot=… mem=…` log lines). If it drops back within ~5 min, no action — the guard worked. If it sticks >85% for 10+ min, restart the revision. |
+| OOM / MemoryError "refusing new browser" | **Our pool guard**, not OS-OOM. Replica hit ~85%+ and refused a new browser spawn. | Peek pool mem% timeline (`Pool: hot=… mem=…` log lines). If it drops back within ~5 min, no action — the guard worked. ~~If it sticks >85% for 10+ min, restart the revision.~~ **DO NOT restart on this alone — corrected 2026-08-10.** The overnight sweep sat above 85 % for ~15 hours and a restart would have been wrong every time: at 420 refusal events the guard read **88.7 %** while true `anon` was **68.6 %**, the rest being **583 MB of reclaimable active page cache**. **Read `anon=` in the same line, not the percentage.** Escalate on `anon` ≥85 %, an `OOMKilled`, or an exit 137 — none of which have ever been seen. `tasks/memory-guard-charges-reclaimable-page-cache.md` |
 | OTHER | Usually garbage. Log lines whose ms timestamp contains "504" (e.g. `02:17:04,504`) hit the regex. | Peek once per night to confirm, then ignore. |
 | FORCE-CLOSE / "Janitor reaped" | Fix-2 Janitor killed a stuck slot | Investigate. If recurring, stuck-slot pattern from 2026-04-14 — restart or rollback. |
 | ACTIVE-REQ counter not decreasing over multiple ticks | Stuck-slot pattern | **Rollback** to previous known-good image. |
-| Pool mem% P99 > 95% sustained across 2+ 5min bins | Cluster approaching OS-OOM, guard overwhelmed | Restart revision. Single-bin spikes to 99% that recover next window are normal and self-healing. **Only count bins with `n >= 150` samples** — low-n P99 is outlier-sensitive and can misread late-arriving log data as a plateau (2026-04-17-evening lesson). Re-query on the next tick before acting. (April logs repeatedly flagged that the n≥150 gate was unreachable under 15 pinned replicas; moot since pinning was retired 2026-07-17 — replica counts now track load, and memory pressure is no longer the primary failure mode.) |
+| Pool mem% P99 > 95% sustained across 2+ 5min bins | ~~Cluster approaching OS-OOM, guard overwhelmed~~ — **not on its own, corrected 2026-08-10.** Overnight ran p95 92–93 % with max 100 % for 15 h, zero OOM kills, at a true `anon` of ~69 %. **The percentile is also biased upward**: the janitor samples every 10 s above 80 % and 60 s below 60 %, oversampling high states ~6× (measured overstatement 5.3×). `max` and event *counts* are unbiased; percentiles are not | ~~Restart revision.~~ **Confirm on `anon=` first, then restart only if `anon` is the thing that is high.** Single-bin spikes to 99% that recover next window are normal and self-healing. **Only count bins with `n >= 150` samples** — low-n P99 is outlier-sensitive and can misread late-arriving log data as a plateau (2026-04-17-evening lesson). Re-query on the next tick before acting. (April logs repeatedly flagged that the n≥150 gate was unreachable under 15 pinned replicas; moot since pinning was retired 2026-07-17 — replica counts now track load, and memory pressure is no longer the primary failure mode.) |
 
 ## Intervention thresholds
 

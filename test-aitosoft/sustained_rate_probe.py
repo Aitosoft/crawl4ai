@@ -167,7 +167,37 @@ async def run_probe(args: argparse.Namespace, token: str) -> Dict[str, Any]:
     print(f"  fanout            {args.fanout} request(s) per arrival")
     print()
 
-    limits = httpx.Limits(max_connections=args.rate_per_min * 4 + 20)
+    # Aitosoft 2026-08-14: the connection-count arm. The ACA HTTP scaler's input
+    # is undocumented; an ACA maintainer states it counts "active connections as
+    # well as requests" (microsoft/azure-container-apps#536), and connection
+    # count is the only observable of the right magnitude to explain a fleet of
+    # ~12 replicas on 0.3 req/s. `--no-keepalive` sets max_keepalive_connections
+    # to 0, so httpx closes each connection after its response and every request
+    # opens a fresh one. Everything else -- arrival rate, fanout, render time,
+    # payload -- is held identical, which is exactly what the 2026-08-08 A/B
+    # failed to do: its `--fanout 4` arm varied burstiness and connection count
+    # together (see tasks/crawl-cost-is-idle-replicas-not-slow-renders.md §3).
+    # THE TRAP THAT COST THIS EXPERIMENT ITS FIRST RUN, 2026-08-14: httpx's
+    # default `keepalive_expiry` is **5.0 s** (verified by executing
+    # `httpx.Limits().keepalive_expiry` on httpx 0.28.1, not by reading docs).
+    # At 19 req/min with fanout 4 the gap between arrivals is **12.63 s**, so
+    # every pooled connection expires before the next tick and the "pooled" arm
+    # silently becomes a second copy of the no-keepalive arm. It climbed to 6
+    # replicas and was recorded as a control until the number looked wrong.
+    #
+    # This is the same defect we are investigating in MAS's client: undici's
+    # ~4 s keepAliveTimeout against ~7 pages per company spread over time. A
+    # pool that expires between uses is not a pool. **Set the expiry explicitly
+    # in both arms** so the only difference is the one under test.
+    max_conns = int(args.rate_per_min * 4 + 20)
+    if args.no_keepalive:
+        limits = httpx.Limits(max_connections=max_conns, max_keepalive_connections=0)
+    else:
+        limits = httpx.Limits(
+            max_connections=max_conns,
+            max_keepalive_connections=max_conns,
+            keepalive_expiry=args.keepalive_expiry,
+        )
     started_utc = datetime.now(timezone.utc).isoformat()
     t_origin = time.monotonic()
     records: List[Dict[str, Any]] = []
@@ -309,6 +339,27 @@ def main() -> int:
         help=f"target per-render wall time. Default {MAS_P50_RENDER_S} (MAS p50).",
     )
     p.add_argument("--payload-kb", type=int, default=8)
+    p.add_argument(
+        "--keepalive-expiry",
+        type=float,
+        default=5.0,
+        help=(
+            "seconds an idle pooled connection is kept. Default 5.0 is HTTPX'S OWN "
+            "DEFAULT, which is SHORTER than the arrival gap at any rate below "
+            "~19/min with fanout 4 -- so the default silently disables pooling. "
+            "Pass a value above the arrival gap (e.g. 300) for a real pooled arm."
+        ),
+    )
+    p.add_argument(
+        "--no-keepalive",
+        action="store_true",
+        help=(
+            "close every connection after its response (max_keepalive_connections=0). "
+            "This is the B arm of the connection-count experiment: run it against an "
+            "otherwise identical pooled A arm to test whether the ACA scaler's input "
+            "is connections rather than request rate."
+        ),
+    )
     p.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     p.add_argument("--timeout-s", type=float, default=180.0)
     p.add_argument("--outdir", default=str(Path(__file__).resolve().parent))

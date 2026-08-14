@@ -1,10 +1,74 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-09 (third update that day), after **implementing item 10 and closing
+**Updated:** 2026-08-10, after reading MAS's **overnight sweep** — the largest workload
+either repo has run, by 5×, and the first that lasted long enough to reach a steady state.
+It produced one new file (item 11) and refuted three things this index asserted.
+
+**Where this leaves us: nothing open is gating, production is current, and nothing
+should be deployed until the sweep ends.**
+
+> ## ⚡ 2026-08-14, read this first: the scale trigger went 6 → 12 and the fleet is now 2
+>
+> **`tasks/done/trigger-12-readout-2026-08-14.md`** is the measurement. Live:
+> revision `--0000042`, trigger **12**, `maxReplicas` **20**, `minReplicas` 0,
+> image `0.9.2-desc-cap` (unchanged). MAS ran a bounded 30-minute sweep on it
+> (`tmp/mas-repo-messages/45-…`) and resumed to Sunday. **Decision: continue,
+> deploy nothing.**
+>
+> - Fleet **~12 → 2**, slot utilisation **7.0 % → 54 %**, cost **~€89 → ~€15/day**.
+>   p50 +7 %, **p99 −28 %**, 0 OOM, 0 render defects.
+> - **Browser launches per request fell 2.8× and pool hit rate went 26.6 % → 60.5 %.**
+>   A small fleet is *more* efficient per request — the "over-provisioning
+>   manufactures its own load" loop running backwards.
+> - **Three documents were wrong in ways that would have caused wrong actions,
+>   all fixed 2026-08-14:** the cost file's abort rule named `--max-replicas 20`,
+>   which was already the live value — a no-op that reads as a successful revert
+>   at 03:00; CLAUDE.md called `deploy/docker/utils.py` "unchanged" when it is
+>   **+74/−1** and holds the memory guard's own metric; item 11's headroom
+>   argument does not survive at 2 replicas (peak `anon` **84.35 %**, 0.65 points
+>   under the threshold) — **option (a) must not ship alone any more.**
+> - **The fleet is now weakly elastic.** One scale-up event in 30 minutes; a
+>   synthetic arm at 1.44× MAS's rate held **1 replica for 12 minutes** through 38
+>   rejections. Their connection churn is what still moves it — so **the
+>   client-side connection fix we were contemplating asking MAS for would remove
+>   our last scale-up signal.** Those two levers fight; neither may move alone.
+> - **Split every 429 by token before reading anything into it.** Tonight: 31
+>   memory-guard, 7 queue-full, 10 total RenderGate. MAS's independent count
+>   agrees to the request. A combined 429 rate is not a threshold and our own
+>   stop-trigger was unevaluable — corrected in `46-…` §1.
+
+## The overnight sweep, 2026-08-09 14:19 → still running
+
+MAS: **1,471 companies in 15.2 h**, 1,366 clean, 59 blocked, ~1.68 companies/min, with
+~15,100 to go (≈6–7 more days). Ours: **10,537 `/crawl`** → 9,981 × 200 (94.7 %),
+**434 × 429** (4.1 %), 118 × 500 (1.1 %), **0 × 504**. p50 5.1 s / p90 7.53 s / p99 30.9 s.
+True concurrency **1.3** on max **20 replicas of 45**. **0 OOM kills, 0 render defects,
+5 collapse recoveries, `origin_blocked` flat at 5/1/5/2/2 per 3 h** — no IP-reputation
+decay, which is the standing stop-rule, and MAS's independent per-hour count agrees.
+The `desc` cap holds: largest response **6.9 MB** against the 232 MB that lost
+`www.thermokon.fi`.
+
+**The 429s are the story, and they are not capacity.** RenderGate rejected **25**; the
+other ~409 are the pool's **memory guard**, firing on a reading ~14 points too high.
+Item 11 is the file. **Three things this index or CLAUDE.md said that it refutes:**
+
+- **"Nothing in the memory family needs building"** — true for four workloads, false
+  for the fifth. The parked `replica-memory-baseline-unexplained.md` row predicted this
+  exactly and its un-park condition has fired.
+- **"A cold-start 429 is structural, ~one per segment"** (CLAUDE.md) — described only
+  the RenderGate population. There are two, with opposite fixes. **Split a 429 count
+  before reading anything into it.**
+- **Correction #3's admits-per-replica driver** (below) — refuted by its own re-open
+  criterion firing. Overnight ran **40 admits/replica against batch 1's 97**, with
+  *higher* memory. It also called the mechanism right a day early; read it with item 11.
+
+**A fourth correction is mine, from the same morning:** I recommended `max_browsers: 6 → 4`
+to Tero before reading `config.yml:171-177`, which argues against it in terms. The guard
+fires on a percentage, not a count — the refusal log reads `resident=4/6`.
+
+**Previously:** 2026-08-09 (third update that day), after **implementing item 10 and closing
 items 6 and the parked `base-config` file without code**. Read "Corrections to the record,
 2026-08-09" before picking anything up.
-
-**Where this leaves us: nothing open is gating, and production is current.**
 
 - **Item 10 SHIPPED AND DEPLOYED** — `0.9.2-desc-cap`, revision `--0000040`,
   **2026-08-09 14:31 UTC**. `MEDIA_DESCRIPTION_MAX_CHARS = 200` + upstream's own
@@ -309,7 +373,12 @@ What that run settled:
 
 **The capacity and memory work is done and proven.** The cap, the shed-before-refuse
 guard and `permanent_unused_ttl_sec: 120` between them took memory refusals from
-36 to 0. Nothing in the memory family needs building.
+36 to 0. ~~Nothing in the memory family needs building.~~ **Superseded 2026-08-10:**
+that sentence was true of every workload up to batch 1 and is false of the
+overnight sweep, which produced **420 memory refusals** — on a reading ~14 points
+too high, at a true `anon` of 68.6 %. See
+`tasks/memory-guard-charges-reclaimable-page-cache.md`. The *capacity* half of
+this claim still stands untouched.
 
 What that run *found*:
 
@@ -457,6 +526,21 @@ forward only, so MAS's first segment is the first thing it can describe.
 
 ## The open items, in order
 
+> **SUPERSEDED 2026-08-14 — item 12 is gating and it is about money.** The
+> paragraph below said "nothing here is gating" on the strength of a **€0 cash
+> cost** that turned out to be an artefact of where we looked. Tero's usage
+> export (`tmp/azure-costs/`) shows Azure Container Apps at **€398.89 for one
+> sweep — 94.6 % of all Azure spend.** (An earlier version of this note said
+> "202× the €1.97 the LLMs cost". **Wrong, and withdrawn** — €1.97 is the Azure
+> `Foundry Models` line only and MAS's models run off-Azure at
+> **$30–36/day**. The real ratio is **~2.4×**. Same error MAS made in `42-…`,
+> made independently here the same day: a total read off one invoice that did
+> not contain the whole population.) The Cost Management API returns empty for
+> this
+> subscription; **sponsorship usage does not flow there, so absence of records
+> is not absence of cost.** Every "not worth touching, it is €0" recommendation
+> in this file rested on that and must be re-read.
+
 **Nothing here is gating, and nothing is waiting on a deploy — the `desc` cap
 went out 2026-08-09 14:31 UTC.** Items 10, 6, 9 and the parked `base-config`
 file all closed on 2026-08-08/09. What remains below is item 3 (the
@@ -482,12 +566,15 @@ an escaped exception. Details in `AITOSOFT_CHANGES.md` 2026-08-02.
 
 | # | Task | Size | What to know |
 |---|------|------|--------------|
+| **12** | **`crawl-cost-is-idle-replicas-not-slow-renders.md`** | **S code / L judgement** | **NEW 2026-08-14, gating, and the only item on this list that is about money.** MAS's message 42 claimed our renders average **81 s** against an 80 s cap and that this is 95 % of their bill. **The cost is right and confirmed against the invoice; the diagnosis is wrong.** Mean render is **5.39 s** (93,076 requests) and exactly **4** landed in the 75–85 s band — they put *provisioned capacity* into Little's Law where *occupancy* belongs. Measured occupancy **1.639**, and 1.639/0.3042 = **5.388 s**, the measured mean to three decimals. **The money is that we hold ~23.6 render slots to do 1.6 renders of work — 7.0 % utilisation, identical on every day of the sweep.** Our Log Analytics replica accounting predicts the invoice to **2.1 %** (1,262 vs 1,235 replica-hours), so config changes can be priced before they are made. **Their own remedy (`maxReplicas` 45 → 20, done 2026-08-14) saves €0** — peak was 19. **Two things this kills:** raising `render_capacity` (newly measured **~2.4 CPU cores per in-flight render, ~12 CPU-s/render**, so a replica at 2/2 is already oversubscribed 2.4×; and the scaler never observes render occupancy — replicas went 38 → 5 from the *trigger* alone with capacity fixed at 2), and the 2026-07-17 benchmark that justified capacity 2 (`bench_capacity.py` **was never committed and is not in `git log --all`**; the memo says "matching your suggested number" — the 2 came from MAS). **The mechanism is fitted, not proven:** every request-rate model is dead by 5–11×, and connection count is the only survivor of the right magnitude. **`ConnectionId` is a TCP connection, not a per-request id** — 5,030 connections carried 2+ requests and one carried 17; key on `(EnvoyPodName, ConnectionId)` or it merges across the 2 Envoy pods. **CLAUDE.md's "the driver is burst shape" is confounded** — the 2026-08-08 `--fanout 4` arm varied burstiness and connections together. Also fixed here: `deploy-image.sh` pins `ACA_MAX_REPLICAS=45` against a live 20 and hard-fails **after** the image lands |
 | ~~9~~ | ~~`autoscaler-ratchets-to-the-cap.md`~~ | M | **CLOSED 2026-08-09, `tasks/done/`. Shipped 2026-08-08 and the acceptance PASSED TWICE** — segment 5 (318 companies at `--concurrency 4`) peaked at **9 replicas of 45**, batch 1 (200 companies at 5) at **10 of 45**, against segment 3's 30 replicas for a ~1.2-concurrency load. No revert criterion met. **Do not re-run the acceptance experiment.** Trigger 2 → 6; `deploy-image.sh` drift check replaces the category-error invariant (it would have hard-failed every future deploy *after* the image landed); `batch-scale.sh` no longer silently reverts `maxReplicas` 45 → 30. **Five things in the original file did not survive**, and the sharpest is that a *controlled* run refuted the headline: uniform traffic at segment 3's exact arrival rate produced **1 replica and zero scale-up events**, so the scaler is correct on smooth load and the defect is specific to MAS's traffic *shape*. Also: "ratchet" is refuted (segment 2 ran longer and peaked lower, and both earlier runs scaled *down* mid-run); option B does not exist (no stabilization-window surface in ACA at all); the cost was **10× low, not high** (€3.00/run at list, €0 cash — Sponsored subscription); and the cost/429 trade is largely illusory because the ingress is **round-robin** and the 429 window is cold start, where there is 1 replica regardless. ~~**The acceptance measurement is MAS's next run**~~ — it ran, twice, and passed; criteria were pre-registered and none fired. **`raw://` is now the load instrument** and should be reached for before any live host |
 | ~~1~~ | ~~`consent-scripts-delete-the-page.md`~~ | M | **DONE and DEPLOYED 2026-08-06** (`0.9.2-consent-guard`). `tasks/done/`. The diagnosis reproduced exactly; three things about the *fix* changed, and the first is the one to carry: dropping the 20 generic selectors would have deleted the measurement step 5 branches on, so they now **observe instead of removing** and log `chars`/`pagechars`. |
 | ~~2~~ | ~~`total-loss-is-permanent-not-transient.md`~~ | S | **DONE and DEPLOYED 2026-08-06** (`0.9.2-consent-guard`). `tasks/done/`. Keyed on the **capture shape** (no `<body>`), not the reason string — one test covers both production signatures, which two reason strings could not. Nothing pinned the old 500, so it was a bug fix and not a contract change. |
 | 3 | `fixture-origin-bypasses-the-pinning-proxy.md` | S | `set_egress_proxy()` has one caller, `server.py:183`, so `ProductionPath` never starts the proxy and **all 67 fixture tests run on a network path production does not use**. A dead host is 134 s direct vs 30 s through the proxy — a test without it measures the wrong number by 4×. ~12 lines; expect some tests to change behaviour, and treat that as the payoff. The count moved 54 → 66 with the `/consent/*` routes and is **67** as of 2026-08-09. |
 | ~~10~~ | ~~`media-desc-duplicates-the-page-per-image.md`~~ | S | **DONE and DEPLOYED 2026-08-09 14:31 UTC** (`0.9.2-desc-cap`, revision `--0000040`; Tier 1 4/4 pre-deploy, prod smoke green, `caverna.fi` byte-identical across the deploy). `MEDIA_DESCRIPTION_MAX_CHARS = 200` + upstream's own `truncate()` helper (`utils.py:3004`) in `find_closest_parent_with_useful_text`, `tasks/done/`. Measured: `media` **231,708,619 → 538,747 B (430×)**, `cleaned_html` and markdown **byte-identical by md5**, all **1,160** entries kept, offline suite **312 green**. **The diagnosis survived to the byte; eight peripheral things did not**, and three are worth carrying: the walk **never reaches `<html>`** in 78 real captures (lxml leaves `html.text` `None`); the pathological population was undercounted (**19 of 78** captures — 12 jpond *plus 7 accountor* — not 12 of 68); and "the cap is faster" was a single timing inside its own noise — `scrap()` gains ~8 %, **the 330× is `json.dumps` (0.655 s → 0.002 s)**. Also **`grumblo.com` is confirmed the same mechanism**, which the file listed as its largest uncertainty: one plain GET shows 272 images carrying **1,524,174 chars of `desc`, 88 % of its media payload**. **Do not read this as "response size is now bounded"** — the cap bounds `desc` only; `alt` is copied per variant, and **`media.tables` multiplies cell text by an unvalidated `colspan`** (a 4,624-byte page reaches 4,504,226 B of media; `colspan="2000000"` costs +91 MB RSS from 905 bytes of HTML). Neither is built; both need pathological markup and neither has ever been seen in production. That is what turns §3c from *unnecessary* into *parked* |
 | ~~6~~ | ~~`inference-tier-500s-are-not-retryable.md`~~ | S | **CLOSED UNFIXED 2026-08-09, `tasks/done/`. Do not re-open without a page MAS can show has never succeeded.** The measurement was sound — 89 % of batch 1's 500s, 84 % of 14 days' `render_error` — but the *fix* is refuted by the only corpus that could refute it: `www.ktth.fi` returned **14,542 chars on 2026-04-17**, and the `laatutrio.fi` apex paths **21,234 and 14,564 chars on 2026-08-08**, the day this file called them deterministic. Marking them permanently dead converts a recoverable miss into **silent permanent loss on live sites** — the exact direction the taxonomy exists to prevent. MAS asked us not to build it and priced the cost as theirs and small (~1.5 % of a batch's wall clock). **PDFs are settled too:** MAS removes them at dispatch, and their April corpus shows PDF text extraction is a **regression, not a limitation** — though *what* produced that text is **not established** and their attribution to us is inference. **Four findings were rehomed, not lost:** the `browser_manager.py` channel downgrade + the CI gap (CLAUDE.md row, TESTING.md, two test comments), `response_headers` is the first redirect hop with **no final-hop field** (CLAUDE.md row beside `redirected_status_code`), `unrenderable_content` has fired **zero times ever** (the corrected download row + `aitosoft_failure_class.py`), and the untrusted-reachable `PDFContentScrapingStrategy` (`file-upstream-prs.md`). The fixture work its §7 argued for **survives on its own** — it is test work and never needed the classification change |
+| 11 | `memory-guard-charges-reclaimable-page-cache.md` | S code / M review | **New 2026-08-10, from MAS's overnight sweep. Not gating; explicitly DO NOT ship mid-sweep** (MAS's call, and it is the right one — upside ~1.5 % of their capacity against a revision transition into a run that took a day to stabilise). The memory guard fired **420** times at a median reading of **88.7 %** while true `anon` was **68.6 %**, with **583 MB of active page cache** charged into the reading; only **4 of 420** had `anon` ≥85 %. Zero OOM kills. This is **~409 of the 434 × 429** the sweep saw — RenderGate rejected only 25, at a true concurrency of **1.3**. **Two things it kills on arrival:** `max_browsers: 6 → 4` is *not* the fix (`config.yml:171-177` already says so, and the refusal log reads `resident=4/6` — under the cap, refused on percentage alone), and the 2026-08-09 correction #3's **admits-per-replica driver is refuted** (overnight median 40/replica vs batch 1's 97, with *higher* memory). Cause is the cohort: MAS re-visits already-scraped companies, so the diet is real resolving content-heavy pages, and **the pool keys per company** — 1,127 distinct browser signatures for ~1,471 companies, ~9.3 admits each. Expect it to persist for the remaining ~15,100 |
+| 12 | **Put the capacity gate in the 429 envelope** — no file yet, scope in `tasks/done/trigger-12-readout-2026-08-14.md` §8.2 | S | **New 2026-08-14, and it is MAS's one explicit ask** (`45-…` §3). Both our 429 mechanisms — RenderGate and the pool's memory guard — emit a byte-identical envelope: `failure_class: "capacity"`, `Retry-After: 5`, differing only in the free text after `Replica at render capacity:`. So **MAS cannot hold a threshold on either gate**, and the stop-trigger we handed them for an unattended run was unevaluable; taking it literally would have aborted a healthy run at minute two. **Ship an additive `capacity_gate` field, NOT a new `failure_class` value** — both need identical plumbing, but a new enum value additionally breaks the two places pinning `capacity` (`test_failure_classification.py:317`, `AITOSOFT_CHANGES.md:1559`) and splits MAS's own 1,953-429 baseline mid-programme, while a sibling field keeps `capacity` as the stable total. `gate` on `RenderCapacityExceeded` (`aitosoft_admission.py:71-74`) → `:140`, `:160`, `crawler_pool.py:431,466` → `_capacity_429` (`api.py:825-829`) + stream twin (`:1278-1282`) → emitted in `server.py:540-547`, always present so absence means "old build". ~30 production lines, ~75 test, ~35 doc. **`DEPLOYMENT_INFO.md:484` is actively wrong today** ("429 means the render slots are full" — ~99 % are the memory guard) and belongs in the same change. **After the sweep.** A 1-line `X-Capacity-Gate` header is the true minimum and needs no `server.py` change, but MAS asked for the envelope |
 | 8 | **Two `failure_class` log holes + a `render_mode` mislabel** — no file yet | XS | **New, from segment 2.** (a) `render_mode: "static"` failed fetches log at INFO with **no `failure_class` field** (`aitosoft_static_mode.py:301,307`) while `_static_error_result` defaults the class to `origin_unreachable` (`:164-179`) — so **no `failure_class` query can ever count them**, and the hole opens exactly when a host has already misbehaved enough for MAS to pivot it to static. ~6 lines mirroring `api.py:1033-1039`; no double-count risk (static returns at `api.py:770`, never traversing the full-mode loop). (b) `api.py:1198`'s `failed_result(...)` omits `render_mode`, which defaults to `"full"` (`aitosoft_failure_class.py:507`) — and because the seed check (`:760`) precedes the static short-circuit (`:764`), a **static** request to a dead domain is reported to MAS as `"full"`. One word, in a field they parse |
 | 7 | **The patchright tier retries classes already known permanent** — no file yet | S | **Re-justify it before starting: item 6 is closed, and item 7's saving can no longer be counted against it.** `render_error` is **not** in `NON_RETRYABLE_CLASSES` (`aitosoft_failure_class.py:129-133`), so item 7 as written would have saved **zero** of batch 1's 18 events — the two were listed as independent and were coupled. What remains is the `render_defect` leg alone, whose production population is small. The cost model, if it is worth having: one URL in this class measured `admits=8 fetches=32 completes=16 patchright=8`, i.e. 4 wire attempts × ~29.5 s = **32 navigations for one URL**. Original text follows. **New, from segment 2.** `_is_blocked` (`aitosoft_patchright_fallback.py:163`) gates the retry on the block-marker **string**, not on classified permanence, so `render_defect` — which is in `NON_RETRYABLE_CLASSES` — still gets an internal retry leg. That leg then dies on upstream's `wait_for_selector("body", timeout=30000)` (`async_crawler_strategy.py:898`), i.e. it waits 30 s for **exactly the element whose absence defined the failure** and can never succeed. ~a few lines; saves 2 navigations + ~60 s per URL. Fold in the fragment-strip for `CONSENT NAVIGATION` (§2 of the same file). Also open and *not* answered: **why `delotec.fi` has no `<body>` at 2015 bytes** — two engines agree, it is not our JS, and MAS holds the bytes |
 | 4 | `guard-corpus-is-not-in-the-repo.md` | S | **After the sweep.** Real and verified — `test-aitosoft/artifacts/*` is gitignored, three tests fail on a fresh clone at `assert checked >= 30`. But its load-bearing sentence is **wrong**: "our only pre-deploy gate is the offline suite" is false (see corrections below), and it fails *loud*, in the safe direction. If ever done: 4–6 files into `artifacts/keep/`, the mechanism `.gitignore:14-17` already provides. Do **not** open its four-option sizing table before the sweep. **Item 1 raised its value slightly**: the 7-host corpus is load-bearing for a claim about consent selectors, and 2 of 2 CMP measurements is thin — though the `CONSENT DECLINED` counter now answers that from production instead. |
@@ -587,11 +674,11 @@ delta is the attribution.
 
 | Task | Why parked | What would un-park it |
 |---|---|---|
-| ~~`replica-memory-baseline-unexplained.md`~~ | **CLOSED and moved to `tasks/done/` 2026-08-06.** It had been marked closed in its own header since 2026-08-05 but was still sitting in the open directory, which is the same invitation the row warned about. Now **four** consecutive workloads with no symptom (p95 39.8 % → 29.9 % → 43.6 %, peak 63.8 %, against an 85 % guard; zero memory refusals throughout) | Nothing. If memory ever becomes a symptom again, that is a new file with new data |
-| `cleaned-html-collapse-guard.md` — repair 1 (`unclosed-script`) | Purely prospective and **structurally uncountable**: zero production instances have ever been attributed to it, and the shape is invisible by construction. Its value is upstream PR quality, not our data | The segment-1 `COLLAPSE RECOVERED` / `RENDER DEFECT` split showing the shape actually occurs |
-| `static-fallback-within-fence.md` | 0 × 504 in two workloads now; the hang it was sized against was fixed in `done/render-retry-unbounded-hang.md` | A real 504 population in a sweep |
-| `blocked-host-retry-economy.md` | Cost optimisation, not a defect — and the 2026-08-01 run saw **0 blocks in 336 renders** | A sweep showing blocked-host cost actually hurts |
-| `residential-egress-retry-path.md` | Population is floor 6 / ceiling 29, costs money, and 0 blocks were seen in the only recent traffic | A real count, then Tero |
+| ~~`replica-memory-baseline-unexplained.md`~~ | **CLOSED and moved to `tasks/done/` 2026-08-06.** It had been marked closed in its own header since 2026-08-05 but was still sitting in the open directory, which is the same invitation the row warned about. Now **four** consecutive workloads with no symptom (p95 39.8 % → 29.9 % → 43.6 %, peak 63.8 %, against an 85 % guard; zero memory refusals throughout) | **Its own un-park condition fired, 2026-08-10, exactly as written.** The fifth workload — MAS's overnight sweep — produced **420 memory refusals**. It is a new file with new data, as this row required: `memory-guard-charges-reclaimable-page-cache.md`. **Do not re-open this file** — its unresolved question (the browsers→memory slope) is still controller-contaminated and the new file does not depend on it |
+| `cleaned-html-collapse-guard.md` — repair 1 (`unclosed-script`) | Purely prospective and **structurally uncountable**: zero production instances have ever been attributed to it, and the shape is invisible by construction. Its value is upstream PR quality, not our data. **Still parked, and the overnight sweep strengthens that** — see next column | The split has now run at real scale and **says stay parked**: 10,537 requests produced **5 `COLLAPSE RECOVERED` and 0 `RENDER DEFECT`**. Recovery is firing and succeeding; the **unrecoverable** shapes (`unclosed-script`, `unterminated-comment`) — which are exactly what repair 1 exists for — produced **zero** instances in the largest workload either repo has run. Un-park needs a non-zero `RENDER DEFECT … recovered 0 chars` population, not a non-zero recovery count |
+| `static-fallback-within-fence.md` | **0 × 504 in five workloads now**, the last being 10,537 requests overnight at p99 30.9 s against a 180 s fence and a 240 s ingress limit; the hang it was sized against was fixed in `done/render-retry-unbounded-hang.md` | A real 504 population in a sweep. The sweep has run — max request was **151.3 s**, still ~90 s inside the ingress limit — so this is now the best-evidenced park on the list |
+| `blocked-host-retry-economy.md` | Cost optimisation, not a defect — and the 2026-08-01 run saw **0 blocks in 336 renders**. **The sweep it was waiting for has now run and the answer is still "not yet"** | Overnight 2026-08-09/10: **15 `origin_blocked` in 10,537 requests (0.14 %)**, flat across the night (5/1/5/2/2 per 3 h). MAS counts **59 blocked sites of 1,471 companies (4 %)** — theirs is the site-level instrument, ours is event-level; they are not the same number and neither is climbing. **One figure needs care before anyone sizes this:** there were **342 `Anti-bot retry` lines**, which is *not* 342 block retries — upstream retries on **any** exception, so that token over-counts this task's population by an unknown factor. Size it from `failure_class=origin_blocked`, never from the retry token |
+| `residential-egress-retry-path.md` | Population is floor 6 / ceiling 29, costs money, and 0 blocks were seen in the only recent traffic. **A real count now exists and it argues against spending** | Overnight: **15 `origin_blocked` in 10,537 requests**, flat, no reputation decay across 1,471 companies from one shared SNAT address — which is the risk this file was hedging. MAS's 4 % site-level block rate is the number to re-check per batch; **a rate that climbs batch over batch is the trigger**, not the absolute value. Still: a real count, then Tero |
 | `static-mode-tls-impersonation.md` | Hardens a path nothing currently falls back to | `residential-egress-retry-path.md` |
 | ~~`base-config-boolean-defaults-never-applied.md`~~ | **CLOSED 2026-08-09, `tasks/done/`.** Its un-park trigger is moot: `CrawlerRunConfig.set_defaults()` sets booleans today *and* honours an explicit client `false`, which the file's proposed merge-rule fix explicitly could not. The `config.yml` line is commented out with the reason inline — left in place it was a landmine, since fixing the merge rule would have turned user simulation on for every request | Someone wanting user simulation on, which is a **measurement**, not a merge-rule change |
 | `preflight-batch-endpoint.md` | **MAS said do not build speculatively.** Their words | MAS asks |
@@ -615,8 +702,12 @@ only path to more memory is converting the environment to workload profiles,
 which is an infrastructure migration with a different billing model (dedicated
 profiles bill continuously and would end `minReplicas: 0` economics) — and at
 2× cost per replica-second with `render_capacity` fixed at 2 by the vCPU count,
-**cost per fetch would double for zero throughput gain**. Not approved, and no
-longer needed: memory refusals are at zero.
+**cost per fetch would double for zero throughput gain**. Not approved, and ~~no
+longer needed: memory refusals are at zero~~ — **refusals are no longer zero
+(420 overnight, 2026-08-09/10), and this does not revive the resize.** The
+refusals fire at a true `anon` of 68.6 % on a reading of 88.7 %, so the binding
+constraint is the *metric*, not the 4 GiB. More memory would paper over a
+mis-measurement at 2× the cost per replica-second.
 
 **`render_capacity` stays 2** — fixed by 2 vCPU. **The instruction that used to
 follow this line ("if it ever moves, change the ACA scale rule first") is
@@ -804,6 +895,20 @@ any code was written rather than during implementation.
    guard's own `Creating new browser … mem=` reading crosses 85, or an OOM appears** — and
    do **not** make the guard fire on pool-hit paths, which would 429 requests that need no
    allocation.
+   > **FIRED 2026-08-10. The reading crossed 85 — 420 times in 15 hours; still no OOM.**
+   > `tasks/memory-guard-charges-reclaimable-page-cache.md`. This correction gets the
+   > credit and one demerit. **Right, a day early, about the mechanism:** its ~566 MB of
+   > active reclaimable file cache is the whole finding, and the overnight run measured
+   > **583 MB** independently — two instruments, same number. Its sampling-bias warning
+   > also stands and is why item 11 leans on refusal *counts*, not percentiles.
+   > **Wrong about the driver:** "admits per replica, i.e. our own scale-trigger change,
+   > not cohort" is refuted — overnight ran **40 admits/replica against batch 1's 97**
+   > with p50 memory 80 % against 47 %. A driver that moves the wrong way is not the
+   > driver. The cause is the **cohort's diet** (already-scraped companies resolve and
+   > carry real content; DNS refusals fell 4.2 % → 1.2 %) combined with **per-company
+   > pool keying** (1,127 signatures for ~1,471 companies). Note "cohort *size* cannot be
+   > the driver" was never contradicted — size and diet are different variables, and it
+   > is the second one that moved.
 4. **`ContainerAppHTTPLogs` has no `_CL` suffix.** The `_CL` name errors. It also retains
    ~5 days against the console table's longer window, so date-bound any query against it.
 5. **A naive `countif` on a log substring overcounts events.** `DNS: host does not resolve`
