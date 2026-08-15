@@ -1,6 +1,6 @@
 # The memory guard refuses browsers on cache it would never OOM on
 
-**Status:** open, not gating, **do not ship mid-sweep** (see "Timing"), and
+**Status:** open, **gating for the memory family** (its own OOM re-open trigger fired 2026-08-15), **do not ship mid-sweep** (see "Timing"), and
 **do not ship option (a) alone — read the last section first** (2026-08-14: the
 fleet is now 2 replicas and peak `anon` is 0.65 points under the threshold).
 **Size:** S in code, M in review — it is a change to a safety guard, and the
@@ -27,6 +27,61 @@ open a new browser.
 True concurrency across the whole run was **1.3** against a fleet ceiling of
 ~26 render slots. We were nowhere near busy. We were, by our own reading, nearly
 out of memory. Only one of those two things was true.
+
+---
+
+## ⛔ READ THIS BEFORE THE REST OF THE FILE (2026-08-15)
+
+**Everything below the line is preserved as written, but two of its load-bearing
+claims are now false and its recommended fix is now unsafe as stated.** The
+appendix sections at the end supersede the headline; this box exists because the
+file spent a day arguing against itself top-versus-bottom and a reader who stopped
+at "The finding" got the refuted version.
+
+**What survives:** the diagnosis. The guard's reading charges active file cache;
+refusals do not correspond to real memory pressure; `anon` at refusal time is
+nowhere near the limit. Confirmed twice more since, at 2 replicas and over 12 hours.
+
+**What is dead:**
+
+1. **"The reading is ~14 points too high"** — wrong *shape*, not just wrong size. A
+   fixed offset implies a correctable meter. Measured over ~6,000 samples across
+   11 h: the reading's **p25 82 %, p50 86.5 %, p75 90 %** against a threshold of
+   **85.0 %**. **The threshold is drawn through the middle of its own signal.** The
+   guard reads above its trip point ~58 % of every hour, all night, while `anon`
+   stays flat at p50 ~2,900 MB. So the refusal count is a **threshold-crossing
+   count on a signal centred on the threshold** — it swings tens of percent on a
+   ~1-point wobble and contains no information about memory. Both repos then read
+   trends into it (our "hourly climb 5.9 → 9.2", MAS's "68.7 vs the 40–63 band").
+   Same artefact, both times.
+2. **"Zero OOM kills, zero exit 137" / "Chasing an OOM that has not happened"** —
+   **an OOM happened.** 2026-08-15 04:30, `OOMKilled` exit 137 on two containers
+   plus 3 × `ContainerBackOff`. Self-recovered, **zero pages lost**. Critically it
+   fired at *ordinary* readings — `anon` 2,835–3,445 MB, `mem` 80.5–93.5 % in the
+   preceding 90 s — so **no sampled threshold predicts it.**
+3. **"~1.25 GB of genuine headroom"** — true at the median, false at the tail, and
+   the file already says so at the bottom. Real tail margin at 2 replicas is ~27 MB.
+
+**What this does to the fix — the design space is inverted:**
+
+- **Option (a), metric-only (read `anon`)** is now the *unsafe* one alone. It
+  raises the ceiling the pool may reach in a system that demonstrably dies without
+  warning at ordinary readings. **Do not ship it by itself.**
+- **Options (b) `max_browsers` 6→4 and (d) `idle_ttl_sec`** were rejected as
+  *rivals* to (a). They are the only options that bound the **allocation** rather
+  than re-scale the **meter**, which makes them the strongest candidates now.
+- **The option buried in "what I am least sure of"** — *refuse if
+  `anon + expected_browser_cost > limit × margin`* — is the only shape that
+  survives both the noise finding and the OOM. **Promote it into the design space.**
+- The real defect is not which number the guard reads. It is that **the threshold
+  sits where the signal lives.** Any fix that leaves the trip point inside the
+  working distribution reproduces the noise, whichever number it reads.
+
+**Prerequisite, still not done and now decision-blocking rather than plan-blocking:**
+`/sys/fs/cgroup/memory.swap.max` on a live replica — one `az containerapp exec`.
+
+Evidence: `tasks/done/trigger-12-readout-2026-08-14.md` §8b and the appendix
+sections at the end of this file.
 
 ---
 
@@ -251,8 +306,13 @@ this file is not an argument that something must be built.
   duration on this data**, and the honest resolution came from MAS's side, not
   ours. Recorded because "correlated with our last deploy" is exactly the shape
   that gets adopted as cause.
-- **Chasing an OOM that has not happened.** Zero in 15 hours at a *true* 69 %.
-  The margin is genuinely there.
+- ~~**Chasing an OOM that has not happened.** Zero in 15 hours at a *true* 69 %.
+  The margin is genuinely there.~~ ⛔ **FIRED 2026-08-15 04:30 — `OOMKilled`,
+  exit 137, two containers.** This bullet is the one I would most want a future
+  session to notice: it is filed under *things deliberately not worried about*, and
+  the thing happened. The reasoning was not careless — 15 hours of evidence at a
+  true 69 % is a fair basis — but it generalised a median to a tail. The margin was
+  there **at the median** and was ~27 MB at the tail.
 
 ---
 

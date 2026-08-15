@@ -268,9 +268,11 @@ parked deliberately, not waiting for a free session.
 
 ## Where we actually are
 
-**Shape:** 2 vCPU / 4 GiB, `minReplicas: 0`, `maxReplicas: 45` (raised from 30
-on 2026-08-08), ACA scale trigger `http-renders` **6** (raised from 2 on
-2026-08-08; ACA's own default is 10). **The trigger is NOT `render_capacity` and
+**Shape:** 2 vCPU / 4 GiB, `minReplicas: 0`, **`maxReplicas: 20`** (MAS lowered
+it from 45 on 2026-08-14; saves EUR 0, kept as tail protection), ACA scale trigger
+`http-renders` **12** (raised from 6 on 2026-08-14; from 2 on 2026-08-08; ACA's own
+default is 10). **In practice this pins the fleet at 2 replicas** on MAS's full
+load -- see the header block at the top of this file. **The trigger is NOT `render_capacity` and
 must never be pinned to it again** — different quantities, different units; see
 `tasks/done/autoscaler-ratchets-to-the-cap.md`. RenderGate still hard-caps renders at
 2/replica and that is the safety mechanism.

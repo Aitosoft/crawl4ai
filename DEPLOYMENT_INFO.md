@@ -32,11 +32,19 @@ window was the **scale trigger**. If the symptom
 is capacity, cost or replica count, roll back *that*, not the image:
 
 ```bash
-# Scale-trigger rollback (2026-08-08 change only). Cheap and reversible.
+# Scale-trigger rollback. Cheap and reversible. Creates a new revision:
+# every replica restarts and every in-flight render dies.
 az containerapp update --name crawl4ai-service --resource-group aitosoft-prod \
   --scale-rule-name http-renders --scale-rule-type http \
-  --scale-rule-http-concurrency 2
+  --scale-rule-http-concurrency 6
 ```
+
+> ⛔ **This command said `2` until 2026-08-15, and `2` is the runaway setting.**
+> At trigger 2 the metric is ~3× the replica count and the fleet ratchets to the
+> cap — measured 38 replicas, ~€89/day. Anyone reaching for a "revert" mid-incident
+> would have made the incident dramatically worse and paid for the privilege.
+> **The live trigger is 12; the last known-good previous value is 6.** There is no
+> circumstance in which 2 is the right answer.
 Then update `ACA_SCALE_TRIGGER` in `azure-deployment/deploy-image.sh` to match,
 or the **next deploy hard-fails its invariant check after the image has already
 been updated**.
@@ -307,10 +315,22 @@ rebuild, takes effect on the next KEDA poll):
 ```bash
 az containerapp update --name crawl4ai-service --resource-group aitosoft-prod \
   --scale-rule-name http-renders --scale-rule-type http \
-  --scale-rule-http-concurrency 2
+  --scale-rule-http-concurrency 6
 ```
-Then set `ACA_SCALE_TRIGGER` back to 2 in `azure-deployment/deploy-image.sh`,
+Then set `ACA_SCALE_TRIGGER` back to 6 in `azure-deployment/deploy-image.sh`,
 or the next deploy will fail its drift check.
+
+> ⛔ **This block said `2` in both places until 2026-08-15.** See the warning at the
+> top of this file: 2 is the runaway setting (38 replicas, ~€89/day), not a revert.
+> **Live is 12 since 2026-08-14T15:59:42Z (revision `--0000042`); previous
+> known-good is 6.**
+>
+> **And check the 429 split before reverting at all.** Two mechanisms emit 429 and
+> only one is capacity: `RenderGate REJECT` (real) vs `refusing new browser` (the
+> pool memory guard, benign). Overnight 2026-08-14/15 ran 1,147 × 429 of which
+> ~76 % were the memory guard, and MAS's terminal-outcome count shows the whole
+> 1,147 cost them **five captures** — their retry ladder absorbed 99.6 %. A 429
+> rate is not, by itself, a reason to touch the trigger.
 
 ### ⚠️ Never change the template while the fleet is large — measured 2026-08-08
 

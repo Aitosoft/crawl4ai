@@ -7,7 +7,20 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-08-09
+**Last Updated**: 2026-08-15
+
+> ⛔ **This section was a revision behind from 2026-08-14 to 2026-08-15 while
+> `CLAUDE.md` designated it authoritative for current state. Two documents, both
+> wrong, pointing at each other. Trust `az containerapp show` over both.**
+>
+> **LIVE 2026-08-15: revision `--0000042`, image `0.9.2-desc-cap` (unchanged).**
+> `--0000042` is a **scale-rule** change made 2026-08-14T15:59:42Z, not a new
+> build: ACA trigger `http-renders` 6 -> 12, `maxReplicas` 45 -> 20 (MAS's change),
+> `minReplicas` 0. Effect: fleet ~12 -> **2 replicas**, slot utilisation 7 % ->
+> ~54 %, cost ~EUR 89/day -> ~EUR 14.5/day, p50 +3.8 %, p99 -28 %. Validated over
+> an 11 h 38 m unattended run: 13,869 requests, 1 render defect, 0 collapse
+> recoveries, 0 wall-clock fences, and **one self-recovered `OOMKilled` at 04:30
+> that cost zero pages**. `tasks/done/trigger-12-readout-2026-08-14.md`.
 
 > **DEPLOYED 2026-08-09 14:31 UTC: `0.9.2-desc-cap` (revision `--0000040`).**
 > One page returned **232 MB four times** at HTTP 200 `success: true` with no log
