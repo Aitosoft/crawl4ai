@@ -310,11 +310,41 @@ whose value is `None` or `""`, and `max_retries` defaults to `0`.
    periodically, prefer primary sources, and **record every source's date** — an undated finding is
    unusable here.
 8. **Run a second-opinion pass before committing to a plan, and again before
-   calling it done.** A separate agent with a clean context, asked exactly three
+   calling it done.** A separate agent with a clean context, asked exactly five
    questions:
    - **What did we miss?**
    - **Is there a simpler solution?**
-   - **Do we already have something we could use?**
+   - **Do we already have something we could use** — in this repo, in our stored
+     corpus, or in something a past session already measured?
+   - **What is available online, and is it current?** (Not what was true six
+     months ago — this field moves.)
+   - **What is upstream doing about this right now?**
+
+   **The failure these questions exist to break, named properly, because it is
+   the loop this project actually gets stuck in:** we build a measurement, we
+   measure, **we do not know that we are not seeing the whole picture**, we draw
+   a conclusion, and we act on it. The measurement being wrong is not the
+   dangerous part — the dangerous part is that a wrong measurement looks exactly
+   like a right one from the inside, so the error is invisible until something
+   external contradicts it. Then the action generates new work, and the new work
+   generates new measurements, and the loop sustains itself while feeling
+   productive.
+
+   **The only reliable exits are external**: a fresh context that re-derives
+   instead of inheriting, a second instrument, the other repo's data, published
+   work, or upstream's issue tracker. **Every one of them is cheaper than the
+   loop.** On 2026-08-17 a single session had six of its own findings killed —
+   one of them a *false refutation of a correct claim*, produced by a Kusto
+   operator behaving differently than assumed — and separately discovered that
+   the cookie-consent problem we had been solving alone was long since settled
+   by the wider ecosystem, and that five defects we were carrying were already
+   fixed or in review upstream. **None of that was derivable from inside the
+   repo, and all of it was an afternoon's work.**
+
+   So: **count anything that matters twice, from two instruments, and treat a
+   disagreement as the finding.** State which table and column produced a
+   number and what would make it wrong. And be most suspicious precisely when a
+   measurement confirms what you expected — that is when nobody looks.
 
    These are the questions that break work loops, and none of them can be asked
    honestly by the session that wrote the plan. Question 3 has paid out
