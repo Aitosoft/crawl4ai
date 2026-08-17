@@ -19,7 +19,7 @@ files: >
     \.env\.example|
     CLAUDE\.md|
     AITOSOFT_.*\.md|
-    DEPLOYMENT_INFO\.md|
+    AZURE_OPERATIONS\.md|
     TESTING\.md|
     TEST_SITES_REGISTRY\.md|
     OVERNIGHT_PLAYBOOK\.md

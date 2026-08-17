@@ -30,7 +30,7 @@ $CRAWL4AI_API_TOKEN`, constant-time, fail-closed. Our old
 ### Documentation
 - `CLAUDE.md` - Claude Code guidance (entry point for new sessions)
 - `AITOSOFT_CHANGES.md` - Change tracking and current state (authoritative log)
-- `DEPLOYMENT_INFO.md` - Production deployment info (endpoint, token, provisioning reference)
+- `AZURE_OPERATIONS.md` - Production deployment info (endpoint, token, provisioning reference)
 - `AITOSOFT_FILES.md` - This file
 - `TESTING.md`, `TEST_SITES_REGISTRY.md`, `OVERNIGHT_PLAYBOOK.md`
 

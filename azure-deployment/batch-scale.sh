@@ -4,7 +4,7 @@
 # RETIRED as a routine pre-batch step (2026-07-17). Capacity is now managed
 # by the render-admission gate (aitosoft_admission.py, 429 + Retry-After) and
 # the `http-renders` ACA scale rule (a trigger, NOT render capacity) — replicas
-# scale with load automatically. See DEPLOYMENT_INFO.md "Scaling".
+# scale with load automatically. See AZURE_OPERATIONS.md "Scaling".
 #
 # Keep for emergencies: if KEDA misbehaves mid-batch (e.g. the 2026-04-14
 # outage where replica xs697 was SIGTERM'd during an active run), pinning

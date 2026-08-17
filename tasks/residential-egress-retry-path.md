@@ -179,7 +179,7 @@ shape to the pre-commit secret pattern in CLAUDE.md if it is distinguishable.
 
 Deploy note: setting a new env var means `az containerapp update --set-env-vars`,
 which is the operation that has broken MAS's token before. Read
-`DEPLOYMENT_INFO.md` and do it as its own change, never during an image deploy.
+`AZURE_OPERATIONS.md` and do it as its own change, never during an image deploy.
 
 ## Spend safety (do not skip — this is metered)
 

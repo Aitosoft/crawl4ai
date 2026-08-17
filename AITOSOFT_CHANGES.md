@@ -2937,7 +2937,7 @@ CrawlerRunConfig(
 
 **Files Created:**
 - `azure-deployment/deploy-aitosoft-prod.sh` - Production deployment script
-- `DEPLOYMENT_INFO.md` - Current production info, credentials, usage examples
+- `AZURE_OPERATIONS.md` - Current production info, credentials, usage examples
 
 **Infrastructure Used:**
 - `aitosoftacr` - Existing ACR (now has crawl4ai-service repository)

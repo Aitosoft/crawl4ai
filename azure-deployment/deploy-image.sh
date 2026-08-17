@@ -15,7 +15,7 @@
 # run from repo root or pass nothing else — the build context is the repo root.
 #
 # Full provisioning reference (scale rule, probes, env vars) lives in
-# DEPLOYMENT_INFO.md — this script assumes the app already exists.
+# AZURE_OPERATIONS.md — this script assumes the app already exists.
 
 set -euo pipefail
 
@@ -113,7 +113,7 @@ fi
 if [[ "$rule_trigger" != "$ACA_SCALE_TRIGGER" ]]; then
     echo "!! DRIFT: ACA http-renders rule=$rule_trigger but this repo expects $ACA_SCALE_TRIGGER." >&2
     echo "!! Someone changed the scale rule outside the repo, or ACA_SCALE_TRIGGER in this" >&2
-    echo "!! script is stale. Reconcile before running traffic -- see DEPLOYMENT_INFO.md" >&2
+    echo "!! script is stale. Reconcile before running traffic -- see AZURE_OPERATIONS.md" >&2
     echo "!! 'Scaling' and tasks/done/autoscaler-ratchets-to-the-cap.md." >&2
     echo "!! NOTHING HAS BEEN BUILT OR DEPLOYED -- this check now runs first." >&2
     exit 1

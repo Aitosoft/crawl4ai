@@ -177,7 +177,15 @@ crawler:
     # memory guard firing.
     max_browsers: 6
     evict_close_timeout_sec: 30           # bound on an evicted browser's close(), off-lock
-    idle_ttl_sec: 300                     # 30 min janitor cutoff
+    # 300 s = 5 MINUTES. This comment said "30 min janitor cutoff" until
+    # 2026-08-17 and was wrong by 6x — which mattered, because idle_ttl_sec was
+    # one of three candidate fixes for the memory guard and the argument for it
+    # ("we hold idle browsers for half an hour") was reasoning from a value that
+    # does not exist. crawler_pool.py:641 uses this as cold_ttl = 300 s and
+    # hot_ttl = 600 s. Measured on the final sweep at 2 replicas: 56 TTL closes
+    # against 6,406 pressure evictions, i.e. the TTL path is effectively dead —
+    # pressure eviction reclaims every browser long before it fires.
+    idle_ttl_sec: 300                     # cold browsers: 5 min; hot: 10 min
     stuck_busy_timeout_sec: 600           # Aitosoft: janitor force-closes browsers busy longer than this (leak safety net)
     # Aitosoft 2026-08-02: how long the boot ("permanent") browser may sit
     # unused before the janitor closes it. Was the code default of 600 s;
