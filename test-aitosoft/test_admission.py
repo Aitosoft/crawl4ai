@@ -216,8 +216,35 @@ def test_handle_crawl_request_maps_to_429():
                 )
             assert exc_info.value.status_code == 429
             assert "Retry-After" in (exc_info.value.headers or {})
+            # The other real raise site. No memory reading exists here and its
+            # absence is the signal: this is the only 429 that means "full".
+            assert exc_info.value._envelope_extra == {"capacity_gate": "render_slots"}
         finally:
             adm.set_render_gate(None)
+
+    run(main())
+
+
+def test_the_wait_timeout_rejection_is_also_labelled_render_slots():
+    """`RenderGate REJECT` has TWO raise sites and the test above only covers
+    one of them.
+
+    Queue-full (`max_queue` reached) and wait-timeout (`max_wait_s` elapsed) are
+    separate `raise` statements, and in production BOTH are live — the sweep's
+    613 trigger-12 rejections are a mix. A test that saturates with
+    `max_queue=0` can never reach the timeout branch, so deleting its `gate=`
+    kwarg would silently downgrade real render-slot 429s to "unspecified" with
+    the whole suite green. That is the shape this repo keeps getting caught by:
+    a test one layer above the line it is nominally covering.
+    """
+
+    async def main():
+        gate = RenderGate(capacity=1, max_queue=1, max_wait_s=0.05)
+        await gate.acquire()  # saturate, and leave a queue slot open
+        with pytest.raises(RenderCapacityExceeded) as exc_info:
+            await gate.acquire()  # must WAIT, then time out
+        assert "no render slot freed" in str(exc_info.value), "wrong branch fired"
+        assert exc_info.value.envelope_fields() == {"capacity_gate": "render_slots"}
 
     run(main())
 
@@ -272,6 +299,17 @@ def test_memory_pressure_is_a_429_not_a_500(monkeypatch):
             ), "a full replica must never answer the status MAS retries"
             assert "Retry-After" in (exc_info.value.headers or {})
             assert "memory" in str(exc_info.value.detail).lower()
+            # Which gate refused — asserted at the REAL raise site, because
+            # test_mas_contract.py builds the exception itself and would pass
+            # happily if crawler_pool mislabelled this as render_slots. That
+            # mislabel is the expensive one: it would attribute the 94 %
+            # population to the 6 % one, i.e. break the single measurement the
+            # field exists to make.
+            assert exc_info.value._envelope_extra == {
+                "capacity_gate": "memory",
+                "memory_pct": 95.6,
+                "limit_pct": 85.0,
+            }
         finally:
             adm.set_render_gate(None)
 

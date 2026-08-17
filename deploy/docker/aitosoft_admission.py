@@ -57,6 +57,8 @@ import asyncio
 import logging
 from typing import Optional
 
+from aitosoft_failure_class import GATE_RENDER_SLOTS, GATE_UNSPECIFIED
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_RENDER_CAPACITY = 2
@@ -66,12 +68,58 @@ RETRY_AFTER_S = 5  # advertised in the 429 Retry-After header
 
 
 class RenderCapacityExceeded(Exception):
-    """Raised when a render cannot be admitted (queue full or wait timeout)."""
+    """Raised when a render cannot be admitted (queue full or wait timeout).
 
-    def __init__(self, reason: str, retry_after_s: int = RETRY_AFTER_S):
+    Also raised by crawler_pool's two refusals — deliberately, because this is
+    the ONLY exception api.py maps to 429 + Retry-After and a new type would
+    fall into the generic `except Exception` and become the 500 MAS retries
+    three times. `gate` is what tells the three apart on the wire; the values
+    are the contract in aitosoft_failure_class.
+
+    `gate` defaults to GATE_UNSPECIFIED, and both of the alternatives are worse:
+
+      * **Required** would raise TypeError at construction inside
+        `crawler_pool.get_crawler`, which `api.py`'s `except
+        RenderCapacityExceeded` does not catch — so a forgotten argument turns
+        a 429 into precisely the 500 this class exists to avoid.
+      * **Defaulting to GATE_RENDER_SLOTS** would silently attribute a new
+        unlabelled raise site to the 6 % population instead of the 94 % one,
+        poisoning the single measurement this field exists to make.
+
+    "unspecified" is greppable, honest, and costs no status change. Same
+    reasoning as `failure_class: "none"` — a value that needs no interpretation.
+    """
+
+    def __init__(
+        self,
+        reason: str,
+        retry_after_s: int = RETRY_AFTER_S,
+        gate: str = GATE_UNSPECIFIED,
+        memory_pct: Optional[float] = None,
+        limit_pct: Optional[float] = None,
+    ):
         super().__init__(reason)
         self.reason = reason
         self.retry_after_s = retry_after_s
+        self.gate = gate
+        self.memory_pct = memory_pct
+        self.limit_pct = limit_pct
+
+    def envelope_fields(self) -> dict:
+        """The structured half of the 429 body.
+
+        Readings are rounded to one decimal on purpose: that is the precision
+        of the `memory at 90.2% (limit 85.0%)` text MAS has been regexing out
+        of `detail` for a fortnight, so the structured field is directly
+        comparable with the 4,455 readings they already hold. Emitted only
+        where a reading exists — absent on a RenderGate refusal is meaningful.
+        """
+        fields: dict = {"capacity_gate": self.gate}
+        if self.memory_pct is not None:
+            fields["memory_pct"] = round(float(self.memory_pct), 1)
+        if self.limit_pct is not None:
+            fields["limit_pct"] = round(float(self.limit_pct), 1)
+        return fields
 
 
 class RenderGate:
@@ -139,7 +187,8 @@ class RenderGate:
                 )
                 raise RenderCapacityExceeded(
                     f"render capacity exhausted ({self._in_use}/{self.capacity} "
-                    f"rendering, {self._queued} queued)"
+                    f"rendering, {self._queued} queued)",
+                    gate=GATE_RENDER_SLOTS,
                 )
 
             self._queued += 1
@@ -158,7 +207,8 @@ class RenderGate:
                     self._queued,
                 )
                 raise RenderCapacityExceeded(
-                    f"no render slot freed within {self.max_wait_s:.0f}s"
+                    f"no render slot freed within {self.max_wait_s:.0f}s",
+                    gate=GATE_RENDER_SLOTS,
                 ) from None
             finally:
                 self._queued -= 1

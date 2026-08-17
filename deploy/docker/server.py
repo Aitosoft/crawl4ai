@@ -523,7 +523,7 @@ async def _http_exception_handler(request: Request, exc: _StarletteHTTPException
     # to carry one (capacity, auth, malformed request, our own faults). MAS's
     # division of labour: result level for anything a crawl produced, envelope
     # level only where there is nothing to attach to.
-    from aitosoft_failure_class import envelope_class_for_status
+    from aitosoft_failure_class import envelope_class_for_status, envelope_extra_for
 
     _fc = envelope_class_for_status(exc.status_code)
     if exc.status_code == 500:
@@ -540,6 +540,12 @@ async def _http_exception_handler(request: Request, exc: _StarletteHTTPException
     body = {"detail": exc.detail}
     if _fc:
         body["failure_class"] = _fc
+    # Aitosoft: structured fields the exception chose to publish — today which
+    # of the four things that can 429 actually refused, and the memory reading
+    # behind it. Merged rather than special-cased so this stays the single
+    # place a result-less error becomes a body. The 500 branch above returns
+    # before this on purpose: those bodies are deliberately genericized.
+    body.update(envelope_extra_for(exc, exc.status_code))
     return JSONResponse(
         body,
         status_code=exc.status_code,

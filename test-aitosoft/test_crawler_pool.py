@@ -532,6 +532,11 @@ def test_the_cap_refuses_rather_than_waits_when_nothing_is_idle(monkeypatch):
             await asyncio.wait_for(crawler_pool.get_crawler(_distinct(2)), timeout=2)
         assert "busy" in str(exc.value)
         assert exc.value.retry_after_s > 0
+        # The third gate. It has fired 0 times in 186,178 production requests
+        # and is labelled anyway: a gate that never fires is a useful thing to
+        # be able to PROVE, and the proof needs the label to exist before the
+        # first occurrence rather than after it.
+        assert exc.value.envelope_fields() == {"capacity_gate": "browser_pool"}
 
     run(main())
 

@@ -278,6 +278,15 @@ async def one_request(
                 detail = payload.get("detail") or payload.get("error")
                 if detail:
                     rec["detail"] = str(detail)[:200]
+                # Which gate refused (image >= 0.9.2-capacity-gate). This probe
+                # is the only instrument that produces 429s on demand, so it is
+                # where the split becomes readable without a live sweep. An
+                # ABSENT `capacity_gate` on a 429 means an old build -- that is
+                # the whole point of the field being unconditional, so record
+                # the absence rather than defaulting it here.
+                for k in ("capacity_gate", "memory_pct", "limit_pct"):
+                    if k in payload:
+                        rec[k] = payload[k]
     except Exception as exc:  # noqa: BLE001
         rec["status"] = None
         rec["error"] = f"{type(exc).__name__}: {exc}"[:200]
@@ -333,11 +342,24 @@ def summarise(records: List[Dict[str, Any]], wall_s: float) -> Dict[str, Any]:
         if fc:
             fclasses[str(fc)] = fclasses.get(str(fc), 0) + 1
     n429 = by_status.get("429", 0)
+    # Split the 429s by which gate refused. NEVER read a 429 count as a
+    # capacity signal without this: across the 175 h sweep ~94 % of them were
+    # the pool's memory guard (benign, and a threshold crossing on a gauge
+    # whose median sits above its own trip point) against ~6 % RenderGate
+    # (real). `missing` counts 429s with no `capacity_gate` at all, which on a
+    # current image means something other than the render path answered -- or
+    # that the endpoint is running an image older than 0.9.2-capacity-gate.
+    gates: Dict[str, int] = {}
+    for r in records:
+        if str(r.get("status")) == "429":
+            g = str(r.get("capacity_gate") or "missing")
+            gates[g] = gates.get(g, 0) + 1
     return {
         "requests": len(records),
         "by_status": by_status,
         "count_429": n429,
         "rate_429": round(n429 / len(records), 4) if records else None,
+        "capacity_gates": gates,
         "retry_after_values": sorted(
             {r.get("retry_after") for r in records if r.get("retry_after")}
         ),
@@ -399,6 +421,8 @@ def print_table(
             f"  429 count            {summary['count_429']}  "
             f"({summary['rate_429']:.1%} of burst)"
         )
+    if summary.get("capacity_gates"):
+        print(f"  capacity_gate        {summary['capacity_gates']}")
     if summary["retry_after_values"]:
         print(f"  Retry-After seen     {summary['retry_after_values']}")
     if summary["failure_classes"]:

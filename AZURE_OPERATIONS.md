@@ -618,10 +618,39 @@ and cross-check with `az containerapp replica list`.
 ### 3.8 429s: two mechanisms, opposite fixes, and only one is capacity
 
 `RenderGate REJECT` (concurrency, real) and `refusing new browser`
-(`crawler_pool`'s memory guard, benign) both emit **HTTP 429 + `Retry-After`**
-with a byte-identical envelope. Across the full sweep the split was **~99 %
-memory guard**. Reading the total as a capacity ceiling sends you at
-`maxReplicas`, which was never the constraint.
+(`crawler_pool`'s memory guard, benign) both emit **HTTP 429 + `Retry-After`**.
+The split is **regime-dependent, and this line quoted one regime as if it were
+the whole sweep**: RenderGate was 47 of 5,434 429s at trigger 6 (**99.1 % memory
+guard**) but 613 of 5,098 at trigger 12 (**88.0 %**) — **93.7 % across the full
+sweep**, 660 of 10,532. Use ~94 % for the sweep and ~99 % only for trigger 6.
+Reading the total as a capacity ceiling sends you at `maxReplicas`, which was
+never the constraint.
+
+> **Since `0.9.2-capacity-gate` (2026-08-17) the envelope is no longer identical
+> and you should stop reconstructing this split from console logs.** Every 429
+> carries `capacity_gate`: `"render_slots"` (RenderGate — the only one that
+> means full), `"memory"` (the guard, which also carries `memory_pct` and
+> `limit_pct`), `"browser_pool"` (the `max_browsers` cap, 0 occurrences in
+> 186,178 requests), or `"unspecified"` (anything that answered 429 without
+> going through render admission — slowapi's inbound 1000/min limit, which is
+> keyed on the address slowapi sees and behind the ingress is the platform
+> proxy, so it is per replica process rather than per caller; or the
+> background-job quota, which `config.yml:51`'s `per_principal: 0` makes
+> structurally unreachable. Neither has ever fired, and an `unspecified` 429
+> carries **no `Retry-After`** — back off on your own schedule).
+> **`failure_class` stays
+> `"capacity"` for all of them**, deliberately, so counts taken before this
+> change stay comparable.
+>
+> **An ABSENT `capacity_gate` on a 429 means the replica is running an older
+> image** — the field is unconditional, which is what makes that inference safe.
+>
+> Read `memory_pct` for what it is: the cache-inclusive working-set figure from
+> `utils.get_container_memory_percent`, on a gauge whose **median sits above its
+> own 85 % trip point** (unconditional p50 86.6 %). A refusal count is a
+> threshold-crossing count on a signal centred on the threshold — count them,
+> never interpret them. That is §3.8's older warning and the structured field
+> does not retire it, it just makes the split free.
 
 **Split the count before reading anything into it, and never treat a 429 rate as
 a threshold.** MAS's terminal accounting for the whole 175-hour sweep: our 429s
@@ -1025,7 +1054,9 @@ Three things to read off it:
   line of any kind**. The four responses over 10 MB in the 39-hour window all
   returned 200 in 8–47 s and nothing flagged them. **If you are asked "is
   anything pathological", this column is the question no counter answers.**
-- **429 rate is not a threshold** (§3.8). 4.1 % here was ~99 % memory guard.
+- **429 rate is not a threshold** (§3.8). 4.1 % here was ~99 % memory guard —
+  **that is this window, which is trigger-6 era; the full sweep is ~94 %.** Since
+  2026-08-17 you do not have to infer the split at all, the envelope carries it.
 
 ---
 
@@ -1224,7 +1255,7 @@ the one you are typing in.** `RES_OPTIONS="timeout:2 attempts:2 ndots:1"` in
 | Symptom | First move |
 |---|---|
 | **401** | Token mismatch. Confirm the env var *exists* (never print it): `az containerapp show -n crawl4ai-service -g aitosoft-prod --query "properties.template.containers[0].env[].name" -o tsv`. Check the header is `Authorization: Bearer <token>` |
-| **429** | **Split it before reading anything into it** (§3.8). `RenderGate REJECT` = concurrency; `refusing new browser` = the memory guard, ~99 % of them, benign |
+| **429** | **Split it before reading anything into it** (§3.8). The client's envelope now answers it directly: `capacity_gate` = `render_slots` (concurrency, real) / `memory` (the guard, ~94 % of them across the sweep and ~99 % at trigger 6, benign, and it carries `memory_pct`) / `browser_pool` / `unspecified`. From our side the log tokens still are `RenderGate REJECT` and `refusing new browser`. **Absent field on a 429 = an older image** |
 | **500** | Ours by definition (`failure_class` reserves 5xx for us). Query `RESULT FAILURE` / `TERMINAL FAILURE` by `failure_class=`, not by token (§5.3) |
 | **504** | The 180 s wall-clock fence. One `WALL-CLOCK FENCE 504` line per event, with URL. Expect a few during cold ramp; investigate only if they cluster *post*-ramp or grow across windows |
 | **Slow first request** | Cold start (§6.5) |

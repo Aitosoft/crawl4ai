@@ -23,15 +23,20 @@ Where a task file and this index disagree, the task file wins and the index is s
 
 ## State of the world
 
-**Production:** image `0.9.2-desc-cap`, unchanged since 2026-08-09. **Check the revision, trigger
-and replica bounds with `az`, not with any document here** — `AZURE_OPERATIONS.md` opens with the
-exact commands, and every transcribed copy of those values in this repo has drifted at least once.
+**Production:** last deploy 2026-08-17 (`capacity-gate-2`; the one before it was 2026-08-09).
+The `-2` is not a fix on top of a broken `-1` — it is the same change with two comment corrections
+and one defensive guard, rebuilt so the committed tree and the running image are identical.
+**Check the running image, revision, trigger and replica bounds with `az`, not with any document
+here** — `AZURE_OPERATIONS.md` opens with the exact commands, and every transcribed copy of those
+values in this repo has drifted at least once.
 
-**`main` == production** as of the 2026-08-09 deploy. This sentence has been false in both
+**`main` == production** as of the 2026-08-17 deploy. This sentence has been false in both
 directions before; verify it rather than believing it.
 
 **Nothing is gating. Nothing is waiting on a deploy. There is no active campaign** — MAS's sweep
 finished 2026-08-16T21:50 UTC and their request rate against us is near zero until the next one.
+That is what made 2026-08-17 the right window for a revision change; it will not be free once the
+next campaign starts.
 
 ### What the final sweep measured
 
@@ -58,59 +63,19 @@ repo published before 2026-08-17 is ~12 % high. `€398.89 for one sweep` is `$3
 
 | # | Task | Size | Why it is on this list |
 |---|---|---|---|
-| **1** | `capacity-gate-in-the-429-envelope.md` | S | MAS's one explicit ask, we committed to it, and the sweep proved why it matters. |
-| **2** | `fixture-origin-bypasses-the-pinning-proxy.md` | S | ~12 lines; makes 67 existing tests measure the path production uses. The fast feedback loop. |
-| **3** | `file-upstream-prs.md` | M judgement | The simplicity play, and it is time-sensitive. |
-| **4** | `render_mode` mislabel — no file, it is one word | XS | We report a lie in a field MAS parses. |
+| **1** | `file-upstream-prs.md` | M judgement | The simplicity play, and it is time-sensitive. |
+| **2** | `render_mode` mislabel — no file, it is one word | XS | We report a lie in a field MAS parses. |
 
-### 1. Put the capacity gate in the 429 envelope
+**Two items left this list on 2026-08-17, in opposite ways, and both are worth two minutes before
+you re-derive anything.** `capacity-gate-in-the-429-envelope.md` **shipped** — and the implementing
+session found the invariant the whole feature is sold on was not achievable as specified, because
+there are **four** things in this service that answer 429, not three. `fixture-origin-bypasses-the-
+pinning-proxy.md` **closed unbuilt**: the gap is real, but every one of the 67 fixture tests targets
+an always-up local `http://` origin, so the proxy behaviour that differs from the direct path
+(CONNECT, connect timeout, dead-host cost) cannot be reached by any of them — and the 80 % version
+already exists in `test_egress_dns_offload.py`. Both records are in `tasks/done/`.
 
-**The concern.** Both our 429 mechanisms emit a byte-identical envelope — `failure_class:
-"capacity"`, `Retry-After: 5` — differing only in free text after `Replica at render capacity:`. So
-MAS cannot hold a threshold on either gate independently, and the stop-trigger we handed them for an
-unattended run was **unevaluable**; taking it literally would have aborted a healthy run at minute
-two.
-
-**The evidence that it matters, and it is better than when this was first written.** MAS's `49-…`
-§1 discovered that our memory gauge has been sitting in their logs **for a fortnight** — every
-refusal carries `memory at 90.2% (limit 85.0%)` — and they read it two weeks late because it was
-embedded in prose. Those 4,455 readings turned out to be a **better instrument than our own**
-(our janitor's sampling interval is chosen from the reading it just took, so it oversamples high
-states; theirs is triggered by request arrivals and is unbiased). A structured field would have made
-their whole §1 a dashboard.
-
-**Scope, and the reasoning behind the shape.** Ship an **additive `capacity_gate` field, not a new
-`failure_class` value** — both need identical plumbing, but a new enum value additionally breaks the
-two places pinning `capacity` (`test_failure_classification.py:317`, `AITOSOFT_CHANGES.md:1559`) and
-splits MAS's own 429 baseline mid-programme. Keeping `capacity` as the stable total is the point.
-Add `memory_pct` and `limit_pct` alongside it — that is the half `49-…` actually argued for.
-Always present, so absence means "old build".
-
-The plumbing runs `RenderCapacityExceeded` (`aitosoft_admission.py:71-74`) → `:140`, `:160`,
-`crawler_pool.py:431,466` → `_capacity_429` (`api.py:825-829`) + the stream twin (`:1278-1282`) →
-emitted in `server.py:540-547`.
-
-**Fold in:** `AZURE_OPERATIONS.md`'s claim that "a 429 means the render slots are full" is actively
-wrong — **~94 % of the sweep's 10,532 429s were the pool memory guard, not RenderGate.**
-
-**What I am least sure of:** whether MAS would rather have a header (`X-Capacity-Gate`) than an
-envelope field. They asked for the envelope; a header is the true minimum and needs no `server.py`
-change. If you find the envelope path ugly, the header is a defensible substitute — tell them.
-
-### 2. `fixture-origin-bypasses-the-pinning-proxy.md`
-
-**The concern.** `set_egress_proxy()` has exactly one caller, `server.py:183`, so `ProductionPath`
-never starts the proxy and **all 67 fixture tests run on a network path production does not use.**
-
-**Why it matters more than its size suggests.** A dead host is **134 s direct vs 30 s through the
-proxy** — a test without the proxy measures the wrong number by 4×. Every failure-class test we
-have, and every future one, inherits that error. This is the loop where investment still compounds:
-data-quality defects are testable offline in seconds, while infrastructure defects need a real sweep
-and are now essentially closed out.
-
-**Expect some tests to change behaviour, and treat that as the payoff, not a problem.**
-
-### 3. `file-upstream-prs.md` — reframed, and now time-sensitive
+### 1. `file-upstream-prs.md` — reframed, and now time-sensitive
 
 **The concern is maintenance surface, not altruism.** Our fork is **+4,696 / −193 lines across 25
 files**, and **~2,375 of those lines sit on 17 files upstream also owns**. `crawler_pool.py` alone
@@ -151,12 +116,14 @@ cap and the consent snippet are the two that carry their own evidence and need n
 sufficient for `innerText` and insufficient for a DOM extractor. That tension is real and the PR
 must address it — possibly by removing only *inside* a structural guard and hiding otherwise.
 
-### 4. The `render_mode` mislabel — one word
+### 2. The `render_mode` mislabel — one word
 
-`api.py:1198`'s `failed_result(...)` omits `render_mode`, which then defaults to `"full"`
-(`aitosoft_failure_class.py:507`). Because the seed check (`:760`) precedes the static short-circuit
-(`:764`), **a static-mode request to a dead domain is reported to MAS as `"full"`.** One word, in a
-field they parse.
+`api.py:1216`'s `failed_result(...)` omits `render_mode`, which then defaults to `"full"`
+(`aitosoft_failure_class.py:574`). Because the seed check (`api.py:782`) precedes the static
+short-circuit (`:786`), **a static-mode request to a dead domain is reported to MAS as `"full"`.**
+One word, in a field they parse. (Line numbers re-derived 2026-08-17 after the capacity-gate change
+moved them — they had already drifted ~18 lines, which is why this item names what to look for and
+not just where.)
 
 **The sibling half of this item is dead and should not be rebuilt:** `render_mode: "static"` failed
 fetches log no `failure_class` at all (`aitosoft_static_mode.py:301,307`). Real in code, and
@@ -260,6 +227,12 @@ repos' numbering has diverged and a message once sat unread for two days because
 **Last exchange:** MAS sent `49-…` plus `49-data/` (61,937 timing rows, 5,511 retry rows, hourly
 aggregates, per-host 500 tables, terminal outcomes) on 2026-08-17. We replied with `50-…`, which
 answers their three questions, corrects four things we had told them, and asks for nothing.
+
+⚠️ **`50-…` has not been relayed yet** as of 2026-08-17 evening — MAS is mid-cleanup on their side.
+Its §5 was rewritten after the capacity gate shipped, so it now describes the deployed shape rather
+than a promise, and carries one correction to our own `46-…` §2 design: there is a **fourth**
+`capacity_gate` value, `unspecified`, because four things here can answer 429, not three. **If you
+relay it, relay the current file** — do not re-paste an earlier copy.
 
 **Corrections we sent them in `50-…`, in case they come back on any of it:** the 2026-08-15 OOM was
 not the first (2026-08-13 was) and not "two containers" (ACA emits two rows per kill); there were

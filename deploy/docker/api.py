@@ -43,6 +43,28 @@ from llm_broker import LLMProviderNotAllowed
 from crawl4ai.utils import perform_completion_with_backoff
 
 
+def _capacity_http_exception(e) -> HTTPException:
+    """Aitosoft: the ONE 429 shape for "this replica is full", on both crawl
+    endpoints.
+
+    There used to be two — /crawl built it inside `handle_crawl_request` and
+    /crawl/stream repeated it inline — which is how a field added to one would
+    have been missing from the other. `e` is a `RenderCapacityExceeded`; it
+    publishes its own structured fields, and `_envelope_extra` is what
+    `aitosoft_failure_class.envelope_extra_for` reads at serialisation time.
+
+    `detail` is unchanged and must stay unchanged: MAS has a live regex over
+    `memory at N% (limit M%)` inside it. The structured fields are additive.
+    """
+    exc = HTTPException(
+        status_code=429,
+        detail=f"Replica at render capacity: {e.reason}. Retry with backoff.",
+        headers={"Retry-After": str(e.retry_after_s)},
+    )
+    exc._envelope_extra = e.envelope_fields()
+    return exc
+
+
 def _enqueue_job(background_tasks, factory, principal=None):
     """Submit a background job to the bounded work queue (per-principal quota).
 
@@ -822,11 +844,7 @@ async def handle_crawl_request(
                 )
             except:
                 pass
-            return HTTPException(
-                status_code=429,
-                detail=f"Replica at render capacity: {e.reason}. Retry with backoff.",
-                headers={"Retry-After": str(e.retry_after_s)},
-            )
+            return _capacity_http_exception(e)
 
         try:
             _gate_weight = await _gate.acquire(
@@ -1274,12 +1292,10 @@ async def handle_stream_crawl_request(
         except RenderCapacityExceeded as e:
             # Aitosoft: same mapping as /crawl. MAS does not use the streaming
             # path, but a full replica must not answer 500 on any endpoint —
-            # that is the amplification this image removes.
-            raise HTTPException(
-                status_code=429,
-                detail=f"Replica at render capacity: {e.reason}. Retry with backoff.",
-                headers={"Retry-After": str(e.retry_after_s)},
-            )
+            # that is the amplification this image removes. It is the same
+            # builder as /crawl now, so `capacity_gate` cannot be present on
+            # one endpoint and missing on the other.
+            raise _capacity_http_exception(e)
 
         # Attach declarative hooks if provided
         if hooks_config:

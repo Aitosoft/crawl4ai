@@ -304,3 +304,144 @@ def test_multi_url_request_rejected_with_400():
         assert "single-URL" in exc_info.value.detail
 
     asyncio.get_event_loop_policy().new_event_loop().run_until_complete(main())
+
+
+# ── the 429 envelope: which gate refused ────────────────────────────────
+#
+# tasks/done/capacity-gate-in-the-429-envelope.md. Four mechanisms in this
+# service answer 429 and the envelope was byte-identical for all of them, so
+# from MAS's side every 429 was one number. Across the 175 h sweep that number
+# was ~94 % memory guard and ~6 % render gate — not the same signal, opposite
+# fixes — and we handed them a stop-trigger they could not evaluate because of
+# it (`45-…` §3, conceded in `46-…` §1).
+#
+# These assert the SERIALISED BODY through the real exception handler, not the
+# exception object. The distinction is the 2026-08-05 lesson: a change that
+# passed 229 offline + 54 browser + 316 upstream tests still broke production,
+# because every test patched the layer ABOVE the broken line. api.py builds the
+# HTTPException; server.py turns it into a body; only a test that spans both
+# can catch a field that is set and never emitted.
+
+
+def _raise_capacity(gate, memory_pct=None, limit_pct=None):
+    """A fake handle_crawl_request that refuses exactly the way the real raise
+    sites do — through the real `_capacity_http_exception`, so the builder is
+    under test rather than mocked."""
+    import api
+    from aitosoft_admission import RenderCapacityExceeded
+
+    async def _fake(**kwargs):
+        raise api._capacity_http_exception(
+            RenderCapacityExceeded(
+                "…", gate=gate, memory_pct=memory_pct, limit_pct=limit_pct
+            )
+        )
+
+    return _fake
+
+
+def _post_crawl(client):
+    return client.post(
+        "/crawl",
+        json={"urls": ["https://example.com/"]},
+        headers={"Authorization": f"Bearer {os.environ['CRAWL4AI_API_TOKEN']}"},
+    )
+
+
+def test_memory_guard_429_carries_the_gauge_as_structured_fields(monkeypatch):
+    """The 94 % population. MAS regexed this reading out of `detail` for a
+    fortnight before noticing it was there; 4,455 of those readings then turned
+    out to be a better instrument than our own logs. One decimal, because that
+    is the precision of the text they already hold."""
+    from aitosoft_failure_class import GATE_MEMORY
+
+    client, server = _crawl_client_and_app()
+    monkeypatch.setattr(
+        server, "handle_crawl_request", _raise_capacity(GATE_MEMORY, 90.23, 85.0)
+    )
+
+    r = _post_crawl(client)
+
+    assert r.status_code == 429
+    body = r.json()
+    assert body["failure_class"] == "capacity", "the stable total must not split"
+    assert body["capacity_gate"] == "memory"
+    assert body["memory_pct"] == 90.2
+    assert body["limit_pct"] == 85.0
+    assert r.headers["Retry-After"] == "5"
+    # The free text is a live MAS regex target. Additive means additive.
+    assert "Replica at render capacity" in body["detail"]
+
+
+def test_render_gate_429_names_the_gate_and_carries_no_reading(monkeypatch):
+    """The 6 % population — the only 429 that means "you are full". No memory
+    reading exists here, and its absence is the signal, not an omission."""
+    from aitosoft_failure_class import GATE_RENDER_SLOTS
+
+    client, server = _crawl_client_and_app()
+    monkeypatch.setattr(
+        server, "handle_crawl_request", _raise_capacity(GATE_RENDER_SLOTS)
+    )
+
+    r = _post_crawl(client)
+
+    assert r.status_code == 429
+    body = r.json()
+    assert body["failure_class"] == "capacity"
+    assert body["capacity_gate"] == "render_slots"
+    assert "memory_pct" not in body
+    assert "limit_pct" not in body
+
+
+def test_browser_pool_429_is_labelled_even_though_it_has_never_fired(monkeypatch):
+    """0 times in 186,178 requests. A gate that never fires is a useful thing
+    to be able to prove, and the proof needs the label to exist."""
+    from aitosoft_failure_class import GATE_BROWSER_POOL
+
+    client, server = _crawl_client_and_app()
+    monkeypatch.setattr(
+        server, "handle_crawl_request", _raise_capacity(GATE_BROWSER_POOL)
+    )
+
+    assert _post_crawl(client).json()["capacity_gate"] == "browser_pool"
+
+
+def test_every_429_carries_capacity_gate_even_from_a_non_render_source(monkeypatch):
+    """The invariant MAS actually builds on: an ABSENT `capacity_gate` means
+    "old build", so it must never be absent for any other reason.
+
+    It nearly was. Three other things in this app answer 429 without going
+    anywhere near render admission — slowapi's inbound rate limit (which
+    subclasses starlette's HTTPException, so it lands in this very envelope),
+    the background-job quota, and any future one. They get "unspecified":
+    a value that needs no interpretation, rather than an absence that does.
+    """
+    from fastapi import HTTPException
+
+    client, server = _crawl_client_and_app()
+
+    async def _fake(**kwargs):
+        raise HTTPException(status_code=429, detail="1000 per 1 minute")
+
+    monkeypatch.setattr(server, "handle_crawl_request", _fake)
+
+    body = _post_crawl(client).json()
+    assert body["capacity_gate"] == "unspecified"
+    assert body["failure_class"] == "capacity"
+
+
+def test_non_429_envelopes_are_not_widened(monkeypatch):
+    """The merge must be inert everywhere else. A 400 or a 504 gains nothing —
+    if this fails, `envelope_extra_for` is defaulting on the wrong axis."""
+    from fastapi import HTTPException
+
+    client, server = _crawl_client_and_app()
+
+    async def _fake(**kwargs):
+        raise HTTPException(status_code=504, detail="Crawl exceeded the time limit")
+
+    monkeypatch.setattr(server, "handle_crawl_request", _fake)
+
+    body = _post_crawl(client).json()
+    assert "capacity_gate" not in body
+    assert body["failure_class"] == "render_timeout"

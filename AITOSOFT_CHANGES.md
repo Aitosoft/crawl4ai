@@ -7,13 +7,27 @@ Keeping this log helps when syncing with upstream updates.
 
 ## Current State
 
-**Last Updated**: 2026-08-15
+**Last Updated**: 2026-08-17
 
 > ⛔ **This section was a revision behind from 2026-08-14 to 2026-08-15 while
 > `CLAUDE.md` designated it authoritative for current state. Two documents, both
 > wrong, pointing at each other. Trust `az containerapp show` over both.**
 >
-> **LIVE 2026-08-15: revision `--0000042`, image `0.9.2-desc-cap` (unchanged).**
+> **DEPLOYED 2026-08-17: `0.9.2-capacity-gate` (revision `--0000043`).** Every
+> HTTP 429 now names which of the four gates refused — `capacity_gate`, plus
+> `memory_pct`/`limit_pct` on the memory gate. **Additive only**: `detail` is
+> byte-identical (MAS has a live regex over it) and `failure_class` stays
+> `"capacity"` for all of them, so no count either side has taken splits.
+> Tier 1 4/4, 317/317 tests, and proved on the wire with 8 real 429s from the
+> `raw://` load generator. Full account in the section below; the record of what
+> the task file got wrong is `tasks/done/capacity-gate-in-the-429-envelope.md`.
+>
+> **`tasks/fixture-origin-bypasses-the-pinning-proxy.md` closed the same day
+> without code** — the faithfulness gap is real and no fixture test can reach the
+> proxy behaviour that differs, because all 67 target an always-up local
+> `http://` origin. The 80 % version already exists in `test_egress_dns_offload.py`.
+>
+> **2026-08-15 (superseded by the entry above): revision `--0000042`, image `0.9.2-desc-cap`.**
 > `--0000042` is a **scale-rule** change made 2026-08-14T15:59:42Z, not a new
 > build: ACA trigger `http-renders` 6 -> 12, `maxReplicas` 45 -> 20 (MAS's change),
 > `minReplicas` 0. Effect: fleet ~12 -> **2 replicas**, slot utilisation 7 % ->
@@ -183,6 +197,113 @@ Keeping this log helps when syncing with upstream updates.
   launch. Fixed by `FENCE_STALL_S = 8`, which widens the gap between fence and
   origin rather than the assertion's meaning, and costs the suite nothing.
   `tasks/done/flaky-fence-test-margin.md`.
+
+---
+
+## Which of the four gates answered 429 (2026-08-17)
+
+**DEPLOYED 2026-08-17 as `0.9.2-capacity-gate-2`, revision `--0000044`.** 318/318 offline +
+browser tests. Tier 1 **4/4** was run against `0.9.2-capacity-gate` (`--0000043`), which is the
+same change minus two comment corrections and the reserved-key guard in `envelope_extra_for`;
+`-2` exists so the committed tree and the running image are the same bytes, and it was **not**
+re-Tier-1'd because that would have been a second live hit on all four sites in one session for a
+delta that cannot touch the crawl path (TESTING.md rule 1).
+
+**Verified live on the wire on both images**, with the `raw://` burst generator and therefore zero
+third-party traffic: 12 concurrent requests against a warm single replica gave 4 × 200 and
+**8 × 429, every one `"capacity_gate": "render_slots"`**, `failure_class: "capacity"`,
+`Retry-After: 5`, `memory_pct`/`limit_pct` correctly **absent**. The `-2` run additionally hit
+**both** RenderGate raise sites — `render capacity exhausted (2/2 rendering, 4 queued)` at ~1.0 s
+and `no render slot freed within 15s` at ~14.3 s — so the branch that a first pass of the tests
+missed is confirmed in production too. The memory gate cannot be forced without real pressure and
+is covered by tests at its own raise site; the serialisation path is identical for all of them.
+
+**One additive field, no behaviour change, no wire-status change.** Every HTTP 429 now carries
+`capacity_gate`; the memory gate additionally carries `memory_pct` and `limit_pct`.
+`failure_class` stays **`"capacity"`** for all of them — deliberately, so MAS's several-thousand-
+event 429 baseline does not split mid-programme and their TypeScript union does not widen.
+
+```json
+{ "detail": "Replica at render capacity: memory at 90.2% (limit 85.0%), refusing new browser. Retry with backoff.",
+  "failure_class": "capacity",
+  "capacity_gate": "memory", "memory_pct": 90.2, "limit_pct": 85.0 }
+```
+
+**Why.** Three mechanisms raise one exception and emitted a byte-identical envelope, so from the
+client's side every 429 was one number — and across the 175 h sweep that number was **~94 % pool
+memory guard** (benign; a threshold crossing on a gauge whose median sits *above* its own trip
+point) against **~6 % RenderGate** (the only one that means "full"). We handed MAS a stop-trigger
+for an unattended weekend run phrased as "429s materially above ~4.5 %", which they could not
+evaluate for exactly this reason; taking it literally would have aborted a healthy run at minute
+two (`45-…` §3, conceded in `46-…` §1). Separately, MAS spent a fortnight regexing our memory
+gauge out of the `detail` prose before noticing it was there — and those 4,455 readings then
+turned out to be a **better instrument than our own logs**, because our janitor picks its sampling
+interval from the reading it just took while their samples are request-triggered and unbiased.
+
+**The values, and they are a contract** (`46-…` §2): `render_slots` · `memory` · `browser_pool` ·
+`unspecified`. **Present on every 429**, so an absent field means "old build" and never needs
+interpretation.
+
+**`unspecified` is a fourth value that was not in the `46-…` design, and finding out why is the
+main thing this change taught us.** There are **four** things in this service that answer 429, not
+three. `slowapi.errors.RateLimitExceeded` **subclasses starlette's `HTTPException` with
+`status_code=429`**, `/crawl` carries `@limiter.limit(...)`, and slowapi's own handler is never
+registered (`Limiter.init_app` is not called anywhere) — so an inbound rate-limit breach already
+lands in *our* envelope handler and already reports `failure_class: "capacity"`. The
+background-job quota (`api.py:82`, `/llm`) is a third — and that one is **structurally dead, not
+merely quiet**: `config.yml:51` sets `per_principal: 0`, which `work_queue.py:15` documents as
+"never 429". So `unspecified` rests on slowapi alone, which is sufficient: it is live, and it is on
+`/crawl` itself. The invariant MAS builds on is "absent ⇒ old build", and one that holds 99.99 % of
+the time is one somebody debugs at 03:00. Defaulted at the serialisation point rather than at the
+raise sites, so it covers sources we do not own.
+
+**Note for MAS's tooling, and it is a real asymmetry:** a render-path 429 carries `Retry-After: 5`;
+an `unspecified` one **does not** — slowapi's header-injecting handler is not registered and the
+job-quota raise passes no headers. Treat a missing `Retry-After` as "back off on your own schedule",
+not as a protocol error.
+
+**Files.** `aitosoft_failure_class.py` +`GATE_*` and +`envelope_extra_for()` (the wire vocabulary
+lives with the rest of the wire vocabulary; `server.py` already imported from this module, so the
+change costs **no new import**). `aitosoft_admission.py` — `RenderCapacityExceeded` gains
+`gate`/`memory_pct`/`limit_pct` + `envelope_fields()`. `crawler_pool.py` — the two pool refusals
+label themselves. `api.py` — the duplicated 429 builder in `/crawl` and `/crawl/stream` collapses
+into one `_capacity_http_exception`; **they were separate copies, so the obvious implementation
+would have shipped the field on one endpoint and not the other.** `server.py` — **+7/−1, entirely
+inside the hunk that was already ours.**
+
+**Two things deliberately NOT done, both recorded so they are not re-derived:**
+
+- **`detail` is unchanged, byte for byte.** MAS has a live regex over
+  `memory at N% (limit M%)` inside it and 4,455 readings extracted that way. `memory_pct` is
+  rounded to **one decimal** for the same reason — it must be directly comparable with the corpus
+  they already hold. Additive means additive; their regex retires when they choose.
+- **The five ungated endpoints still turn a pool refusal into a 500.** `/md`, `/html`,
+  `/screenshot`, `/pdf` and `/execute_js` re-wrap every non-`HTTPException` as
+  `HTTPException(500, …)` (`api.py:440-445`, `server.py:666`, `:730`, `:765`, `:842`), which is
+  the 2026-07-31 render-500-window regression still live outside `/crawl`, and it is why
+  `browser_pool` is unobservable today. MAS calls none of them; it is a different change with a
+  different blast radius. Written into the code comment at the raise site.
+
+**Tests: 6 new plus 3 assertions added to existing ones (suite 312 → 318), on both sides of the
+seam, because the existing 245 all passed with the production change in place and would have passed
+with it wrong.** Five in `test_mas_contract.py` assert the **serialised body** through the real
+exception handler (api.py builds, server.py emits — a field that is set and never emitted fails
+there). The rest assert the label at the **real raise sites**, because the contract tests construct
+the exception themselves and would not notice `crawler_pool` mislabelling the 94 % population as
+the 6 % one: `test_admission.py` covers the memory guard and **both** RenderGate branches (the
+queue-full one and the wait-timeout one — a first pass covered only the former, and deleting the
+`gate=` kwarg from the latter left the whole suite green), `test_crawler_pool.py` covers the
+browser cap. Mutation-checked twice: deleting the one-line merge in `server.py` fails 4 of the 5
+contract tests, and dropping the wait-timeout label fails exactly the test written for it. `cold_burst_probe.py` now records and summarises the gate split, so
+the 429 population is readable on demand from `raw://` traffic with no live host involved.
+
+**`gate` defaults to `"unspecified"`, and both alternatives are worse.** Required would raise
+`TypeError` inside `get_crawler`, which `api.py`'s `except RenderCapacityExceeded` does not catch —
+turning a 429 into precisely the 500 this class exists to avoid. Defaulting to `render_slots` would
+silently attribute a future unlabelled raise site to the 6 % population, poisoning the one
+measurement the field exists to make.
+
+`tasks/done/capacity-gate-in-the-429-envelope.md`.
 
 ---
 

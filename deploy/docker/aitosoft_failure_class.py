@@ -82,11 +82,50 @@ UNRENDERABLE_CONTENT = "unrenderable_content"  # served fine; it is not a page
 CAPACITY = "capacity"  # render gate rejected -> 429
 AUTH = "auth"  # 401/403 from us, not the origin
 BAD_REQUEST = "bad_request"  # malformed request -> 400
+
 # ...except BAD_REQUEST, which static mode also attaches to a *result* when a
 # redirect hop is refused by the egress broker. That result must never be
 # retried, so it has to be in NON_RETRYABLE_CLASSES below — routing static mode
 # through `http_status_for` without it turns an SSRF refusal into a 500 and buys
 # MAS three more attempts at a URL our own policy has already declined.
+
+# ── which gate refused: the sub-classification of a 429 ─────────────────────
+#
+# Aitosoft 2026-08-17. `failure_class: "capacity"` stays the stable TOTAL and
+# these split it underneath. Four mechanisms in this service answer 429 and the
+# envelope was byte-identical for all of them, so from MAS's side every 429 was
+# one number -- and across the 175 h sweep that number was ~94 % memory guard,
+# ~6 % render gate, which are not the same signal and have opposite fixes. We
+# handed them a stop-trigger ("429s materially above ~4.5 %") they could not
+# evaluate because of exactly this, and taking it literally would have aborted
+# a healthy run at minute two (their 45-... 3, conceded in our 46-... 1).
+#
+# The three strings below are a CONTRACT: 46-... 2 names them and MAS builds on
+# them. Do not rename one to something tidier.
+#
+# Why not a new `failure_class` value, which is what you would reach for first:
+# it would (a) break the two places pinning `capacity`
+# (test_failure_classification.py, AITOSOFT_CHANGES.md) and (b) split MAS's own
+# 429 baseline mid-programme, so their before/after stops being comparable --
+# which is the whole point of a threshold. A sibling field costs them nothing
+# and preserves every count they have already taken.
+GATE_RENDER_SLOTS = "render_slots"  # RenderGate: concurrency admission. Real capacity.
+GATE_MEMORY = "memory"  # crawler_pool memory guard. ~94 % of them, and benign.
+GATE_BROWSER_POOL = "browser_pool"  # crawler_pool max_browsers cap.
+# Everything else that can 429. Not a render gate at all, and MAS has never
+# received one. The live one is slowapi's inbound rate limit: note it
+# subclasses starlette's HTTPException, so it already lands in this same
+# envelope, on /crawl itself. (config.yml calls its 1000/minute "per caller",
+# which is not what it is -- slowapi keys on `get_remote_address`, and behind
+# the ACA ingress that is the platform proxy, so it is effectively per replica
+# process. Nowhere near binding either way at ~18 req/min.) The background-job quota
+# (`_enqueue_job`, api.py:82) is the other, and it is structurally dead rather
+# than merely quiet -- `config.yml:51` sets `per_principal: 0`, which
+# `work_queue.py:15` documents as "no per-caller cap (never 429)".
+# It exists so `capacity_gate` can be present on EVERY 429 -- that
+# property is what lets MAS read an absent field as "old build" without ever
+# having to interpret it, and an approximately-true invariant would not.
+GATE_UNSPECIFIED = "unspecified"
 
 
 class OriginUnresolvable(Exception):
@@ -571,3 +610,33 @@ def envelope_class_for_status(status_code: int) -> Optional[str]:
     """`failure_class` for an error envelope that carries no result, or None
     when the status is not part of the taxonomy (404, 405, …)."""
     return _STATUS_TO_ENVELOPE_CLASS.get(status_code)
+
+
+def envelope_extra_for(exc, status_code: int) -> dict:
+    """Structured envelope fields beyond `failure_class`, for an error that
+    carries no result.
+
+    An exception publishes them by setting `_envelope_extra` on itself — today
+    only `RenderCapacityExceeded`, via api.py's `_capacity_http_exception`.
+    Anything else gets `{}` and the envelope is unchanged.
+
+    The one rule that is not "merge whatever is there": **a 429 always carries
+    `capacity_gate`.** Four mechanisms in this service answer 429 and only three
+    of them go through the render path, so without the default below the field
+    would be absent on a real (if never-yet-observed) population — and MAS's
+    rule for an absent field is "old build". A contract that is true 99.99 % of
+    the time is one someone eventually debugs at 03:00.
+    """
+    extra = getattr(exc, "_envelope_extra", None)
+    fields = dict(extra) if isinstance(extra, dict) else {}
+    # An exception may add fields; it may never redefine the two the envelope
+    # already owns. Nothing violates this today (the only publisher emits three
+    # fixed keys), but the caller merges with `dict.update`, so a future
+    # publisher could silently rewrite `failure_class` — the field MAS's whole
+    # retry ladder branches on — and no test would notice. Cheaper to make
+    # impossible than to remember.
+    for reserved in ("detail", "failure_class"):
+        fields.pop(reserved, None)
+    if status_code == 429:
+        fields.setdefault("capacity_gate", GATE_UNSPECIFIED)
+    return fields

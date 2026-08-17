@@ -410,6 +410,7 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
         mem_pct = get_container_memory_percent()
         if mem_pct >= MEM_LIMIT:
             from aitosoft_admission import RenderCapacityExceeded
+            from aitosoft_failure_class import GATE_MEMORY
 
             # Snapshot composition BEFORE shedding: this line is the one place
             # a memory reading is paired with a pool composition, and pairing
@@ -428,8 +429,15 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
                 f"shed={'1 idle browser' if shed else 'nothing idle to shed'}, "
                 f"resident now {resident_browsers()}/{MAX_BROWSERS}"
             )
+            # The reason string stays byte-identical: MAS has a live regex over
+            # it and 4,455 readings extracted that way. The structured fields
+            # are additive, and the plan is that the regex retires once they
+            # have read `memory_pct` for a while — not that it breaks today.
             raise RenderCapacityExceeded(
-                f"memory at {mem_pct:.1f}% (limit {MEM_LIMIT}%), refusing new browser"
+                f"memory at {mem_pct:.1f}% (limit {MEM_LIMIT}%), refusing new browser",
+                gate=GATE_MEMORY,
+                memory_pct=mem_pct,
+                limit_pct=MEM_LIMIT,
             )
 
         # Aitosoft 2026-08-02: bound residency by construction, not by a
@@ -452,6 +460,7 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
             _evict_for_capacity(headroom=1)
             if resident_browsers() >= MAX_BROWSERS:
                 from aitosoft_admission import RenderCapacityExceeded
+                from aitosoft_failure_class import GATE_BROWSER_POOL
 
                 busy = sum(
                     1
@@ -463,9 +472,25 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
                     f"resident={resident_browsers()}/{MAX_BROWSERS}, busy={busy}, "
                     f"hot={len(HOT_POOL)}, cold={len(COLD_POOL)} — refusing"
                 )
+                # Labelled even though it has fired 0 times in 186,178
+                # requests, and it is worth knowing WHY it is unobservable
+                # today rather than assuming the label is dead code. From
+                # /crawl it is reachable in principle -- api.py catches this
+                # exception and answers 429 -- but not under the current
+                # numbers, for the arithmetic in the comment above. From the
+                # ungated endpoints (/md, /html, /screenshot, /pdf,
+                # /execute_js) it IS reachable and comes out as a 500, because
+                # those five re-wrap every non-HTTPException (api.py's
+                # markdown handler, server.py's /html, ...). That is the
+                # 2026-07-31 render-500-window regression still live outside
+                # /crawl; it is NOT fixed here, deliberately -- MAS calls none
+                # of them and it is a different change with a different blast
+                # radius. If you fix it, this gate value is what makes the
+                # result countable.
                 raise RenderCapacityExceeded(
                     f"browser pool at capacity ({resident_browsers()}/"
-                    f"{MAX_BROWSERS}, {busy} busy), refusing new browser"
+                    f"{MAX_BROWSERS}, {busy} busy), refusing new browser",
+                    gate=GATE_BROWSER_POOL,
                 )
 
         # Create new browser (either no match in pool, or existing ones at capacity)
