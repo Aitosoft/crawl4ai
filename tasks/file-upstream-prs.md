@@ -3,6 +3,95 @@
 **Status:** four filed, all awaiting upstream review. **A fifth is written and
 deliberately unfiled**, and three more candidates now exist — see below.
 
+---
+
+## ⚡ 2026-08-17: why this is now a maintenance task, not a good-citizenship one
+
+**Read this before deciding what to file.** Three things changed and they point in different
+directions.
+
+**1. The divergence is growing and it is concentrated where it hurts.** Our fork is **+4,696 / −193
+lines across 25 files**. About **2,143 of those are our own `aitosoft_*.py` files and cost nothing** —
+upstream will never touch them. The other **~2,375 sit on 17 files upstream also owns**:
+`crawler_pool.py` +605, `api.py` +429, `antibot_detector.py` +371, `async_crawler_strategy.py` +267,
+`remove_consent_popups.js` +168, `server.py` +104. **Upstream currently has 7 commits we lack and
+three of them edit `api.py`, `server.py` and `supervisord.conf`** — solving the same problem class
+our `aitosoft_failure_class.py` solves (`fix(docker): preserve failed crawl results`). The next
+`git merge upstream/develop` conflicts precisely where our most complex logic lives.
+
+**So a merged PR deletes our divergence permanently, and an unfiled one is a merge conflict every
+release, forever.** That is the argument. It is about our own maintenance cost, not about being
+good open-source citizens, and it should be weighed that way.
+
+**2. Our own stop condition has fired, and it argues for filing FEWER, better PRs.** This file says:
+*"if #2114 sits as long as #2085 did, stop filing and carry the patches."* Measured 2026-08-17:
+upstream has **116 open PRs** (101 on 2026-07-30 — the backlog grew 15 in 18 days), **5 commits on
+`develop` in all of August** against 42 in July and 86 in March, and **zero maintainer engagement on
+any of our four** in 18–31 days. #2114's only response is a favourable peer review from another
+contributor.
+
+The conclusion is not "stop entirely" — it is that **the marginal PR is worth little and the two
+that carry their own evidence are worth a lot.** Those are the **`desc` cap** (seventh, below) and
+the **consent snippet** (fifth), because a maintainer can verify both without our corpus. Everything
+else on this list should wait until one of those lands and tells us whether the channel is open.
+
+**3. The consent PR should argue a different fix than the one we built — and this is the most
+useful thing the 2026-08-17 research found.**
+
+We planned to argue the root collision. That is correct, and it is well supported: the adblocker
+ecosystem hit this identical failure in 2021 (`uBlockOrigin/uBlock-issues#1692` — sites blanked
+because `body` carried a consent class matched by a generic filter), fixed it at the engine level in
+uBO v1.37.3b15, and **still carries ~845 hand-written `:not(html)` / `:not(body)` guards** across
+Fanboy's and AdGuard's annoyance lists, verified live on EasyList master. That is a decade of
+institutional evidence that generic-substring-matches-root is a *chronic* hazard, and it needs
+neither repo's corpus.
+
+**But it points past our fix.** Every maintained system in this space **hides rather than removes**:
+
+- **DuckDuckGo's `autoconsent`** — ~300 CMP rule files, commits daily, the de-facto standard — has
+  **no `remove()` action in its rule syntax at all.** Its actions are exists / visible / wait /
+  click / **hide** / remove-class / set-style / eval.
+- EasyList's own written policy, uBO, AdGuard and Ghostery all inject `display:none`.
+
+**crawl4ai's snippet is more dangerous than any adblocker not because its selectors are worse but
+because its action is.** So the strongest submission is **"the generic tier should hide, not
+remove"**, with the structural guard as defence in depth — which is what we already do internally
+(our 20 generic selectors observe instead of removing), and which makes the root-collision question
+*moot* rather than merely survivable. A maintainer is far more likely to take a change that matches
+what the entire field converged on than a novel guard.
+
+**Pre-empt one objection in the PR body:** uBO's stricter follow-up (`7c8aec2`, 2022-01-12) was
+**reverted** (`5178b91`, 2022-02-16). A reviewer who knows that history will raise it. The revert
+was of an attempt to rewrite arbitrary user CSS into `:is()`/`:not()` wrappers; ours is a
+node-identity check immediately before `.remove()`. Different mechanism, far smaller blast radius.
+
+**And the honest tension, which the PR must address rather than dodge:** hiding is sufficient for
+`innerText` and **insufficient for a DOM extractor** — `cleaned_html` goes through lxml, so
+`display:none` leaves the banner text in the output. That is a real cost and it may be why upstream
+chose `.remove()` in the first place. The defensible synthesis is probably *remove only inside a
+structural guard, hide otherwise*. Work it out before filing; do not hand a reviewer an obvious hole.
+
+**⚠️ Time pressure, new:** upstream **PR #2139** (filed 2026-08-13, unreviewed) modifies **both**
+`remove_consent_popups.js` and `remove_overlay_elements.js` — for an unrelated defect, a CSP
+`sandbox` directive disabling script timers so the snippet's unconditional `await new
+Promise(setTimeout)` never resolves (GitHub raw: 31 s → 1.3 s; HuggingFace raw: hung >130 s →
+1.5 s). **It will conflict with our fifth and sixth candidates.** It is unreviewed so we can
+plausibly land first, but reference it — and note it independently found a *second* latent defect in
+that file, which supports our framing that the snippet has never been audited.
+
+**Also worth knowing before filing anything in `crawl4ai/`:** several problems we hold are already
+being fixed upstream. **PDF → 174-byte shell → tier-3 "blocked" → 500** is issue #2135 with two
+competing PRs (#2137, #2138); **`pypdf` missing from the image** is #2127 + PR #2130; **the
+`base_config` `None`/`""` merge trap** is #2121 + PR #2122; **cgroup v2 `memory.max == "max"`** is
+#2123 + PR #2132 (**we inherit that bug verbatim at `deploy/docker/utils.py:487`** — `int()` raises
+on the `"max"` sentinel, the bare `except` swallows it, and the function silently returns *host*
+memory percent; harmless in ACA where the limit is set, but it means **every offline test of the
+memory guard has been measuring the host**); and **the 30 s `wait_for_selector("body")` that
+`ignore_body_visibility: True` then discards** is #2129 + PR #2131. **Take theirs. Build none of
+these.**
+
+---
+
 **The seventh, and it is the cleanest we have: an image `desc` can be the whole
 page.** Shipped on our fork 2026-08-09 in `crawl4ai/content_scraping_strategy.py`
 (`MEDIA_DESCRIPTION_MAX_CHARS`). `find_closest_parent_with_useful_text` walks up
