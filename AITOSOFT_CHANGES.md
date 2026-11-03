@@ -16,6 +16,49 @@ What changed in this fork, when, why, and what it cost or proved. Newest first.
 
 ---
 
+## 2026-11-03: upstream v0.9.5 merged, behaviour kept for MAS (branch `upgrade-upstream-v0.9.5`, not yet deployed)
+
+**What changed:**
+- **Upstream v0.9.2 → v0.9.5** (`838869b`, 187 commits, 7 conflicted files, 25 hunks), an ordinary
+  merge of the tag. Fourteen upstream security advisories come with it; none was urgent for us.
+- **Four silent upstream changes were held at today's behaviour**, each pinned by tests:
+  - TLS tolerance (`f0ada4c` removed `--ignore-certificate-errors`), via
+    `egress_broker.ALLOW_INSECURE_TLS`;
+  - the 180 s `page_timeout` cap (now `CRAWL4AI_MAX_TIMEOUT_MS`);
+  - the capture point (`b536bf5`'s conditional consent wait, one line reverted);
+  - recycling off (`max_pages_before_recycle: 0`; upstream #2419).
+- **Also kept:** our 15 s connect budget through upstream's new proxy-chaining dials, and
+  falsy-field tolerance extended to upstream's new global forbidden set.
+- **MAS-visible, additive:**
+  - every result carries keyed `links`/`media`;
+  - 36 of 74 stored pages gain whitespace (+2 to +32 chars);
+  - nested-noscript `fit_html` keeps content;
+  - `Connection: close` on plain-http origins;
+  - `/health` reports 0.9.5.
+  - The heads-up is `tmp/mas-repo-messages/55-to-mas-…` (unsent).
+- **Build:**
+  - `azure-deployment/pip-constraints.txt` (the 0.9.2-capacity-gate-2 image's freeze) via
+    `PIP_CONSTRAINT`.
+  - `.dockerignore`: images up to `0.9.2-capacity-gate-2` carried `/tmp/project/.env`, `PRIVATE.md`
+    and `tmp/`.
+- **CI (on `main`, `f203391`):** `aitosoft-tests.yml` runs the offline half of `test-aitosoft/` on
+  every push.
+
+**Evidence:**
+- **Server A/B, `main` vs merged, 40 cases on one binary:** identical status, `failure_class`,
+  timing and `raw_markdown`.
+- **Suites:** offline 262, fixture 70, security 343.
+- **Inside the candidate image on real Chrome 156:** fixture 69/70, the one failure being
+  production's known inline-PDF case.
+- **Independent review:** no resolution bug; five follow-ups, all done.
+- Full record: `tasks/upgrade-upstream-v0.9.5.md` §8.
+
+**What it doesn't hold still:** Google Chrome. The candidate image moves 151.0.7922.137 →
+156.0.8078.79. Python packages are identical to production's except `anyio` (floats) and `pypdf`
+(new). Read any post-deploy rendering change as "merge *or* Chrome".
+
+---
+
 ## 2026-08-17: every 429 names the gate that refused (`0.9.2-capacity-gate-2`)
 
 **What changed:**

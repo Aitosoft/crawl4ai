@@ -31,7 +31,7 @@ crawl4ai-setup && crawl4ai-doctor   # browsers + install check
 pre-commit run --all-files          # black/ruff/mypy, scoped to our files only
 
 # Tests — run from repo root; TESTING.md has the full picture (counts as of 2026-11-03)
-pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py   # 256 pure-function, ~30 s
+pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py   # 262 pure-function, ~30 s
 pytest test-aitosoft/test_fixture_origin.py                           # 70 browser vs local origin, ~4 min
 pytest deploy/docker/tests/test_security_*.py                         # upstream's, what CI runs
 python test-aitosoft/test_regression.py --tier 1 --version <label>    # Tier 1, live sites — sparingly
@@ -132,7 +132,9 @@ Each line points at the entry that explains it. `FINDINGS.md` holds the code-lev
 
 ## Testing
 
-**Before every deploy:** the offline suites pass, then Tier 1 (`test_regression.py --tier 1`,
+**Before every deploy:** the offline suites pass (all of `pytest test-aitosoft/`, the fixture-origin
+browser suite included: it is the only pin on TLS tolerance and the capture point that renders, and CI
+runs only the pure half), then Tier 1 (`test_regression.py --tier 1`,
 4/4): `caverna.fi`, `accountor.com/fi/finland`, `solwers.com`, `jpond.fi`. **Tier 1 is a smoke
 test, not evidence of quality** — it checks only ~400 chars of markdown and half the expected names,
 and the sites have drifted (accountor redirects to `aspia.fi`, jpond.fi no longer obfuscates

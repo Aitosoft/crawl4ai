@@ -76,7 +76,12 @@ page in January (see [Consent and overlay scripts](#consent-and-overlay-scripts)
 use it is page damage, not a 400.
 
 **A falsy forbidden field is dropped, not rejected.** A truthy forbidden field gets a 400, and
-unknown fields are dropped silently. Don't transcribe the forbidden sets; print them:
+unknown fields are dropped silently. `[merged v0.9.5]`: v0.9.5 added
+`UNTRUSTED_GLOBAL_FORBIDDEN_FIELDS` (filesystem sinks and code fields, refused on every type) and
+checks it inside its own filter, so our tolerant wrapper, which pruned only the per-type sets, let
+`{"downloads_path": null}` or `{"save_images_locally": false}` become a 400 where v0.9.2 dropped
+them. Found by the merge's independent review; the wrapper now prunes the global set too, pinned by
+`test_falsy_global_forbidden_fields_are_dropped_not_rejected`. Don't transcribe the forbidden sets; print them:
 `python -c "import sys; sys.path.insert(0,'deploy/docker'); from aitosoft_trust import apply_trust_relaxations as a; a(); import crawl4ai.async_configs as c; print({k: sorted(c.UNTRUSTED_FORBIDDEN_FIELDS[k]) for k in ('CrawlerRunConfig','BrowserConfig')})"`.
 Note that `cookies` and `extra_args` are `BrowserConfig` fields. `test-aitosoft/test_mas_contract.py`
 pins MAS's contract, so run it after every upstream sync.

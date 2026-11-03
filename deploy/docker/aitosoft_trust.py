@@ -65,10 +65,18 @@ def apply_trust_relaxations() -> None:
     #    configs sent). A falsy power-field is semantically identical to its
     #    absence, so absorbing it costs nothing security-wise. Truthy
     #    forbidden fields (js_code, proxy_config, cookies, ...) still 400.
+    #
+    #    v0.9.5 added UNTRUSTED_GLOBAL_FORBIDDEN_FIELDS (filesystem sinks and
+    #    code fields, refused on every type), checked inside upstream's filter.
+    #    Pruning only the per-type set left e.g. {"downloads_path": null} or
+    #    {"save_images_locally": false} as a 400 where v0.9.2 dropped them, so
+    #    the global set is pruned too (read at call time; absent before v0.9.5).
     _upstream_filter = _ac._filter_untrusted_fields
 
     def _filter_untrusted_fields_tolerant(type_name, params):
-        forbidden = _ac.UNTRUSTED_FORBIDDEN_FIELDS.get(type_name, set())
+        forbidden = _ac.UNTRUSTED_FORBIDDEN_FIELDS.get(type_name, set()) | getattr(
+            _ac, "UNTRUSTED_GLOBAL_FORBIDDEN_FIELDS", set()
+        )
         pruned = {k: v for k, v in params.items() if not (k in forbidden and not v)}
         return _upstream_filter(type_name, pruned)
 

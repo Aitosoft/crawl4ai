@@ -445,3 +445,87 @@ def test_non_429_envelopes_are_not_widened(monkeypatch):
     body = _post_crawl(client).json()
     assert "capacity_gate" not in body
     assert body["failure_class"] == "render_timeout"
+
+
+# ── what the v0.9.5 merge kept, pinned where CI can see it ───────────────
+# The behavioural tests for TLS and the capture point need a browser and live
+# in test_fixture_origin.py, which CI does not run. These are their offline
+# counterparts: cheaper, blunter, and visible on every push.
+
+
+def test_tls_tolerance_survives_enforce_egress():
+    """Upstream f0ada4c (v0.9.5) removed --ignore-certificate-errors, and
+    enforce_egress forces ignore_https_errors=False unless
+    egress_broker.ALLOW_INSECURE_TLS. Our relaxations set it, so a broken-cert
+    site still renders (behavioural pin: test_a_broken_certificate_still_renders)."""
+    import egress_broker
+    from utils import load_config
+
+    assert egress_broker.ALLOW_INSECURE_TLS is True
+    cfg = BrowserConfig()
+    egress_broker.enforce_egress(cfg)
+    assert cfg.ignore_https_errors is True
+
+    # utils.DEFAULT_CONFIG supplies no ignore_https_errors, so this is config.yml's.
+    kwargs = load_config()["crawler"]["browser"]["kwargs"]
+    assert kwargs.get("ignore_https_errors") is True
+
+
+def test_falsy_global_forbidden_fields_are_dropped_not_rejected():
+    """v0.9.5 added UNTRUSTED_GLOBAL_FORBIDDEN_FIELDS; until our tolerant filter
+    learned about it, these 400'd where v0.9.2 dropped them."""
+    load_browser({**PERSONA_BROWSER_CONFIG, "downloads_path": None})
+    load_crawler(
+        {**V13_CRAWLER_CONFIG, "save_images_locally": False, "image_save_dir": ""}
+    )
+    with pytest.raises(UntrustedConfigError):
+        load_crawler({"save_images_locally": True})
+
+
+def test_browser_recycling_stays_off_by_default():
+    """Upstream 15f4b29 defaults max_pages_before_recycle to 200 through the
+    config deep-merge; #2419 deadlocks after a recycle once a crawl has been
+    cancelled, and our wall-clock fence cancels crawls. Off until PR #2432."""
+    from utils import load_config
+
+    assert load_config()["crawler"]["pool"]["max_pages_before_recycle"] == 0
+
+
+def test_consent_wait_stays_unconditional():
+    """A string pin for test_the_capture_point_includes_the_consent_wait.
+    Upstream b536bf5 (#2139) made this wait conditional, which moved MAS's
+    capture point 0.5 s earlier on every page without a consent action."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(
+        here, "..", "crawl4ai", "js_snippet", "remove_consent_popups.js"
+    )
+    with open(path) as fh:
+        js = fh.read()
+    assert "if (accepted || apiCalled) await new Promise" not in js
+    assert "\n    await new Promise(r => setTimeout(r, 500));\n" in js
+
+
+def test_failed_results_carry_keyed_links_and_media(monkeypatch):
+    """One shape for `links`/`media` whichever code path built the result
+    (server._crawl_response -> normalize_result_shapes)."""
+    client, server = _crawl_client_and_app()
+    monkeypatch.setattr(
+        server,
+        "handle_crawl_request",
+        _one_result_response(
+            success=False,
+            status_code=0,
+            error_message="net::ERR_NAME_NOT_RESOLVED",
+            failure_class="origin_unreachable",
+            links={},
+        ),
+    )
+    r = client.post(
+        "/crawl",
+        json={"urls": ["https://x.fi/"]},
+        headers={"Authorization": f"Bearer {os.environ['CRAWL4AI_API_TOKEN']}"},
+    )
+    assert r.status_code == 200
+    result = r.json()["results"][0]
+    assert result["links"] == {"internal": [], "external": []}
+    assert result["media"] == {"images": [], "videos": [], "audios": []}

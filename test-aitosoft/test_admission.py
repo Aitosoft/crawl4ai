@@ -360,3 +360,56 @@ def test_the_capacity_slot_is_released_when_the_pool_refuses(monkeypatch):
             adm.set_render_gate(None)
 
     run(main())
+
+
+def test_the_capacity_slot_is_released_even_if_releasing_the_crawler_raises(
+    monkeypatch,
+):
+    """The `finally` gives the render slot back even when the crawler release
+    (or, on the PDF path added in v0.9.5, `crawler.close()`) raises. Before
+    2026-11-03 the gate release sat after the crawler release in the same
+    `finally`, so one raise there leaked the slot for the life of the process.
+    Hermetic: the seed check is patched, nothing resolves or renders."""
+    import aitosoft_admission as adm
+
+    async def main():
+        import api
+        import crawler_pool
+
+        gate = RenderGate(capacity=1, max_queue=0, max_wait_s=0.1)
+        adm.set_render_gate(gate)
+
+        class _Crawler:
+            async def arun(self, *a, **k):
+                raise RuntimeError("render failed")
+
+        async def _get_crawler(cfg):
+            return _Crawler()
+
+        async def _broken_release(crawler):
+            raise RuntimeError("release failed")
+
+        monkeypatch.setattr(api, "validate_url_destination", lambda url: None)
+        monkeypatch.setattr(crawler_pool, "get_crawler", _get_crawler)
+        monkeypatch.setattr(crawler_pool, "release_crawler", _broken_release)
+        config = {
+            "crawler": {
+                "base_config": {},
+                "memory_threshold_percent": 85.0,
+                "rate_limiter": {"enabled": False, "base_delay": [1, 2]},
+            },
+            "limits": {"wall_clock_s": 180},
+        }
+        try:
+            with pytest.raises(RuntimeError, match="release failed"):
+                await api.handle_crawl_request(
+                    urls=["https://example.com"],
+                    browser_config={},
+                    crawler_config={},
+                    config=config,
+                )
+            assert gate.snapshot()["in_use"] == 0, f"slot leaked: {gate.snapshot()}"
+        finally:
+            adm.set_render_gate(None)
+
+    run(main())

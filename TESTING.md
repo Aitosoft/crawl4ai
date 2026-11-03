@@ -37,8 +37,8 @@ what we did".
 ## Offline suites: what proves what
 
 ```bash
-pytest test-aitosoft/                                                # 326 tests, ~270 s
-pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # 256 tests, ~30 s (pure-function)
+pytest test-aitosoft/                                                # 332 tests, ~270 s
+pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # 262 tests, ~30 s (pure-function)
 pytest test-aitosoft/test_fixture_origin.py                          # 70 tests, ~245 s (browser, loopback)
 pytest deploy/docker/tests/test_security_*.py -q                     # upstream's: 343 passed + 1 xfailed, ~8 s (needs pypdf)
 ```
@@ -423,7 +423,7 @@ Either way, CI runs only the offline suites, not this one (see "Known limitation
 
 | Gate | When | Bar |
 |---|---|---|
-| Offline suites (`pytest test-aitosoft/`) | before every deploy; after every upstream sync | all pass (326 on 2026-11-03, after the v0.9.5 merge). On a fresh clone the four corpus tests fail (they skip under CI); see "Known limitations" |
+| Offline suites (`pytest test-aitosoft/`) | before every deploy; after every upstream sync | all pass (332 on 2026-11-03, after the v0.9.5 merge). On a fresh clone the four corpus tests fail (they skip under CI); see "Known limitations" |
 | Upstream security suite (`pytest deploy/docker/tests/test_security_*.py`) | after every upstream sync; after changing `deploy/docker/` | all pass, 1 xfail (316 + 1 on 2026-11-03) |
 | Tier 1 regression | before every deploy | 4/4 |
 | Post-deploy smoke | after every deploy | `/health` 200; unauthenticated `POST /crawl` → 401; check the new revision has 100 % of traffic **before** crawling (a mid-cutover smoke reported the old image on 2026-07-30; `az` commands are in `AZURE_OPERATIONS.md`); one authenticated `raw://` crawl → 200, `failure_class: "none"`. A made-up domain → 200, `success: false`, `origin_unreachable`, `DNS: host does not resolve`; it exercises the egress path without contacting anyone, and is what caught the 2026-08-05 `NameError` |

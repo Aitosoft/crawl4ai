@@ -615,7 +615,7 @@ as written, apart from the dated *[Corrected]* notes where a claim was wrong.
 
 ### Evidence (re-runnable; scratch outputs under the session scratchpad, numbers here)
 
-- **Suites on the merged tree:** offline 256/256 (251 + 5 new); fixture origin 70/70 (67 + 3 new,
+- **Suites on the merged tree:** offline 256/256 (251 + 5 new; 262 after the review's 6 pins); fixture origin 70/70 (67 + 3 new,
   headless shell, arm64); security 343 + 1 xfail (venv with `pypdf` 6.21.4); upstream's non-security
   docker tests 102 pass, 5 fail, all deliberate (single-URL 400 ×2, recycling off ×3).
   `test_stream_crawls_allowed_seeds_and_reports_refused`, red in report 3, passes now because of the
@@ -671,15 +671,76 @@ as written, apart from the dated *[Corrected]* notes where a claim was wrong.
 - Seed check kept async rather than shaped like #2428 (reason above).
 - `.dockerignore` added on the branch: not asked for, security hygiene, no behaviour change.
 
+### Build note (candidate image, not deployed)
+
+`az acr build … --image crawl4ai-service:0.9.5-candidate` from `3b6b2a1` (+ docs), 2026-11-03
+13:00–13:10 UTC, ACR run `cb1q`, digest `sha256:2fdddd05…`. No Container App change. Read back with
+`az acr run`:
+- **Python packages: identical to production's freeze** except `anyio` 4.14.2 → 4.16.0 (floats, as
+  documented in the constraints header) and the new `pypdf` 6.21.4. Playwright browser caches are the
+  same builds (`chromium-1228/1234`).
+- **Google Chrome 151.0.7922.137 → 156.0.8078.79**, and the base image's Python 3.12.14 → 3.12.16.
+  Chrome is the one stack component the constraints can't hold. It moves five majors in this deploy,
+  under the old Playwright 1.62.
+- `/tmp/project/` no longer has `.env`, `.env.txt`, `PRIVATE.md`, `tmp/`, `test-aitosoft/artifacts/`
+  or `.claude/` (`.dockerignore` works). `PIP_CONSTRAINT` stays set in the runtime env; nothing
+  pip-installs at runtime.
+- **Our suites inside that image, on real Chrome 156** (`az acr run`, as `appuser`, `CI=true`,
+  loopback fixture origin only): offline 251 passed + 5 skipped; **fixture origin 69/70**. The one
+  failure is `pdf-inline` (`Blocked by anti-bot … minimal_text, 356 bytes`), the production inline-PDF
+  500 that §Target predicted for any real-Chrome run. TLS parity and its control, the capture-point
+  test and every other route pass on Chrome. This is the first time our browser suite ran on Google
+  Chrome.
+- **Second instrument for `pdf-inline`:** the same suite inside the *production* image
+  (`0.9.2-capacity-gate-2`, Chrome 151, its own August tests). The first attempt errored 64 times on
+  `PermissionError: /tmp/project/.env` (python-dotenv, run as `appuser`): the baked-in `.env` again.
+  Rerun from a copy without it: **66/67, the same single `pdf-inline` failure.** So that red is
+  production's today on Chrome 151 and not caused by the merge, and every other route passes on both
+  images (the candidate's 69/70 is those 66 plus the 3 new tests).
+
+### Independent review (clean context, 2026-11-03)
+
+It ran its own worktrees (offline 256/256, fixture 70/70, security 343 + 1 xfail, negative controls
+on the egress, capture-point, TLS and noscript tests) and found **no correctness bug in the
+resolutions**. Its findings, and what was done:
+
+1. **Chrome 151 → 156 ships with the merge, under Playwright 1.62: an untested combination.** Done:
+   the suites ran inside the candidate image on Chrome 156 (above). The Dockerfile comment, which
+   claimed "a code change and a browser-stack move never ship in one build", is corrected, and so is
+   MAS draft §4 ("post-deploy deltas may be Chrome's"). Pinning Chrome via a `.deb` or copying
+   `/opt/google/chrome` from the old image was considered and not done: the suite passes on 156,
+   Chrome stable would have moved at the next rebuild anyway, and owning a browser binary is a
+   maintenance bill for a variable we can now test.
+2. **TLS parity, recycling-off, the capture point and the shape normalisation were invisible to
+   CI.** It removed all four and the offline suite stayed green. Done: offline pins in
+   `test_mas_contract.py` (`test_tls_tolerance_survives_enforce_egress`,
+   `test_browser_recycling_stays_off_by_default`, `test_consent_wait_stays_unconditional`,
+   `test_failed_results_carry_keyed_links_and_media`), each with a negative control run here. CLAUDE.md's
+   pre-deploy line now says the browser suite is part of "the offline suites".
+3. **§8's "checked by building it" was written before the build finished.** True; the build note is
+   above now.
+4. **A render slot leaks if the crawler release raises** (the PDF path's new `close()`, or
+   `release_crawler`). Done: inner `try/finally` in `handle_crawl_request`, pinned by
+   `test_the_capacity_slot_is_released_even_if_releasing_the_crawler_raises` (negative control run).
+5. **Falsy fields in upstream's new `UNTRUSTED_GLOBAL_FORBIDDEN_FIELDS` became 400s.** Verified by
+   execution on both trees: `main` drops `{"downloads_path": null}`, `{"save_images_locally": false}`,
+   `{"image_save_dir": ""}`; the merge rejected them. MAS's audited payloads don't send them, but it
+   narrowed the relaxation's own contract. Done: the tolerant filter prunes the global set too;
+   `test_falsy_global_forbidden_fields_are_dropped_not_rejected`. Also noted, not changed:
+   `crawler_configs` with a single URL is now honoured (it was ignored); MAS sends none.
+6. **Unmeasured: `OptimizationHints` on Chrome, `Connection: close` on multi-origin plain-http
+   pages.** Recorded; the MAS draft now says "not expected, unmeasured beyond single-origin pages".
+   MAS draft §3 tables: now "unchanged on our 13 pages", with upstream's `<th>`/rowspan rework named.
+
 ### What I am least sure of
 
-1. **Production's browser.** Every browser result here is Chromium 1208 headless shell on arm64 with
-   Playwright 1.58. Production is Chrome 151 with Playwright 1.62. TLS tolerance is a context option
-   on both, and the A/B is tree-against-tree on one binary, so the merge's *delta* is well measured;
-   the absolute behaviour on Chrome isn't. The post-deploy smoke should include one broken-cert host
-   only if a safe one exists; otherwise rely on the `origin_unreachable` rate.
-2. **The capture-point test's margin** is ~0.2 s on each side on loopback. It passed every time here,
-   but a slow CI runner (if the browser suite ever runs in CI) could flake it. If it flakes, widen
-   the paint time toward 2.9 s; don't delete it.
-3. **That the candidate image resolves exactly to the freeze** on amd64/3.12: checked by building it
-   (see the build note below), not by reasoning.
+1. **Production's browser, at full scale.** The suite on Chrome 156 is loopback fixtures: no real
+   anti-bot vendor, no real CMP, no real fonts or third-party scripts. Chrome 156's fingerprint
+   against Cloudflare et al. is untested, and blocks are the largest failure class. Watch
+   `origin_blocked` and the patchright-rescue rate in MAS's first batch as well as
+   `origin_unreachable`; if they move, suspect Chrome before the merge.
+2. **The capture-point test's margin** is ~0.2 s on each side on loopback. It passed on arm64 and on
+   ACR's amd64 with Chrome 156, but a slow runner could flake it. If it flakes, widen the paint time
+   toward 2.9 s; don't delete it.
+3. **The `.env` in old images.** Not a public leak (ACR has anonymous pull off), but every
+   `aitosoftacr` puller has had the token, and those images remain the rollback targets.

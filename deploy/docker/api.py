@@ -1375,14 +1375,19 @@ async def handle_crawl_request(
             })
         )
     finally:
-        if crawler:
-            if is_pdf_crawl:
-                await crawler.close()  # not pooled; release_crawler would be a no-op
-            else:
-                await release_crawler(crawler)
-
-        if _gate is not None and _gate_weight:
-            await _gate.release(_gate_weight)
+        # Aitosoft: the render slot is released even if closing or releasing
+        # the crawler raises. A slot that leaks is gone until the process
+        # restarts; at render_capacity 2, two leaks make every request on the
+        # replica a 429. (v0.9.5 added the PDF crawler's close() here.)
+        try:
+            if crawler:
+                if is_pdf_crawl:
+                    await crawler.close()  # not pooled; release_crawler would be a no-op
+                else:
+                    await release_crawler(crawler)
+        finally:
+            if _gate is not None and _gate_weight:
+                await _gate.release(_gate_weight)
 
 async def _prepend_results(first: List[CrawlResult], results_gen: AsyncGenerator) -> AsyncGenerator:
     for result in first:

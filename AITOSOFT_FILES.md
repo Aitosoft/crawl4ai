@@ -48,7 +48,9 @@ gunicorn → aitosoft_entry:app
   `browser_config.headers` is allowed; the `page_timeout` clamp is 180 s, not
   60 s (since v0.9.5 via `CRAWL4AI_MAX_TIMEOUT_MS`, set with `setdefault`);
   `magic`, `simulate_user` and `override_navigator` are **accepted**; a
-  falsy forbidden field is dropped rather than rejected; and
+  falsy forbidden field is dropped rather than rejected (since v0.9.5 that
+  includes upstream's new `UNTRUSTED_GLOBAL_FORBIDDEN_FIELDS`, e.g.
+  `downloads_path: null`, which v0.9.5 alone would 400); and
   `egress_broker.ALLOW_INSECURE_TLS = True`, so broken certificates still render
   after upstream removed `--ignore-certificate-errors` (pinned by
   `test_fixture_origin.py`'s two broken-certificate tests). A truthy forbidden field
@@ -315,7 +317,9 @@ Our heaviest diff. Everything is deployment-specific.
      `TERMINAL FAILURE`, and is where a pre-admission dead domain lands.
    - 500.
 
-   The gate is released in `finally`.
+   The gate is released in an inner `finally`, so it is given back even if
+   the crawler release (or the PDF path's `close()`) raises; a leaked slot
+   lasts until the process restarts.
 
 **`handle_stream_crawl_request`**
 - Awaited seed check. A pool refusal uses the same 429 builder.
@@ -568,8 +572,8 @@ Upstream will never touch these, so they cost nothing at merge time.
 - **Gitignored:** `artifacts/` holds the guard's evidence corpus
   (`tasks/guard-corpus-is-not-in-the-repo.md`).
 - `TESTING.md` owns test counts and procedure. To verify the count:
-  `pytest --collect-only -q test-aitosoft/` (326 on 2026-11-03 after the v0.9.5
-  merge: 256 offline + 70 fixture-origin).
+  `pytest --collect-only -q test-aitosoft/` (332 on 2026-11-03 after the v0.9.5
+  merge: 262 offline + 70 fixture-origin).
 
 **Other**
 - `azure-deployment/`: `deploy-image.sh` is the only deploy path.

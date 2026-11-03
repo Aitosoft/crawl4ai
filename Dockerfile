@@ -139,8 +139,10 @@ fi' > /tmp/install.sh && chmod +x /tmp/install.sh
 COPY . /tmp/project/
 
 # Aitosoft: resolve every pip step to the versions the previous production
-# image ran, so a code change and a browser-stack move never ship in one build.
-# Why, and how to regenerate: the header of the file itself.
+# image ran, so Python packages (playwright, patchright, lxml, ...) don't move
+# by accident with a code change. Google Chrome is NOT pinned by this:
+# `playwright install chrome` below takes current stable, so record its version
+# for every build that ships. Why, and how to regenerate: the file's header.
 ENV PIP_CONSTRAINT=/tmp/project/azure-deployment/pip-constraints.txt
 
 # Copy supervisor config first (might need root later, but okay for now)
