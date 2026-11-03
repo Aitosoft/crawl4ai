@@ -1,270 +1,137 @@
 # Open tasks, in the order to do them
 
-**Updated:** 2026-08-17, after the final WAA sweep ended and a six-agent forensic review of it.
-
-**Read this first: the service is in good shape and the open list is deliberately short.** Seven
-task files were closed on 2026-08-17 — not because they were wrong, but because the sweep sized the
-harm and the harm was smaller than the risk of fixing it. The reasoning for each closure is in
-`tasks/done/post-sweep-closure-2026-08-17.md`, and it is worth reading before you re-derive any of
-them.
-
-## How to read this file
-
-Every item below gives you **the concern, the evidence, and why it matters** — and deliberately no
-ordered checklist. You are a peer with a clean context and the same tools; a step list would narrow
-your judgement, and this repo's record is that a fresh session re-deriving the diagnosis catches
-what the author missed. **You are expected to challenge what is written here and to record what you
-found wrong, in the task file itself.** That has happened on nine consecutive task files and it is
-the quality gate that actually works.
-
-Where a task file and this index disagree, the task file wins and the index is stale.
-
----
+**Updated 2026-11-03.** Each task file carries the concern, the evidence and the design space, and
+deliberately no checklist. You're expected to challenge it and record what you found wrong in the
+file itself; that has happened on nine consecutive task files, and it is the quality gate that
+works. Where a task file and this index disagree, the task file wins.
 
 ## State of the world
 
-**Production:** last deploy 2026-08-17 (`capacity-gate-2`; the one before it was 2026-08-09).
-The `-2` is not a fix on top of a broken `-1` — it is the same change with two comment corrections
-and one defensive guard, rebuilt so the committed tree and the running image are identical.
-**Check the running image, revision, trigger and replica bounds with `az`, not with any document
-here** — `AZURE_OPERATIONS.md` opens with the exact commands, and every transcribed copy of those
-values in this repo has drifted at least once.
+- **Production is healthy and idle.** It last changed 2026-08-17. Check image, revision, trigger and
+  replica bounds with `az` (`AZURE_OPERATIONS.md` §0), never from a document. **`main` ==
+  production + docs** as of 2026-11-03. Verify that rather than believe it.
+- **No sweep is scheduled.** MAS's last sweep ended 2026-08-16. Since then, traffic has been small
+  test batches only (~1,540 requests in 2½ months). That makes now the window for changes that need a
+  quiet service.
+- **What the last sweep says about priorities.** 186,178 requests over 175 h. Of MAS's 60,874
+  capture attempts, 86.1 % were stored and **95 % of failures were the origin's**. Our share, in
+  captures lost:
+  - 500s: 156;
+  - 429s: 29;
+  - `render_defect`: 27;
+  - `unrenderable_content`: 4.
 
-**`main` == production** as of the 2026-08-17 deploy. This sentence has been false in both
-directions before; verify it rather than believing it.
+  Size any new defect against those numbers before investigating it.
+- **Cost.** ~$0.605 per hour of sweep (2 replicas) and $0 when idle. **Invoice-verified** to within
+  1 % on 2026-08-15/16 (`AZURE_OPERATIONS.md` §4.4). USD, not EUR.
 
-**Nothing is gating. Nothing is waiting on a deploy. There is no active campaign** — MAS's sweep
-finished 2026-08-16T21:50 UTC and their request rate against us is near zero until the next one.
-That is what made 2026-08-17 the right window for a revision change; it will not be free once the
-next campaign starts.
+## Open items
 
-### What the final sweep measured
-
-2026-08-09T14:19 → 2026-08-16T21:50, **175.5 h, 186,178 `/crawl` requests** — 5× anything either
-repo had run. 93.6 % × 200, 5.66 % × 429, 0.69 % × 5xx. Mean true concurrency **1.68**.
-
-**The number that should govern your sense of proportion** is MAS's terminal accounting, because it
-counts pages we cost them rather than wire events: of **60,874 capture attempts, 86.1 % stored**;
-our 429s cost them **29 captures**, our 500s **156**, our `render_defect` **27**. **95 % of all
-their failures were the origin** — dead domains, 404s, and sites blocking us. Across 175 hours,
-**2 requests failed hard at the wire** (both in the one moment both replicas restarted together).
-
-**The scale trigger 6 → 12 change (2026-08-14) is the most valuable thing this repo has done in six
-months, and it was one number.** Mean fleet 11.05 → 1.97, slot utilisation 8.9 % → 40 %, cost per
-1,000 requests **$3.28 → $0.51**. It cost queue wait (0.041 s → 0.919 s mean) and 27× more
-RenderGate rejections per admit, all absorbed by MAS's retry ladder.
-
-**Costs are in USD.** The Azure usage export carries no currency column and every euro figure this
-repo published before 2026-08-17 is ~12 % high. `€398.89 for one sweep` is `$398.89 ≈ €350`.
-
----
-
-## The open items
-
-| # | Task | Size | Why it is on this list |
+| # | Task | Size | Why now |
 |---|---|---|---|
-| **1** | `file-upstream-prs.md` | M judgement | The simplicity play, and it is time-sensitive. |
-| **2** | `render_mode` mislabel — no file, it is one word | XS | We report a lie in a field MAS parses. |
+| **1** | `upgrade-upstream-v0.9.5.md` | L | 233 upstream commits since our last sync. Two silent behaviour changes MAS depends on: TLS verification turns on, and the `page_timeout` cap drops to 60 s. The service is quiet now, and won't be during a sweep. |
+| **2** | The `render_mode` mislabel (no file; one word) | XS | We report a wrong value in a field MAS parses. Do it after #1 ships. |
+| **3** | `file-upstream-prs.md` | M | After #1 ships. File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
 
-**Two items left this list on 2026-08-17, in opposite ways, and both are worth two minutes before
-you re-derive anything.** `capacity-gate-in-the-429-envelope.md` **shipped** — and the implementing
-session found the invariant the whole feature is sold on was not achievable as specified, because
-there are **four** things in this service that answer 429, not three. `fixture-origin-bypasses-the-
-pinning-proxy.md` **closed unbuilt**: the gap is real, but every one of the 67 fixture tests targets
-an always-up local `http://` origin, so the proxy behaviour that differs from the direct path
-(CONNECT, connect timeout, dead-host cost) cannot be reached by any of them — and the 80 % version
-already exists in `test_egress_dns_offload.py`. Both records are in `tasks/done/`.
+**Owed to MAS, not a task file:**
+`tmp/mas-repo-messages/54-to-mas-live-config-unchanged-and-14-5-is-now-invoice-verified.md` is
+drafted and **unsent**, because Tero asked for quiet in the platform repo on 2026-11-03 while they
+deploy. Send it when he lifts that, and before their next sweep. Item 1's MAS heads-up can go in the
+same message.
 
-### 1. `file-upstream-prs.md` — reframed, and now time-sensitive
+### 2. The `render_mode` mislabel
 
-**The concern is maintenance surface, not altruism.** Our fork is **+4,696 / −193 lines across 25
-files**, and **~2,375 of those lines sit on 17 files upstream also owns**. `crawler_pool.py` alone
-is +605. Upstream currently has 7 commits we lack, and three of them edit `api.py`, `server.py` and
-`supervisord.conf` — our three heaviest diffs — solving the same problem class our
-`aitosoft_failure_class.py` solves. **The divergence is actively growing.** A merged PR deletes our
-diff permanently; an unfiled one is a merge conflict every release, forever.
+In `api.handle_crawl_request`, the exception path's `failed_result(...)` call omits
+`render_mode`, which then defaults to `"full"` (`aitosoft_failure_class.failed_result`). The seed
+check runs before the static short-circuit, so **a static-mode request to a dead domain is reported
+to MAS as `"full"`.** One word, in a field they parse. Find it by name, not by line number: line
+numbers in `api.py` drift with every change, and the merge will move them again.
 
-**The reframe, and it is the most useful thing the 2026-08-17 research found.** We planned to argue
-the consent PR on the root collision. That is right but it is not the strongest argument, and it
-proposes the wrong fix:
-
-- **DuckDuckGo's `autoconsent`** — ~300 CMP rule files, commits daily — has **no `remove()` action
-  in its rule syntax at all.** Its actions are hide / click / wait / set-style.
-- **uBlock and EasyList hit our exact bug in 2021** (`uBlockOrigin/uBlock-issues#1692`: sites
-  blanked because `body` carried a consent class matched by a generic filter) and still carry
-  **~845 hand-written `:not(html)` / `:not(body)` guards** across Fanboy's and AdGuard's lists,
-  verified live on EasyList master.
-- **Every maintained system in this space hides rather than removes.** crawl4ai's snippet is more
-  dangerous than any adblocker not because its selectors are worse but because **its action is.**
-
-So the strongest submission is **"the generic tier should hide, not remove"**, with the structural
-guard as defence in depth — which is what we already do internally, and what the whole field
-converged on. It makes the root-collision question moot rather than merely survivable.
-
-**Time pressure:** upstream **PR #2139** (filed 2026-08-13, unreviewed) modifies **both**
-`remove_consent_popups.js` and `remove_overlay_elements.js`, for an unrelated CSP-sandbox hang. File
-soon and reference it.
-
-**And read our own stop condition before starting: it has fired.** The file says "if #2114 sits as
-long as #2085 did, stop filing and carry the patches." Upstream has **116 open PRs**, **5 commits in
-all of August** (against 42 in July), and **zero maintainer engagement on any of our four** in
-18–31 days. **That is a real argument for filing fewer, better PRs rather than more** — the `desc`
-cap and the consent snippet are the two that carry their own evidence and need no context from us.
-
-**What I am least sure of:** whether a "hide" change is acceptable to upstream at all, since
-`cleaned_html` is parsed by lxml and `display:none` still leaves the text in the DOM. Hiding is
-sufficient for `innerText` and insufficient for a DOM extractor. That tension is real and the PR
-must address it — possibly by removing only *inside* a structural guard and hiding otherwise.
-
-### 2. The `render_mode` mislabel — one word
-
-`api.py:1216`'s `failed_result(...)` omits `render_mode`, which then defaults to `"full"`
-(`aitosoft_failure_class.py:574`). Because the seed check (`api.py:782`) precedes the static
-short-circuit (`:786`), **a static-mode request to a dead domain is reported to MAS as `"full"`.**
-One word, in a field they parse. (Line numbers re-derived 2026-08-17 after the capacity-gate change
-moved them — they had already drifted ~18 lines, which is why this item names what to look for and
-not just where.)
-
-**The sibling half of this item is dead and should not be rebuilt:** `render_mode: "static"` failed
-fetches log no `failure_class` at all (`aitosoft_static_mode.py:301,307`). Real in code, and
-**exactly zero requests wide** — static mode was used **0 times in 186,178 requests**, confirmed
-from MAS's side (`renderMode: "full"` on all 61,937 of their rows).
+Its sibling is not worth building: static-mode failed fetches log no `failure_class`. That is real in
+code, but static mode was used **0 times in 186,178 requests** (MAS confirms: `renderMode: "full"` on
+all 61,937 of their rows).
 
 ---
 
-## Parked on purpose — do not pick these up unasked
+## Parked on purpose: don't pick these up unasked
 
-**`residential-egress-retry-path.md`.** It addresses the layer our data says actually dominates:
-blocks are IP-based, not fingerprint-based, and Azure's shared SNAT means we inherit co-tenants'
-reputation. But it needs an instrument **neither repo has** — a real browser from a residential IP.
-`curl` cannot substitute: a 403 there separates nothing, and even a 200 could be TLS or header
-shape rather than address reputation. Also relevant: the one independent 2026 benchmark puts
-Patchright at **25 of 31** Cloudflare targets against vanilla Playwright's **24** — our tier-2 has a
-small, measured ceiling, and every "residential vs datacentre" percentage in circulation comes from
-companies selling residential proxies.
+- **Dead-browser replacement (upstream `3f9f790`, on develop after v0.9.5).** It replaces pooled
+  browsers whose Chromium process died. We lack it, and how often a browser dies in production is
+  unmeasured (the 74 restarts in the last sweep were whole-container). It lands in our most-modified
+  file and carries a silent trap: an auto-merged janitor block calls helpers that don't exist on our
+  side, and the janitor dies without a log. See `upgrade-upstream-v0.9.5.md`. **Make it a task only
+  with a measured frequency**, or when the next sync brings it in anyway.
+- **`residential-egress-retry-path.md`.** It aims at what actually dominates (blocks are IP-based,
+  and Azure's shared SNAT inherits co-tenants' reputation). But it needs an instrument neither repo
+  has: a real browser from a residential IP. The one independent 2026 benchmark puts Patchright at 25
+  of 31 Cloudflare targets against vanilla Playwright's 24.
+- **`guard-corpus-is-not-in-the-repo.md`.** XS. Three tests fail on a fresh clone because
+  `test-aitosoft/artifacts/*` is gitignored. It fails loudly, in the safe direction. Commit 4–6 files
+  to `artifacts/keep/`, or delete the task. Don't open its sizing table.
+- **Tier 1 has drifted.** accountor redirects to `aspia.fi`, jpond.fi no longer obfuscates emails,
+  caverna.fi's homepage is a location picker, and the gate checks only ~400 chars and half the
+  expected names (`TEST_SITES_REGISTRY.md`). It is a smoke test now, not evidence. Refresh it only
+  when a real need for a live gate appears; the fixture origin and `raw://` A/B are the real
+  instruments.
+- **`test_fingerprint.py` has been broken since v0.9.2** (it sends `js_code`, which gets a 400).
+  `test_soak.py` breaks the live-site rules (327 live requests in its stored run). Fix or delete each
+  one when someone next needs it; until then, don't run them.
+- **The egress proxy may answer with its own 400 on an idle socket.** `_handle` writes `_BAD` when
+  an idle client socket times out after 30 s (`egress_proxy.py`). On full Chromium, a stalled
+  plain-http navigation once got that 400 and ended as `origin_http_error` after 162.9 s (seen once
+  in the upgrade's trial merge, not reproduced; `tmp/upgrade-v0.9.5-evidence/upstream-report-3-trial-merge.md`
+  §6.2). Production runs full Chrome. Size it before building anything, e.g. from MAS's data:
+  `origin_http_error` with status 400 on plain-http URLs.
+- **The response-size backstop and the `colspan` amplifier.** Pathological markup only, and never
+  seen in production. The sweep's largest response was 32.6 MB against the 232 MB that lost a customer
+  before the `desc` cap (`FINDINGS.md` §Output). Raise its priority if a real instance appears, or if
+  OOMs become worth fixing by bounding allocations.
+- **Scale-trigger or `render_capacity` changes.** The fleet is at its floor, and loop gain is ~0.45 at
+  trigger 12 (`AZURE_OPERATIONS.md` §3.2). Only worth a run if MAS picks the slow-LLM shape (a) from
+  `52-to-mas-…`.
+- **Memory work.** Closed by two repos independently: `anon` moved +26 MB of 4,096 over 53 h.
+  `tasks/done/post-sweep-closure-2026-08-17.md` has the seven closures from 2026-08-17. Read it
+  before re-deriving any of them.
 
-**`guard-corpus-is-not-in-the-repo.md`.** XS. Three tests fail on a fresh clone because
-`test-aitosoft/artifacts/*` is gitignored. It fails **loud, in the safe direction**. Either commit
-4–6 files into `artifacts/keep/` (the mechanism `.gitignore:14-17` already provides) or delete the
-file. **Do not open its four-option sizing table** — that is exactly the elaboration this repo's
-principle 7 warns about.
+## Open threads that need someone else's data
 
-**The response-size backstop, and the `media.tables` `colspan` amplifier.** `table_extraction.py`
-does `row_data.extend([text] * colspan)` with an **unvalidated integer straight from the page**: a
-4,624-byte page reaches 4.5 MB of `media`, and `colspan="2000000"` costs **+91 MB RSS from 905 bytes
-of HTML** while leaving the wire unchanged. Never seen in production. The sweep's largest response
-was **32.6 MB** and **zero exceeded 100 MB** against the 232 MB that lost a customer before the
-`desc` cap — so the cap is holding and this stays parked. Two things raise its priority if they
-change: an actual production instance, or a decision to fix OOMs by bounding allocations (this is
-the one candidate that bounds an *allocation* rather than re-scaling a *meter*).
+- **53 captures came back with no `<body>` element**, on 28 hosts (`etlistat.fi` ×15). On 26 of the 28
+  hosts our consent JS logged nothing, so it is not the cause. That is a real, unexplained mechanism,
+  and it is 53 captures. Worth a task only if it grows, or if MAS can hand over the bytes.
+- **Text after an inline `<style>`, `<link>` or `<meta>` is dropped from our output today**
+  (upstream #2416, verified open 2026-11-03; a maintainer has a fix in progress). lxml keeps the
+  following text in the removed element's `.tail`, and the scraper's removal loop discards it. Our
+  `strip_noscript` protects only the `<noscript>` case. The size of the loss is unknown, but it is
+  cheap to measure on the stored corpus. **Take upstream's fix when it ships, and don't build ours.**
+  The upgrade task keeps `strip_noscript` for the same reason.
+- **PDF text extraction.** MAS holds April captures with extracted PDF text; today the class returns
+  a 174-byte viewer shell. Who caused that is not established (`FINDINGS.md` §Downloads and PDFs).
+  Upstream now ships `pypdf` and an opt-in PDF path, which arrive with the merge. Nobody needs it
+  yet: MAS removes PDFs at dispatch.
 
-**Raising `render_capacity`, and any further scale-trigger change.** The fleet is at its floor. Loop
-gain (see `AZURE_OPERATIONS.md`) is ~0.45 at trigger 12 against ~0.87 at trigger 6 — comfortable.
-A replica at 2/2 is already oversubscribed ~2.4× on CPU.
+## Reference, not a task
 
-**More memory work.** Closed by two repos independently: `anon` moved **+26 MB of 4,096 across 53
-hours**. See the closure record.
-
----
-
-## Open threads that are real but need someone else's data
-
-**53 captures came back with no `<body>` element at all**, on 28 hosts (`etlistat.fi` alone ×15).
-**26 of those 28 hosts emitted no `CONSENT DECLINED` line**, so our own consent JS is not the cause
-for the great majority, and MAS sends `remove_overlay_elements: false`. Two engines agree on
-`delotec.fi` at 2,015 bytes. **It is a real unexplained mechanism and it is 53 captures** — worth a
-task file only if it grows or if MAS can hand over the bytes.
-
-**PDF text extraction.** MAS holds April captures with 11,101–45,118 characters of extracted PDF
-text; today the same class returns a 174-byte viewer shell. **Who caused that is NOT established** —
-their attribution to our browser change is inference, not a provenance check, and this repo cannot
-reproduce it either way (`pypdf` is not in the image). Nobody needs it: MAS removes PDFs at
-dispatch. **Upstream is moving here** — issue #2135 with two competing PRs (#2137, #2138), plus
-#2130 adding `pypdf` to the Docker requirements. **Take theirs; build nothing.**
-
----
-
-## Standing rules that have earned their place
-
-**Size the harm before opening the investigation.** If you cannot state an upper bound on what a
-defect is costing, that bound is the first measurement. This repo has consistently investigated
-first and sized second, and the 2026-08-17 review is what made the cost of that visible: the memory
-family consumed weeks and cost 29 captures.
-
-**Do not build what upstream will ship in a month or two.** They see every user's experience; we see
-one client. Spend our effort on what we must hand-roll — the Azure deployment, the admission and
-pool layer, the failure taxonomy — and take theirs everywhere else. Check `git log
-HEAD..upstream/develop` and the open PR list before starting anything in `crawl4ai/`.
-
-**Research what is true *this month*, not six months ago.** This field moves fast and we have been
-burned by stale advice in both directions. The 2026-08-17 research pass found that the consent
-problem was solved by the wider ecosystem in a way we had not noticed, and that our own operational
-knowledge exceeds anything published. Both were worth knowing; neither was derivable from inside
-the repo. Do this periodically, and always record each source's date.
-
-**Our characteristic failure is a wrong instrument, not sloppy reasoning.** Every headline number
-that turned out wrong was wrong because the measurement was wrong. Before reporting a number, say
-which table and column produced it and what would make it wrong. Count anything that matters twice,
-from two instruments; when they disagree, that disagreement is the finding. The trap list lives in
-`AZURE_OPERATIONS.md`, and it grew by six entries on 2026-08-17 — including one (`contains` is
-term-based on `_CL` columns) that produced a **false refutation of a correct claim**.
-
-**Reach for the cheapest lever before the cleverest one**, and verify the cheap lever exists before
-building an argument on it. Buying headroom, deleting a feature, raising a limit and doing nothing
-are all legitimate answers, and they beat a correct implementation of the wrong question.
-
-**Roles stay separated across sessions.** Whoever writes a plan does not implement it; whoever
-implements does not sign off. The implementing session is *required* to challenge the task file and
-record what it found wrong. A task file that survives implementation unamended is the unusual case.
-
----
+`waa-eval-2026-07-30-forensics.md` is the evidence base for the five root causes behind the
+2026-07-30 image. Code comments and older tasks cite it by path, so it stays in `tasks/`.
 
 ## Cross-repo state
 
-Messages live in gitignored `tmp/mas-repo-messages/`. **Cite filenames, never integers** — the two
-repos' numbering has diverged and a message once sat unread for two days because of it.
+**Since 2026-11-03 the MAS thread is direct, session to session over Remote Control** (CLAUDE.md
+§Cross-repo). Messages are filed in gitignored `tmp/mas-repo-messages/`. Cite filenames, never
+integers.
+- `50-to-mas-…` sat unrelayed from 2026-08-17 until 2026-11-03, when it was sent verbatim. **Don't
+  send it again.**
+- `51-from-us-…` is MAS's: a slower LLM host for WAA, and does our bill follow pages or wall-clock?
+  They number it 50.
+- `52-to-mas-…` answers it. The bill follows wall-clock (`$0.605/h × wall-clock ÷ companies in
+  flight`), so a slow host is cheap only at ~15 in flight.
+- `53-to-mas-…` reconciles their ≈$85/day with our $14.5: those are the trigger-6 and trigger-12
+  regimes.
+- `54-to-mas-…` is a **draft, unsent** (see above).
 
-**Last exchange:** MAS sent `49-…` plus `49-data/` (61,937 timing rows, 5,511 retry rows, hourly
-aggregates, per-host 500 tables, terminal outcomes) on 2026-08-17. We replied with `50-…`, which
-answers their three questions, corrects four things we had told them, and asks for nothing.
-
-**2026-11-03: the thread is now direct, session to session over Remote Control — Tero no longer
-carries messages.** Reply to the `from` attribute of the incoming `<cross-session-message>`. Our
-`50-to-mas-…` sat unrelayed from 2026-08-17 until **2026-11-03**, when it was sent verbatim; **do not
-send it again.** MAS's next message was numbered 50 on their side and is filed here as
-`51-from-us-a-slower-model-may-keep-your-fleet-up-longer-…` (a slower LLM host for WAA; does our bill
-follow pages or wall-clock?). Our answer is `52-to-mas-we-bill-by-the-hour-…`: at trigger 12 the fleet
-sits at 2, so the bill is $0.605/h of sweep time, our cost per company is
-`$0.605/h × wall-clock ÷ companies in flight`, and a slow host is only cheap at ~15 in flight. **It
-promised MAS a live-config check before their next sweep.** Both owed items were done 2026-11-03 but
-**not sent**, because Tero asked for quiet while the platform repo deploys. They are in
-`54-to-mas-live-config-unchanged-and-14-5-is-now-invoice-verified.md` (DRAFT). Live config is unchanged
-since 2026-08-17, and $14.5/day is invoice-verified to within 1 % on 08-15/16. **Send it when the quiet
-lifts, and before their next sweep.**
-
-**Corrections we sent them in `50-…`, in case they come back on any of it:** the 2026-08-15 OOM was
-not the first (2026-08-13 was) and not "two containers" (ACA emits two rows per kill); there were
-34 container restarts in the 53-hour window, not 4; `az containerapp replica list` *can* see silent
-restarts via `properties.containers[].restartCount`; and `unrenderable_content` has now fired 12
-times after we told them it never had.
-
-**What each side can see, because it decides who should measure what.** We see inside the browser,
-the pool, the admission gate, response bytes on the wire, which detector branch fired, and anything
-at the point of removal *before* capture. They see ~117,000 stored pages, corpus history (has this
-URL ever succeeded, and with how many characters), what was inside an element we declined to remove,
-the complete 404 instrument, their own client's socket behaviour, cohort composition, and — the one
-that matters most — **whether a company actually lost work.** Their terminal-outcome table is a
-better prioritisation instrument than anything we hold, and adopting it is what reordered this list.
-
----
-
-## Documentation
-
-| Doc | When |
-|---|---|
-| `AZURE_OPERATIONS.md` | Anything about the deployment, scaling, cost, logs or alerts. Live state is `az`, not prose. |
-| `OVERNIGHT_PLAYBOOK.md` | Tero says "monitor overnight". |
-| `AITOSOFT_CHANGES.md` | What we changed and why — the authoritative change log. |
-| `TESTING.md`, `TEST_SITES_REGISTRY.md` | Test framework, quality gates, site safety. |
-| `tasks/done/post-sweep-closure-2026-08-17.md` | Why seven items are closed. Read before re-deriving any of them. |
-| `tasks/waa-eval-2026-07-30-forensics.md` | The five root causes behind the 2026-07-30 image; cited by older work. |
+**Corrections we sent in `50-…`, in case they come back on any of them:**
+- The first OOM was 2026-08-13, not 08-15, and it wasn't "two containers": ACA emits two rows per
+  kill.
+- There were 34 container restarts in the 53-hour window, not 4.
+- `az containerapp replica list` *can* see silent restarts, via `restartCount`.
+- `unrenderable_content` has fired 12 times.
