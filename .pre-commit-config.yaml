@@ -16,6 +16,7 @@ files: >
     \.devcontainer/.*|
     \.pre-commit-config\.yaml|
     \.github/workflows/monitor-crawl4ai-releases\.yml|
+    \.github/workflows/aitosoft-tests\.yml|
     \.env\.example|
     CLAUDE\.md|
     AITOSOFT_.*\.md|

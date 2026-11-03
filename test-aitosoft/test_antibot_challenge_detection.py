@@ -403,6 +403,7 @@ def test_monidor_interstitial_is_detected():
     assert "Challenge interstitial" in reason
 
 
+@pytest.mark.requires_corpus
 def test_no_stored_real_capture_is_condemned():
     """The false-positive check that costs nothing and would have caught this
     class of mistake in either direction: every capture of a real customer site

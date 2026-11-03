@@ -524,10 +524,12 @@ Upstream will never touch these, so they cost nothing at merge time.
   memory alert.
 - `tasks/`: open work, with `tasks/done/` for closed work. `tasks/README.md` is
   the ordered index.
-- `.devcontainer/`, `.env.example`, `.github/workflows/monitor-crawl4ai-releases.yml`.
-  The other workflows are upstream's. `security.yml` runs upstream's security
-  tests, only for changes under `deploy/docker/**`, `crawl4ai/async_configs.py`
-  or the workflow itself (`TESTING.md`); **no workflow runs `test-aitosoft/`**.
+- `.devcontainer/`, `.env.example`, `.github/workflows/monitor-crawl4ai-releases.yml`,
+  `.github/workflows/aitosoft-tests.yml` (the offline half of `test-aitosoft/`, every
+  push, Python 3.12; since 2026-11-03). The other workflows are upstream's.
+  `security.yml` runs upstream's security tests, only for changes under
+  `deploy/docker/**`, `crawl4ai/async_configs.py` or the workflow itself
+  (`TESTING.md`).
 - `.pre-commit-config.yaml`: the top-level `files:` pattern scopes every hook to
   our files. **Never widen it to upstream code.** Formatter drift on upstream
   files once turned a 10-file delta into an 11.5k-line phantom diff. When you

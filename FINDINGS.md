@@ -693,9 +693,10 @@ rescue it, because it produces the same string that gets dropped. Production run
 `[revisit after upstream merge]`: upstream `a1bd6c8` passes `channel="chromium"` again and falls back
 to the shell, so the suite's browser will change. Re-run `pdf-inline` and the download tests.
 
-**CI never runs `test-aitosoft/`.** No workflow in `.github/workflows/` references it; CI runs only
-`deploy/docker/tests/test_security_*.py`. Our suite is a local gate, and only as good as the session
-that runs it.
+**CI runs only the offline half of `test-aitosoft/`.** Until 2026-11-03 no workflow ran it at all.
+`aitosoft-tests.yml` now runs the pure-function suite on every push (Python 3.12, no browser, the four
+`requires_corpus` tests skipped). The browser suite is still a local gate, and only as good as the
+session that runs it.
 
 **Offline (libxml2-only) suites cannot see browser-serialisation shapes.** The unclosed `<noscript>`
 was invisible offline. A new failure class gets a `test-aitosoft/fixture_origin.py` route, driven

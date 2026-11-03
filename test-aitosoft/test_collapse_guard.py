@@ -201,6 +201,7 @@ def _real_captures():
             yield os.path.relpath(path, ARTIFACTS), data
 
 
+@pytest.mark.requires_corpus
 def test_thresholds_clear_every_real_capture():
     """The evidence for the thresholds, re-derived on every run.
 
@@ -221,6 +222,7 @@ def test_thresholds_clear_every_real_capture():
     assert checked >= 30, f"expected the stored corpus, found {checked} captures"
 
 
+@pytest.mark.requires_corpus
 def test_no_real_capture_is_mutated_by_the_guard():
     """`test_thresholds_clear_every_real_capture` checks the *verdict*; this
     checks the *mutation*, which is what recovery added.
@@ -248,6 +250,7 @@ def test_no_real_capture_is_mutated_by_the_guard():
     assert checked >= 30, f"expected the stored corpus, found {checked} captures"
 
 
+@pytest.mark.requires_corpus
 def test_the_real_corpus_still_shows_the_gap():
     """Not just "no false positives" — the healthy pages must stay far away from
     the threshold, or the guard is one unusual customer page from firing."""

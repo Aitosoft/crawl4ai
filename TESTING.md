@@ -82,19 +82,23 @@ noise.
 - **The browser suite does not run production's browser.** It runs Playwright's
   `chromium_headless_shell`, which has no PDF viewer. Details and the two fixes
   are under "arm64 devcontainer" below.
-- **No GitHub workflow runs `test-aitosoft/`.** `.github/workflows/security.yml`
-  is the only workflow that runs tests. It runs upstream's
-  `deploy/docker/tests/test_security_*.py` on pushes to `main`, `develop` or
-  `security/**` and on PRs, and **both triggers are path-filtered**: it runs only
-  when the change touches `deploy/docker/**`, `crawl4ai/async_configs.py` or the
-  workflow file itself. A push that changes only `crawl4ai/` scraping code runs
-  nothing. This suite runs only where someone types the command.
-- **Three tests fail on a fresh clone.** `test-aitosoft/artifacts/*` is
+- **CI runs only the offline half of `test-aitosoft/`** (since 2026-11-03).
+  `.github/workflows/aitosoft-tests.yml` runs
+  `pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py` on
+  Python 3.12 on every push and PR, unfiltered. The browser suite still runs
+  only where someone types the command. Upstream's `security.yml` runs
+  `deploy/docker/tests/test_security_*.py` on Python 3.10, on pushes to `main`,
+  `develop` or `security/**` and on PRs, **path-filtered** to
+  `deploy/docker/**`, `crawl4ai/async_configs.py` and the workflow file.
+- **Four tests need the gitignored corpus.** `test-aitosoft/artifacts/*` is
   gitignored, so `test_collapse_guard.py`'s
   `test_thresholds_clear_every_real_capture`,
   `test_the_real_corpus_still_shows_the_gap` and
-  `test_no_real_capture_is_mutated_by_the_guard` only pass on a machine that
-  holds the local corpus. They fail loudly, which is the safe direction.
+  `test_no_real_capture_is_mutated_by_the_guard`, and
+  `test_antibot_challenge_detection.py::test_no_stored_real_capture_is_condemned`,
+  only pass on a machine that holds the local corpus. They carry the
+  `requires_corpus` marker: under CI (`CI` set) with no corpus they skip; on a
+  fresh local clone they still fail loudly, which is the safe direction.
   `tasks/guard-corpus-is-not-in-the-repo.md`.
 - **Fixture tests bypass the pinning egress proxy.** `ProductionPath` calls
   `api.handle_crawl_request` directly, so the lifespan that installs the proxy
@@ -408,7 +412,7 @@ The two fixes, neither built:
   merge of `develop` brings it (`tasks/file-upstream-prs.md`);
 - give the fixture a test-local explicit `channel="chromium"` override.
 
-Either way, CI would still not run the suite (see "Known limitations").
+Either way, CI runs only the offline suites, not this one (see "Known limitations").
 
 ---
 
@@ -416,7 +420,7 @@ Either way, CI would still not run the suite (see "Known limitations").
 
 | Gate | When | Bar |
 |---|---|---|
-| Offline suites (`pytest test-aitosoft/`) | before every deploy; after every upstream sync | all pass (318 on 2026-11-03). On a fresh clone the three corpus tests fail; see "Known limitations" |
+| Offline suites (`pytest test-aitosoft/`) | before every deploy; after every upstream sync | all pass (318 on 2026-11-03). On a fresh clone the four corpus tests fail (they skip under CI); see "Known limitations" |
 | Upstream security suite (`pytest deploy/docker/tests/test_security_*.py`) | after every upstream sync; after changing `deploy/docker/` | all pass, 1 xfail (316 + 1 on 2026-11-03) |
 | Tier 1 regression | before every deploy | 4/4 |
 | Post-deploy smoke | after every deploy | `/health` 200; unauthenticated `POST /crawl` → 401; check the new revision has 100 % of traffic **before** crawling (a mid-cutover smoke reported the old image on 2026-07-30; `az` commands are in `AZURE_OPERATIONS.md`); one authenticated `raw://` crawl → 200, `failure_class: "none"`. A made-up domain → 200, `success: false`, `origin_unreachable`, `DNS: host does not resolve`; it exercises the egress path without contacting anyone, and is what caught the 2026-08-05 `NameError` |

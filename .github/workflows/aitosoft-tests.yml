@@ -1,0 +1,45 @@
+# Aitosoft: our own offline suite, test-aitosoft/ minus the browser suite.
+#
+# Before this workflow nothing ran test-aitosoft/ in CI; only upstream's
+# security suite ran, and only on path-filtered pushes. It runs on every push
+# and pull request so that an upstream merge's CI run shows exactly the merge's
+# failures against a green baseline (tasks/upgrade-upstream-v0.9.5.md §4).
+#
+# - Python 3.12, because production runs it (Dockerfile line 1); upstream's
+#   security workflow uses 3.10.
+# - No browser, no network beyond pip, no redis: the suite is pure functions
+#   plus FastAPI TestClient. The browser suite (test_fixture_origin.py) is
+#   excluded; see TESTING.md "Known limitations".
+# - Four tests read the gitignored stored corpus and skip here when it is
+#   absent (marker `requires_corpus`, test-aitosoft/conftest.py). Everywhere
+#   else they still fail without it.
+name: Aitosoft tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  offline-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install -r deploy/docker/requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Run test-aitosoft/ (offline)
+        run: |
+          python -c "import crawl4ai, sys; print(sys.version); print(crawl4ai.__file__)"
+          python -m pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py \
+            -q -rs -p no:cacheprovider
