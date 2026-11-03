@@ -116,8 +116,11 @@ Each line points at the entry that explains it. `FINDINGS.md` holds the code-lev
   fixture must match the real page on the axis the fix depends on. → §Block detection
 - **A capped pool never waits for a browser**; every "full" is `RenderCapacityExceeded` → 429.
   → §Browser pool
-- **Our browser suite doesn't run production's Chrome, and CI runs only the offline half of
-  `test-aitosoft/`** (`aitosoft-tests.yml`, every push; the browser suite never). → §Testing fidelity
+- **Our browser suite doesn't run production's Chrome locally, and CI runs only the offline half
+  of `test-aitosoft/`.** It does run on real Chrome inside a built image (`az acr run`, TESTING.md
+  §"Inside a built image"), where `pdf-inline` is red for a true reason. → §Testing fidelity
+- **`gh` without `-R` answers for upstream (unclecode) in this checkout**, silently. Pass
+  `-R Aitosoft/crawl4ai` or `-R unclecode/crawl4ai` every time.
 - **Azure's instruments lie quietly:** Cost Management returns nothing on this Sponsored
   subscription (not "no cost"); the metrics API truncates windows over ~30 days without error; Log
   Analytics keeps 30 days; KQL `contains` is term-based (use `indexof`). → AZURE_OPERATIONS §4, §5

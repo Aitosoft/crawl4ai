@@ -82,9 +82,10 @@ noise.
 
 ### Known limitations
 
-- **The browser suite does not run production's browser.** It runs Playwright's
+- **Locally, the browser suite does not run production's browser.** It runs Playwright's
   `chromium_headless_shell`, which has no PDF viewer. Details and the two fixes
-  are under "arm64 devcontainer" below.
+  are under "arm64 devcontainer" below. It *can* run on real Google Chrome inside
+  a built image: see "Inside a built image" below.
 - **CI runs only the offline half of `test-aitosoft/`** (since 2026-11-03).
   `.github/workflows/aitosoft-tests.yml` runs
   `pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py` on
@@ -416,6 +417,28 @@ The two fixes, neither built:
 - give the fixture a test-local explicit `channel="chromium"` override.
 
 Either way, CI runs only the offline suites, not this one (see "Known limitations").
+
+---
+
+## Inside a built image: real Chrome, amd64
+
+The only place our browser suite runs on production's browser. `az acr run` starts the image in
+ACR's task infrastructure; nothing is deployed and the fixture origin is loopback, so there is no
+third-party traffic beyond `pip install pytest`. ~6 min, a few cents. First done 2026-11-03.
+
+```bash
+az acr run --registry aitosoftacr --timeout 2700 --cmd 'aitosoftacr.azurecr.io/crawl4ai-service:<tag> bash -c "export HOME=/home/appuser CI=true PYTHONDONTWRITEBYTECODE=1; cd /tmp/project; google-chrome --version; pip install -q --user pytest pytest-asyncio; python -m pytest test-aitosoft/ -q -p no:cacheprovider -rf 2>&1 | tail -30"' /dev/null
+```
+
+- `HOME`: `az acr run` sets an unwritable one, and crawl4ai creates `~/.crawl4ai` on import.
+- `CI=true`: the corpus is excluded from images since `.dockerignore` (2026-11-03), so the four
+  `requires_corpus` tests skip.
+- **Images up to `0.9.2-capacity-gate-2`** carry an unreadable `/tmp/project/.env` that makes
+  python-dotenv raise in every test. Copy the tree without it first:
+  `mkdir /tmp/p2 && cd /tmp/project && tar --exclude=./.env --exclude=./.env.txt -cf - . | (cd /tmp/p2 && tar xf -)`, then run from `/tmp/p2`.
+- **Expected on real Chrome: `test_a_download_is_not_a_retryable_server_error[pdf-inline]` fails**,
+  the production inline-PDF 500 described under "arm64 devcontainer". Everything else passes:
+  69/70 on `0.9.5-candidate` (Chrome 156), 66/67 on `0.9.2-capacity-gate-2` (Chrome 151).
 
 ---
 

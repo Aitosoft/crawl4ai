@@ -224,6 +224,16 @@ What the tag list cannot tell you:
   faults at HTTP 200 + `success:false`; 5xx reserved for us). MAS's retry branch
   reads the wire status. Coordinate first.
 
+- **The v0.9.5 merge (branch `upgrade-upstream-v0.9.5`, first deployed after 2026-11-03).** Its
+  rollback target is `0.9.2-capacity-gate-2`. That reverts the code to v0.9.2 and Chrome to 151, and
+  for MAS only the additive changes revert (keyed `links`/`media`, a little markdown whitespace;
+  `tasks/upgrade-upstream-v0.9.5.md` §8). **`0.9.5-candidate` is neither a deploy artifact nor a
+  rollback target:** it is a test build from before the merge review's fixes. Deploy with
+  `deploy-image.sh`, which rebuilds.
+- **Every tag up to and including `0.9.2-capacity-gate-2` carries `/tmp/project/.env` (the API
+  token), `PRIVATE.md` and `tmp/`**, because there was no `.dockerignore` (`tasks/README.md` item
+  1b). Rolling back to one is still safe; deleting them removes rollback targets.
+
 **Image only. Never set env vars during a rollback.**
 
 ### 2.6 Manual equivalents
@@ -234,6 +244,17 @@ az containerapp update -n crawl4ai-service -g aitosoft-prod \
   --image aitosoftacr.azurecr.io/crawl4ai-service:<tag>
 curl -s -o /dev/null -w '%{http_code}\n' "$CRAWL4AI_API_URL/health"
 ```
+
+**Read an image without running it** (versions, files; a few cents of ACR task time, no Container
+App change). The image runs as `appuser`, and `az acr run` sets an unwritable `HOME`, so set it:
+
+```bash
+az acr run --registry aitosoftacr --cmd 'aitosoftacr.azurecr.io/crawl4ai-service:<tag> sh -c "export HOME=/home/appuser; pip freeze; google-chrome --version"' /dev/null
+```
+
+Record Chrome's version for every image that ships: the build installs current stable, and
+`azure-deployment/pip-constraints.txt` pins only the Python packages. Running our test suites inside
+an image (real Chrome, amd64) is in `TESTING.md` §"Inside a built image".
 
 ### 2.7 Rotating the token — a standalone change, never during a deploy
 

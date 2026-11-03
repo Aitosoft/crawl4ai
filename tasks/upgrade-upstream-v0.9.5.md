@@ -6,7 +6,7 @@ platform repo's quiet period, then
 `tmp/mas-repo-messages/55-to-mas-upstream-v0-9-5-merge-what-you-will-and-wont-see.md` (drafted,
 unsent) and MAS's answer on sweep timing. Deploy with `deploy-image.sh` at fleet zero, then merge
 the branch into `main`. The implementing session's record, including what this file got
-wrong, is [§8](#8-implementation-record-2026-11-03) at the end. Framed 2026-11-03 by the coordinator
+wrong, is [§8](#8-implementation-record-2026-11-03); [§9](#9-hand-over-deploy-then-the-first-joint-agent-runs-for-the-session-after-2026-11-03) is the hand-over to the next session. Framed 2026-11-03 by the coordinator
 session.
 **Size:** L. Mostly reconciliation and verification; the code you write is small.
 **Gate:** none to *start*. **Deploying has two gates:**
@@ -747,3 +747,64 @@ resolutions**. Its findings, and what was done:
    toward 2.9 s; don't delete it.
 3. **The `.env` in old images.** Not a public leak (ACR has anonymous pull off), but every
    `aitosoftacr` puller has had the token, and those images remain the rollback targets.
+
+---
+
+## 9. Hand-over: deploy, then the first joint agent runs (for the session after 2026-11-03)
+
+Written at the end of the implementing session for a peer with a clean context. Not a checklist;
+the reasoning is above and in the docs it points to.
+
+**Where things stand.** The merge and its fixes are on branch `upgrade-upstream-v0.9.5` (pushed;
+CI green at `9936679`). `main` is still production plus CI, so **work from the branch**, and merge it
+into `main` only once its image is the one running. It should be a fast-forward. Production is
+`0.9.2-capacity-gate-2`; confirm that with `az` (AZURE_OPERATIONS §0), not from here.
+
+**Before the deploy:**
+- Tero confirms the platform repo's quiet period is over.
+- Send `54-…`, then `55-…`, to MAS's session (CLAUDE.md §Cross-repo: `ListAgents`, `SendMessage`,
+  file both directions). Re-read 55 first; it was written before anyone knew the experiment plan,
+  so adjust it to what you actually agree.
+- No MAS batch is running, and the fleet is at zero (AZURE_OPERATIONS §2.3, §2.4).
+
+**The deploy:**
+- `./azure-deployment/deploy-image.sh <tag>` and nothing else. Never env vars; rollback is
+  image-only to `0.9.2-capacity-gate-2` (§2.5, which also says why not `0.9.5-candidate`).
+- The script rebuilds, so read the shipped image's Chrome version (AZURE_OPERATIONS §2.6) and tell
+  MAS. `0.9.5-candidate` had 156.0.8078.79.
+- Post-deploy smoke and SSRF negatives: TESTING.md §Quality gates. One optional extra is cheap and
+  third-party-free: the suites inside the shipped image (TESTING.md §"Inside a built image"); expect
+  69/70 with only `pdf-inline` red.
+
+**The joint runs: divide by what each side can see** (CLAUDE.md §Cross-repo).
+- **We see:** inside the browser, the pool and the admission gate, from Log Analytics
+  (AZURE_OPERATIONS §5; 30-day retention, so archive the aggregates).
+  - Count failures by the `failure_class=` field on `RESULT`/`ORIGIN`/`TERMINAL FAILURE` lines plus
+    `RENDER DEFECT`, never by one token.
+  - Watch: `Anti-bot retry` and patchright rescues, `COLLAPSE RECOVERED`, render time,
+    `capacity_gate` on 429s, browser launches, memory.
+- **MAS sees:** what was stored, which pages came back empty or wrong, what the agent decided, and
+  whether a company lost work. Their August client-side record is `tmp/mas-repo-messages/49-data/`
+  (61,937 requests, hourly latency percentiles and status counts), the only per-request baseline
+  that survives.
+- **Count the headline numbers on both sides; a disagreement is the finding** (CLAUDE.md principle
+  8).
+
+**What to be suspicious of** (§8 "What I am least sure of"):
+- **Chrome moved five majors with this deploy.** Its fingerprint against real anti-bot vendors is
+  the untested part. If `origin_blocked`, the anti-bot retry rate or patchright's rescue rate moves,
+  suspect Chrome before the merge. The way to separate them, if it matters, is the old image vs the
+  new on the same small URL set, recorded in `TEST_SITES_REGISTRY.md`.
+- **`origin_unreachable`** is the TLS canary. TLS tolerance is pinned, but only on loopback.
+- **The capture point:** pages painting 2.6–3.1 s after load. MAS's "newly empty pages" is the
+  instrument that would catch a miss.
+
+**Live traffic:** MAS's agent runs are production traffic and fine. Our own probes of third-party
+sites stay at the CLAUDE.md §Testing rules (1–2 hits per host per session, recorded).
+
+**After the runs:** this file moves to `tasks/done/` once the deploy is proven, and `tasks/README.md`
+gets the next ordered list. Already queued:
+- the `render_mode` mislabel (README item 2);
+- the PRs (`file-upstream-prs.md`);
+- the image-secrets decision (README item 1b, Tero's);
+- the parked browser-suite-in-CI idea.

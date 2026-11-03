@@ -31,7 +31,7 @@ works. Where a task file and this index disagree, the task file wins.
 
 | # | Task | Size | Why now |
 |---|---|---|---|
-| **1** | `upgrade-upstream-v0.9.5.md` | L | **Merged on the branch, all gates green, not deployed** (2026-11-03). Waiting on Tero's quiet period, then MAS message `55-…`, then a deploy at fleet zero; then merge the branch into `main`. Its §8 is the record. |
+| **1** | `upgrade-upstream-v0.9.5.md` | L | **Merged on branch `upgrade-upstream-v0.9.5`, all gates green, independent review done and acted on, not deployed** (2026-11-03). Next: send MAS `54-…` and `55-…`, deploy in a gap they name, merge the branch into `main`, then the first joint agent runs. §8 is the record, §9 the hand-over. |
 | **1b** | The image carried `.env` (no task file; a decision) | XS | Found during #1: images up to `0.9.2-capacity-gate-2` contain `/tmp/project/.env`, `PRIVATE.md` and `tmp/`. `.dockerignore` is on the branch. Decide (Tero): rotate the token? delete or keep old tags, which are the rollback targets? Detail: `upgrade-upstream-v0.9.5.md` §8 item 5. |
 | **2** | The `render_mode` mislabel (no file; one word) | XS | We report a wrong value in a field MAS parses. Do it after #1 ships. |
 | **3** | `file-upstream-prs.md` | M | After #1 ships. File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
@@ -137,6 +137,9 @@ integers.
 - `53-to-mas-…` reconciles their ≈$85/day with our $14.5: those are the trigger-6 and trigger-12
   regimes.
 - `54-to-mas-…` is a **draft, unsent** (see above).
+- `55-to-mas-upstream-v0-9-5-merge-what-you-will-and-wont-see.md` is the v0.9.5 heads-up, a
+  **draft, unsent**. It asks three questions: sweep timing, whether anything hashes page text, and
+  whether they want TLS verification on.
 
 **Corrections we sent in `50-…`, in case they come back on any of them:**
 - The first OOM was 2026-08-13, not 08-15, and it wasn't "two containers": ACA emits two rows per
