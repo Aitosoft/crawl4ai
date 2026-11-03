@@ -8,7 +8,9 @@ behavior at import time:
   1. BrowserConfig class-level defaults from config.yml (stealth, real
      Chrome, UA, viewport) — upstream's own set_defaults() mechanism.
   2. Trusted-client relaxations of the v0.9.0 untrusted-config boundary
-     (see aitosoft_trust.py; contract pinned by test_mas_contract.py).
+     (see aitosoft_trust.py; contract pinned by test_mas_contract.py),
+     including the page_timeout cap and TLS tolerance.
+  3. Upstream's cloud-notice console banner switched off.
 
 Auth note: our old SimpleTokenAuthMiddleware was removed in the v0.9.2
 upgrade — upstream's AuthGateMiddleware now provides the same contract
@@ -41,6 +43,14 @@ BrowserConfig.set_defaults(**_yml_kwargs)  # type: ignore[attr-defined]
 
 # ── Trusted-client relaxations of the untrusted-config boundary ──
 apply_trust_relaxations()
+
+# ── Upstream's "Crawl4AI Cloud" console banner, off ──
+# crawl4ai/cloud_notice.py (v0.9.5) prints a multi-line rich banner to stderr
+# once a day per container until 2027-01-01, and again on the first block of
+# the day. Every new ACA replica is a new container, and the console logger
+# wraps it across Log Analytics rows. Read at call time, so setting it here,
+# before the server imports, covers every crawler this process starts.
+os.environ.setdefault("CRAWL4AI_NO_CLOUD_NOTICE", "1")
 
 # ── Import the upstream app (auth gate + middleware come with it) ──
 from server import app  # noqa: E402, F401

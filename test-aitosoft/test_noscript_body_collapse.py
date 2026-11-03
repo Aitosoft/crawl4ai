@@ -118,3 +118,33 @@ def test_realistic_lazyload_gtm_block():
     assert "Kiertopakkaus Oy" in out
     assert "Siirry sisaltoon" in out
     assert "010 000 0000" in out
+
+
+def test_text_after_a_balanced_noscript_survives():
+    """Contact text that FOLLOWS a balanced `<noscript>` must survive.
+
+    Why this is ours to keep (v0.9.5 merge): upstream's own fix,
+    `unwrap_orphaned_noscript` (#2284), leaves a balanced `<noscript>` in the
+    tree, and `_scrap` later removes it with `getparent().remove()`, which
+    discards the element's lxml `.tail`, i.e. the text right after it.
+    Executed 2026-11-03: pure v0.9.5 renders the paragraph below as
+    `Soita meille ` and loses the phone number; our pre-parse
+    `strip_noscript` keeps it. Upstream #2416 (open) covers this and the same
+    loss after inline `<style>`, `<link>` and `<meta>`, which our tree still
+    has. 0 of the 74 stored captures have this shape, so the corpus could not
+    tell the two fixes apart; this test can.
+    """
+    from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+
+    html = (
+        "<html><body><main><h1>Yritys Oy</h1>"
+        "<p>Soita meille <noscript><img src='/x.gif'></noscript>"
+        "numeroon 010 123 4567 tai lahetä sahkopostia.</p>"
+        "<p>" + "Lorem ipsum dolor sit amet. " * 30 + "</p></main></body></html>"
+    )
+    md = (
+        DefaultMarkdownGenerator()
+        .generate_markdown(input_html=cleaned(html), base_url="https://x/")
+        .raw_markdown
+    )
+    assert "010 123 4567" in md

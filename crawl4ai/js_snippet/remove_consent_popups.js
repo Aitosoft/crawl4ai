@@ -384,6 +384,7 @@ async () => {
     // =========================================================================
     // Phase 2: Try CMP JavaScript APIs
     // =========================================================================
+    let apiCalled = false;
 
     // IAB TCF v2 API
     if (typeof window.__tcfapi === 'function') {
@@ -396,6 +397,7 @@ async () => {
     if (typeof window.Didomi !== 'undefined') {
         try {
             window.Didomi.setUserAgreeToAll();
+            apiCalled = true;
         } catch (e) { /* continue */ }
     }
 
@@ -403,6 +405,7 @@ async () => {
     if (typeof window.Cookiebot !== 'undefined') {
         try {
             window.Cookiebot.submitCustomConsent(true, true, true);
+            apiCalled = true;
         } catch (e) { /* continue */ }
     }
 
@@ -410,6 +413,7 @@ async () => {
     if (typeof window.Osano !== 'undefined') {
         try {
             window.Osano.cm.acceptAll();
+            apiCalled = true;
         } catch (e) { /* continue */ }
     }
 
@@ -417,10 +421,21 @@ async () => {
     if (typeof window.klaro !== 'undefined') {
         try {
             window.klaro.getManager().acceptAll();
+            apiCalled = true;
         } catch (e) { /* continue */ }
     }
 
-    // Wait for CMP animations/transitions
+    // Wait for CMP animations/transitions.
+    // Aitosoft (v0.9.5 merge): unconditional, as before upstream b536bf5 (#2139)
+    // made it `if (accepted || apiCalled)`. That change moves the capture point
+    // 0.5 s earlier on every page where no consent action fired, so MAS's
+    // `delay_before_return_html: 2.0` would mean 2.0 s instead of 2.5 s, and a
+    // page painting inside that gap is captured blank -> tier-3 minimal_text ->
+    // anti-bot retry -> patchright leg (measured on loopback: 1 navigation in
+    // 3.3 s became 3 in 16 s). #2139's reason, a CSP `sandbox` page whose
+    // timers never fire, is bounded for us at 10 s by bounded_evaluate around
+    // this snippet. Pinned by test_fixture_origin.py's capture-point test.
+    // See tasks/upgrade-upstream-v0.9.5.md §3.4.
     await new Promise(r => setTimeout(r, 500));
 
     // =========================================================================

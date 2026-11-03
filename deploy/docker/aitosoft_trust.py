@@ -15,6 +15,8 @@ The MAS request contract these relaxations serve is pinned by
 test-aitosoft/test_mas_contract.py — run it after every upstream sync.
 """
 
+import os
+
 import crawl4ai.async_configs as _ac
 
 _applied = False
@@ -37,7 +39,17 @@ def apply_trust_relaxations() -> None:
     #    90s for slow SPA sites. Raise the cap to our wall-clock deadline
     #    (config.yml limits.wall_clock_s = 180s) so the per-page timeout can
     #    never exceed the request deadline anyway.
-    _ac._MAX_TIMEOUT_MS = 180_000
+    #
+    #    Through the env var since v0.9.5: upstream (a59f50e, 61eb573) replaced
+    #    the `_MAX_TIMEOUT_MS` constant we used to assign with
+    #    `_max_timeout_ms()`, which reads CRAWL4AI_MAX_TIMEOUT_MS on EVERY call.
+    #    Our old assignment silently became an attribute nothing reads, and
+    #    MAS's 90000 was clamped to 60000 (only test_mas_contract.py noticed).
+    #    Per-call reading is also why setdefault here is import-order-proof.
+    #    The same ceiling caps wait_for_timeout and body_visibility_timeout.
+    #    Note `page_timeout: 0` now becomes 60000, not this cap: upstream
+    #    treats malformed input as the default on purpose. MAS never sends 0.
+    os.environ.setdefault("CRAWL4AI_MAX_TIMEOUT_MS", "180000")
 
     # 3. Behavioral emulation knobs — magic / simulate_user /
     #    override_navigator are anti-bot-evasion toggles, not code-execution
@@ -61,3 +73,24 @@ def apply_trust_relaxations() -> None:
         return _upstream_filter(type_name, pruned)
 
     _ac._filter_untrusted_fields = _filter_untrusted_fields_tolerant
+
+    # 5. TLS: tolerate broken certificates, as this service always has.
+    #    Until v0.9.2 upstream hardcoded --ignore-certificate-errors into every
+    #    Chromium launch; f0ada4c (v0.9.5) removed it, and enforce_egress forces
+    #    ignore_https_errors=False unless egress_broker.ALLOW_INSECURE_TLS. An
+    #    expired, self-signed or wrong-host certificate would then fail as
+    #    net::ERR_CERT_* -> origin_unreachable -> HTTP 200 success:false, which
+    #    MAS cannot tell from a company with no website. Nobody has counted how
+    #    many MAS targets that is, so verification stays off until someone does
+    #    and MAS agrees (tasks/upgrade-upstream-v0.9.5.md §3.1). Static mode
+    #    already uses verify=False, so the two render modes agree.
+    #
+    #    The module attribute, not the CRAWL4AI_ALLOW_INSECURE_TLS env var:
+    #    egress_broker reads the env var once at import, and under pytest it is
+    #    imported before this module (test_egress_dns_offload imports api), so
+    #    an env-var default here would hold in one test run and not in another.
+    #    enforce_egress and webhook.py read the attribute at call time.
+    #    Pinned by test_fixture_origin.py's broken-certificate tests.
+    import egress_broker
+
+    egress_broker.ALLOW_INSECURE_TLS = True

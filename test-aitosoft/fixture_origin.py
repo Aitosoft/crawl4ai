@@ -68,16 +68,25 @@ Routes (every default is a module constant; every one is overridable):
     ?stall=<s>        server sleeps before responding (wall-clock fence)
     ?status=<n>       override the status code of any route
     ?marker=<name>    which challenge family the interstitial belongs to
+
+Every route is also served over HTTPS with a broken certificate by the
+`broken_tls_origin` fixture (`FixtureOrigin(tls=True)`): one leaf that is
+self-signed, expired and issued for another host, so tolerating it means
+tolerating all three. That pins the TLS decision of the v0.9.5 merge
+(tasks/upgrade-upstream-v0.9.5.md §3.1).
 """
 
 from __future__ import annotations
 
 import contextlib
+import datetime
 import json
 import os
 import re
 import shutil
+import ssl
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -1043,16 +1052,71 @@ class _Server(ThreadingHTTPServer):
             super().handle_error(request, client_address)
 
 
+def _broken_tls_context() -> ssl.SSLContext:
+    """A server context whose certificate fails verification three ways.
+
+    Self-signed (no trusted issuer), expired 30 days ago, and issued for
+    `wrong-host.invalid` rather than 127.0.0.1. Chromium reports only the first
+    error it hits (`ERR_CERT_AUTHORITY_INVALID` here), but a browser that
+    tolerates this leaf tolerates each defect. Nothing touches a trust store.
+    `cryptography` comes with crawl4ai's own pyOpenSSL dependency.
+    """
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "wrong-host.invalid")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(days=400))
+        .not_valid_after(now - datetime.timedelta(days=30))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.DNSName("wrong-host.invalid")]),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    with tempfile.TemporaryDirectory() as tmp:
+        cert_path = os.path.join(tmp, "cert.pem")
+        key_path = os.path.join(tmp, "key.pem")
+        with open(cert_path, "wb") as fh:
+            fh.write(cert.public_bytes(serialization.Encoding.PEM))
+        with open(key_path, "wb") as fh:
+            fh.write(
+                key.private_bytes(
+                    serialization.Encoding.PEM,
+                    serialization.PrivateFormat.PKCS8,
+                    serialization.NoEncryption(),
+                )
+            )
+        ctx.load_cert_chain(cert_path, key_path)
+    return ctx
+
+
 class FixtureOrigin:
     """A threaded HTTP origin on an ephemeral loopback port.
 
     Records every path served, so a test can assert what a failure class costs
     in page loads — the measurement tasks/blocked-host-retry-economy.md needs
     and has so far only been able to get from production logs.
+
+    `tls=True` serves the same routes over HTTPS with a deliberately broken
+    certificate (`_broken_tls_context`). A browser that rejects it never sends
+    a GET, so `hits` doubles as the second instrument: zero hits means the
+    handshake was refused, not that the page was empty.
     """
 
-    def __init__(self, host: str = "127.0.0.1"):
+    def __init__(self, host: str = "127.0.0.1", tls: bool = False):
         self._host = host
+        self._tls = tls
         self._server: Optional[_Server] = None
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
@@ -1061,6 +1125,13 @@ class FixtureOrigin:
     # -- lifecycle --
     def start(self) -> "FixtureOrigin":
         self._server = _Server((self._host, 0), _RequestHandler)
+        if self._tls:
+            # The handshake runs in accept(); a client that rejects the
+            # certificate makes accept() raise ssl.SSLError, an OSError, which
+            # socketserver drops silently. Nothing reaches the handler.
+            self._server.socket = _broken_tls_context().wrap_socket(
+                self._server.socket, server_side=True
+            )
         self._server.origin = self  # type: ignore[attr-defined]
         self._thread = threading.Thread(
             target=self._server.serve_forever, name="fixture-origin", daemon=True
@@ -1091,7 +1162,8 @@ class FixtureOrigin:
 
     @property
     def base_url(self) -> str:
-        return f"http://{self._host}:{self.port}"
+        scheme = "https" if self._tls else "http"
+        return f"{scheme}://{self._host}:{self.port}"
 
     def url(self, route: str, **params: Any) -> str:
         """`origin.url("/challenge/resolve-after/1", marker="none", status=200)`."""
@@ -1414,6 +1486,16 @@ def fixture_origin() -> Iterator[FixtureOrigin]:
     """The local origin. Session-scoped: one port, one thread, for the run."""
     origin = FixtureOrigin()
     origin.start()
+    try:
+        yield origin
+    finally:
+        origin.stop()
+
+
+@pytest.fixture(scope="session")
+def broken_tls_origin() -> Iterator[FixtureOrigin]:
+    """The same routes over HTTPS, behind a certificate no browser trusts."""
+    origin = FixtureOrigin(tls=True).start()
     try:
         yield origin
     finally:

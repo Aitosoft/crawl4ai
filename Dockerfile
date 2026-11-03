@@ -1,7 +1,7 @@
 FROM python:3.12-slim-bookworm AS build
 
 # C4ai version
-ARG C4AI_VER=0.9.2
+ARG C4AI_VER=0.9.5
 ENV C4AI_VERSION=$C4AI_VER
 LABEL c4ai.version=$C4AI_VER
 
@@ -137,6 +137,11 @@ else\n\
 fi' > /tmp/install.sh && chmod +x /tmp/install.sh
 
 COPY . /tmp/project/
+
+# Aitosoft: resolve every pip step to the versions the previous production
+# image ran, so a code change and a browser-stack move never ship in one build.
+# Why, and how to regenerate: the header of the file itself.
+ENV PIP_CONSTRAINT=/tmp/project/azure-deployment/pip-constraints.txt
 
 # Copy supervisor config first (might need root later, but okay for now)
 COPY deploy/docker/supervisord.conf .

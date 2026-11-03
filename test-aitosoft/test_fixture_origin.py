@@ -505,6 +505,88 @@ def test_a_shell_captured_after_it_paints_is_the_real_page(
     assert CONTENT_MARKER in outcome.markdown
 
 
+#: Paints after MAS's 2.0 s wait but before the consent pass's in-page 0.5 s
+#: wait ends. Measured on loopback (report 3 of the v0.9.5 merge): main
+#: captured it at 1 navigation; upstream b536bf5, which runs that wait only when
+#: a consent action fired, captured it blank and spent 3 navigations and ~16 s.
+CAPTURE_POINT_PAINT_S = 2.8
+
+
+def test_the_capture_point_includes_the_consent_wait(fixture_origin, production_path):
+    """Pins *when* MAS's page is captured, not just whether.
+
+    With `delay_before_return_html: 2.0` and `remove_consent_popups: true`, the
+    capture happens after the delay, plus the consent snippet's in-page 500 ms
+    wait, plus the driver's 500 ms. Upstream #2139 (`b536bf5`) made the in-page
+    wait conditional, which moved the capture 0.5 s earlier on every page with
+    no consent banner. A page painting in that gap then came back blank, tier 3
+    called it blocked, and the anti-bot retry and patchright leg ran: here the
+    patchright leg rescues it, on a real host it may not. The existing hydrate
+    tests paint outside the window, which is why every suite stayed green. The
+    merge kept the unconditional wait (remove_consent_popups.js; task §3.4).
+    If this goes red after a sync, the capture point moved: decide it, then
+    tell MAS, who can move their delay.
+    """
+    fixture_origin.reset_hits()
+    outcome = production_path.crawl(
+        fixture_origin.url(f"/hydrate-after/{CAPTURE_POINT_PAINT_S}"),
+        delay_before_return_html=MAS_WAIT,
+    )
+
+    assert outcome.success, outcome.error_message
+    assert CONTENT_MARKER in outcome.markdown
+    assert (
+        fixture_origin.hits_for("/hydrate-after") == 1
+    ), "captured blank and rescued by a retry: the capture point moved earlier"
+
+
+# ── TLS: broken certificates (v0.9.5 merge, task §3.1) ───────────────────
+
+
+def test_a_broken_certificate_still_renders(broken_tls_origin, production_path):
+    """The TLS decision, pinned: a broken certificate does not cost the page.
+
+    Until v0.9.2 this held because upstream hardcoded
+    `--ignore-certificate-errors` into every Chromium launch. v0.9.5 (`f0ada4c`)
+    removed the flag and nothing of ours noticed until an executed probe did:
+    the page would have come back `origin_unreachable` at HTTP 200, which MAS
+    cannot tell from a company with no website. Parity now rests on
+    `aitosoft_trust` setting `egress_broker.ALLOW_INSECURE_TLS`. If you turn
+    verification on deliberately, change this test to say so; don't skip it.
+    """
+    broken_tls_origin.reset_hits()
+    outcome = production_path.crawl(
+        broken_tls_origin.url("/ok"), delay_before_return_html=SHORT_WAIT
+    )
+
+    assert outcome.success, outcome.error_message
+    assert outcome.http_status == 200
+    assert outcome.failure_class == "none"
+    assert CONTENT_MARKER in outcome.markdown
+    assert broken_tls_origin.hits_for("/ok") == 1
+
+
+def test_the_broken_certificate_origin_really_is_broken(
+    broken_tls_origin, production_path, monkeypatch
+):
+    """The control for the test above: with verification on, the same origin
+    fails, and the origin never sees a GET. Without this, a certificate that
+    accidentally verified would make the parity test pass vacuously."""
+    import egress_broker
+
+    monkeypatch.setattr(egress_broker, "ALLOW_INSECURE_TLS", False)
+    broken_tls_origin.reset_hits()
+    outcome = production_path.crawl(
+        broken_tls_origin.url("/ok"), delay_before_return_html=SHORT_WAIT
+    )
+
+    assert not outcome.success
+    assert "ERR_CERT_" in outcome.error_message, outcome.error_message
+    assert outcome.failure_class == "origin_unreachable"
+    assert outcome.http_status == 200, "origin-caused, so not retried"
+    assert broken_tls_origin.hits_for("/ok") == 0
+
+
 # ── redirect chains (the effective_status fix) ───────────────────────────
 
 

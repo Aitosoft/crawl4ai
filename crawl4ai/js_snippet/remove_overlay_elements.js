@@ -5,16 +5,11 @@ async () => {
         return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
     };
 
-    // Aitosoft 2026-08-06: never remove the document's own structure. Every
-    // rule below walks `querySelectorAll("*")`, which includes <html> and
-    // <body>, and the scroll-lock pattern a real CMP uses is literally
-    // `body { position: fixed }` — so `removeFixedElements` below could select
-    // the body on exactly the pages this script exists for. Same guard, same
-    // reasoning as remove_consent_popups.js; see
-    // tasks/done/consent-scripts-delete-the-page.md.
-    const isStructural = (el) =>
-        !!el &&
-        (el === document.documentElement || el === document.body || el === document.head);
+    // Never strip document structure <html>, <head>, or <body>; removing those tags empties the page.
+    const isDocumentStructure = (elem) => {
+        const tag = elem && elem.tagName;
+        return tag === "HTML" || tag === "HEAD" || tag === "BODY";
+    };
 
     // Aitosoft 2026-08-06: the alpha of a computed background colour, or 1 when
     // it is opaque or unparseable.
@@ -89,7 +84,7 @@ async () => {
         // Find elements with high z-index
         const allElements = document.querySelectorAll("*");
         for (const elem of allElements) {
-            if (isStructural(elem)) continue;
+            if (isDocumentStructure(elem)) continue;
             const style = window.getComputedStyle(elem);
             const zIndex = parseInt(style.zIndex);
             const position = style.position;
@@ -111,7 +106,8 @@ async () => {
         for (const selector of commonSelectors) {
             const elements = document.querySelectorAll(selector);
             elements.forEach((elem) => {
-                if (isVisible(elem) && !isStructural(elem)) {
+                if (isDocumentStructure(elem)) return;
+                if (isVisible(elem)) {
                     elem.remove();
                 }
             });
@@ -125,7 +121,7 @@ async () => {
     const removeFixedElements = () => {
         const elements = document.querySelectorAll("*");
         elements.forEach((elem) => {
-            if (isStructural(elem)) return;
+            if (isDocumentStructure(elem)) return;
             const style = window.getComputedStyle(elem);
             if ((style.position === "fixed" || style.position === "sticky") && isVisible(elem)) {
                 elem.remove();
@@ -155,8 +151,6 @@ async () => {
         document.body.style.paddingRight = "0px";
         document.body.style.overflow = "auto";
 
-        // Wait a bit for any animations to complete
         document.body.scrollIntoView(false);
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
 };

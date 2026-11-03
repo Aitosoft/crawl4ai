@@ -322,6 +322,11 @@ def test_the_breakdown_is_loggable_and_never_raises(monkeypatch):
 # and which flips `ignore_https_errors` True -> False. The two signatures differ
 # in a field no client controls, so the permanent browser is unreachable by
 # construction and this TTL always fires. See crawler_pool.PERMANENT_UNUSED_TTL_S.
+#
+# Since the v0.9.5 merge that is no longer true by construction: the lifespan
+# builds it through get_default_browser_config() and enforce_egress no longer
+# flips TLS (aitosoft_trust). MAS's persona configs still miss it, so the TTL
+# still matters. Same note at crawler_pool.PERMANENT_UNUSED_TTL_S.
 
 
 def test_an_unused_permanent_browser_is_closed(monkeypatch):

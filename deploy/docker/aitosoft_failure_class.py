@@ -594,6 +594,35 @@ def failed_result(
     }
 
 
+def _empty_links() -> dict:
+    return {"internal": [], "external": []}
+
+
+def _empty_media() -> dict:
+    return {"images": [], "videos": [], "audios": []}
+
+
+def normalize_result_shapes(results) -> None:
+    """Give every result dict keyed ``links`` and ``media``, in place.
+
+    Upstream ``8bd0776`` (v0.9.5) made a failed ``CrawlResult`` carry
+    ``links: {internal: [], external: []}`` and ``media: {images: [], videos: [],
+    audios: []}`` instead of ``{}``. Our own builders (``failed_result`` above,
+    and static mode's success and failure builders) emit keyed ``links`` and no
+    ``media`` at all, so without this MAS would see the shape of ``media``
+    depend on which code path built the result, and on ``render_mode``. Applied
+    once, in ``server._crawl_response``, which both render modes pass through.
+    Only fills what is missing or an empty dict; never touches content.
+    """
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        if not result.get("links"):
+            result["links"] = _empty_links()
+        if not result.get("media"):
+            result["media"] = _empty_media()
+
+
 #: Envelope-level `failure_class` for statuses raised without a result.
 _STATUS_TO_ENVELOPE_CLASS = {
     400: BAD_REQUEST,

@@ -182,6 +182,12 @@ class AsyncWebCrawler:
         """
         await self.crawler_strategy.__aenter__()
         self.logger.info(f"Crawl4AI {crawl4ai_version}", tag="INIT")
+        try:
+            from .cloud_notice import show_once
+
+            show_once(self.logger)
+        except Exception:
+            pass
         self.ready = True
         return self
 
@@ -534,7 +540,7 @@ class AsyncWebCrawler:
 
                                 # Check if blocked (skip for raw: URLs —
                                 # caller-provided content, anti-bot N/A)
-                                if _is_raw_url:
+                                if _is_raw_url or async_response.placeholder_html:
                                     _blocked = False
                                     _block_reason = ""
                                 else:
@@ -669,7 +675,8 @@ class AsyncWebCrawler:
                         # empty by design, and is_blocked() would misread "0 bytes
                         # html" as a block.
                         _has_download = bool(getattr(crawl_result, "downloaded_files", None))
-                        if not _fallback_succeeded and not _is_raw_url and not _has_download:
+                        _placeholder = bool(getattr(async_response, "placeholder_html", False))
+                        if not _fallback_succeeded and not _is_raw_url and not _has_download and not _placeholder:
                             _blocked, _block_reason = is_blocked(
                                 effective_status(
                                     crawl_result.status_code,
@@ -680,6 +687,13 @@ class AsyncWebCrawler:
                             if _blocked:
                                 crawl_result.success = False
                                 crawl_result.error_message = f"Blocked by anti-bot protection: {_block_reason}"
+                                # the moment the hosted crawler helps most; at most once a day
+                                try:
+                                    from .cloud_notice import show_blocked
+
+                                    show_blocked(self.logger)
+                                except Exception:
+                                    pass
                         crawl_result.crawl_stats = _crawl_stats
                     else:
                         # All proxies threw exceptions and fallback either wasn't

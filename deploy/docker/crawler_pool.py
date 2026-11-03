@@ -22,6 +22,7 @@ LOCK = asyncio.Lock()
 MEM_LIMIT = CONFIG.get("crawler", {}).get("memory_threshold_percent", 95.0)
 BASE_IDLE_TTL = CONFIG.get("crawler", {}).get("pool", {}).get("idle_ttl_sec", 300)
 MAX_PAGES = CONFIG.get("crawler", {}).get("pool", {}).get("max_pages", 5)
+RECYCLE_PAGES = CONFIG.get("crawler", {}).get("pool", {}).get("max_pages_before_recycle", 0)
 DEFAULT_CONFIG_SIG = None  # Cached sig for default config
 
 # Aitosoft 2026-08-02 (tasks/pool-residency-unbounded.md): the number of live
@@ -77,6 +78,14 @@ BUSY_SINCE: Dict[int, float] = {}
 # construction**, this TTL always fires, and the lazy re-create branch in
 # get_crawler is dead code in production. Left as-is deliberately: "fixing" it
 # would revive a browser nothing wants.
+#
+# **Changed by the v0.9.5 merge (2026-11-03).** Upstream 7b02a2c makes the
+# lifespan call init_permanent(get_default_browser_config()), which applies
+# enforce_egress, and aitosoft_trust now sets egress_broker.ALLOW_INSECURE_TLS,
+# so enforce_egress no longer flips ignore_https_errors. A request with no
+# browser_config, and the internal /html, /screenshot and /pdf calls, can now
+# match the permanent browser. MAS always sends a persona browser_config, so for
+# /crawl it is still unused in practice, and this TTL still bounds what it holds.
 PERMANENT_UNUSED_TTL_S = (
     CONFIG.get("crawler", {}).get("pool", {}).get("permanent_unused_ttl_sec", 600)
 )
@@ -96,6 +105,22 @@ def memory_breakdown() -> str:
         f"anon={parts['anon']:.0f}MB file={parts['file']:.0f}MB "
         f"inactive_file={parts['inactive_file']:.0f}MB"
     )
+
+
+def _apply_pool_defaults(cfg: BrowserConfig) -> BrowserConfig:
+    """Apply pool-owned policy to a browser config before it is pooled.
+
+    Browsers handed out by this pool are long-lived, and the endpoints build
+    their BrowserConfig from the request body (see api.py handle_crawl_request),
+    so config.yml's browser kwargs never reach them. Pooling is what makes a
+    browser long-lived, so the pool is where its recycling policy belongs.
+
+    Applied before _sig() so every request shares one signature and pooling is
+    unaffected. An explicit per-request value wins. See #2231.
+    """
+    if RECYCLE_PAGES and not cfg.max_pages_before_recycle:
+        cfg.max_pages_before_recycle = RECYCLE_PAGES
+    return cfg
 
 
 def get_pool_snapshot() -> dict:
@@ -265,6 +290,13 @@ async def get_crawler(cfg: BrowserConfig) -> AsyncWebCrawler:
 
     Enforces MAX_PAGES per browser to prevent cascading page starvation.
     When a pooled browser is at capacity, falls through to create a new one.
+
+    Aitosoft (v0.9.5 merge): signs ``_sig(cfg)``, NOT upstream's
+    ``_sig(_apply_pool_defaults(cfg))``, so config.yml's recycling default does
+    not reach request browsers. Recycling is off in config.yml
+    (``max_pages_before_recycle: 0``, upstream #2419), and at 0
+    ``_apply_pool_defaults`` is a no-op, so ``init_permanent``'s signature
+    still equals this one.
     """
     global PERMANENT
     sig = _sig(cfg)
@@ -534,7 +566,7 @@ async def init_permanent(cfg: BrowserConfig):
     async with LOCK:
         if PERMANENT:
             return
-        DEFAULT_CONFIG_SIG = _sig(cfg)
+        DEFAULT_CONFIG_SIG = _sig(_apply_pool_defaults(cfg))
         logger.info("🔥 Creating permanent default browser")
         PERMANENT = AsyncWebCrawler(config=cfg, thread_safe=False)
         await PERMANENT.start()

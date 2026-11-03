@@ -344,7 +344,11 @@ async def test_connect_timeout_is_honoured(monkeypatch):
         reader, writer = await asyncio.open_connection(
             proxy.bound_host, proxy.bound_port
         )
-        writer.write(b"CONNECT slow.example:443 HTTP/1.1\r\n\r\n")
+        # The port in the CONNECT line is the one the proxy dials, not the
+        # pinned target's. Until 2026-11-03 this said `:443`, so the proxy dialled
+        # 127.0.0.1:443, got connection-refused at once, and the test passed
+        # with the budget at 30 s too: it never reached the hanging sentinel.
+        writer.write(f"CONNECT slow.example:{sentinel} HTTP/1.1\r\n\r\n".encode())
         await writer.drain()
         # The proxy closes without replying when the upstream connect fails, so
         # read() returns b"" at the timeout rather than a body.
@@ -355,6 +359,85 @@ async def test_connect_timeout_is_honoured(monkeypatch):
         await proxy.stop()
 
     assert elapsed < 1.5, f"connect timeout did not fire: {elapsed:.2f}s"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "request_tmpl, via_upstream",
+    [
+        ("CONNECT slow.example:{port} HTTP/1.1\r\n\r\n", False),
+        ("CONNECT slow.example:{port} HTTP/1.1\r\n\r\n", True),
+        (
+            "GET http://slow.example:{port}/ HTTP/1.1\r\nHost: slow.example\r\n\r\n",
+            False,
+        ),
+        (
+            "GET http://slow.example:{port}/ HTTP/1.1\r\nHost: slow.example\r\n\r\n",
+            True,
+        ),
+    ],
+    ids=["connect-direct", "connect-via-upstream", "http-direct", "http-via-upstream"],
+)
+async def test_every_dial_path_honours_the_connect_budget(
+    monkeypatch, request_tmpl, via_upstream
+):
+    """Every TCP dial the proxy makes uses our budget, on every path.
+
+    The v0.9.5 merge brought upstream's proxy chaining (`890af3d`): a new
+    `_dial()` and a new `dst` for plain http, both hardcoded to `timeout=30`.
+    Taking upstream's side of that conflict passes upstream's security suite and
+    silently doubles what a dead host costs a render slot; only the CONNECT
+    direct path was covered by the test above. A dial that hangs must end in
+    ~our budget whichever of the four paths reached it. (Chaining is off in
+    production: no proxy env var is set on the Container App.)
+
+    The request line carries the sentinel port because that is the port the
+    proxy dials directly. Negative control, 2026-11-03: with every dial set
+    back to `timeout=30`, all four cases fail.
+    """
+    sentinel = 65124
+    real_open_connection = asyncio.open_connection
+
+    async def hang_for_sentinel(host=None, port=None, *a, **k):
+        if port == sentinel:
+            await asyncio.sleep(60)
+        return await real_open_connection(host, port, *a, **k)
+
+    scheme = "https" if request_tmpl.startswith("CONNECT") else "http"
+    request_bytes = request_tmpl.format(port=sentinel).encode()
+    monkeypatch.setattr(
+        egress_proxy,
+        "resolve_and_pin",
+        lambda url: PinnedTarget(scheme, "slow.example", sentinel, "127.0.0.1"),
+    )
+    if via_upstream:
+        # The upstream proxy is the thing that never answers.
+        monkeypatch.setattr(
+            egress_proxy,
+            "upstream_proxy",
+            lambda s="https": ("127.0.0.1", sentinel, b""),
+        )
+        monkeypatch.setattr(egress_proxy, "_no_proxy_match", lambda host, ip: False)
+    else:
+        monkeypatch.setattr(egress_proxy, "upstream_proxy", lambda s="https": None)
+    monkeypatch.setattr(asyncio, "open_connection", hang_for_sentinel)
+
+    proxy = egress_proxy.PinningProxy(connect_timeout_s=0.2)
+    await proxy.start()
+    try:
+        started = time.monotonic()
+        reader, writer = await asyncio.open_connection(
+            proxy.bound_host, proxy.bound_port
+        )
+        writer.write(request_bytes)
+        await writer.drain()
+        await asyncio.wait_for(reader.read(4096), timeout=5)
+        elapsed = time.monotonic() - started
+        writer.close()
+    finally:
+        await proxy.stop()
+
+    assert elapsed < 1.5, f"connect budget not honoured on this path: {elapsed:.2f}s"
 
 
 def test_default_connect_timeout_stays_under_chromiums():
