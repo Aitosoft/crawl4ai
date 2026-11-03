@@ -1,0 +1,32 @@
+# Aitosoft: what `az acr build` must not upload.
+#
+# The build context is the developer's working tree, and the Dockerfile does
+# `COPY . /tmp/project/`. Until 2026-11-03 there was no .dockerignore, and the
+# production image 0.9.2-capacity-gate-2 was found to contain /tmp/project/.env
+# (the API token), .env.txt, PRIVATE.md, tmp/ (cross-repo messages) and
+# test-aitosoft/artifacts/ (stored customer captures). The registry is private,
+# so the readers were the same Azure principals who can read the Container App's
+# env vars; it is still nothing an image needs. Gitignored local state belongs
+# here too. Keep the build inputs (crawl4ai/, deploy/, pyproject.toml, setup.py,
+# azure-deployment/pip-constraints.txt, ...) out of this list.
+
+# secrets and private identifiers
+.env
+.env.*
+PRIVATE.md
+
+# local evidence, messages and customer data
+tmp/
+test-aitosoft/artifacts/
+dump.rdb
+*.rdb
+
+# local tooling state
+.git/
+.claude/
+.context/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+**/__pycache__/
+*.egg-info/
