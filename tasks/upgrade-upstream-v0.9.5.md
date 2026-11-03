@@ -1,9 +1,11 @@
 # Merge upstream crawl4ai v0.9.2 → v0.9.5
 
 **Status:** merged on branch `upgrade-upstream-v0.9.5` (2026-11-03, merge commit `937e100`), all
-gates green, **not deployed**. Waiting on: Tero lifting the platform repo's quiet period, then
+gates green, independent review done and acted on, **not deployed**. Waiting on: Tero lifting the
+platform repo's quiet period, then
 `tmp/mas-repo-messages/55-to-mas-upstream-v0-9-5-merge-what-you-will-and-wont-see.md` (drafted,
-unsent) and an independent review. The implementing session's record, including what this file got
+unsent) and MAS's answer on sweep timing. Deploy with `deploy-image.sh` at fleet zero, then merge
+the branch into `main`. The implementing session's record, including what this file got
 wrong, is [§8](#8-implementation-record-2026-11-03) at the end. Framed 2026-11-03 by the coordinator
 session.
 **Size:** L. Mostly reconciliation and verification; the code you write is small.
@@ -613,7 +615,7 @@ as written, apart from the dated *[Corrected]* notes where a claim was wrong.
 | 3.8 pinning | constraints | `azure-deployment/pip-constraints.txt` = `pip freeze` of the production image `0.9.2-capacity-gate-2` (read with `az acr run`) minus crawl4ai and anyio; `ENV PIP_CONSTRAINT` in the Dockerfile. Production's stack, read from the image: playwright 1.62.0, patchright 1.61.2, playwright-stealth 2.0.3, lxml 6.1.1 (libxml2 2.14.6), Google Chrome 151.0.7922.137, Python 3.12.14. |
 | Target | v0.9.5, no cherry-picks | `129a950` adds little for us (our Dockerfile's own `playwright install` steps already fail loudly); the `clone()` pair is free but makes "we are at v0.9.5" untrue. All arrive with the next sync. |
 
-### Evidence (re-runnable; scratch outputs under the session scratchpad, numbers here)
+### Evidence (re-runnable; outputs copied to gitignored `tmp/upgrade-v0.9.5-evidence/implementation/`)
 
 - **Suites on the merged tree:** offline 256/256 (251 + 5 new; 262 after the review's 6 pins); fixture origin 70/70 (67 + 3 new,
   headless shell, arm64); security 343 + 1 xfail (venv with `pypdf` 6.21.4); upstream's non-security
@@ -674,8 +676,9 @@ as written, apart from the dated *[Corrected]* notes where a claim was wrong.
 ### Build note (candidate image, not deployed)
 
 `az acr build … --image crawl4ai-service:0.9.5-candidate` from `3b6b2a1` (+ docs), 2026-11-03
-13:00–13:10 UTC, ACR run `cb1q`, digest `sha256:2fdddd05…`. No Container App change. Read back with
-`az acr run`:
+13:00–13:10 UTC, ACR run `cb1q`, digest `sha256:2fdddd05…`. No Container App change. The tag stays in
+ACR but is **not the deploy artifact**: `deploy-image.sh` rebuilds, so re-read Chrome's version from
+the image that ships (Chrome stable may have moved again). Read back with `az acr run`:
 - **Python packages: identical to production's freeze** except `anyio` 4.14.2 → 4.16.0 (floats, as
   documented in the constraints header) and the new `pypdf` 6.21.4. Playwright browser caches are the
   same builds (`chromium-1228/1234`).
