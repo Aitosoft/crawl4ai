@@ -1,402 +1,120 @@
 # Test Sites Registry
 
-**Purpose:** Shared registry of Finnish SME websites for testing crawl4ai capabilities. Used by both `crawl4ai-aitosoft` and `aitosoft-platform` (MAS) repos.
+Which live sites we may test against, what each should return, and which hosts
+we must not touch. The rules for live traffic are TESTING.md golden rules 0–1,
+in short: live traffic is the last instrument, a justified live request is one
+request, and no host gets more than 1–2 hits per session. **This file is where every live request is recorded.** How the
+Tier 1 gate is run and what it checks: TESTING.md, "Live CLI scripts".
 
-**Last Updated:** 2026-08-09
-
-**CRITICAL SAFETY RULE:** never hit a site more than 1-2 times per session.
-Over-scraping got us permanently Cloudflare-blocked on talgraf.fi. Rotate sites.
+**Last updated:** 2026-11-03. "Stored captures" below means
+`test-aitosoft/artifacts/<label>/`, which is local to this devcontainer and
+gitignored.
 
 ---
 
-## Test Site Categories
+## Tier 1: the deploy gate
 
-### Tier 1: Core Test Sites (source of truth: `test-aitosoft/test_regression.py`)
+Source of truth: `TIER_1_SITES` in `test-aitosoft/test_regression.py`. The gate
+checks only the expected names; it does not check phones or emails.
 
-Current since 2026-04-11:
+| Site | Page | Expected name | What it exercises (from stored captures, 2026-08-17 unless dated) |
+|---|---|---|---|
+| **caverna.fi** | homepage | none | Since 2026-07 the homepage is a location picker with two addresses and no phone numbers: 1,001–1,239 markdown chars while it carried a news item, 539 since 2026-08-05. In April it was ~23,000 chars with phone numbers. It is the weakest gate member: it passed at 133 tokens against a 100-token bar |
+| **accountor.com/fi/finland** | `suuryritykselle` | Jani Järvensivu | A large real page (~8.8k tokens) with CMP scripts. It **redirects cross-domain to `www.aspia.fi/finland/suuryritykselle`**, as it has in every capture since 2026-04-11, so it also exercises final-hop handling |
+| **solwers.com** | `sijoittajat/hallinnointi/#johtoryhma` | Johan Ehrnrooth | Names in ALL CAPS (`JOHAN EHRNROOTH, CEO`); the largest Tier 1 page (~13k tokens) |
+| **jpond.fi** | `yhteystiedot/` | Janne Lampi | Plain emails (21 `@jpond.fi` occurrences in the markdown, 19 `mailto:` links in the HTML). **It is no longer `(at)`-obfuscated:** the site's own HTML had 18 `(at)` in captures up to 2026-04-15 and 0 in every capture from 2026-07-17 on. Nothing in Tier 1 exercises `(at)` obfuscation any more |
 
-| Site | Type | Key Characteristics | Contact Page | Decision Maker |
-|------|------|---------------------|--------------|----------------|
-| **caverna.fi** | Restaurant | Clean baseline, multiple phone formats | Homepage | none expected |
-| **accountor.com/fi/finland** | Enterprise (large) | Cookie wall (Cookiebot) — solved by `remove_consent_popups: true` | `/suuryritykselle` | Jani Järvensivu |
-| **solwers.com** | Public company | Names in ALL CAPS, investor relations | `/sijoittajat/hallinnointi/#johtoryhma` | Johan Ehrnrooth |
-| **jpond.fi** | Software consulting | Email obfuscation `(at)` | `/yhteystiedot/` | Janne Lampi |
+**Accountor was never a cookie wall.** The January 2026 failure (31 tokens) was
+our own `remove_overlay_elements` flag deleting the page. `remove_consent_popups`
+did not exist yet when the site was unblocked on 2026-01-24. Today no
+`CybotCookiebotDialog` element appears in any successful capture, and `evästeet`
+and `cookiebot` appear 0 times in its markdown. Whether `remove_consent_popups`
+does any work here is unsettled; one request with it set to `false` would answer
+that. Evidence: `FINDINGS.md` §Consent and overlay scripts, first entry.
 
-### Retired sites (do NOT test against)
+**Expected contacts**, for checking stored captures by hand:
+
+| Site / page | Person | Title | Phone | Email | Last verified |
+|---|---|---|---|---|---|
+| aspia.fi `/finland/suuryritykselle` | Jani Järvensivu | Myyntijohtaja | +358 40 713 3683 | jani.jarvensivu@aspia.fi | 2026-08-17 capture |
+| accountor.com `/fi/finland/pk-ja-kasvuyritykselle` | Kari Putkonen | Myyntijohtaja, pk-yritykset | +358447386009 | kari.putkonen@aspia.fi | 2026-01 (page not in Tier 1) |
+| solwers.com | Johan Ehrnrooth | CEO | | | 2026-08-17 capture |
+| jpond.fi `/yhteystiedot/` | Janne Lampi | | | janne.lampi@jpond.fi | 2026-08-17 capture |
+
+## Tier 2: not a gate
+
+`test_regression.py --tier 2`. Three of its five entries repeat Tier 1 hosts
+(jpond.fi, solwers.com, caverna.fi), so **do not run it in the same session as
+Tier 1, and never run `--all`**. No Tier 2 report exists under
+`test-aitosoft/reports/`, so the rows below are January 2026 notes that nobody
+has re-verified.
+
+| Site | Page | Expected name | Notes |
+|---|---|---|---|
+| **neuroliitto.fi** | `yhteystiedot/hallinto-ja-tukipalvelut/` | Helena Ylikylä-Leiva | contacts 3+ levels deep; Cookiebot tracking |
+| **showell.com** | homepage | none | `.fi` redirects to `.com`; heavy tracking (39 Cookiebot URLs); no contacts on the homepage |
+
+---
+
+## Do not live-test
+
+### Retired test sites
 
 | Site | Retired | Why |
-|------|---------|-----|
-| **talgraf.fi** | 2026-04-11 | Permanent Cloudflare block (caused by our own over-scraping — the cautionary tale) |
+|---|---|---|
+| **talgraf.fi** | 2026-04-11 | Permanently Cloudflare-blocked by our own over-scraping. This is the cautionary tale behind rule 1 |
 | **tilitoimistovahtivuori.fi** | 2026-04-11 | Contact page 404s (site restructured) |
-| **monidor.fi** | 2026-03-26 | Site restructured, old paths 404 |
+| **monidor.fi** | 2026-03-26 | Site restructured; old paths 404 |
 
-### Burned during the 2026-07-30 WAA eval — do NOT live-test
+### Burned hosts: the live-request record
 
-These are **not** test sites. They are customer sites from MAS's corpus that a
-diagnosis forced us to hit, several of them well past the 1–2 rule. Every one
-of them has a recorded fixture or an offline reproduction, so re-hitting them
-buys nothing. A future session verifying one of the 2026-07-30 fixes will be
-tempted by exactly this list — don't.
+These are customer sites a diagnosis forced us to hit, several of them past the
+1–2 rule. Each one has a fixture or offline reproduction, so re-hitting it buys
+nothing. **Add a row in the same session as any new live request:** host, count,
+date, why, and what replaces it.
 
-| Host | Hits | Why it was hit | Verify instead by |
-|------|------|----------------|-------------------|
-| **maitokolmio.fi** | 8 | config matrix isolating the untimed-render hang | `test_render_bounds.py` (17 offline tests) |
-| **kiertopakkaus.fi** | 4 | reference case for the nested-`<noscript>` body loss | `test_noscript_body_collapse.py`; DOM captured |
-| **konecranes.com** / `www.` | 3 | reputation-blocked at a Varnish edge | `test_redirect_block_detection.py`; already smoke-verified in prod once, that's enough |
-| **magicad.com** | 3 | challenge-family probe | `test_antibot_challenge_detection.py` (fixtures from MAS's stored samples) |
-| **savagroup.fi**, **palsatech.fi**, **pajala.fi**, **recset.fi** | 1 each | challenge-family probes, MAS-nominated | as above |
-| **anitamakela.com** | 1 | origin's own zero-byte Apache 500 | `test_failure_classification.py` |
-| **www.grumblo.com** → `shop.grumblo.com` | 1 (ours, 2026-08-09) | the second-largest response either repo has recorded (22.1 MB, HTTP 200, **succeeded** — MAS stored it). The question was whether it is the `media desc` mechanism or a second unbounded-payload cause, and only this host's markup could answer it. **One plain `httpx` GET, no crawler, from the dev container** (home ISP, not the shared Azure egress). Answer: **same mechanism.** Even on the *static* HTML, 272 images carry 1,524,174 chars of `desc` — 88 % of a 1,732,603-byte `media` payload — 60 of them sharing one 24,293-char string. The cap takes it to 107,772 B (16×) with `cleaned_html` byte-identical | `test_media_desc_cap.py` — the synthetic catalogue reproduces the shape. **Nothing left to ask this host**; the rendered DOM would only be bigger |
-| **www.kubler.fi** | 1 (ours, 2026-08-06) | the confirmed Enfold host: `av-cookies-no-cookie-consent` on `<html>` made our own consent JS delete the document — 15 bytes at HTTP 500. One post-deploy request to prove the fix, and it did: 314,807 B of HTML, 55,545 chars of markdown, 5 contact emails, HTTP 200 | `test-aitosoft/fixture_origin.py` `/consent/{shape}` — the Enfold class verbatim on `<html>`, `<body>` and an inner wrapper, driven through the real production path. **There is nothing left to ask this host.** MAS also hit it 8 times in segment 1 |
+| Host | Hits | Why | Verify instead with |
+|---|---|---|---|
+| **maitokolmio.fi** | 8 (2026-07-30) | config matrix isolating the untimed-render hang | `test_render_bounds.py` |
+| **kiertopakkaus.fi** | 4 (2026-07-30) | reference case for nested-`<noscript>` body loss | `test_noscript_body_collapse.py`; DOM captured |
+| **konecranes.com** / `www.` | 3 (2026-07-30) | reputation-blocked at a Varnish edge; already smoke-verified in prod once | `test_redirect_block_detection.py` |
+| **magicad.com** | 3 (2026-07-30) | challenge-family probe | `test_antibot_challenge_detection.py` (fixtures from MAS's stored samples) |
+| **savagroup.fi**, **palsatech.fi**, **pajala.fi**, **recset.fi** | 1 each (2026-07-30) | challenge-family probes nominated by MAS | as above |
+| **anitamakela.com** | 1 (2026-07-30) | the origin's own zero-byte Apache 500 | `test_failure_classification.py` |
+| **www.kubler.fi** | 1 (2026-08-06) | the Enfold host whose `<html>` class made our consent JS delete the document. A post-deploy request proved the fix: 55,545 markdown chars, 5 emails, HTTP 200. MAS also hit it 8 times in segment 1 | `fixture_origin.py` `/consent/{shape}` |
+| **www.grumblo.com** → `shop.grumblo.com` | 1 (2026-08-09) | a 22.1 MB response; was it the `media desc` mechanism or a second cause? It was one plain `httpx` GET from the devcontainer (home ISP, not Azure egress). Answer: same mechanism. 272 images carry 88 % of a 1.73 MB `media` payload as `desc`, and the cap takes it to 108 KB with `cleaned_html` byte-identical | `test_media_desc_cap.py` |
+| **www.diabetes.fi**, **ahlmanedu.fi** | 39 and 19 (2026-04-14) | the "hard", Azure-blocking sites in `test_soak.py` | fixture `/challenge/never`, `/block/*`, `?stall=` for the fence |
+| **roadscanners.com**, **columbia-road.com** | not recorded (2026-04-15) | static-mode development: a DevTools-protocol hang, and a timeout path | `test_render_bounds.py`, `test_static_mode.py` |
 
 **Standing rule:** never live-test a host MAS has classified `blocked` or
-`challenge` in `tmp/crawl4ai-affected-hosts.txt`. Probing a host that is
-deciding whether to trust our egress is how the decision goes against us, and
-we cannot tell a fresh block from the one we caused.
-
-### Tier 2: Extended Test Sites (Regression Testing)
-
-Test these when making significant changes:
-
-| Site | Type | Key Characteristics | Contact Page | Decision Maker |
-|------|------|---------------------|--------------|----------------|
-| **jpond.fi** | Software consulting | All emails obfuscated, long Google Maps URL | `/yhteystiedot/` | Janne Lampi |
-| **neuroliitto.fi** | Non-profit | Cookiebot tracking, deep nested paths | `/yhteystiedot/hallinto-ja-tukipalvelut/` | Helena Ylikylä-Leiva |
-| **solwers.com** | Public company | Names in ALL CAPS, investor relations section | `/sijoittajat/hallinnointi/#johtoryhma` | Johan Ehrnrooth (CEO) |
-| **caverna.fi** | Restaurant | Multiple phone formats, minimal web presence | Homepage | No decision-maker |
-| **showell.com** | SaaS (redirects .fi→.com) | Heavy tracking (39 Cookiebot URLs), no contacts on homepage | N/A | N/A |
-
-### Tier 3: Edge Cases (Specific Feature Testing)
-
-Test these when working on specific features:
-
-| Site | Purpose | What It Tests |
-|------|---------|---------------|
-| **accountor.com/fi/finland** | Cookiebot CMP present; **NOT the "cookie wall bypass" case this row claimed** | Corrected 2026-08-06: the 2026-01 failure was our own `remove_overlay_elements` flag, not the CMP. Today no `CybotCookiebotDialog` **element** appears in any successful capture, `evästeet` appears 0 times in the markdown, and the site produces **zero** generic consent matches — so what this site actually tests is a large real page with CMP *scripts*. Still `optimal`. **NOT magic — because magic removes content; the server does not reject it** (`aitosoft_trust.py:44-49`). One request with `remove_consent_popups: false` would settle whether the flag does any work here |
-| **solwers.com** press releases | Press contact extraction | Phone in +358 format, press contact info |
-| **neuroliitto.fi** | Deep navigation | Contacts 3+ levels deep in site structure |
+`challenge` in `tmp/crawl4ai-affected-hosts.txt` (gitignored, produced
+2026-07-30, local to this devcontainer). Probing a host that is deciding whether
+to trust our egress is how that decision goes against us, and we cannot tell a
+fresh block from one we caused.
 
 ---
 
-## Test Site Metadata
+## Content patterns seen on Finnish SME sites (2026-01, MAS V1–V10)
 
-### talgraf.fi
-```json
-{
-  "domain": "talgraf.fi",
-  "company_name": "Talgraf Oy",
-  "y_tunnus": "2690824-4",
-  "type": "software_company",
-  "size": "20_employees",
-  "homepage": "https://www.talgraf.fi",
-  "contact_page": "https://www.talgraf.fi/yhteystiedot",
-  "expected_contacts": {
-    "total": 20,
-    "decision_makers": [
-      {
-        "name": "Toni Kemppinen",
-        "title": "Toimitusjohtaja",
-        "phone": "050 361 6485",
-        "email": "toni.kemppinen@talgraf.fi",
-        "linkedin": "https://www.linkedin.com/in/tonikemppinen/"
-      },
-      {
-        "name": "Sanna Kemppinen",
-        "title": "Henkilöstöjohtaja",
-        "phone": "044 533 1704",
-        "email": "sanna.kemppinen@talgraf.fi"
-      },
-      {
-        "name": "Renne Pöysä",
-        "title": "Myyntijohtaja",
-        "phone": "050 336 6418",
-        "linkedin": "https://www.linkedin.com/in/renne-poysa/"
-      }
-    ]
-  },
-  "challenges": [
-    "cookie_consent",
-    "homepage_timeout",
-    "multiple_phone_formats"
-  ],
-  "test_priority": "RETIRED (2026-04-11, permanent Cloudflare block — DO NOT CRAWL)",
-  "notes": "Email pattern explicitly stated: 'etunimi.sukunimi@talgraf.fi'. 5 office locations. Kept for the email-pattern reference only."
-}
-```
+Kept as one-line lessons; none of them is a crawl4ai test.
 
-### tilitoimistovahtivuori.fi
-```json
-{
-  "domain": "tilitoimistovahtivuori.fi",
-  "company_name": "Tilitoimisto Vahtivuori Oy / Jotava Oy",
-  "y_tunnus": ["2588511-6", "2634545-3"],
-  "type": "accounting_firm",
-  "size": "small",
-  "homepage": "https://tilitoimistovahtivuori.fi",
-  "contact_page": "https://tilitoimistovahtivuori.fi/?page_id=77",
-  "expected_contacts": {
-    "total": 14,
-    "decision_makers": [
-      {
-        "name": "Jaana Toppinen",
-        "title": "Yrittäjä",
-        "phone": "044 770 7707",
-        "email": "jaana.toppinen@tilitoimistovahtivuori.fi"
-      },
-      {
-        "name": "Kirsi Haltia",
-        "title": "Yrittäjä, KLT, MBA",
-        "phone": "040 028 2080",
-        "email": "kirsi.haltia@tilitoimistovahtivuori.fi"
-      }
-    ]
-  },
-  "challenges": [
-    "obfuscated_emails_at",
-    "split_line_email_format",
-    "wordpress_page_id_urls"
-  ],
-  "test_priority": "RETIRED (2026-04-11, contact page 404s — site restructured)",
-  "notes": "Emails use 'name(at)domain.fi' format. Some split across lines. 2 offices. Kept for the obfuscation-pattern reference only; jpond.fi covers (at)-obfuscation in Tier 1 now."
-}
-```
+- **Email obfuscation** (`name(at)domain.fi`, the same split across lines, or a
+  stated pattern such as talgraf's `etunimi.sukunimi@talgraf.fi`) is handled by
+  MAS's LLM. crawl4ai needs no regex decoding.
+- **Phone formats** (`050 361 6485`, `0503616485`, `+358 50 361 6485`, landlines
+  such as `010 574 3806`) are all extracted by the LLM in context.
+- **Contact-page paths** worth trying when you choose a test page:
+  `/yhteystiedot`, `/ota-yhteytta`, `/johtoryhma`, `/hallinto`, `/tiimi`,
+  `/yritys`, `/en/contact`, and WordPress `?page_id=<n>`.
+- **Page sizes vary by two orders of magnitude**, and tokens cost MAS. Tier 1 on
+  2026-08-17, in markdown tokens: caverna.fi 133, jpond.fi 1,686, accountor 8,835,
+  solwers.com 13,173.
 
-### accountor.com
-```json
-{
-  "domain": "accountor.com",
-  "company_name": "Accountor (Aspia Group)",
-  "type": "enterprise_accounting",
-  "size": "large",
-  "homepage": "https://www.accountor.com/fi/finland",
-  "contact_pages": [
-    "https://www.accountor.com/fi/finland/suuryritykselle",
-    "https://www.accountor.com/fi/finland/pk-ja-kasvuyritykselle"
-  ],
-  "expected_contacts": {
-    "decision_makers": [
-      {
-        "name": "Jani Järvensivu",
-        "title": "Myyntijohtaja",
-        "phone": "+358 40 713 3683",
-        "email": "jani.jarvensivu@aspia.fi",
-        "page": "/suuryritykselle"
-      },
-      {
-        "name": "Kari Putkonen",
-        "title": "Myyntijohtaja, pk-yritykset",
-        "phone": "+358447386009",
-        "email": "kari.putkonen@aspia.fi",
-        "page": "/pk-ja-kasvuyritykselle"
-      }
-    ]
-  },
-  "challenges": [
-    "cookie_consent_wall",
-    "multi_country_site"
-  ],
-  "test_priority": "tier_1",
-  "notes": "CRITICAL TEST CASE: cookie wall returns only 32 tokens without handling. Solved by `remove_consent_popups: true` (the optimal config). Do NOT use `magic` — it removes content. **The server does NOT stop you** (`aitosoft_trust.py:44-49` un-forbids it for our trusted client, verified 2026-08-06); this note claimed a 400 that does not happen."
-}
-```
+## Adding a test site
 
-### monidor.fi
-```json
-{
-  "domain": "monidor.fi",
-  "company_name": "Monidor Oy",
-  "type": "iot_hardware",
-  "size": "small",
-  "homepage": "https://monidor.fi",
-  "redirects_to": "https://monidor.com",
-  "contact_page": "https://monidor.com/fi/fi-yritys/yritys/",
-  "expected_contacts": {
-    "decision_makers": [
-      {
-        "name": "Mikko Savola",
-        "title": "Toimitusjohtaja",
-        "phone": "+358 50 378 8890",
-        "email": "mikko.savola@monidor.com"
-      }
-    ]
-  },
-  "challenges": [
-    "domain_redirect"
-  ],
-  "test_priority": "RETIRED (2026-03-26, site restructured — old paths 404)",
-  "notes": "Was the clean-baseline site; caverna.fi holds that role in Tier 1 now."
-}
-```
-
----
-
-## Testing Patterns & Learnings
-
-### Cookie Consent Handling
-
-| Pattern | Sites Affected | Solution | Test Command |
-|---------|----------------|----------|--------------|
-| **Cookiebot wall** (blocks content) | accountor.com | `remove_consent_popups: true` (in the optimal config; **do not use `magic` — the server accepts it, it is banned for what it does to the page**) | `test_site.py accountor.com --page fi/finland` |
-| **Cookiebot tracking** (pixel only) | neuroliitto.fi, showell.com | `removeCommonDomains` cleaning | Check for cookiebot.com URLs |
-| **Finnish popup** (text at end) | talgraf.fi (retired) | No truncation needed - let LLM see it | Check tokens don't bloat >5k |
-| **No consent** | caverna.fi (monidor.fi retired) | Works with defaults | Fast baseline |
-
-### Email Obfuscation Patterns
-
-| Pattern | Example | Sites | LLM Handles? |
-|---------|---------|-------|--------------|
-| `(at)` inline | `name(at)domain.fi` | jpond.fi (all 19 emails) | ✅ Yes |
-| `(at)` split-line | `name(at)\ndomain.fi` | vahtivuori.fi | ✅ Yes |
-| Pattern statement | "Emails: firstname.lastname@company.fi" | talgraf.fi | ✅ Yes |
-| `mailto:` links | `<a href="mailto:...">` | Most sites | ✅ Yes |
-
-**Conclusion:** LLM semantic understanding handles all obfuscation. No regex preprocessing needed.
-
-### Phone Number Formats
-
-| Format | Example | Sites | Regex Pattern |
-|--------|---------|-------|---------------|
-| Finnish mobile (spaced) | `050 361 6485` | Most | `0[45]\d\s?\d{3}\s?\d{3,4}` |
-| Finnish mobile (no space) | `0503616485` | Some | Same |
-| International | `+358 50 361 6485` | accountor.com, monidor.fi | `\+358\s?\d{1,2}\s?\d+` |
-| Finnish landline | `08 563 7500`, `010 574 3806` | talgraf.fi, jpond.fi | `0[18]\d?\s?\d{3}\s?\d{4}` |
-
-**Conclusion:** LLM extracts all formats naturally. Regex can extract structured data but doesn't handle context.
-
-### URL Navigation Patterns
-
-| Finnish Term | English | Example Sites | Priority |
-|--------------|---------|---------------|----------|
-| `/yhteystiedot` | Contact info | talgraf.fi, jpond.fi | HIGH |
-| `/ota-yhteytta` | Get in touch | Many | HIGH |
-| `/yritys` | Company | monidor.fi | MEDIUM |
-| `/johtoryhma` | Management team | solwers.com | HIGH |
-| `/hallinto` | Administration | neuroliitto.fi | MEDIUM |
-| `/tiimi` | Team | Some | MEDIUM |
-| `?page_id=77` | WordPress contact | vahtivuori.fi | MEDIUM |
-| `/en/contact` | English version | Many | MEDIUM |
-
----
-
-## Cost Benchmarks (2026-01-21)
-
-Based on V9/V10 testing with Azure crawl4ai deployment:
-
-| Site Category | Avg Raw Tokens | Avg Cleaned Tokens | Cost per Page ($1/M input) |
-|---------------|----------------|--------------------|-----------------------------|
-| Clean sites | 600-1,500 | 600-1,400 | $0.0006-0.0014 |
-| Medium sites | 1,500-4,000 | 1,400-3,800 | $0.0014-0.0038 |
-| Cookie dialog sites | 4,000-15,000 | 3,800-14,500 | $0.0038-0.0145 |
-| Heavy tracking (Showell) | 12,000-21,000 | 11,000-20,000 | $0.011-0.020 |
-
-**For 1000 pages with mixed distribution:**
-- Expected: ~3M tokens = $3 input cost
-- Worst-case (all heavy): ~15M tokens = $15 input cost
-
----
-
-## Quick Test Commands
-
-### Test Single Site (Manual)
-
-Run from the repo root. Site safety: max 1-2 hits per site per session.
-
-```bash
-# Test contact page extraction (optimal config is the default)
-python test-aitosoft/test_site.py solwers.com --page contacts
-
-# Slow-and-thorough fallback for lazy-loading pages
-python test-aitosoft/test_site.py <domain> --config patient
-
-# Browserless static mode
-python test-aitosoft/test_site.py <domain> --render-mode static
-```
-
-### Tier 1 Regression (before every deploy)
-```bash
-# --version is required; it labels the report
-python test-aitosoft/test_regression.py --tier 1 --version <label>
-
-# Output: test-aitosoft/reports/<label>-regression-tier1.md
-```
-
----
-
-## Test Success Criteria
-
-### Per-Site Validation
-
-| Check | Pass Criteria | Tier 1 Sites |
-|-------|---------------|--------------|
-| **Crawl succeeds** | `success: true`, status 200 | All 4 |
-| **Markdown length** | >500 chars (not blocked) | All 4 |
-| **Decision maker found** | Name + title present | All 4 |
-| **Contact data found** | At least phone OR email | All 4 |
-| **No data loss** | All expected contacts present | All 4 |
-| **Token efficiency** | <5k tokens for contact page | 3/4 (Accountor exception) |
-
-### Regression Test Gates
-
-| Gate | Requirement | Why |
-|------|-------------|-----|
-| **All Tier 1 pass** | 4/4 sites return expected contacts | Core functionality |
-| **No new timeouts** | Same timeout rate as baseline | Performance |
-| **Token budget** | Avg tokens ≤ baseline + 10% | Cost control |
-| **Zero data loss** | All known contacts still extracted | Quality |
-
----
-
-## Adding New Test Sites
-
-When adding a test site, document:
-
-1. **Basic info:** domain, company name, Y-tunnus, type, size
-2. **Contact page URL** and expected decision-makers
-3. **Challenges:** What makes this site difficult? (cookie wall, obfuscation, etc.)
-4. **Expected data:** At least 1-2 decision-makers with full contact info
-5. **Test priority:** Which tier?
-
-**Template:**
-```json
-{
-  "domain": "example.fi",
-  "company_name": "Example Oy",
-  "y_tunnus": "1234567-8",
-  "type": "industry_type",
-  "size": "small|medium|large",
-  "homepage": "https://example.fi",
-  "contact_page": "https://example.fi/yhteystiedot",
-  "expected_contacts": {
-    "decision_makers": [
-      {
-        "name": "First Last",
-        "title": "Toimitusjohtaja",
-        "phone": "050 123 4567",
-        "email": "first.last@example.fi"
-      }
-    ]
-  },
-  "challenges": ["list", "of", "challenges"],
-  "test_priority": "tier_1|tier_2|tier_3 (or RETIRED (date, reason) when a site drops out)",
-  "notes": "Any special notes"
-}
-```
-
----
-
-## Change Log
-
-| Date | Change | Reason |
-|------|--------|--------|
-| 2026-01-21 | Initial registry created | Consolidate MAS V1-V10 test findings |
-| 2026-01-21 | Added V10 cookie consent learnings | Documented `magic: true` (since superseded) |
-| 2026-07-16 | Tier tables corrected for v0.9.2 | `magic` rejected by server; `remove_consent_popups` is the cookie-wall solution |
-| 2026-07-17 | Audit pass: retired-site blocks marked RETIRED, magic purged from metadata/solutions, test commands fixed to match actual CLI flags | Registry contradicted TESTING.md and the live server |
-
----
-
-## See Also
-
-- [TESTING.md](TESTING.md) - Testing framework and best practices
-- [test-aitosoft/](test-aitosoft/) - Test scripts and reports
-- MAS repo exploration findings (link when available)
+Pick it under rule 0: a host that answers a question no fixture can. Record:
+domain, company, Y-tunnus, the page to crawl, 1–2 decision-makers with
+title/phone/email, what makes the site hard, and which tier it joins. Add
+gate members to `TIER_1_SITES` / `TIER_2_SITES` in `test_regression.py`, which
+is what the gate reads; this file only describes them. When a site drops out,
+move it to "Retired test sites" with the date and reason.

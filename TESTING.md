@@ -1,227 +1,149 @@
-# Testing Framework
+# Testing
 
-Rewritten 2026-07-16 (v0.9.2 upgrade). The old version of this file predated
-the stealth package, recommended `magic: true` configs, and listed retired sites
-as Tier 1. If you see advice contradicting this file elsewhere, this file wins.
-
-**Corrected 2026-08-09:** this paragraph used to say the v0.9.x server *rejects*
-`magic` with a 400. **It does not** — `aitosoft_trust.py:44-49` un-forbids it for
-our trusted client, verified by executing `apply_trust_relaxations()`. That was
-both wrong and the dangerous direction (a session could send it believing the
-boundary would stop them), and it contradicted golden rule 4 twenty lines below
-in this same file. `magic` is banned **because of what it does to a page**, not
-because anything prevents it.
+How to prove a change works without spending customer goodwill. Counts and
+runtimes were measured 2026-11-03 on this devcontainer (arm64). Test sites,
+expected contacts and the burned-host list are in `TEST_SITES_REGISTRY.md`.
 
 ---
 
 ## Golden rules
 
-0. **Live traffic is the last instrument, not the first.** A new failure class
-   gets a fixture route. A live request is justified only when the question is
-   about a specific third party's behaviour and cannot be answered any other
-   way — and then it is one request, recorded in `TEST_SITES_REGISTRY.md`, with
-   the host added to the burned list in the same session.
-1. **Site safety:** never hit the same site more than 1-2 times per session.
-   Over-scraping permanently Cloudflare-blocked talgraf.fi. Rotate sites.
-   Hosts already burned (and the offline suite that replaces each) are listed
-   under "Burned during the 2026-07-30 WAA eval" in `TEST_SITES_REGISTRY.md`.
-   Never live-test a host MAS classified `blocked` or `challenge`.
-2. **Tier 1 must pass 4/4 before any deploy** (quality gate).
-3. Source of truth for tier membership: `test-aitosoft/test_regression.py`
-   (`TIER_1_SITES`). Site metadata: `TEST_SITES_REGISTRY.md`.
-4. Use the `optimal` config (matches MAS production). **Never `magic` — because it
-   removes content on cookie sites. Do NOT rely on the server to stop you: our
-   own `aitosoft_trust.py:44-49` un-forbids `magic`, `simulate_user` and
-   `override_navigator`, so the boundary ACCEPTS them** (verified by executing
-   `apply_trust_relaxations()` 2026-08-06). This file, `TEST_SITES_REGISTRY.md:74`
-   and `test_site.py:46-48` all said the server rejects it; that was true only
-   between upstream's `60886d1` and our `f7a0d74`.
+0. **Live traffic is the last instrument, not the first.** Use stored captures,
+   `test-aitosoft/fixture_origin.py` and `raw://` first (see "Zero-traffic
+   instruments"). A live request is justified only when the question is about a
+   specific third party's behaviour and nothing else can answer it. Then it is
+   **one request**, recorded in `TEST_SITES_REGISTRY.md`, with the host added to
+   its burned list in the same session.
+1. **Site safety:** at most 1–2 hits per host per session; rotate. Our own
+   over-scraping got talgraf.fi permanently Cloudflare-blocked. Never live-test a
+   host on the registry's burned list, or one MAS has classified `blocked` or
+   `challenge`.
+2. **Tier 1 must pass 4/4 before any deploy.**
+3. Tier membership: `TIER_1_SITES` in `test-aitosoft/test_regression.py` is the
+   source of truth. The registry holds metadata.
+4. **Use the `optimal` config; never `magic`.** `magic` removes real content on
+   cookie-consent sites. The server will **not** stop you: `aitosoft_trust.py`
+   (its step 3) un-forbids `magic`, `simulate_user` and `override_navigator` for our
+   trusted client. Any doc that says the server rejects `magic` is stale.
 
-Why rule 0 outranks rule 1: rule 1 is a budget, and we had no way to spend it
-honestly. Every failure class diagnosed since 2026-04 was diagnosed against a
-customer's site, all of it leaving from one Azure SNAT address that is not
-contractually ours and that MAS's production fetches share — so "this host
-blocks datacentre IPs" and "this host blocked us because of what we did" were
-indistinguishable, and their re-scrape and our test hits drew on one account.
-`test-aitosoft/fixture_origin.py` removes the reason: a local origin with a
-route per failure class, driven through the real production path. Adding a
-class there is a query parameter. See `tasks/done/fixture-origin.md`.
+Why rule 0 outranks rule 1: every live test leaves from the Azure SNAT address
+that MAS's production fetches also use, and that address is not contractually
+ours. Our test hits and their sweeps draw on one reputation budget, and "this
+host blocks datacentre IPs" looks identical to "this host blocked us because of
+what we did".
 
-## How to run
+---
 
-All tests are HTTP clients against a running service. Point them anywhere via
-env vars:
+## Offline suites: what proves what
 
 ```bash
-export CRAWL4AI_API_URL=http://127.0.0.1:11235   # default: production endpoint
-export CRAWL4AI_API_TOKEN=<token>                 # required
-
-python test-aitosoft/test_regression.py --tier 1 --version <label>  # quality gate
-python test-aitosoft/test_site.py <domain> --page <path>            # single site
-python test-aitosoft/test_site.py <domain> --render-mode static     # static mode
-python test-aitosoft/test_fingerprint.py --label <label>            # stealth diagnostic
-python test-aitosoft/test_soak.py --duration-min 30                 # leak hunting
+pytest test-aitosoft/                                                # 318 tests, ~270 s
+pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # 251 tests, ~31 s (pure-function)
+pytest test-aitosoft/test_fixture_origin.py                          # 67 tests, ~240 s (browser, loopback)
+pytest deploy/docker/tests/test_security_*.py -q                     # upstream's: 316 passed + 1 xfailed, ~7 s
 ```
 
-Everything pytest collects is OFFLINE — no server, no customer site:
+None of these contacts a server or a customer site. Run them from the repo root.
+`test-aitosoft/conftest.py` keeps pytest from collecting the four live CLI
+scripts. Counts change whenever a test is added, so regenerate them instead of
+trusting the table:
 
 ```bash
-pytest test-aitosoft/          # 312 tests, ~260 s
+pytest test-aitosoft/ --collect-only -q | grep '::' | cut -d: -f1 | sort | uniq -c
 ```
 
-That splits in two, and the split matters when you are choosing where to put a
-new test:
+| Suite | Tests | Pins | Re-run after touching |
+|---|--:|---|---|
+| `test_mas_contract.py` | 16 | MAS's audited request fields against the untrusted boundary plus our relaxations; multi-URL → 400; every 429 carries `capacity_gate` | `async_configs.py`, `aitosoft_trust.py`, any upstream sync |
+| `test_admission.py` | 13 | RenderGate capacity, bounded queue, 429 + `Retry-After` | admission / capacity |
+| `test_crawler_pool.py` | 27 | PERMANENT re-init, `max_browsers` evict-or-refuse (never wait), memory guard, the cgroup reading | `crawler_pool.py`, `deploy/docker/utils.py` memory functions |
+| `test_static_mode.py` | 10 | per-hop SSRF redirect validation, bounded fan-out, monitor outcome | `aitosoft_static_mode.py` |
+| `test_patchright_fallback.py` | 4 | in-flight counter, recycle race | `aitosoft_patchright_fallback.py` |
+| `test_redirect_block_detection.py` | 12 | block detection judges the final redirect hop; a benign 301→200 stays a success | `antibot_detector.py`, `async_webcrawler.py` |
+| `test_antibot_challenge_detection.py` | 31 | challenge families served at HTTP 200; the Shopify `Access Denied` false positive | `antibot_detector.py` patterns |
+| `test_render_bounds.py` | 17 | `page.evaluate`, `page.content` and `total_timeout` are bounded; `total_timeout` sits inside `wall_clock_s` | capture path, adapters, timeouts |
+| `test_failure_classification.py` | 56 | the `failure_class` taxonomy and its wire status (table below) | `aitosoft_failure_class.py`, error-text matching |
+| `test_noscript_body_collapse.py` | 11 | a nested `<noscript>` no longer swallows the body | `strip_noscript()`, scraping strategy |
+| `test_collapse_guard.py` | 34 | guard thresholds against real captures; recovery | `aitosoft_collapse_guard.py` |
+| `test_egress_dns_offload.py` | 14 | DNS off the event loop; NXDOMAIN → `origin_unreachable`; proxy connect timeout; `http://` connect failure closes | `egress_proxy.py`, `egress_broker.py`, the seed check in `api.py` |
+| `test_media_desc_cap.py` | 6 | image `desc` capped at 200 chars | `content_scraping_strategy.py` |
+| `test_fixture_origin.py` | 67 | browser-driven: time, navigation, challenge resolution, hydration, redirect chains, consent/overlay JS, downloads, the wall-clock fence | capture path, block detection, `failure_class`, consent/overlay snippets, the fence |
 
-| | Suites | Tests | Time | Covers |
-|---|---|---:|---|---|
-| Pure-function | the thirteen below | 245 | ~30 s | synthetic strings through `strip_noscript`, `is_blocked`, `classify_result`, the `desc` cap, the config boundary, the gate |
-| Browser-driven | `test_fixture_origin.py` | 67 | ~215 s | **time, navigation and the browser** — challenge resolution, hydration races, redirect chains, the wall-clock fence |
+**Tests that pin a defect on purpose.** Three tests in `test_fixture_origin.py`
+assert today's wrong behaviour so that the fix has a red test to turn green:
+`test_an_unmarked_interstitial_is_stored_as_content`,
+`test_a_body_swallowed_into_a_script_is_still_silent` (`unclosed-script`) and
+`test_a_self_inflicted_click_navigation_is_detected`. When the fix ships, invert
+them; do not delete them. If one flips during a merge, that is a finding, not
+noise.
+
+### Known limitations
+
+- **The browser suite does not run production's browser.** It runs Playwright's
+  `chromium_headless_shell`, which has no PDF viewer. Details and the two fixes
+  are under "arm64 devcontainer" below.
+- **No GitHub workflow runs `test-aitosoft/`.** `.github/workflows/security.yml`
+  is the only workflow that runs tests. It runs upstream's
+  `deploy/docker/tests/test_security_*.py` on pushes to `main`, `develop` or
+  `security/**` and on PRs, and **both triggers are path-filtered**: it runs only
+  when the change touches `deploy/docker/**`, `crawl4ai/async_configs.py` or the
+  workflow file itself. A push that changes only `crawl4ai/` scraping code runs
+  nothing. This suite runs only where someone types the command.
+- **Three tests fail on a fresh clone.** `test-aitosoft/artifacts/*` is
+  gitignored, so `test_collapse_guard.py`'s
+  `test_thresholds_clear_every_real_capture`,
+  `test_the_real_corpus_still_shows_the_gap` and
+  `test_no_real_capture_is_mutated_by_the_guard` only pass on a machine that
+  holds the local corpus. They fail loudly, which is the safe direction.
+  `tasks/guard-corpus-is-not-in-the-repo.md`.
+- **Fixture tests bypass the pinning egress proxy.** `ProductionPath` calls
+  `api.handle_crawl_request` directly, so the lifespan that installs the proxy
+  never runs. CONNECT handling, the connect timeout and dead-host cost are
+  covered only by `test_egress_dns_offload.py`.
+  `tasks/done/fixture-origin-bypasses-the-pinning-proxy.md`.
+
+---
+
+## Live CLI scripts
+
+These need a running server and a token. **All four default to the production
+endpoint**, so point them elsewhere explicitly:
 
 ```bash
-pytest test-aitosoft/test_mas_contract.py test-aitosoft/test_admission.py test-aitosoft/test_static_mode.py test-aitosoft/test_crawler_pool.py test-aitosoft/test_patchright_fallback.py test-aitosoft/test_redirect_block_detection.py test-aitosoft/test_render_bounds.py test-aitosoft/test_failure_classification.py test-aitosoft/test_noscript_body_collapse.py test-aitosoft/test_antibot_challenge_detection.py test-aitosoft/test_collapse_guard.py test-aitosoft/test_egress_dns_offload.py test-aitosoft/test_media_desc_cap.py
+export CRAWL4AI_API_URL=http://127.0.0.1:11235    # unset = production
+export CRAWL4AI_API_TOKEN=<token>                  # required; scripts exit without it
 ```
 
-This list drifts, three times now: it said "seven suites, 64 tests" three suites
-later, and it was still missing `test_collapse_guard.py` a day after that suite
-shipped. **`CLAUDE.md` no longer keeps a parallel copy** — it runs
-`--ignore=test-aitosoft/test_fixture_origin.py` instead, which is the same split
-expressed as a complement and cannot go stale. Prefer that form; this explicit
-list survives only because it names the suites.
+| Command | Live cost | Status |
+|---|---|---|
+| `python test-aitosoft/test_regression.py --tier 1 --version <label>` | 1 request per Tier 1 host, a 2nd if the result is thin | The deploy gate. Report: `test-aitosoft/reports/<label>-regression-tier1.md`; captures: `test-aitosoft/artifacts/<label>/` |
+| `python test-aitosoft/test_site.py <domain> [--page <path>] [--config optimal\|patient] [--render-mode full\|static] [--version <label>] [--no-save]` | 1 request | Single-site check. `static` is for hosts where Playwright hangs |
+| `python test-aitosoft/test_fingerprint.py --label <label> [--url <api>]` | 4 fingerprint sites | **Broken since v0.9.2 (2026-07-16):** it sends `js_code`, which the untrusted boundary rejects with 400 (verified offline 2026-11-03). Baseline `test-aitosoft/stealth-v4/` is from 2026-04-11 |
+| `python test-aitosoft/test_soak.py --duration-min 30 [--url <api>] [--parallel N]` | **Hundreds of requests** | **Do not run as written.** It loops over 9 public sites, three Tier 1 hosts and 3 "hard" URLs for the whole duration. The stored 2026-04-14 30-minute run sent 327 requests: 22–23 each to jpond.fi, caverna.fi and solwers.com, 36 to www.diabetes.fi, 18 to ahlmanedu.fi (`test-aitosoft/results/soak-20260414-160043.json`). It predates rule 0. For memory and leak questions, use `experiment_pool_memory.py` or a `raw://` probe |
 
-The four CLI scripts (`test_regression.py`, `test_site.py`,
-`test_fingerprint.py`, `test_soak.py`) need a live server + token and are run by
-hand as shown above. `test-aitosoft/conftest.py` keeps pytest from collecting
-them; three of their helpers are named `test_*`, so a clean run used to report
-three errors, and a permanently red bar trains you to ignore the bar.
+What the Tier 1 gate actually checks (`test_regression.py` via `test_site.py`):
+- HTTP 2xx with envelope `success: true`. The envelope is true for every
+  processed request, origin failures included; per-result `success` is never
+  read, so the markdown floor is what catches a failed page;
+- at least 100 "tokens" of `raw_markdown`, where a token is `len // 4`, i.e. at
+  least 400 chars;
+- at least 50 % of the expected decision-maker names appear in `raw_markdown`.
 
-**Always run from the repo root** — artifact/report paths are relative
-(`test-aitosoft/reports/`); running from inside `test-aitosoft/` creates a
-nested `test-aitosoft/test-aitosoft/` clutter directory.
+It reads `raw_markdown`, not `fit_markdown`, because PruningContentFilter drops
+contact blocks at threshold ≥ 0.35. If the markdown is under 100 tokens, it
+retries once with `patient` (networkidle + full scroll), which is a second live
+hit. It does not check phones, emails, `failure_class`, or
+`expected_min_contacts` (that field is defined but never read). caverna.fi has
+no expected names and passed on 2026-08-17 with 133 tokens. **Do not use `--all` or `--tier 2`:** Tier 2
+repeats jpond.fi, solwers.com and caverna.fi, so `--all` hits them twice in one
+run (four times with the thin-result retry), which breaks rule 1.
 
-Reports land in `test-aitosoft/reports/`.
+---
 
-### Reproducing a scraper bug with zero site hits
+## The `optimal` config
 
-Golden rule 1 makes live bisection expensive. You almost never need it: the
-`/crawl` response already carries the raw `html`, so capture it once and bisect
-the markup locally.
-
-```python
-from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
-res = LXMLWebScrapingStrategy().scrap(url, html, word_count_threshold=1)
-len(res.cleaned_html)   # compare against len(html)
-```
-
-This is how the nested-`<noscript>` body loss was found and fixed (312 KB HTML
-→ 97 B `cleaned_html`) without a single extra request to the affected host.
-Same trick for block detection: `antibot_detector.is_blocked(...)` takes stored
-HTML/markdown, which is how the challenge families were fixed against MAS's
-stored samples rather than against live challenged hosts.
-
-### Reproducing one that needs a browser
-
-Stored HTML cannot answer anything about *when* we captured it. For challenge
-resolution, hydration races, `page.content()` against a navigating frame or a
-redirect chain ending in a block, use the fixture origin
-(`test-aitosoft/fixture_origin.py`): a threaded HTTP server with a route per
-failure class, driven through `aitosoft_entry` → `api.handle_crawl_request` →
-a real pool browser, so `failure_class`, `render_mode`, the final-hop
-`status_code` rewrite, the patchright retry and the wall-clock fence are all
-genuinely exercised.
-
-```python
-def test_something(fixture_origin, production_path):        # fixtures are global
-    outcome = production_path.crawl(
-        fixture_origin.url("/challenge/resolve-after/5"),   # delay is an argument
-        delay_before_return_html=0.1,                       # the capture wait
-    )
-    assert outcome.failure_class == "origin_blocked"
-    assert outcome.http_status == 200                       # what MAS would see
-    assert fixture_origin.hits_for("/challenge") == 2       # what it cost us
-```
-
-Everything is a parameter — delay, body size, visible-text length, status code,
-markup shape, plus `?stall=` (server-side sleep) and `?status=` on every route.
-**A new failure class should be a new argument or one short route, never a new
-website.** Existing routes are listed in the module docstring.
-
-**Measuring rather than pinning.** When the question is a number we do not yet
-have — a curve, a threshold, a cost — write an *experiment* next to the fixture,
-not a test. `test-aitosoft/experiment_challenge_capture.py` is the worked example
-(~140 crawls, ~20 min, no assertions, CSV + tables out); it produced the
-`W + 1.22 s` capture budget in `tasks/challenge-interstitial-resolve.md` for zero
-live requests. Tests pin behaviour we have decided on; experiments measure
-behaviour we have not, and `pytest test-aitosoft/` must stay fast, so name them
-`experiment_*.py` — that keeps them out of collection without another
-`collect_ignore` entry.
-
-**That gap is closed (2026-08-01).** `CONTENT_HTML` used to render to ~140
-markdown characters — *below* MAS's `DEGENERATE_CAPTURE_CHARS = 500` — so a
-completely successful fixture capture was degenerate by the customer's own floor.
-It now renders **1,227 markdown characters over 1,135 of visible text**, above 500
-on both sides of the unit boundary, and
-`test_fixture_origin.py::test_the_healthy_control_is_not_degenerate` fails if
-anyone trims it back. Keep it that way: the collapse guard's thresholds are sized
-against this page, and a healthy control that trips the customer's floor is not a
-control.
-
-Two fixture habits that came out of sizing that guard, both of which cost a root
-cause when ignored:
-
-- **Pad to a realistic size before drawing conclusions.** `/collapse/*` serves
-  ~1.5 KB by default; `?bytes=73000` reproduces `apteam.fi`'s fingerprint.
-  `deep-nesting` does **not** collapse at 1.5 KB and does at 73 KB, so an
-  unpadded enumeration misses a whole mechanism — not merely a threshold.
-- **Name the unit every time.** MAS's 500 is **markdown characters**; our collapse
-  ratio is markdown characters per **visible-text character**; `len(html)` and
-  `len(cleaned_html)` are **HTML bytes** and appear nowhere in the guard, because
-  they are dominated by inline CSS/JS that cleaning strips by design.
-
-The fixture runs on loopback, which `egress_broker` exists to refuse. It is not
-weakened: `loopback_allowed()` flips the two flags
-`CRAWL4AI_ALLOW_INTERNAL_URLS` sets, scoped to a `with` block around each crawl,
-never as a process-wide environment variable —
-`test_fixture_origin.py::test_production_configuration_refuses_the_fixture_origin`
-asserts the production configuration still refuses the fixture's own URL, in the
-same suite. Do not turn that into an env var; the other suites in the same
-pytest process would silently lose their SSRF assertions.
-
-### Running the server locally (devcontainer)
-
-```bash
-redis-server --daemonize yes
-cd deploy/docker
-CRAWL4AI_API_TOKEN=<anything> \
-CRAWL4AI_ARTIFACT_DIR=/tmp/artifacts \
-python -m uvicorn aitosoft_entry:app --host 127.0.0.1 --port 11235
-```
-
-arm64 caveat (this devcontainer): real Chrome doesn't exist for linux/arm64 —
-temporarily comment the `chrome_channel`/`channel` lines in
-`deploy/docker/config.yml` for local runs (NEVER commit that). The deployed
-amd64 image has real Chrome.
-
-**That caveat is understated: it is a coverage hole, not a nuisance.** The
-browser suite has **never** run production's browser, and it cannot on this
-machine by the route it takes. `fixture_origin._resolve_channel()` falls back to
-`"chromium"` when no `google-chrome` binary is on PATH, and
-`crawl4ai/browser_manager.py:1123-1128` — a *Windows* workaround applied on
-every platform — then drops the channel entirely, so Playwright launches
-`chromium_headless_shell`. `CRAWL4AI_FIXTURE_CHANNEL=chromium` does not help;
-it is the same string line 1127 discards. The full `chromium` build **is**
-installed here and reproduces production's behaviour when launched with
-`channel="chromium"` explicitly, which is how the inline-PDF divergence was
-finally measured (2026-08-09). Compounding it: **no workflow in
-`.github/workflows/` runs `test-aitosoft/` at all** — only
-`deploy/docker/tests/test_security_*.py` — so this suite executes nowhere but
-this devcontainer. Known consequence so far: five download tests exercise the
-*download* arm, and `pdf-inline` passes for the wrong reason.
-
-PyJWT caveat: a stale `jwt` 1.4.0 package can shadow PyJWT and break server
-boot locally — `pip uninstall jwt` fixes it (the image installs fresh and is
-unaffected).
-
-## The `optimal` config (mirrors MAS)
+`test_site.py` sends this by default, and `fixture_origin.DEFAULT_CRAWLER_CONFIG`
+copies it with a shorter page timeout:
 
 ```json
 {
@@ -234,53 +156,271 @@ unaffected).
 }
 ```
 
-## Key findings (hard-won, don't relearn)
+It carries MAS's content-shaping flags, but it is not MAS's whole request. MAS's
+verbatim payload is pinned in `test_mas_contract.py`: `page_timeout: 90000`,
+`locale: fi-FI`, `timezone_id: Europe/Helsinki`, plus a per-company
+`browser_config` identity. Their `max_retries` was measured as 1 in production
+on 2026-08-05 (`FINDINGS.md` §Request contract). Keep `remove_overlay_elements` false: its size rule
+still removes large fixed or absolutely-positioned elements, such as a
+full-width hero holding the contacts.
 
-| Finding | Detail |
-|---------|--------|
-| ~~`remove_consent_popups: true` solves cookie walls~~ | **Wrong attribution, corrected 2026-08-06.** Accountor was never a cookie wall — it was our own `remove_overlay_elements` flag deleting the page, proven from stored January captures. The flag did not exist when accountor was unblocked. See CLAUDE.md's first three Key Findings rows |
-| Raw markdown > fit_markdown for contacts | PruningContentFilter drops contact blocks at threshold >= 0.35 |
-| `magic: true` is harmful | Removes real content on cookie-consent sites. **The server does NOT reject it** — we un-forbade it (`aitosoft_trust.py:44-49`). The harm argument is the only one that holds |
-| Blocked sites are IP-based, not fingerprint | Two different browser engines got identical blocks (2026-04-11 study) |
-| Playwright can hang pre-Python | Some hosts (roadscanners.com) hang the DevTools protocol; that's what `render_mode: "static"` is for |
+## What tests should expect from the server
 
-## v0.9.x server behavior tests should expect
+| Situation | HTTP | Body | MAS does |
+|---|---|---|---|
+| Success | 200 | `success: true`, `failure_class: "none"` | uses `results[0]` |
+| Origin failure: `origin_http_error`, `origin_blocked`, `origin_unreachable` (NXDOMAIN included) | 200 | `success: false` | logs it, no retry |
+| `render_defect` / `unrenderable_content` (ours or nobody's, but permanent) | 200 | `success: false` | logs it, no retry |
+| `render_error` (ours, transient) | 500 | | retries up to 3× at 1 / 2 / 4 s (also 502, 503) |
+| `render_timeout`: the `limits.wall_clock_s` fence, 180 s | 504 | | no retry; 2 consecutive 504s on a host pivot that host to `render_mode: static` for the session |
+| Capacity | 429 + `Retry-After` | `failure_class: "capacity"`, `capacity_gate` ∈ `render_slots` / `memory` / `browser_pool` / `unspecified`; the memory gate adds `memory_pct`, `limit_pct` | retries on a 5 / 10 / 20 / 30 s ladder; never parses `Retry-After` |
+| More than one URL | 400 | | returns a failure, no retry |
+| Truthy forbidden field (`js_code`, proxy fields, …) | 400 | falsy forbidden fields and unknown fields are silently dropped | returns a failure, no retry |
+| Genuine SSRF target (`169.254.169.254`, `127.0.0.1:8080`) | 400 | | returns a failure, no retry |
+| Missing or wrong bearer token | 401 | reachable without it: `/health`, `/token` (itself demands the token) and the static UI (`/dashboard`, `/playground`, `/static`); `/docs` and `/metrics` need the token | returns a failure, no retry |
 
-- Forbidden config fields → HTTP 400 when truthy; silently dropped when falsy
-  (our tolerant boundary, **`aitosoft_trust.py`** — not `aitosoft_entry.py`,
-  which only calls it). **`magic`, `simulate_user` and `override_navigator` are
-  NOT forbidden here** — we un-forbid them for our single trusted client
-  (`aitosoft_trust.py:44-49`). `js_code` and proxy fields still 400. Note
-  `cookies` and `extra_args` are **BrowserConfig** fields, not
-  `CrawlerRunConfig`.
-- Unknown config fields → silently dropped.
-- **Dead/unresolvable domains → HTTP 200 + `success:false` +
-  `failure_class: origin_unreachable`.** Changed 2026-08-05; this line said
-  "HTTP 400 `URL blocked (SSRF protection)`" until 2026-08-06. A genuine SSRF
-  target (`169.254.169.254`, `127.0.0.1:8080`) **does** still 400 — only "there
-  is no address at all" moved out of that bucket.
-- Wall-clock timeout (config `limits.wall_clock_s`, 180s) → HTTP 504.
-- Every result carries `render_mode: "full" | "static"`.
-- Only `/health` is public; everything else needs the bearer token
-  (including `/docs` and `/metrics`).
+The "MAS does" column is MAS's client as they re-read it at their HEAD on
+2026-08-06 (`tmp/mas-repo-messages/23-from-us-your-3-limit-is-removable.md`;
+first stated in `09-from-us-taxonomy-answer-and-zero-traffic.md`, 2026-07-31). Its retry
+decision reads the wire status only, and the body only for its log message, so
+`failure_class` changes no MAS behaviour. Their client gives up at 210 s.
+
+Every result carries `render_mode` (`full` | `static`) and `failure_class`.
+`failure_class` says whose fault a failure is; `status_code` (rewritten to the
+final redirect hop) says what the origin answered. A styled 404 page is
+`success: true`, `failure_class: "none"`, `status_code: 404`. The authority is
+`aitosoft_failure_class.http_status_for`. To print the forbidden-field sets
+after our relaxations, use the one-liner in `FINDINGS.md` §Untrusted-config
+boundary.
+
+**Never branch on `status_code == 200` meaning success, or on
+`status_code >= 400` meaning failure**, in a test or anywhere else. The outcome
+is result-level `success` plus `failure_class`. In MAS's 243-host re-scrape
+(2026-08-01), 36 responses carried origin status **202**, all from challenge
+families, and the same 202 carried interstitials, block pages, real content and
+empty bodies. A block page at 202 passed as a healthy page until the
+status-independent block-notice tier shipped on 2026-08-01 (`AITOSOFT_CHANGES.md`).
+
+---
+
+## Zero-traffic instruments
+
+### Stored captures: scraper bugs, no browser
+
+The `/crawl` response carries the raw `html`, and every Tier 1 run stores it
+under `test-aitosoft/artifacts/<label>/` (local only, gitignored). Bisect the
+markup offline:
+
+```python
+from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
+res = LXMLWebScrapingStrategy().scrap(url, html, word_count_threshold=1)
+```
+
+`antibot_detector.is_blocked(...)` takes stored HTML and markdown the same way.
+This is how the nested-`<noscript>` loss and the challenge families were fixed
+without contacting the affected hosts.
+
+### Fixture origin: time, navigation and the browser
+
+Stored HTML cannot tell you *when* we captured it. For challenge resolution,
+hydration races, `page.content()` against a navigating frame, redirect chains or
+the fence, use `test-aitosoft/fixture_origin.py`. It is a threaded loopback HTTP
+server with one route per failure class, driven through `aitosoft_entry` →
+`api.handle_crawl_request` → a real pool browser:
+
+```python
+def test_something(fixture_origin, production_path):        # fixtures registered by conftest.py
+    outcome = production_path.crawl(
+        fixture_origin.url("/challenge/resolve-after/5"),   # delay is an argument
+        delay_before_return_html=0.1,                       # the capture wait
+    )
+    assert outcome.failure_class == "origin_blocked"
+    assert outcome.http_status == 200                       # what MAS would see
+    assert fixture_origin.hits_for("/challenge") == 2       # what it cost us
+```
+
+Routes are listed in the module docstring. Delay, body size, visible-text
+length, status and markup shape are all parameters, and `?stall=` and `?status=`
+work on every route. **A new failure class should be a new argument or one short
+route, never a new website.** Habits that each cost a root cause when ignored:
+
+- **Pad to a realistic size.** `/collapse/*` serves ~1.5 KB by default;
+  `?bytes=73000` matches a real page. `deep-nesting` is harmless at 1.5 KB and
+  fatal at 73 KB.
+- **Name the unit.** MAS's 500 floor is markdown chars; the collapse ratio is
+  markdown chars per visible-text char; `len(html)` and `len(cleaned_html)` are
+  HTML bytes and appear nowhere in the guard.
+- **Keep the healthy control healthy.** `CONTENT_HTML` renders ~1,200 markdown
+  chars, above MAS's 500. `test_the_healthy_control_is_not_degenerate` fails if
+  it is trimmed.
+- **Never turn the loopback allowance into an env var.** `loopback_allowed()`
+  flips the SSRF flags inside a `with` block around each crawl. A process-wide
+  `CRAWL4AI_ALLOW_INTERNAL_URLS` would silently disable the SSRF assertions of
+  every other suite in the same pytest run.
+  `test_production_configuration_refuses_the_fixture_origin` guards this.
+
+**Measuring rather than pinning.** When the answer is a number you do not have
+yet (a curve, a threshold, a cost), write `experiment_*.py` next to the fixture:
+no assertions, CSV or tables out, and the name keeps it out of collection.
+`experiment_challenge_capture.py` produced the `W + 1.22 s` capture budget;
+`experiment_pool_memory.py` prices a pooled browser.
+
+### `raw://`: the full render path with no navigation
+
+A `raw://<html>` URL skips DNS and the SSRF check (`deploy/docker/utils.py`,
+`validate_url_destination`) but still renders in the browser via
+`page.set_content()` whenever `needs_browser` is set, and `remove_consent_popups`
+sets it. It therefore exercises RenderGate, the pool, a real Chromium launch,
+the consent pass, scraping, markdown and the collapse guard. Wall time is about
+1.3 s plus `delay_before_return_html`, so render duration is a dial. Verified
+locally 2026-11-03 with a 0.1 s delay: 200, `failure_class: "none"`, 1.7 s.
+
+It does **not** exercise navigation. `status_code` is always 200,
+`redirected_status_code` is null, block detection is skipped for `raw:` URLs,
+and there is no egress path. Use the fixture origin for those.
+
+**Zero egress holds only for self-contained HTML.** `set_content()` fetches every
+absolute subresource and runs inline scripts. Nothing blocks routes by default
+(`text_mode: false`; `browser_manager.py` installs route blocking only for
+`avoid_css`, `text_mode` and `avoid_ads`). Replaying a stored real capture as
+`raw://` therefore fetches the customer's images, CSS and scripts and fires
+their analytics. Strip `<script>`, `<iframe>`, `<link>` and absolute
+`src`/`srcset`/`href` first, identically in both arms. This comes from reading
+the code; it was not executed.
+
+For load and scaling (cold start, 429s, replica count), use
+`cold_burst_probe.py` and `sustained_rate_probe.py`; see `AZURE_OPERATIONS.md`
+§3.10. Both default to the production endpoint and call `az` for replica state.
+
+---
+
+## Before/after comparison (upstream merge)
+
+Feed the same input through both trees, so no third party's drift can enter the
+diff. Cheapest arm first.
+
+**1. Offline suites on both trees.**
+
+```bash
+git worktree add <dir> <pre-merge-sha>
+cp -r test-aitosoft/artifacts/. <dir>/test-aitosoft/artifacts/      # the corpus is gitignored
+(cd <dir> && python -m pytest test-aitosoft/ -q -rA -p no:cacheprovider) > before.txt
+python -m pytest test-aitosoft/ -q -rA -p no:cacheprovider > after.txt
+diff <(grep -E '^(PASSED|FAILED|ERROR|XFAIL|XPASS)' before.txt | sort) \
+     <(grep -E '^(PASSED|FAILED|ERROR|XFAIL|XPASS)' after.txt | sort)
+```
+
+Repeat with `deploy/docker/tests/test_security_*.py`. **Use `python -m pytest`
+in the second tree, not `pytest`.** `pip install -e .` registers a finder that
+maps `crawl4ai` to the main checkout. Plain `pytest` in a worktree therefore
+imports the main checkout's `crawl4ai` together with the worktree's
+`deploy/docker` (the suites add their own tree's `deploy/docker` via
+`__file__`), a silent mix of two versions. `python -m` puts the cwd first.
+Verified 2026-11-03. Confirm with `python -c "import crawl4ai;
+print(crawl4ai.__file__)"` from the worktree root.
+
+**2. Scrape and markdown over the stored corpus (no browser, no network).**
+Upstream changes to the scraper or the markdown generator show up here first.
+There are 86 stored result JSONs on this machine (2026-11-03), each with `url`,
+`html` and the image's own `markdown`. The loop below runs over all of them in
+~4 s:
+
+```python
+import glob, json
+from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+for p in sorted(glob.glob("test-aitosoft/artifacts/*/*.json")):
+    if p.endswith("-meta.json"):
+        continue
+    r = json.load(open(p))
+    s = LXMLWebScrapingStrategy().scrap(r["url"], r["html"], word_count_threshold=1)
+    md = DefaultMarkdownGenerator().generate_markdown(input_html=s.cleaned_html, base_url=r["url"])
+    print(p, len(s.cleaned_html), len(md.raw_markdown))
+```
+
+Run it in each tree (`PYTHONPATH=<tree> python script.py`) and diff the output.
+This is not the server's exact scraping configuration: only 30 of the 86 stored
+captures reproduce their stored markdown length. **Compare tree against tree,
+never snippet against stored markdown.** If upstream renamed the API, that is a
+finding in itself.
+
+**3. Two local servers, identical `raw://` bodies.** This covers the browser
+stage and the response envelope. Start one server per tree on its own port (see
+below; the old tree needs `PYTHONPATH=<tree>`). POST the same self-contained
+bodies to both, then diff `success`, `failure_class`, `render_mode`,
+`raw_markdown`, `len(cleaned_html)` and the size of `media`. Skip the echoed
+`url`, which contains the whole payload. Browser behaviour that depends on
+navigation stays with arm 1.
+
+**4. Tier 1, once, on the merged build.** This is one live pass under rule 1.
+Compare each host's capture with the previous run's under
+`test-aitosoft/artifacts/`.
+
+---
+
+## arm64 devcontainer: what runs and what does not
+
+**Running the server locally:**
+
+```bash
+redis-server --daemonize yes
+cd deploy/docker
+CRAWL4AI_API_TOKEN=<anything> \
+CRAWL4AI_ARTIFACT_DIR=/tmp/artifacts \
+python -m uvicorn aitosoft_entry:app --host 127.0.0.1 --port 11235
+```
+
+`aitosoft_entry:app` is the production entry point (`supervisord.conf`), so it
+applies the config.yml defaults and the trust relaxations. `server:app` skips
+both. On this machine startup **fails** with `Chromium distribution 'chrome' is
+not found at /opt/google/chrome/chrome`, because `deploy/docker/config.yml:254-255`
+pins `chrome_channel: chrome` / `channel: chrome` and Chrome has no linux/arm64
+build. Comment those two lines out for the local run. **Never commit that edit**
+(it has been committed by accident before), so check
+`git diff --exit-code deploy/docker/config.yml` before committing. With the two
+keys removed (verified 2026-11-03, patched in-process), the server boots,
+`/health` returns 200, unauthenticated `/crawl` returns 401, and a `raw://`
+crawl returns 200. To serve a second tree (a worktree), run the same command from
+`<tree>/deploy/docker` with `PYTHONPATH=<tree>` and a different `--port`.
+`python -m` puts `deploy/docker` first on the path, not the tree root, so
+without `PYTHONPATH` the server imports the main checkout's `crawl4ai`. If boot
+fails on a `jwt` import, a stale `jwt` 1.4.0 package is shadowing PyJWT: run
+`pip uninstall jwt`.
+
+**Neither the local server nor the browser suite runs production's browser.**
+`fixture_origin._resolve_channel()` falls back to `"chromium"` when no
+`google-chrome` is on PATH, which is always the case here. Then
+`crawl4ai/browser_manager.py:1127`, a Windows workaround applied on every
+platform, drops `channel` whenever it equals `"chromium"`. Playwright therefore
+launches `chromium_headless_shell`, which has no PDF viewer.
+`CRAWL4AI_FIXTURE_CHANNEL=chromium` cannot help, because it is the same string
+that gets dropped. The full Chromium build is installed
+(`~/.cache/ms-playwright/chromium-*`), and launching it with an explicit
+`channel="chromium"` reproduces production's behaviour; that is how the
+inline-PDF divergence was measured on 2026-08-09. Known consequence: the five
+`/download/*` tests behave like production for four kinds, but `pdf-inline`
+passes for the wrong reason. Production's Chrome renders an inline PDF into a
+174-byte shell that tier-3 inference calls a block (`render_error`, 500).
+
+The two fixes, neither built:
+- make the workaround Windows-only (`sys.platform == "win32"`). Not worth filing
+  upstream: upstream fixed it in `a1bd6c8`, on `develop` after v0.9.5, so a
+  merge of `develop` brings it (`tasks/file-upstream-prs.md`);
+- give the fixture a test-local explicit `channel="chromium"` override.
+
+Either way, CI would still not run the suite (see "Known limitations").
+
+---
 
 ## Quality gates
 
 | Gate | When | Bar |
-|------|------|-----|
-| MAS contract test (`pytest test-aitosoft/test_mas_contract.py`) | before every deploy + after every upstream sync | 8/8 pass — offline, pins MAS's exact request fields against the untrusted boundary + single-URL 400 |
-| Render-gate test (`pytest test-aitosoft/test_admission.py`) | before every deploy; after any admission/capacity change | all pass — offline, pins RenderGate capacity/queue/429 semantics |
-| Static-mode test (`pytest test-aitosoft/test_static_mode.py`) | before every deploy; after any static-mode change | all pass — offline, pins per-hop SSRF redirect validation, bounded fan-out, monitor outcome |
-| Crawler-pool test (`pytest test-aitosoft/test_crawler_pool.py`) | before every deploy; after any pool change | all pass — offline, pins PERMANENT lazy re-init after stuck force-close |
-| Patchright-fallback test (`pytest test-aitosoft/test_patchright_fallback.py`) | before every deploy; after any fallback change | all pass — offline, pins in-flight counter + recycle-race fix |
-| Redirect block-detection test (`pytest test-aitosoft/test_redirect_block_detection.py`) | before every deploy; after any block-detection change | 11/11 pass — offline, pins that block detection judges the FINAL redirect hop, that benign 301→200 stays a success, and the retry/patchright cost of a blocked verdict |
-| Render-bounds test (`pytest test-aitosoft/test_render_bounds.py`) | before every deploy; after any change to the capture path, adapters, or timeouts | 17/17 pass — offline, pins that `page.evaluate`/`page.content`/`total_timeout` are all bounded, and that config.yml's `total_timeout` stays inside `wall_clock_s` |
-| Failure-classification test (`pytest test-aitosoft/test_failure_classification.py`) | before every deploy; after any change to `failure_class`, the error-text matching, or the 200/500/504 mapping | 34/34 pass — offline, pins MAS's Q2 contract: origin-caused ⇒ 200 + `success:false`, 5xx reserved for us, `failure_class` on every result |
-| Noscript-collapse test (`pytest test-aitosoft/test_noscript_body_collapse.py`) | before every deploy; after any change to `strip_noscript()` or the scraping strategy | 11/11 pass — offline, pins that a nested `<noscript>` no longer swallows the body |
-| Challenge-detection test (`pytest test-aitosoft/test_antibot_challenge_detection.py`) | before every deploy; after any `antibot_detector` pattern change | 18/18 pass — offline, pins both measured challenge families at HTTP 200 and the Shopify `Access Denied` false positive |
-| Fixture-origin test (`pytest test-aitosoft/test_fixture_origin.py`) | before every deploy; after any change to the capture path, block detection, `failure_class`, **the consent/overlay snippets** or the fence | **67/67 pass — offline but browser-driven (~235 s)**, measured on 2026-08-06 (the 54/~220 s figure held 3× consecutively on 2026-08-05 before the `/consent/*` routes). The "23/23, ~50 s" this row once claimed was stale by a wide margin. **Four** of its tests pin defects on purpose (padded block at 202, unmarked interstitial, unclosed `<noscript>`, and now the self-inflicted consent click); when the owning task ships, invert them, don't delete them. `MAS_MAX_RETRIES` is now 1, matching production. **The fence test's flake is fixed** (2026-08-06): the fence unwinds in 0.05 s, so the product-finding reading is refuted; the variance was a cold browser launch *outside* the fence. `FENCE_STALL_S = 8` widens the gap rather than the assertion (`tasks/done/flaky-fence-test-margin.md`) |
-| Tier 1 regression | before every deploy | 4/4 pass |
-| Fingerprint diagnostic | after stealth/browser changes | no regressions vs `test-aitosoft/stealth-v4/` |
-| Soak test | after pool/leak-related changes | flat memory over 30 min |
-| Post-deploy smoke | after every deploy | health + 1 crawl + auth 401 check |
-| Upstream merges | after every sync | Tier 1 + `git diff upstream/develop HEAD` matches AITOSOFT_FILES.md inventory |
+|---|---|---|
+| Offline suites (`pytest test-aitosoft/`) | before every deploy; after every upstream sync | all pass (318 on 2026-11-03). On a fresh clone the three corpus tests fail; see "Known limitations" |
+| Upstream security suite (`pytest deploy/docker/tests/test_security_*.py`) | after every upstream sync; after changing `deploy/docker/` | all pass, 1 xfail (316 + 1 on 2026-11-03) |
+| Tier 1 regression | before every deploy | 4/4 |
+| Post-deploy smoke | after every deploy | `/health` 200; unauthenticated `POST /crawl` → 401; check the new revision has 100 % of traffic **before** crawling (a mid-cutover smoke reported the old image on 2026-07-30; `az` commands are in `AZURE_OPERATIONS.md`); one authenticated `raw://` crawl → 200, `failure_class: "none"`. A made-up domain → 200, `success: false`, `origin_unreachable`, `DNS: host does not resolve`; it exercises the egress path without contacting anyone, and is what caught the 2026-08-05 `NameError` |
+| Post-deploy SSRF negatives | after every deploy | `169.254.169.254` and `127.0.0.1:8080` still → 400 `URL blocked (SSRF protection)`. Only a host with no address at all moved to `origin_unreachable`; this proves the security verdict did not move with it. The made-up-domain probe logs a `Traceback` (`Crawl error:`) for the caught `OriginUnresolvable`. That is expected: judge the wire status, not the stack |
+| Post-deploy byte-compare | after every deploy | one Tier 1 page's markdown (md5 or byte count) identical to a capture **you took pre-deploy**, from a local server running the same code. Pick a host the pre-deploy run hit only once, so this stays within rule 1's two hits. Never compare against a figure quoted in a doc: caverna.fi went from 1,210 to 532 chars of markdown between July and August. This shows the deployed image produces the same bytes on a real page, which a 200 does not |
+| Upstream merge | after every sync | the above, plus the before/after comparison, plus `git diff upstream/develop...HEAD --stat -- crawl4ai deploy Dockerfile` listing only files in `AITOSOFT_FILES.md` (26 files, +4,880/−193 on 2026-11-03). Use three dots, which diff from the merge base. Two dots (`upstream/develop HEAD`) also count every upstream change since our last sync as our divergence: 352 files on 2026-11-03, with upstream 233 commits ahead |
+| Stealth/browser changes | after changing stealth or browser flags | `test_fingerprint.py` against `stealth-v4/`, **currently broken** (see "Live CLI scripts") |
