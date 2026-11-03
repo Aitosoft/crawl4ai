@@ -228,11 +228,19 @@ repos' numbering has diverged and a message once sat unread for two days because
 aggregates, per-host 500 tables, terminal outcomes) on 2026-08-17. We replied with `50-…`, which
 answers their three questions, corrects four things we had told them, and asks for nothing.
 
-⚠️ **`50-…` has not been relayed yet** as of 2026-08-17 evening — MAS is mid-cleanup on their side.
-Its §5 was rewritten after the capacity gate shipped, so it now describes the deployed shape rather
-than a promise, and carries one correction to our own `46-…` §2 design: there is a **fourth**
-`capacity_gate` value, `unspecified`, because four things here can answer 429, not three. **If you
-relay it, relay the current file** — do not re-paste an earlier copy.
+**2026-11-03: the thread is now direct, session to session over Remote Control — Tero no longer
+carries messages.** Reply to the `from` attribute of the incoming `<cross-session-message>`. Our
+`50-to-mas-…` sat unrelayed from 2026-08-17 until **2026-11-03**, when it was sent verbatim; **do not
+send it again.** MAS's next message was numbered 50 on their side and is filed here as
+`51-from-us-a-slower-model-may-keep-your-fleet-up-longer-…` (a slower LLM host for WAA; does our bill
+follow pages or wall-clock?). Our answer is `52-to-mas-we-bill-by-the-hour-…`: at trigger 12 the fleet
+sits at 2, so the bill is $0.605/h of sweep time, our cost per company is
+`$0.605/h × wall-clock ÷ companies in flight`, and a slow host is only cheap at ~15 in flight. **It
+promised MAS a live-config check before their next sweep.** Both owed items were done 2026-11-03 but
+**not sent**, because Tero asked for quiet while the platform repo deploys. They are in
+`54-to-mas-live-config-unchanged-and-14-5-is-now-invoice-verified.md` (DRAFT). Live config is unchanged
+since 2026-08-17, and $14.5/day is invoice-verified to within 1 % on 08-15/16. **Send it when the quiet
+lifts, and before their next sweep.**
 
 **Corrections we sent them in `50-…`, in case they come back on any of it:** the 2026-08-15 OOM was
 not the first (2026-08-13 was) and not "two containers" (ACA emits two rows per kill); there were
