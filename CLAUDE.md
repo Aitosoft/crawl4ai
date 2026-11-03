@@ -31,8 +31,8 @@ crawl4ai-setup && crawl4ai-doctor   # browsers + install check
 pre-commit run --all-files          # black/ruff/mypy, scoped to our files only
 
 # Tests — run from repo root; TESTING.md has the full picture (counts as of 2026-11-03)
-pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py   # 251 pure-function, ~30 s
-pytest test-aitosoft/test_fixture_origin.py                           # 67 browser vs local origin, ~4 min
+pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py   # 256 pure-function, ~30 s
+pytest test-aitosoft/test_fixture_origin.py                           # 70 browser vs local origin, ~4 min
 pytest deploy/docker/tests/test_security_*.py                         # upstream's, what CI runs
 python test-aitosoft/test_regression.py --tier 1 --version <label>    # Tier 1, live sites — sparingly
 ```
@@ -125,10 +125,10 @@ Each line points at the entry that explains it. `FINDINGS.md` holds the code-lev
   `capacity_gate`. → AZURE_OPERATIONS §3.8, §3.9
 - **Patch the layer below the one you test; a control that shares the suspected cause is not a
   control.** → FINDINGS §Method lessons
-- **The pending upstream merge (v0.9.5) would, if merged naively,** clamp MAS's `page_timeout` to
-  60 s, turn TLS verification on, capture pages 0.5 s earlier and switch on a browser-recycling path
-  with an open upstream deadlock. All silent. → `tasks/upgrade-upstream-v0.9.5.md`, FINDINGS
-  §Upstream merge watchlist. (Delete this line once the merge ships.)
+- **An upstream sync changes MAS-visible behaviour without a conflict marker.** v0.9.5 would have
+  turned TLS verification on, capped `page_timeout` at 60 s, moved capture 0.5 s earlier and switched
+  on browser recycling, all silently and with green suites. Each is now pinned by a test; the next
+  sync's real gate is the old-vs-new server A/B, not the suites. → FINDINGS §Upstream merge watchlist
 
 ## Testing
 
@@ -230,9 +230,9 @@ entirely ours — verified against git. `AITOSOFT_CHANGES.md` is the history. Re
 from git rather than trusting either: `git diff --stat upstream/develop...HEAD -- crawl4ai deploy
 Dockerfile` (three dots — from the merge base).
 
-**Upstream sync:** last synced at v0.9.2 (merged 2026-07-16; merge-base `7e80152`). `git fetch upstream &&
-git merge upstream/develop`. The next merge (v0.9.2 → v0.9.5+, 233 commits) is
-framed in `tasks/upgrade-upstream-v0.9.5.md`.
+**Upstream sync:** last synced at v0.9.5 (merged 2026-11-03; merge-base `838869b`). `git fetch upstream &&
+git merge upstream/develop`. What `develop` brings next, and its one trap, is in `AITOSOFT_FILES.md`
+§5 "Last merge"; the method is `tasks/upgrade-upstream-v0.9.5.md` §4.
 
 ## Azure
 

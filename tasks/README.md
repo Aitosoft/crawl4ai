@@ -9,7 +9,9 @@ works. Where a task file and this index disagree, the task file wins.
 
 - **Production is healthy and idle.** It last changed 2026-08-17. Check image, revision, trigger and
   replica bounds with `az` (`AZURE_OPERATIONS.md` §0), never from a document. **`main` ==
-  production + docs** as of 2026-11-03. Verify that rather than believe it.
+  production + docs + CI** as of 2026-11-03 (`f203391` added the test workflow; no code change).
+  Verify that rather than believe it. **The v0.9.5 merge is on branch `upgrade-upstream-v0.9.5`,
+  not on `main`**, until it deploys.
 - **No sweep is scheduled.** MAS's last sweep ended 2026-08-16. Since then, traffic has been small
   test batches only (~1,540 requests in 2½ months). That makes now the window for changes that need a
   quiet service.
@@ -29,15 +31,17 @@ works. Where a task file and this index disagree, the task file wins.
 
 | # | Task | Size | Why now |
 |---|---|---|---|
-| **1** | `upgrade-upstream-v0.9.5.md` | L | 233 upstream commits since our last sync. Two silent behaviour changes MAS depends on: TLS verification turns on, and the `page_timeout` cap drops to 60 s. The service is quiet now, and won't be during a sweep. |
+| **1** | `upgrade-upstream-v0.9.5.md` | L | **Merged on the branch, all gates green, not deployed** (2026-11-03). Waiting on Tero's quiet period, then MAS message `55-…`, then a deploy at fleet zero; then merge the branch into `main`. Its §8 is the record. |
+| **1b** | The image carried `.env` (no task file; a decision) | XS | Found during #1: images up to `0.9.2-capacity-gate-2` contain `/tmp/project/.env`, `PRIVATE.md` and `tmp/`. `.dockerignore` is on the branch. Decide (Tero): rotate the token? delete or keep old tags, which are the rollback targets? Detail: `upgrade-upstream-v0.9.5.md` §8 item 5. |
 | **2** | The `render_mode` mislabel (no file; one word) | XS | We report a wrong value in a field MAS parses. Do it after #1 ships. |
 | **3** | `file-upstream-prs.md` | M | After #1 ships. File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
 
-**Owed to MAS, not a task file:**
-`tmp/mas-repo-messages/54-to-mas-live-config-unchanged-and-14-5-is-now-invoice-verified.md` is
-drafted and **unsent**, because Tero asked for quiet in the platform repo on 2026-11-03 while they
-deploy. Send it when he lifts that, and before their next sweep. Item 1's MAS heads-up can go in the
-same message.
+**Owed to MAS, not a task file:** two drafts, both **unsent**, because Tero asked for quiet in the
+platform repo on 2026-11-03 while they deploy. Send them, in order, when he lifts that:
+`tmp/mas-repo-messages/54-to-mas-live-config-unchanged-and-14-5-is-now-invoice-verified.md`, then
+`tmp/mas-repo-messages/55-to-mas-upstream-v0-9-5-merge-what-you-will-and-wont-see.md` (item 1's
+heads-up; fill in its Chrome version from the image that ships). The deploy waits for 55's answer
+on sweep timing.
 
 ### 2. The `render_mode` mislabel
 
@@ -55,6 +59,11 @@ all 61,937 of their rows).
 
 ## Parked on purpose: don't pick these up unasked
 
+- **CI could run the browser suite on real Chrome.** GitHub's `ubuntu-latest` has Google Chrome
+  preinstalled, and `fixture_origin._resolve_channel()` picks it automatically, so a second CI job
+  would be the first run of our browser suite on production's browser. Day one it turns
+  `pdf-inline` red for the true reason (production's inline-PDF 500), so that test has to change to
+  describe reality first. Not done in #1 to keep the merge readable.
 - **Dead-browser replacement (upstream `3f9f790`, on develop after v0.9.5).** It replaces pooled
   browsers whose Chromium process died. We lack it, and how often a browser dies in production is
   unmeasured (the 74 restarts in the last sweep were whole-container). It lands in our most-modified

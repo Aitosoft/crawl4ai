@@ -10,9 +10,9 @@ Conventions:
   the rule. The `tasks/done/*.md` pointers hold the full evidence.
 - Code references name the function, because line numbers drift. All of them were checked against
   `main` @ `f365da2` on 2026-11-03.
-- **`[revisit after upstream merge]`** means upstream v0.9.5 or `upstream/develop` changes the code
-  this entry describes. Re-check it after merging. The [watchlist](#upstream-merge-watchlist) at the
-  end lists them all.
+- **`[merged v0.9.5]`** records what the 2026-11-03 merge of upstream v0.9.5 did to the entry.
+  **`[revisit at next sync]`** marks an upstream change that is on `develop` after v0.9.5 and will
+  arrive with the next merge. The [watchlist](#upstream-merge-watchlist) at the end lists both.
 
 ---
 
@@ -31,7 +31,7 @@ now an explicit `false`, deliberately. `deploy/docker/utils.py`'s `DEFAULT_CONFI
 `simulate_user: True` and `load_config()` deep-merges config.yml over it. So if the key were absent,
 fixing the merge rule would quietly turn user simulation on for every request.
 `tasks/done/base-config-boolean-defaults-never-applied.md`.
-`[revisit after upstream merge]`: upstream develop still has the same rule (checked at `cd61be1`); the
+`[merged v0.9.5]`: same rule at v0.9.5 and on develop; the
 fix PR #2122 was closed unmerged on 2026-10-11 and issue #2121 is still open. Upstream `81efcc3` also routes any request that carries
 `crawler_configs` through `arun_many`.
 
@@ -52,7 +52,7 @@ decorated `@_with_defaults` in `async_configs.py`, the same mechanism `aitosoft_
 `to_dict()`). Those fields revert to their class defaults on the patchright retry leg
 (`aitosoft_patchright_fallback`, which calls `crawler_config.clone(delay_before_return_html=…)`).
 None of the seven is set today. Watch for it if you add a default or a field.
-`[revisit after upstream merge]`: upstream `a4c4b2d` (2026-10-15) and `b0ed23c` (2026-10-26) restore
+`[revisit at next sync]`: upstream `a4c4b2d` (2026-10-15) and `b0ed23c` (2026-10-26) restore
 six of them, leaving only `c4a_script`, which is forbidden for our client anyway. **Both are on
 `develop` only and are not in v0.9.5** (`git tag --contains a4c4b2d` lists no release; v0.9.5's
 `to_dict()` still lacks all seven). A merge of the v0.9.5 tag does not bring the fix; a merge of
@@ -81,14 +81,17 @@ unknown fields are dropped silently. Don't transcribe the forbidden sets; print 
 Note that `cookies` and `extra_args` are `BrowserConfig` fields. `test-aitosoft/test_mas_contract.py`
 pins MAS's contract, so run it after every upstream sync.
 
-**The 180 s `page_timeout` cap is a module-attribute write that upstream's next version ignores.**
-`aitosoft_trust` sets `_ac._MAX_TIMEOUT_MS = 180_000`. Upstream develop instead reads the ceiling on
-every call from `_max_timeout_ms()`, which reads env `CRAWL4AI_MAX_TIMEOUT_MS` (default 60,000). After
-the merge our write does nothing, and MAS's 90 s timeouts get clamped to 60 s without any error.
-Upstream develop also caps untrusted `delay_before_return_html` at 60 s and refuses `js:`-style
-`wait_for` / `css_selector` (`736a28a`).
-`[revisit after upstream merge]`: replace our write with the env var, baked into the image.
-CLAUDE.md: never set env vars during a deploy.
+**The 180 s `page_timeout` cap is an env var since v0.9.5, set in code.** Until v0.9.2 `aitosoft_trust`
+assigned `_ac._MAX_TIMEOUT_MS = 180_000`. Upstream v0.9.5 (`a59f50e`, `61eb573`) replaced that constant
+with `_max_timeout_ms()`, which reads `CRAWL4AI_MAX_TIMEOUT_MS` (default 60,000) on every call, so the
+old write became an attribute nothing reads and MAS's 90 s was clamped to 60 s with no error; only
+`test_mas_contract.py` noticed. `[merged v0.9.5]`: `aitosoft_trust` now does
+`os.environ.setdefault("CRAWL4AI_MAX_TIMEOUT_MS", "180000")`, which works whatever the import order
+because the read is per call, and never touches the Container App's env vars. The same ceiling caps
+`wait_for_timeout` and the newly allowlisted `body_visibility_timeout`. `page_timeout: 0` now becomes
+60,000, not the cap (upstream treats malformed input as the default on purpose; MAS never sends 0).
+v0.9.5 also caps untrusted `delay_before_return_html` at 60 s and refuses `js:`-style `wait_for` /
+`css_selector` (`736a28a`); MAS sends 2.0 s and neither field.
 
 ---
 
@@ -103,9 +106,13 @@ are awaited via `asyncio.to_thread` (2026-08-05). The task file had blamed the p
 proxy never even sees a CONNECT for a name that doesn't resolve, and the file was byte-identical to
 upstream, not "ours". Fix the call site that runs, not the file you happened to read.
 `tasks/done/egress-proxy-blocks-the-event-loop.md`.
-`[revisit after upstream merge]`: upstream rewrote `egress_proxy.py` (+149 lines, upstream-proxy
-chaining, `890af3d`) and still calls `resolve_and_pin` synchronously. Our offload, the 15 s budget and
-the close-on-`http://` behaviour all have to be re-applied by hand.
+`[merged v0.9.5]`: upstream rewrote `egress_proxy.py` for upstream-proxy chaining (`890af3d`), with
+a new `_dial()` and plain-http `dst` dial both hardcoded to `timeout=30`. Taking upstream's side passes
+upstream's security suite and silently reverts the budget; taking ours fails two chaining tests. The
+merge took upstream's code and threaded `self._connect_timeout_s` into all three TCP dials. Our
+offload and close-on-`http://` sat outside the conflict and auto-merged intact.
+`test_every_dial_path_honours_the_connect_budget` covers all four paths (CONNECT/plain-http × direct/
+via an upstream proxy). Upstream's open PR #2428 does the same offload its own way.
 
 **Measure the resolver in ACA, not in the devcontainer.** ACA injects `options ndots:5` plus four
 search domains. Against a nameserver that never answers, one `getaddrinfo` took **22.75 s** (8 UDP
@@ -174,8 +181,8 @@ bounded by `browser_adapter.bounded_evaluate()` and by
 `AsyncPlaywrightCrawlerStrategy._capture_html()`, which settles and retries within a group deadline.
 Any new `page.*` call that carries no protocol timeout needs the same wrapping.
 `tasks/done/render-retry-unbounded-hang.md`.
-`[revisit after upstream merge]`: upstream develop still calls `page.content()` unbounded in several
-places (shadow-DOM fallback and others). Our wrappers are merge surface.
+`[merged v0.9.5]`: our wrappers auto-merged; upstream still calls `page.content()` unbounded in
+several places (shadow-DOM fallback and others). Our wrappers stay merge surface.
 
 **The patchright retry needs a longer capture wait than the first attempt.** A different engine with
 the same budget cannot resolve a challenge that already outlasted the first attempt.
@@ -185,6 +192,18 @@ Measured: the retry leg costs W + 1.22 s with zero extra page loads. Don't raise
 instead, because every fetch pays it (~267 render-hours per sweep). This retry goes through
 `clone()`; see [Request contract](#request-contract-and-config-defaults).
 `tasks/done/challenge-interstitial-resolve.md`.
+
+**MAS's capture point is not `delay_before_return_html` alone.** With `remove_consent_popups: true`
+the order is: the delay, the image-dimension pass, the consent snippet (whose in-page "wait for CMP
+animations" is 500 ms), the driver's own `page.wait_for_timeout(500)`, then capture. So MAS's 2.0 s
+captures about 1 s later than the number says. Upstream #2139 (`b536bf5`, v0.9.5) made the in-page
+wait run only when a consent action fired, which moved the capture 0.5 s earlier on every page
+without a banner. Measured through two real servers on loopback: a page painting at 2.8 s or 3.0 s
+went from 1 navigation (~3.3 s) to 3 navigations (~16 s, blank capture → tier-3 `minimal_text` →
+anti-bot retry → patchright), and on a host where the patchright leg fails it would be lost.
+`[merged v0.9.5]`: kept unconditional; `test_the_capture_point_includes_the_consent_wait` (paints at
+2.8 s, must take 1 navigation) goes red if anything moves it again. How many real pages paint in that
+window is unmeasured.
 
 ---
 
@@ -209,8 +228,11 @@ deleted an absolutely-positioned hero that contained the contacts, at `success: 
 now parses the alpha and treats only `0 < a < 1` as a scrim. **Still don't recommend this flag**
 (MAS sends `false`). The fix removes one degenerate clause, but the rule keeps its appetite: its size
 rule removes full-width fixed elements, and it removes every empty block element.
-`[revisit after upstream merge]`: upstream added its own structural guard (`isDocumentStructure`) and
-dropped a wait in this file (`b536bf5`). It overlaps ours.
+`[merged v0.9.5]`: the overlay snippet now uses upstream's `isDocumentStructure` guard and drops its
+50 ms trailing wait; our alpha fix and body null guard stay. In the *consent* snippet, upstream
+`b536bf5` (#2139) made the in-page 500 ms wait run only when a consent action fired. That moved MAS's
+capture point 0.5 s earlier on every page without a banner (see [Render timing](#render-timing-and-retries)),
+so the merge kept it unconditional; `test_the_capture_point_includes_the_consent_wait` pins it.
 
 **`remove_consent_popups` is upstream's flag, MAS sends it on every request, and it used to delete
 pages.** Upstream `3fc7730` (v0.8.5) owns the flag and all 140 container selectors: 120 named vendor
@@ -301,7 +323,9 @@ never closes and libxml2 swallows everything after it. Measured on `kiertopakkau
 Fixed by `content_scraping_strategy.strip_noscript()`, which removes noscript elements pre-parse
 (removal is correct when rendering with JS on).
 `tasks/done/noscript-collapses-body-to-empty-markdown.md`.
-`[revisit after upstream merge]`: upstream's fix, `unwrap_orphaned_noscript()` (community PR #2284,
+`[merged v0.9.5]`: both fixes are in the tree, ours runs first, and
+`test_text_after_a_balanced_noscript_survives` pins what upstream's alone would lose. Upstream's fix,
+`unwrap_orphaned_noscript()` (community PR #2284,
 in v0.9.5), sits at the same `document_fromstring` call. It *keeps* noscript contents when the tags
 are unbalanced and leaves a *balanced* `<noscript>` in the tree. `_scrap` later removes that element
 with `getparent().remove()` (v0.9.5 `content_scraping_strategy.py` ~827, unchanged on develop at
@@ -325,7 +349,7 @@ instead enters raw-text mode and serialises the rest of the document *inside* th
 `</body></html>` included. `strip_noscript()` then correctly removes the element and takes the page
 with it. Only a browser in the loop shows this; `fixture_origin` found it on 2026-07-31. The
 html2text recovery below rescues it.
-`[revisit after upstream merge]`: upstream `6b5a0d4`/`ba8b722` claim to fix an unclosed noscript.
+`[merged v0.9.5]`: upstream `6b5a0d4`/`ba8b722` (in v0.9.5) claim to fix an unclosed noscript.
 The fixtures cannot arbitrate between the two fixes: measured for the v0.9.5 upgrade, all 21
 noscript/collapse fixtures still pass with *both* defences disabled, because Chromium's
 serialisation plus our html2text recovery cover them (`tasks/upgrade-upstream-v0.9.5.md`).
@@ -427,9 +451,9 @@ They were caught by the 403 status fallthrough, and the block-notice tier was th
 Likewise `/block/padded-403` was unfaithful on exactly the axis that mattered. It served a bare
 `<div>` (0 content elements, 2 tier-3 signals), where the real page has `<h1>`+`<p>` (2 elements,
 1 signal). A fix validated on that fixture would have closed none of the four real hosts.
-`[revisit after upstream merge]`: upstream `2e30e54` adds `AsyncCrawlResponse.placeholder_html` so
-that both anti-bot call sites in `async_webcrawler` skip PDF stubs. It touches the same lines as our
-`effective_status` feed.
+`[merged v0.9.5]`: upstream `2e30e54` adds `AsyncCrawlResponse.placeholder_html` so
+that both anti-bot call sites in `async_webcrawler` skip PDF stubs. It auto-merged next to our
+`effective_status` feed; all three `is_blocked` sites still receive `effective_status(...)`.
 
 ---
 
@@ -448,9 +472,9 @@ is **permanence, not ownership**: `NON_RETRYABLE_CLASSES` = the origin classes +
 `bad_request` and `unrenderable_content` → 200; `render_timeout` → 504; anything else → 500.
 `render_error` used to be 200 in static mode and 500 in full mode, the same class with opposite retry
 behaviour. Don't add a second mapping site; add to the vocabulary instead.
-`[revisit after upstream merge]`: upstream `130a382` deleted the "all results failed → 500" block
-in `server.py` that `_crawl_response` replaces, so upstream now always answers 200. That conflicts
-directly with our mapping.
+`[merged v0.9.5]`: upstream `130a382` deleted the "all results failed → 500" block
+in `server.py` that `_crawl_response` replaces, so upstream now always answers 200. Ours was kept; it
+also now gives every result keyed `links`/`media` (`normalize_result_shapes`).
 
 **`arun` does not raise. It returns a failed result.** Upstream wraps the whole body in `try:` and
 returns `CrawlResult(success=False, error_message=…)`. So `classify_result`, not
@@ -552,7 +576,7 @@ with `text_content()`. `tasks/done/media-desc-duplicates-the-page-per-image.md`.
 
 Two lessons: payload size is a failure mode nothing in either repo measures
 (`ContainerAppHTTPLogs.BytesSent` is the only surface), and a field with zero consumers still costs.
-`[revisit after upstream merge]`: upstream develop's walker is still uncapped. The cap is merge
+`[merged v0.9.5]`: upstream's walker is still uncapped at v0.9.5 and on develop; ours auto-merged. The cap is merge
 surface, and one of the two PRs worth filing (`tasks/file-upstream-prs.md`).
 
 **The `desc` cap does not bound a media entry, and two amplifiers remain.**
@@ -568,7 +592,7 @@ surface, and one of the two PRs worth filing (`tasks/file-upstream-prs.md`).
 Not fixed, deliberately: these need pathological markup and have never been seen in production. But
 nothing bounds a *response* anywhere (`limits.max_body_bytes` bounds the request). That is why a
 response-size backstop is parked, not unnecessary.
-`[revisit after upstream merge]`: upstream `ee1a295` clamps colspan/rowspan to 1000 (junk counts as
+`[merged v0.9.5]`: upstream `ee1a295` clamps colspan/rowspan to 1000 (junk counts as
 1) in its new body-row grid. **Header rows (`<thead>` and the implicit first row) still use bare
 `int()`**, so the measured `<th>` case and the `"auto"` drop survive the merge.
 
@@ -590,9 +614,10 @@ production's real Chrome does, *renders* the PDF into a 174-byte shell with no v
 `<embed>` (it is in shadow DOM). Tier-3 inference calls that blocked → `render_error` → 500, which
 MAS retries. Measured on both browser arms on 2026-08-09: 4 of 5 download kinds behave identically,
 and only `pdf-inline` diverges. MAS currently removes PDFs at dispatch.
-`[revisit after upstream merge]`: upstream adds `pypdf` to `deploy/docker/requirements.txt`, a PDF
-path selected by `scraping_strategy: PDFContentScrapingStrategy`, and `placeholder_html` so the
-anti-bot checks skip PDF stubs.
+`[merged v0.9.5]`: `pypdf` is now in `deploy/docker/requirements.txt` (so in the image), the PDF
+path selected by `scraping_strategy: PDFContentScrapingStrategy` is kept in `api.py` (opt-in; MAS
+doesn't), and `placeholder_html` makes the anti-bot checks skip PDF stubs. Production's inline-PDF
+500 is unchanged: it comes from the browser path, not `PDFCrawlerStrategy`.
 
 **Whether PDF text extraction regressed, and who caused it, is not established.** MAS holds April
 captures with 11,101–45,118 chars of extracted PDF text, while today the same class returns the
@@ -619,10 +644,11 @@ retained page to `about:blank` returns 0.5 MB of anon memory even when the page 
 committed 100 MB JS heap; the same run shows the heap going in at +100.5 MB, so the instrument can
 see it. A browser's floor is the heaviest page it ever loaded, and only closing the browser resets
 it. `tasks/done/pool-browser-retains-last-page.md` (closed, refuted).
-`[revisit after upstream merge]`: upstream `6ccf610`/`47ea8d7` add `max_pages_before_recycle`, and
-`15f4b29` defaults it to 200 in `DEFAULT_CONFIG`. Our `config.yml` doesn't set the key, so the
-deep-merge would switch recycling on. **Keep it off: set `max_pages_before_recycle: 0` until upstream
-PR #2432 ships.** Two reasons:
+`[merged v0.9.5]`: upstream `6ccf610`/`47ea8d7` add `max_pages_before_recycle`, and
+`15f4b29` defaults it to 200 in `DEFAULT_CONFIG`; without the key in `config.yml` the deep-merge would
+switch recycling on. **It is off: `config.yml` sets `max_pages_before_recycle: 0` and `get_crawler`
+does not apply `_apply_pool_defaults`, until upstream PR #2432 ships.** The field is still in the
+untrusted allowlist (it was at v0.9.2 too), so a client could opt a browser in; MAS doesn't. Two reasons:
 - **It is not known to bound the ratchet.** `BrowserManager._maybe_bump_browser_version()` bumps a
   version in the *context* signature and `context.close()`s the old contexts, inside the same
   Chromium process (read on develop, 2026-11-03). Our measurement says only closing the browser
@@ -646,9 +672,9 @@ so memory pressure quadrupled its own load. The pool's refusals reuse `RenderCap
 because it is the only exception `api.py` maps to 429. A new exception type would fall into
 `except Exception` and become a 500. Which gate refused is reported as `capacity_gate`; see
 AZURE_OPERATIONS.md.
-`[revisit after upstream merge]`: upstream's `crawler_pool` still raises `MemoryError` on its memory
-refusal, and it added replacement of dead pooled browsers (`3f9f790`). Keep our exception type
-through the conflict.
+`[merged v0.9.5]`: upstream's `crawler_pool` still raises `MemoryError` on its memory refusal; ours
+(429) was kept. `[revisit at next sync]`: dead-browser replacement (`3f9f790`) is develop-only, and
+its janitor block would auto-merge into ours calling helpers that only exist on upstream's side.
 
 **The replica's memory split between browsers and everything else is not settled.** The old claim
 that 8 browsers "is the whole 4 GiB" never added up: 9 × 165 MB is about 36 %. That refutation
@@ -690,8 +716,9 @@ PATH, which is always the case on the arm64 devcontainer. `CRAWL4AI_FIXTURE_CHAN
 rescue it, because it produces the same string that gets dropped. Production runs
 `chrome_channel: chrome`. As a result, the download tests exercise the download arm, and
 `pdf-inline` passes for the wrong reason.
-`[revisit after upstream merge]`: upstream `a1bd6c8` passes `channel="chromium"` again and falls back
-to the shell, so the suite's browser will change. Re-run `pdf-inline` and the download tests.
+`[revisit at next sync]`: upstream `a1bd6c8` (develop only) passes `channel="chromium"` again and
+falls back to the shell, so the suite's browser will change and `pdf-inline` will go red for the true
+reason. At v0.9.5 the suite still runs the headless shell (70/70 on 2026-11-03).
 
 **CI runs only the offline half of `test-aitosoft/`.** Until 2026-11-03 no workflow ran it at all.
 `aitosoft-tests.yml` now runs the pure-function suite on every push (Python 3.12, no browser, the four
@@ -712,7 +739,7 @@ delay. Reach for it before any live host; unlike a third party, it is byte-ident
 arms. **Replaying a stored real capture is not zero-egress:** the browser fetches every absolute
 subresource and runs inline scripts, so it pulls the customer's assets and fires their analytics.
 Strip those first; the details are in TESTING.md §"`raw://`".
-`[revisit after upstream merge]`: upstream caps untrusted `delay_before_return_html` at 60 s.
+`[merged v0.9.5]`: upstream caps untrusted `delay_before_return_html` at 60 s.
 
 ---
 
@@ -753,33 +780,48 @@ nothing to find afterwards. See `CONSENT DECLINED` and the pre-capture entry und
 **Enumerate failure shapes at realistic size.** `deep-nesting` is harmless at 1.5 KB and fatal at
 73 KB. A small fixture misses root causes, not just thresholds.
 
+**Run every timeout test once with the timeout broken.** `test_connect_timeout_is_honoured` passed
+from 2026-08-05 to 2026-11-03 with the connect budget at *any* value: its CONNECT line said `:443`,
+the proxy dials the request line's port rather than the pinned target's, so it dialled
+`127.0.0.1:443`, got connection-refused at once, and never reached the hanging sentinel. It was found
+only because the v0.9.5 merge needed a negative control for the new dial paths (budget set back to
+30 s: all five connect tests must fail, and now do). A test that cannot fail is the same family as
+a control that shares the cause.
+
+**A measurement that returns zero is a finding about the instrument first.** Re-checking the v0.9.5
+table claim tree-against-tree, a script read `ScrapingResult.tables` and reported "0 of 74 captures
+have tables, 0 differ", which looked like confirmation. Tables live at `result.media.tables`; read
+there it is 13 of 74, and 0 differ. Both readings say "no change"; only one of them measured anything.
+
 ---
 
 ## Upstream merge watchlist
 
-Entries above marked `[revisit after upstream merge]`, with the upstream change that touches them.
-Checked against `upstream/develop` @ `cd61be1` (v0.9.5 + 46 commits).
+**v0.9.5 was merged on 2026-11-03** (`838869b`; branch `upgrade-upstream-v0.9.5`). Every entry above
+that carried `[revisit after upstream merge]` now says what the merge did (`[merged v0.9.5]`) or what
+`develop` still brings (`[revisit at next sync]`). The decisions and evidence are in
+`tasks/upgrade-upstream-v0.9.5.md`.
 
-| Entry | Upstream change |
-|---|---|
-| Untrusted boundary: the 180 s `page_timeout` cap | `_max_timeout_ms()` reads `CRAWL4AI_MAX_TIMEOUT_MS` per call, so our module write becomes a no-op and the cap is 60 s. Also new: a 60 s cap on `delay_before_return_html` and CSS-only `wait_for` (`736a28a`) |
-| Request contract: `clone()` drops fields | `a4c4b2d`, `b0ed23c` restore all but `c4a_script`. **`develop` only, not in v0.9.5**, so a merge of the release tag does not bring it |
-| Request contract: `base_config` merge | Same rule upstream today (PR #2122 closed unmerged). `81efcc3` sends any `crawler_configs` request through `arun_many` |
-| Egress: event-loop offload, 15 s connect, close on `http://` | `egress_proxy.py` +149 lines (`890af3d`), still synchronous. Re-apply ours by hand |
-| Render timing: unbounded `page.content()` | Still unbounded upstream; our wrappers conflict with its edits |
-| Overlay snippet: structural guard and `rgba` | Upstream's own `isDocumentStructure` guard, and a wait removed (`b536bf5`) |
-| Parse collapse: nested and unclosed `<noscript>` | `unwrap_orphaned_noscript()` (`6b5a0d4`, `ba8b722`, `b59dc9c`) keeps the contents, where ours removes. **Keep both**: upstream's path loses the text after a balanced `<noscript>` (#2416, fix in progress) and ours doesn't. Drop `strip_noscript` once #2416's fix lands |
-| Block detection: PDF placeholder | `placeholder_html` skips the anti-bot checks on stubs (`2e30e54`) |
-| Failure taxonomy: one class, one status | `130a382` removed upstream's all-failed → 500, so upstream now always answers 200 |
-| Media: `desc` cap | Upstream still uncapped |
-| Media: `colspan` amplifier | Body rows clamped to 1000 (`ee1a295`); header rows still bare `int()` |
-| Downloads/PDF | `pypdf` in the docker requirements, the `PDFContentScrapingStrategy` path, `placeholder_html` |
-| Pool: memory ratchet | `max_pages_before_recycle` (`6ccf610`, `47ea8d7`), defaulted to 200 by `15f4b29`. **Set it to 0** until PR #2432 fixes the #2419 recycle deadlock; it recycles contexts, not the process, so the ratchet benefit is unverified |
-| Pool: 429 for every refusal | Upstream still raises `MemoryError`; adds dead-browser replacement (`3f9f790`) |
-| Testing: dropped chromium channel | `a1bd6c8` passes the channel again, so the suite's browser changes |
-| Testing: `raw://` delay dial | Untrusted `delay_before_return_html` capped at 60 s |
+**Deliberately kept as before, each pinned by a test:**
 
-Not tied to a finding above, but it moves failure counts across the merge: `f0ada4c` stops launching
-Chromium with `--ignore-certificate-errors`. Today broken-cert sites render; after the merge they
-fail as `net::ERR_CERT_*`, which classifies as `origin_unreachable`. Don't read the jump as a
-regression.
+| Upstream change | What it would have done to MAS | Kept by | Pinned by |
+|---|---|---|---|
+| `f0ada4c` drops `--ignore-certificate-errors` | Broken-cert sites → `origin_unreachable` at 200 | `aitosoft_trust`: `egress_broker.ALLOW_INSECURE_TLS = True`; `ignore_https_errors: true` in `config.yml` | `test_a_broken_certificate_still_renders` + its control |
+| `a59f50e`/`61eb573` `_max_timeout_ms()` | `page_timeout` 90 s → 60 s | `CRAWL4AI_MAX_TIMEOUT_MS` via `setdefault` | `test_mas_contract.py` |
+| `b536bf5` (#2139) conditional consent wait | Capture 0.5 s earlier; paints in the gap come back blank | One line kept unconditional | `test_the_capture_point_includes_the_consent_wait` |
+| `890af3d` `_dial()` at 30 s | Dead host costs twice the render slot | Budget threaded through | `test_every_dial_path_honours_the_connect_budget` |
+| `15f4b29` recycle default 200 | Recycling on; #2419 deadlock | `max_pages_before_recycle: 0` | `config.yml` (no test) |
+| `6b5a0d4` path alone (#2416) | Text after a balanced `<noscript>` lost | `strip_noscript` kept | `test_text_after_a_balanced_noscript_survives` |
+
+**Changed, and MAS is told** (`tmp/mas-repo-messages/55-to-mas-…`): failed results carry keyed
+`links`/`media`; 36 of 74 stored pages gain whitespace (+2 to +32 chars); `fit_html` keeps
+nested-noscript content; `Connection: close` on plain-http origin requests; `/health` says 0.9.5.
+
+**Still on `develop` after v0.9.5, for the next sync:** `3f9f790` (dead-browser replacement; the
+silent-janitor trap), `a1bd6c8` (chromium channel; `pdf-inline` goes red for a true reason),
+`a4c4b2d`/`b0ed23c` (`clone()` fields). Open upstream work that changes what we carry: PR #2428,
+PR #2432, #2416.
+
+**Not a regression if `origin_unreachable` moves after the deploy:** TLS tolerance is kept, so it
+should not. If it jumps anyway, check that `aitosoft_trust` still sets `ALLOW_INSECURE_TLS` before
+anything else; the fixture tests pin it, but they run on headless Chromium, not production's Chrome.

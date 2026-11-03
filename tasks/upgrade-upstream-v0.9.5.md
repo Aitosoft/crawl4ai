@@ -1,6 +1,11 @@
 # Merge upstream crawl4ai v0.9.2 → v0.9.5
 
-**Status:** open, framed 2026-11-03 by the coordinator session. Not started.
+**Status:** merged on branch `upgrade-upstream-v0.9.5` (2026-11-03, merge commit `937e100`), all
+gates green, **not deployed**. Waiting on: Tero lifting the platform repo's quiet period, then
+`tmp/mas-repo-messages/55-to-mas-upstream-v0-9-5-merge-what-you-will-and-wont-see.md` (drafted,
+unsent) and an independent review. The implementing session's record, including what this file got
+wrong, is [§8](#8-implementation-record-2026-11-03) at the end. Framed 2026-11-03 by the coordinator
+session.
 **Size:** L. Mostly reconciliation and verification; the code you write is small.
 **Gate:** none to *start*. **Deploying has two gates:**
 - MAS must hear about the changes they can see (§5) before the deploy. Tero had asked for quiet in
@@ -186,7 +191,8 @@ undone.
   changes during a deploy (CLAUDE.md).
 - **Also set `ignore_https_errors: true` explicitly in `config.yml`'s browser kwargs.** Upstream
   #2437 (2026-10-22) proposes flipping `BrowserConfig.ignore_https_errors` to default False, and the
-  attribute above only stops `enforce_egress` from *forcing* False.
+  attribute above only stops `enforce_egress` from *forcing* False. *[Corrected 2026-11-03: #2437 is
+  a discussion issue ("migrate … default to False (deprecation path)"), open, not a PR.]*
 
 Either way, **pin the decision with a test:** a broken-cert fixture origin whose expected outcome is
 whatever you chose. Report 2's `scripts/tls_probe.py` is a working local self-signed origin. The
@@ -279,7 +285,12 @@ timing shift fails a test instead of passing silently.
 | upstream's code with `self._connect_timeout_s` threaded through both dials | kept | kept | passes |
 
 The natural "make CI green" move silently doubles what a dead host costs a render slot (why 15 s:
-`FINDINGS.md` §Egress). Report 2's `scripts/fix_egress.py` implements the third row. **Add a test
+`FINDINGS.md` §Egress). Report 2's `scripts/fix_egress.py` implements the third row.
+*[Corrected 2026-11-03: worse than stated. Our own suite would not have caught "theirs" either.
+`test_connect_timeout_is_honoured` sent `CONNECT slow.example:443`; the proxy dials the request
+line's port, so it dialled `127.0.0.1:443`, got connection-refused at once and passed at any budget.
+Measured: with every dial set back to `timeout=30`, it still passed. Fixed, plus a four-path test;
+all five fail at 30 s now.]* **Add a test
 that pins the connect budget on the new dial path**, so the next sync can't lose it unnoticed. Our
 off-loop `resolve_and_pin` and close-without-reply-on-`http://` sit outside the conflict and
 auto-merge intact. Verify that rather than trust it.
@@ -403,7 +414,10 @@ resolves all of it at build time:
   prints them, and the same with `google-chrome --version` gives Chrome's. ACR build-log retention
   may not reach back to 2026-08-17, so don't rely on the logs.
 - **Build with a constraints file made from that `pip freeze`,** excluding crawl4ai itself; `pypdf`
-  and `mcp` aren't in the old freeze, so they stay free. That also pins `lxml` (`>=5.3,<7` in
+  and `mcp` aren't in the old freeze, so they stay free. *[Corrected 2026-11-03: `mcp` is in it
+  (1.29.0; v0.9.5 only added `<2` to an existing requirement); only `pypdf` is new. And `anyio` can't
+  be constrained at all: `deploy/docker/requirements.txt` pins `anyio==4.9.0` while the image ends up
+  with 4.14.2, because a later step upgrades it, so either pin fails one step. It is left out.]* That also pins `lxml` (`>=5.3,<7` in
   `pyproject.toml`), whose libxml2 drives the collapse family. Pinning only the three browser
   packages would leave it floating.
 - **Chrome stable can't be pinned cheaply,** so record its version from the new image.
@@ -451,6 +465,9 @@ suite, the server A/B, a header echo, the prefetch check, then teardown. `WITH_C
 full-Chromium arm and an env-fix arm.
 - It merges `cd61be1`. Change that to `838869b` and drop its `ab/resolved/` copy-in when you're
   testing your own resolution. That copy is report 3's throwaway resolution of develop.
+  *[Note 2026-11-03: at v0.9.5 the "full Chromium" arm C does not run full Chromium; `a1bd6c8`, which
+  stops `browser_manager` dropping `channel="chromium"`, is develop-only. The implementation ran
+  arms A and B by hand against committed trees instead of `rerun_all.sh`.]*
 - `SP` defaults to the evidence directory.
 - Each server gets its own redis and `CRAWL4AI_ALLOW_INTERNAL_URLS=true`, so it can reach the
   loopback origins.
@@ -562,3 +579,107 @@ days):
    recommendation doesn't depend on being right about this.
 7. **Whether anything in MAS hashes or diffs page text.** If it does, the whitespace change matters
    more than its 2–32 characters.
+
+---
+
+## 8. Implementation record (2026-11-03)
+
+Written by the implementing session, which did not write §§1–7. The coordinator's text above is left
+as written, apart from the dated *[Corrected]* notes where a claim was wrong.
+
+### What was done
+
+- **`main` first:** `f203391` adds `.github/workflows/aitosoft-tests.yml` (Python 3.12, every push and
+  PR, the offline half of `test-aitosoft/`). The four corpus tests carry a `requires_corpus` marker
+  and skip **only** when the corpus is absent *and* `CI` is set; a fresh local clone still fails them
+  loudly (the guard-corpus task's safe direction). CI on `main`: 246 passed, 5 skipped, Python 3.12.15
+  (run 41634199768).
+- **Branch `upgrade-upstream-v0.9.5`:** `937e100` merges `838869b` (no cherry-picks); `3b6b2a1` adds
+  `.dockerignore` (below). The branch is pushed; CI runs our offline suite on it. Upstream's
+  `security.yml` runs only on pushes to main/develop or on a PR, so on the branch it was run locally.
+
+### Decisions, against §3
+
+| § | Choice | Note |
+|---|---|---|
+| 3.1 TLS | **(a) parity** | `egress_broker.ALLOW_INSECURE_TLS = True` in `apply_trust_relaxations()`; `ignore_https_errors: true` in `config.yml`. Pinned by `test_a_broken_certificate_still_renders` and its control `test_the_broken_certificate_origin_really_is_broken` (verification on → `ERR_CERT_*`, `origin_unreachable`, 0 GETs at the origin). The fixture's leaf is self-signed, expired *and* wrong-host at once. Flipping the global affected no other test. |
+| 3.2 timeout | as recommended | `setdefault("CRAWL4AI_MAX_TIMEOUT_MS", "180000")`, dead assignment deleted. |
+| 3.3 shapes | as recommended | `normalize_result_shapes()` in `aitosoft_failure_class`, called once from `server._crawl_response`. Static-mode successes gain `media` too. |
+| 3.4 capture | **(c)** | Only the conditional line reverted; upstream's `apiCalled` bookkeeping kept, so the next sync conflicts on one line. (a) would add code to two upstream files for a hang `bounded_evaluate` already caps at 10 s. Pinned by `test_the_capture_point_includes_the_consent_wait` (`/hydrate-after/2.8`); negative control: with the conditional restored it fails twice in a row ("captured blank and rescued by a retry"). |
+| 3.5 egress | third row | Budget threaded into both `_dial()` dials and the plain-http `dst` dial. The upstream-proxy CONNECT *reply* wait stays upstream's 30 s (chaining is off here). |
+| 3.6 names | checked | `ruff --select F821,F811,F823` over all 54 touched production files: no finding that isn't already in pure v0.9.5 or in HEAD. |
+| 3.7 api.py | see below | Seed check stays **async** (not #2428's sync-plus-`to_thread` shape): with the sync shape, upstream's v0.9.5 `test_every_crawl_handler_validates_destination` fails until #2428 merges, unless we edit an upstream test. It now returns upstream's `(allowed, refused)` with upstream's partial refusal and our dead-domain branch inside. Upstream's PDF routing kept. |
+| 3.7 rest | as recommended | Hooks carry-over; recycling off; overlay JS reconciled; `strip_noscript` kept with a new tail test (control: neutralising `strip_noscript` fails it); `config.yml` comments; cloud notice off via `os.environ.setdefault` in `aitosoft_entry` rather than `supervisord.conf`, so tests and local servers get it too. |
+| 3.8 pinning | constraints | `azure-deployment/pip-constraints.txt` = `pip freeze` of the production image `0.9.2-capacity-gate-2` (read with `az acr run`) minus crawl4ai and anyio; `ENV PIP_CONSTRAINT` in the Dockerfile. Production's stack, read from the image: playwright 1.62.0, patchright 1.61.2, playwright-stealth 2.0.3, lxml 6.1.1 (libxml2 2.14.6), Google Chrome 151.0.7922.137, Python 3.12.14. |
+| Target | v0.9.5, no cherry-picks | `129a950` adds little for us (our Dockerfile's own `playwright install` steps already fail loudly); the `clone()` pair is free but makes "we are at v0.9.5" untrue. All arrive with the next sync. |
+
+### Evidence (re-runnable; scratch outputs under the session scratchpad, numbers here)
+
+- **Suites on the merged tree:** offline 256/256 (251 + 5 new); fixture origin 70/70 (67 + 3 new,
+  headless shell, arm64); security 343 + 1 xfail (venv with `pypdf` 6.21.4); upstream's non-security
+  docker tests 102 pass, 5 fail, all deliberate (single-URL 400 ×2, recycling off ×3).
+  `test_stream_crawls_allowed_seeds_and_reports_refused`, red in report 3, passes now because of the
+  partial-refusal choice.
+- **Server A/B** (report 3's `ab/harness.py`, arms run by hand: A = `main` `f203391`, B = `3b6b2a1`,
+  same venv, same `chromium_headless_shell`, each asserting its own `crawl4ai.__file__`): 40 cases.
+  Status, class, success, markdown length and timing identical on every row, including
+  `hydrate-after/2.8` (3.200 / 3.202 s), all three broken-TLS origins (200, `none`, 357 chars) and the
+  62 s stall at `page_timeout: 90000` (65.2 s both). The deep diff, timing fields excluded, shows only:
+  keyed `links`/`media` on 4 failed results and on static success; `fit_html` keeping nested-noscript
+  content; `Date` headers. `raw_markdown` is identical everywhere. Header echo: only
+  `Connection: close` differs. Prefetch shape: links sha-identical, +37 B.
+- **Browser memory,** same workload, after the harness: 181 MB PSS on both arms (2 browsers each).
+  Headless shell, so it says nothing about `OptimizationHints` on Chrome; it only rules out a gross
+  change.
+- **Corpus:** 36 of 74 captures change, all whitespace-only, +2 to +32 chars, max 0.06 %, image counts
+  identical, which reproduces report 2. Tables tree-against-tree: 13 of 74 captures have tables, 0
+  differ. (First attempt read `ScrapingResult.tables`, got "0 have tables, 0 differ", and would have
+  passed as confirmation. They live at `result.media.tables`.)
+
+### What this file got wrong or left out
+
+1. **§3.5:** the existing connect-timeout test was decorative (inline correction above). It is the
+   one finding here that would have survived every suite.
+2. **§3.8:** `mcp` is in the old freeze; `anyio` can't be constrained (inline correction).
+3. **§3.1:** #2437 is a discussion issue, not a PR (inline).
+4. **§4:** the harness's full-Chromium arm doesn't exist at v0.9.5 (inline).
+5. **Not covered anywhere: the image carried our secrets.** There was no `.dockerignore`, and the
+   Dockerfile does `COPY . /tmp/project/` from the working tree. Checked with `az acr run`:
+   `0.9.2-capacity-gate-2` contains `/tmp/project/.env` (the API token), `.env.txt`, `PRIVATE.md`,
+   `tmp/` and `test-aitosoft/artifacts/`. ACR has anonymous pull off (admin user on), so the readers
+   were Azure principals who can already read the Container App's plain env var: not a public leak.
+   `3b6b2a1` adds `.dockerignore`. **Older tags still contain the files, and they are the rollback
+   targets**, so deleting them is Tero's call, and so is rotating the token (rotation is an env-var
+   change plus a MAS hand-over, neither of which this session may do).
+6. **Pre-existing, not merge-caused:** `max_pages_before_recycle` is in the untrusted allowlist (it was
+   at v0.9.2), so `config.yml`'s 0 governs only the default; a client could opt a browser into the
+   #2419 path. MAS doesn't send it.
+7. **Upstream moved:** develop is at `627461c` (#2417, `PruningContentFilter` inline text, i.e.
+   `fit_markdown` only) since this file was written. It doesn't touch the target.
+8. **The permanent browser** (§3.7): with TLS parity, `enforce_egress` no longer flips
+   `ignore_https_errors`, so besides `_apply_pool_defaults` being a no-op, the signatures can now
+   actually match: a request with no `browser_config` and the internal `/html`, `/screenshot`, `/pdf`
+   calls can use it. MAS's persona configs still can't. Comments in `config.yml`, `crawler_pool.py`
+   and `test_crawler_pool.py` updated.
+9. **Tooling trap:** `gh run list` with no `-R` answers for **upstream** in this checkout (no default
+   repo is set). Always pass `-R Aitosoft/crawl4ai`.
+
+### Deviations from this file's recommendations
+
+- Corpus tests skip only under `CI`, not "when absent" (reason above).
+- Cloud notice off in `aitosoft_entry`, not `supervisord.conf`.
+- Seed check kept async rather than shaped like #2428 (reason above).
+- `.dockerignore` added on the branch: not asked for, security hygiene, no behaviour change.
+
+### What I am least sure of
+
+1. **Production's browser.** Every browser result here is Chromium 1208 headless shell on arm64 with
+   Playwright 1.58. Production is Chrome 151 with Playwright 1.62. TLS tolerance is a context option
+   on both, and the A/B is tree-against-tree on one binary, so the merge's *delta* is well measured;
+   the absolute behaviour on Chrome isn't. The post-deploy smoke should include one broken-cert host
+   only if a safe one exists; otherwise rely on the `origin_unreachable` rate.
+2. **The capture-point test's margin** is ~0.2 s on each side on loopback. It passed every time here,
+   but a slow CI runner (if the browser suite ever runs in CI) could flake it. If it flakes, widen
+   the paint time toward 2.9 s; don't delete it.
+3. **That the candidate image resolves exactly to the freeze** on amd64/3.12: checked by building it
+   (see the build note below), not by reasoning.

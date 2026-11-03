@@ -5,18 +5,19 @@ what is changed, why, and whether it should go upstream. The history (when each
 change landed, the evidence, what it cost) is `AITOSOFT_CHANGES.md`. Task files
 under `tasks/done/` hold the full investigations.
 
-**Merge-base: `7e80152`** (upstream `v0.9.2`, a commit dated 2026-07-15), merged
-into our fork 2026-07-16 as `cfb8c05`. Re-derive the delta from git instead of
-trusting this file:
+**Merge-base: `838869b`** (upstream `v0.9.5`, tagged 2026-10-14), merged into
+our fork 2026-11-03 on branch `upgrade-upstream-v0.9.5` (merge commit
+`937e100`). The previous base was `7e80152` (v0.9.2). Re-derive the delta from
+git instead of trusting this file:
 
 ```bash
-git diff --stat 7e80152 HEAD -- . ':!tasks' ':!test-aitosoft'   # whole delta
-git diff --name-status 7e80152 HEAD | grep -v '^A'                # upstream files we modified
-git diff 7e80152 HEAD -- <file>                                   # one file
+git diff --stat 838869b HEAD -- . ':!tasks' ':!test-aitosoft'   # whole delta
+git diff --name-status 838869b HEAD | grep -v '^A'                # upstream files we modified
+git diff 838869b HEAD -- <file>                                   # one file
 ```
 
-Last verified against git on 2026-11-03 at `f365da2`. At that commit we modify
-**20 upstream files (+2,621 / −193)** and add 22 files outside `tasks/` and
+Last verified against git on 2026-11-03 at `3b6b2a1`. At that commit we modify
+**21 upstream files (+2,727 / −205)** and add 25 files outside `tasks/` and
 `test-aitosoft/`. If git shows a file or hunk this document does not describe,
 the document is stale. Fix it here.
 
@@ -45,8 +46,12 @@ gunicorn → aitosoft_entry:app
   `api.py`'s `base_config` merge (see the trap list below).
 - **Trust relaxations** (`aitosoft_trust.py`, pinned by `test_mas_contract.py`):
   `browser_config.headers` is allowed; the `page_timeout` clamp is 180 s, not
-  60 s; `magic`, `simulate_user` and `override_navigator` are **accepted**; a
-  falsy forbidden field is dropped rather than rejected. A truthy forbidden field
+  60 s (since v0.9.5 via `CRAWL4AI_MAX_TIMEOUT_MS`, set with `setdefault`);
+  `magic`, `simulate_user` and `override_navigator` are **accepted**; a
+  falsy forbidden field is dropped rather than rejected; and
+  `egress_broker.ALLOW_INSECURE_TLS = True`, so broken certificates still render
+  after upstream removed `--ignore-certificate-errors` (pinned by
+  `test_fixture_origin.py`'s two broken-certificate tests). A truthy forbidden field
   (`js_code`, proxy fields, `extra_args`, `cookies`, `cdp_url`, …) is still a 400.
   The accepted fields are not safe to send. `magic` destroys pages; the reason is
   harm, not the boundary.
@@ -55,7 +60,7 @@ gunicorn → aitosoft_entry:app
 
 ## 1. Upstream files we modified
 
-Line counts are `git diff --numstat 7e80152 f365da2`.
+Line counts are `git diff --numstat 838869b 3b6b2a1`.
 
 | File | +/− | Upstream PR status |
 |---|---:|---|
@@ -66,22 +71,23 @@ Line counts are `git diff --numstat 7e80152 f365da2`.
 | `crawl4ai/async_crawler_strategy.py` | +267/−17 | bounds in #2113; consent reporting unfiled |
 | `crawl4ai/browser_manager.py` | +11/−3 | #2085 |
 | `crawl4ai/content_scraping_strategy.py` | +72/−1 | `strip_noscript` #2114 (leave open until upstream #2416 is fixed); `desc` cap worth filing, unfiled |
-| `crawl4ai/js_snippet/remove_consent_popups.js` | +168/−18 | worth filing, unfiled |
-| `crawl4ai/js_snippet/remove_overlay_elements.js` | +50/−8 | not worth filing (upstream has the guard; only the `rgba` fix is left) |
-| `deploy/docker/api.py` | +445/−26 | ours (deployment) |
-| `deploy/docker/server.py` | +110/−7 | ours (deployment) |
-| `deploy/docker/crawler_pool.py` | +630/−50 | ours (deployment) |
-| `deploy/docker/config.yml` | +186/−11 | ours (deployment config) |
+| `crawl4ai/js_snippet/remove_consent_popups.js` | +180/−20 | worth filing, unfiled |
+| `crawl4ai/js_snippet/remove_overlay_elements.js` | +35/−6 | not worth filing (only the `rgba` fix and a null guard are left) |
+| `deploy/docker/api.py` | +455/−22 | ours (deployment) |
+| `deploy/docker/server.py` | +113/−4 | ours (deployment) |
+| `deploy/docker/crawler_pool.py` | +650/−55 | ours (deployment) |
+| `deploy/docker/config.yml` | +212/−19 | ours (deployment config) |
 | `deploy/docker/utils.py` | +74/−1 | ours (memory instrument) |
-| `deploy/docker/egress_proxy.py` | +49/−6 | not worth filing; carry until upstream PR #2428 lands |
+| `deploy/docker/egress_proxy.py` | +56/−8 | not worth filing; carry until upstream PR #2428 lands |
 | `deploy/docker/egress_broker.py` | +7/−0 | docstring only |
 | `deploy/docker/schemas.py` | +14/−1 | ours |
 | `deploy/docker/supervisord.conf` | +19/−2 | ours |
-| `Dockerfile` | +10/−0 | ours |
+| `Dockerfile` | +15/−0 | ours |
+| `.env.example` | +38/−4 | ours (upstream added an LLM-key stub at the same path; ours kept) |
 | `.gitignore` | +3/−0 | ours |
 
 **Upstream PRs.** Four are filed: #2085, #2112, #2113 and #2114. None of them
-was merged in `upstream/develop` at `cd61be1` (fetched 2026-11-03). Two more
+was merged in `upstream/develop` at `627461c` (fetched 2026-11-03). Two more
 are worth filing, the consent snippet and the `desc` cap; the overlay snippet's
 `rgba` fix, `egress_proxy.py` and the chromium-channel workaround are not.
 `tasks/file-upstream-prs.md` owns the reasoning and what to do when one merges.
@@ -222,6 +228,14 @@ MAS sends `remove_consent_popups: true` on every request.
 - **Other changes:** `document.body` / `documentElement` accesses are
   null-guarded. `acceptedBy` is recorded before each click. The snippet returns a
   `report`.
+- **The in-page 500 ms "wait for CMP animations" stays unconditional.**
+  Upstream `b536bf5` (#2139, v0.9.5) made it `if (accepted || apiCalled)`,
+  which moved MAS's capture point 0.5 s earlier on every page where no consent
+  action fired; pages painting in that gap came back blank and cost the
+  anti-bot retry plus a patchright leg. We kept upstream's `apiCalled`
+  bookkeeping and reverted only that line. #2139's reason (a CSP `sandbox` page
+  whose timers never fire) is bounded for us at 10 s by `bounded_evaluate`.
+  Pinned by `test_the_capture_point_includes_the_consent_wait`.
 - **Selector counts at HEAD:** 86 named + 12 generic accept selectors; **120
   named + 20 generic** container selectors. The counts come from tokenising the
   arrays; a naive quote regex miscounts because selectors contain embedded
@@ -232,8 +246,11 @@ MAS sends `remove_consent_popups: true` on every request.
 
 ### `crawl4ai/js_snippet/remove_overlay_elements.js`
 
-- Same structural guard and the same `document.body` null-guard as the consent
-  snippet.
+- Since v0.9.5 the structural guard is upstream's (`isDocumentStructure`,
+  `a574fbc`, tag-based; ours was identity-based and equivalent for HTML
+  documents), and upstream's removal of the trailing 50 ms wait is taken. What
+  is left of ours: the `document.body` null guard around the body-style resets,
+  and the alpha fix below.
 - **`backgroundColor.includes("rgba")` is replaced with a real alpha test**
   (`0 < a < 1`). `getComputedStyle` returns `rgba(0, 0, 0, 0)` for any
   transparent element, so the old clause was always true. The rule had
@@ -241,8 +258,7 @@ MAS sends `remove_consent_popups: true` on every request.
   a contact-bearing hero at `success: true`.
 - MAS sends `remove_overlay_elements: false`. **Do not recommend the flag**: the
   fix removes one degenerate clause, not the rule's appetite.
-- **Not worth filing.** Upstream `a574fbc` (v0.9.3) added an equivalent
-  structural guard, which leaves only the `rgba` fix, on a flag that deletes
+- **Not worth filing.** Only the `rgba` fix is left, on a flag that deletes
   content even with it.
 
 ### `deploy/docker/api.py`
@@ -255,12 +271,24 @@ Our heaviest diff. Everything is deployment-specific.
   (`capacity_gate`, plus `memory_pct`/`limit_pct` from the memory gate).
   **`detail` must stay byte-identical**, because MAS regexes
   `memory at N% (limit M%)` out of it.
-- **`_normalize_and_validate_seeds` is now async.** It runs the SSRF check off the
+- **`_normalize_and_validate_seeds` is async.** It runs the SSRF check off the
   event loop (`asyncio.to_thread`): the check ends in a blocking `getaddrinfo` and
   runs before render admission on the single loop that serves `/health`. On
   refusal, `_host_has_no_address()` decides whether the host has no address at
-  all. If so it raises `OriginUnresolvable`, which becomes `origin_unreachable`
-  at HTTP 200. An address-level policy refusal stays an SSRF 400.
+  all. If so the refusal is an `OriginUnresolvable`, which becomes
+  `origin_unreachable` at HTTP 200. An address-level policy refusal stays an
+  SSRF 400. Since v0.9.5 it returns upstream's `(allowed, refused)` with
+  upstream's per-seed refusal (a lone refused seed is raised, so under the
+  single-URL contract `refused` is always empty on return). Upstream's open PR
+  #2428 does the same offload with a *sync* function wrapped at the call sites;
+  we stayed async so upstream's v0.9.5 source-inspection test
+  (`test_every_crawl_handler_validates_destination`) passes unedited. Expect a
+  three-line conflict when #2428 merges.
+- **Upstream's opt-in PDF routing is kept** (`_needs_pdf_crawler` /
+  `PDFCrawlerStrategy`, only when a client sends `PDFContentScrapingStrategy`;
+  MAS doesn't). Its `else` is our pool acquisition with the memory guard → 429.
+  Upstream #2460 reports a PDF scrape thread outliving the deadline; know it
+  before anyone opts in.
 
 **`handle_crawl_request(render_mode=…)`**, in request order:
 1. Single-URL guard: `len(urls) > 1` returns 400 before seed validation. The MAS
@@ -299,6 +327,11 @@ Our heaviest diff. Everything is deployment-specific.
 - **`_crawl_response(results)`** replaces upstream's "all results failed → 500".
   The wire status comes from `aitosoft_failure_class.http_status_for` (200, 504
   or 500). Both render modes go through it, so one class has one wire status.
+  Since v0.9.5 it also calls `normalize_result_shapes`, so every result carries
+  keyed `links` and `media` whichever builder made it (upstream `8bd0776`
+  changed only `arun`'s failed results).
+- Upstream's `_reject_disabled_hooks(...)` and the `hooks.code` → `"ignored"`
+  warning are carried around our static branch and `_crawl_response`.
 - **`/crawl`** branches to static mode before the stream check.
 - **`_http_exception_handler`** adds an envelope-level `failure_class`, used only
   where no result exists to carry one: capacity, auth, malformed request, our
@@ -332,8 +365,15 @@ Our second-heaviest diff.
     (`FINDINGS.md` §Browser pool).
   - The browser cap refuses with `gate=browser_pool`.
 - **`_close_unused_permanent`** closes the boot browser if nothing used it within
-  `permanent_unused_ttl_sec` (120). It is unreachable on v0.9.2: see the trap
-  list.
+  `permanent_unused_ttl_sec` (120). It was unreachable on v0.9.2; since v0.9.5
+  (`7b02a2c` plus our TLS parity) a request with no `browser_config` can match
+  it, but MAS's persona configs still don't.
+- **Recycling stays off.** `get_crawler` signs `_sig(cfg)`, not upstream's
+  `_sig(_apply_pool_defaults(cfg))`, and `config.yml` sets
+  `max_pages_before_recycle: 0` explicitly (upstream #2419, a deadlock after a
+  recycle once a crawl was cancelled; our fence cancels crawls). The field is
+  still in the untrusted allowlist, so a client could opt one browser in; MAS
+  doesn't.
 - **Janitor changes:**
   - The memory-adaptive TTL collapse is removed. It closed browsers exactly when
     the next request would need them. The poll interval is still adaptive, and
@@ -348,8 +388,8 @@ Our second-heaviest diff.
 Deployment config, always ours. Every value carries an inline comment with its
 reasoning. What differs from upstream:
 
-- `limits.wall_clock_s: 180`. This is the per-crawl fence; ACA's ingress limit is
-  240 s.
+- `limits.wall_clock_s: 180` (upstream 300 since v0.9.5). This is the per-crawl
+  fence; ACA's ingress limit is 240 s.
 - `crawler.base_config`:
   - `total_timeout: 100000`. It must stay below the fence and above the largest
     client `page_timeout`.
@@ -368,6 +408,8 @@ reasoning. What differs from upstream:
   - `evict_close_timeout_sec: 30`.
   - `stuck_busy_timeout_sec: 600`.
   - `permanent_unused_ttl_sec: 120`.
+  - `max_pages_before_recycle: 0`, explicitly; omitting it inherits upstream's
+    200 from `utils.DEFAULT_CONFIG`.
   - `render_capacity: 2`, `admission_queue: 4`, `admission_max_wait_s: 15`.
 - **`render_capacity` is not the ACA scale trigger.** It is the hard cap on
   concurrent renders per replica. The ACA rule is the autoscaler's trigger,
@@ -376,12 +418,13 @@ reasoning. What differs from upstream:
 - `crawler.browser.kwargs`:
   - `text_mode: false`.
   - `enable_stealth: true`.
+  - `ignore_https_errors: true` (the TLS parity note under `extra_args`).
   - `chrome_channel: chrome` and `channel: chrome`.
   - Viewport 1920×1080.
   - Windows Chrome/138 UA, which matches playwright-stealth's `Win32` platform.
 - `extra_args`: `--disable-gpu` and `--disable-software-rasterizer` are removed.
-  The comment there says `--ignore-certificate-errors` is hardcoded upstream.
-  That is true at v0.9.2 and false after upstream `f0ada4c`; see §5.
+  The TLS comment there records why certificate errors are tolerated without a
+  launch flag since upstream `f0ada4c`.
 
 ### `deploy/docker/utils.py`
 
@@ -406,7 +449,11 @@ reasoning. What differs from upstream:
   the app's only event loop, and `getaddrinfo` blocks.
 - The upstream connect timeout drops from 30 s to 15 s and becomes
   `DEFAULT_CONNECT_TIMEOUT_S` plus a constructor argument. Chromium's own 30 s
-  timer always fired first, so the old value never bound.
+  timer always fired first, so the old value never bound. Since v0.9.5 it is
+  threaded through upstream's chaining code too: both TCP dials in `_dial()` and
+  the plain-http `dst` dial. Taking upstream's side of that conflict passes
+  upstream's security suite and silently reverts to 30 s;
+  `test_every_dial_path_honours_the_connect_budget` covers all four paths.
 - **On the plain `http://` path, a failed connect now closes without replying.**
   A `_BLOCKED` 403 reply is rendered as the page, and our own detector then calls
   it `origin_blocked`. The CONNECT (`https://`) path keeps `_BLOCKED`.
@@ -421,8 +468,9 @@ reasoning. What differs from upstream:
 |---|---|
 | `deploy/docker/egress_broker.py` | Docstring on `_resolve`: it blocks, and callers on a loop must offload it. Behaviour is identical to upstream. |
 | `deploy/docker/schemas.py` | `CrawlRequest.render_mode: Literal["full","static"] = "full"`. |
+| `.env.example` | Ours (token template). Upstream added an LLM-key stub at the same path in v0.9.5; the add/add conflict kept ours. |
 | `deploy/docker/supervisord.conf` | gunicorn target `aitosoft_entry:app`; `RES_OPTIONS="timeout:2 attempts:2 ndots:1"` in the program environment, which overrides ACA's `ndots:5` resolver without root. A typo there is silent, because glibc ignores options it cannot parse. Never verified on a replica; `FINDINGS.md` §Egress says how. |
-| `Dockerfile` | `RUN playwright install chrome`, then a conditional copy of the `chrome-*` cache to the appuser home. Real Chrome's TLS fingerprint differs from bundled Chromium's. |
+| `Dockerfile` | `RUN playwright install chrome`, then a conditional copy of the `chrome-*` cache to the appuser home. Real Chrome's TLS fingerprint differs from bundled Chromium's. Since 2026-11-03 also `ENV PIP_CONSTRAINT=/tmp/project/azure-deployment/pip-constraints.txt`, so a build resolves to the previous production image's Python packages. |
 | `.gitignore` | `PRIVATE.md`, which holds infrastructure identifiers kept out of the public repo. |
 
 ---
@@ -442,10 +490,10 @@ was rejected or deferred. A merge can change any of them under us.
   - **`response_headers` is also first-hop** (`async_crawler_strategy.py`, "keep
     earliest"), and `models.py` has **no `redirected_response_headers`**. Any
     `Content-Type` check silently no-ops across `http→https` and `apex→www`.
-- **The permanent boot browser is unreachable** on v0.9.2. `server.py` builds its
-  config without `enforce_egress`, so its pool signature never matches a
-  request: 0 hits in 224 production pool gets. We close it after 120 s.
-  Upstream `7b02a2c` fixes the signature (see §5).
+- **The permanent boot browser** was unreachable on v0.9.2 (0 hits in 224
+  production pool gets). Since v0.9.5 (`7b02a2c` builds it through
+  `get_default_browser_config()`) a request with no `browser_config` can match it;
+  MAS's persona configs still don't. We still close it after 120 s unused.
 - **`monitor_routes.py`** calls `init_permanent` inside `async with LOCK`, and
   `init_permanent` takes the same lock. That is a self-deadlock, admin-gated and
   off the traffic path.
@@ -458,12 +506,16 @@ was rejected or deferred. A merge can change any of them under us.
 - **`browser_manager.py`** drops `channel` whenever `chrome_channel ==
   "chromium"`. This is a Windows workaround applied on every platform, and it is
   why our browser test suite runs `chromium_headless_shell`, not production's
-  Chrome (`TESTING.md`). Upstream `a1bd6c8` fixes it.
-- **The `--ignore-certificate-errors` launch flag** was hardcoded upstream at
-  v0.9.2. It is the only reason broken-cert sites crawl in full mode, and it
-  makes `enforce_egress`'s `ignore_https_errors=False` moot.
-  `CRAWL4AI_ALLOW_INSECURE_TLS` is unset on purpose. Upstream `f0ada4c` removes
-  the flag (see §5).
+  Chrome (`TESTING.md`). Upstream `a1bd6c8` fixes it, on `develop` after v0.9.5.
+- **TLS verification is upstream's default since v0.9.5, and we turn it off.**
+  Upstream `f0ada4c` removed the hardcoded `--ignore-certificate-errors` launch
+  flag that was the only reason broken-cert sites crawled in full mode.
+  `aitosoft_trust` sets `egress_broker.ALLOW_INSECURE_TLS = True` (a module
+  attribute, not the env var, because of import order under pytest), so
+  `enforce_egress` no longer forces `ignore_https_errors=False`. It also relaxes
+  webhook TLS, which we don't use. Turning verification on is a contract change
+  that needs a count of broken-cert MAS targets first
+  (`tasks/upgrade-upstream-v0.9.5.md` §3.1).
 - **Unbounded `media` amplifiers:** `alt` is copied into every srcset variant.
   `table_extraction.py` multiplies cell text by an unvalidated `colspan`: 4.6 KB
   of HTML produced 4.5 MB of `media`, and a non-integer `colspan` silently drops
@@ -497,8 +549,8 @@ Upstream will never touch these, so they cost nothing at merge time.
 
 | File | Purpose |
 |---|---|
-| `aitosoft_entry.py` | Wrapper entry point: `BrowserConfig` defaults from config.yml, trust relaxations, then `from server import app`. |
-| `aitosoft_trust.py` | Trusted-client relaxations of the untrusted-config boundary. Importable without the server; pinned by `test_mas_contract.py`. |
+| `aitosoft_entry.py` | Wrapper entry point: `BrowserConfig` defaults from config.yml, trust relaxations, `CRAWL4AI_NO_CLOUD_NOTICE=1` (upstream's v0.9.5 console banner, off), then `from server import app`. |
+| `aitosoft_trust.py` | Trusted-client relaxations of the untrusted-config boundary, plus TLS tolerance (`egress_broker.ALLOW_INSECURE_TLS`). Importable without the server; pinned by `test_mas_contract.py` and the broken-certificate fixture tests. |
 | `aitosoft_admission.py` | RenderGate: per-replica render admission (capacity 2, queue 4, 15 s max wait, then 429 + `Retry-After: 5`). Defines `RenderCapacityExceeded(gate=…, memory_pct, limit_pct)`. |
 | `aitosoft_failure_class.py` | `failure_class` taxonomy. It is the only place error text (`net::ERR_*`, ACS-GOTO, `Download is starting`) is matched, and the only place a class becomes a wire status (`http_status_for`). It also defines `ORIGIN_CLASSES`, `NON_RETRYABLE_CLASSES`, the evidence/inference split (`_INFERRED_BLOCK_RE`), `render_defect` for a capture with no `<body>`, `unrenderable_content`, and the `GATE_*` 429 vocabulary with `envelope_extra_for()`. |
 | `aitosoft_collapse_guard.py` | Detects a capture whose body vanished in our parse: visible-text chars in versus markdown chars out, never an HTML-byte ratio. Recovers it with `html2text` over the same HTML, but only if the result clears both floors. It reuses static mode's converter, never static mode's pipeline. |
@@ -516,12 +568,20 @@ Upstream will never touch these, so they cost nothing at merge time.
 - **Gitignored:** `artifacts/` holds the guard's evidence corpus
   (`tasks/guard-corpus-is-not-in-the-repo.md`).
 - `TESTING.md` owns test counts and procedure. To verify the count:
-  `pytest --collect-only -q test-aitosoft/` (318 on 2026-11-03).
+  `pytest --collect-only -q test-aitosoft/` (326 on 2026-11-03 after the v0.9.5
+  merge: 256 offline + 70 fixture-origin).
 
 **Other**
 - `azure-deployment/`: `deploy-image.sh` is the only deploy path.
   `batch-scale.sh` is an emergency valve. `setup-memory-alert.sh` sets up the
-  memory alert.
+  memory alert. `pip-constraints.txt` (2026-11-03) is the previous production
+  image's `pip freeze`, applied by the Dockerfile's `PIP_CONSTRAINT`, so a build
+  does not move the browser stack by accident; its header says how to
+  regenerate it.
+- `.dockerignore` (2026-11-03): keeps `.env*`, `PRIVATE.md`, `tmp/`,
+  `test-aitosoft/artifacts/` and local tool state out of the build context.
+  Before it, `0.9.2-capacity-gate-2` and earlier images carried all of them under
+  `/tmp/project/`.
 - `tasks/`: open work, with `tasks/done/` for closed work. `tasks/README.md` is
   the ordered index.
 - `.devcontainer/`, `.env.example`, `.github/workflows/monitor-crawl4ai-releases.yml`,
@@ -548,6 +608,8 @@ Upstream will never touch these, so they cost nothing at merge time.
 | `api.py` 180 s `asyncio.wait_for` + 504 | Upstream `limits.wall_clock_s`; we set 180 |
 | `simple_token_auth.py` + wrapper middleware | Upstream `AuthGateMiddleware` |
 | `aitosoft_browser_merge.py` + `api.py` hooks | `BrowserConfig.set_defaults()` in `aitosoft_entry.py` (2026-04-14) |
+| `remove_overlay_elements.js` identity-based structural guard and its 50 ms trailing wait | Upstream `a574fbc` `isDocumentStructure` and `b536bf5` (v0.9.5 merge, 2026-11-03) |
+| `aitosoft_trust` `_ac._MAX_TIMEOUT_MS = 180_000` | Upstream's `CRAWL4AI_MAX_TIMEOUT_MS` (`a59f50e`, `61eb573`); we set it with `setdefault` (v0.9.5 merge) |
 
 ---
 
@@ -560,9 +622,11 @@ Upstream will never touch these, so they cost nothing at merge time.
 - Never run formatters over upstream files.
 - `git diff --stat upstream/develop...HEAD -- crawl4ai deploy Dockerfile` must
   list only the files in §1 and §3. Use three dots, which diff from the merge
-  base; two dots also show everything upstream added. On 2026-11-03 it listed
-  26 files, +4,880/−193. If it shows more after a merge, someone reformatted
+  base; two dots also show everything upstream added. After the v0.9.5 merge
+  (2026-11-03) it listed 26 files, +5,020/−201. If it shows more after a merge, someone reformatted
   upstream code; fix that before anything else.
+- The v0.9.5 merge was an ordinary `git merge` of the tag, because our tree
+  was byte-identical to upstream outside the real patches.
 - The v0.9.2 merge took upstream's tree wholesale and re-applied our patches
   (`merge -s ours` then `checkout upstream/develop -- .`). That restored
   byte-identity after the 2026-04 whitespace incident.
@@ -573,83 +637,39 @@ Upstream will never touch these, so they cost nothing at merge time.
 - Run a Tier 1 regression against a local server.
 - Update §1 here, and add an entry to `AITOSOFT_CHANGES.md`.
 
-### Pre-merge overlap: upstream `v0.9.2` → `cd61be1` (v0.9.5 + 46)
+### Last merge, and what the next one inherits
 
-Measured 2026-11-03 from the subject lines of 233 upstream commits. Only the
-items marked *read* were checked against code. Re-derive with
-`git log --oneline --no-merges 7e80152..upstream/develop -- <file>`. **Delete
-this subsection after the merge.**
+**v0.9.2 → v0.9.5 (`838869b`), 2026-11-03**, an ordinary merge (not the v0.9.2
+`-s ours` technique): 187 commits, 7 conflicted files, 25 hunks. Every decision
+and the evidence behind it is in `tasks/upgrade-upstream-v0.9.5.md`; the
+behaviour-preserving choices are recorded per file in §1 above. The traps that
+an auto-merge or a "make CI green" resolution would have hidden, each now
+pinned by a test:
+- TLS verification turning on (`f0ada4c`): the broken-certificate fixture tests.
+- `page_timeout` capped at 60 s (`a59f50e`): `test_mas_contract.py`.
+- Capture 0.5 s earlier (`b536bf5`): `test_the_capture_point_includes_the_consent_wait`.
+- The connect budget lost in upstream's `_dial()` (`890af3d`):
+  `test_every_dial_path_honours_the_connect_budget`.
+- Text after a balanced `<noscript>` (upstream's path, #2416):
+  `test_text_after_a_balanced_noscript_survives`.
 
-**If the merge targets a release tag rather than `develop`:** find the first
-release carrying a commit with `git tag --contains <sha> | sort -V | head -1`.
-- `a574fbc` and `130a382` are in v0.9.3.
-- `7b02a2c` is in v0.9.4.
-- `f0ada4c`, `6b5a0d4`, `350a141` and `d6fdff5` are in v0.9.5.
-- `3f9f790`, `a1bd6c8`, `a4c4b2d` and `b0ed23c` are on `develop` only.
-
-Upstream touched 17 of our 20 files. It left **`antibot_detector.py`,
-`browser_adapter.py` and `.gitignore`** alone, so those merge clean.
-
-**Needs a decision, not just conflict resolution:**
-
-- **TLS: `f0ada4c` removes `--ignore-certificate-errors`** from both launch-flag
-  lists (*read*). After the merge, full mode verifies certificates. Broken-cert
-  SME sites, which upstream's flag has been silently tolerating, will start
-  failing. This is a behaviour change for MAS.
-  - **Options:** `CRAWL4AI_ALLOW_INSECURE_TLS=true`, a context-level
-    `ignore_https_errors`, or accepting the loss. Decide deliberately, and fix
-    the `config.yml` comment that says the flag is hardcoded.
-  - Background: `tasks/done/tls-broken-cert-regression-2026-07-17.md`.
-- **`<noscript>`: upstream added `unwrap_orphaned_noscript`** (`6b5a0d4`,
-  `b59dc9c`, `3442707`; *read*). It unwraps noscript tags and keeps their
-  contents when open and close counts disagree. Our `strip_noscript` removes the
-  elements. **Keep ours alongside theirs** (it auto-merges). Upstream leaves a
-  *balanced* `<noscript>` in the tree and `_scrap` later drops it with
-  `getparent().remove()`, which loses the text after it: executed 2026-11-03,
-  a phone number after a balanced `<noscript>` is lost on pure v0.9.5 and kept
-  on ours (`FINDINGS.md` §Parse collapse). That is upstream #2416, fix in
-  progress; drop `strip_noscript` and close #2114 once it lands. Check
-  `test_noscript_body_collapse.py` too; the browser fixtures cannot tell the two
-  fixes apart.
-- **Overlay snippet: `a574fbc` + `004bc1d`** add upstream's own structural guard
-  (`isDocumentStructure`) and the `document.body` null-guard (*read*). Ours
-  becomes redundant; keep one. The **`rgba` alpha fix is still ours only**,
-  because upstream still has `includes("rgba")`.
-- **Consent and overlay snippets: `b536bf5` (#2139)** removes the unconditional
-  `setTimeout` waits that hang on CSP-sandboxed pages. Expect conflicts near
-  Phase 2 and at the snippet tail.
-- **Server failure mapping: `130a382`** removes upstream's all-failed → 500 rule,
-  the same lines our `_crawl_response` replaced (*read*: upstream `server.py` no
-  longer has it). **`588de04`** preserves single-URL failure details in `api.py`.
-  Keep our status mapping: it is the MAS contract.
-- **Seed validation: `350a141`** reports a refused seed as a failed result
-  rather than a 400. `_normalize_and_validate_seeds` now returns
-  `(allowed, refused)` (*read*). This conflicts directly with our async version
-  and the `OriginUnresolvable` path.
-- **Permanent browser: `7b02a2c`** builds it with the egress-hardened config, so
-  its signature matches requests. Re-check whether
-  `_close_unused_permanent` / `permanent_unused_ttl_sec: 120` still make sense
-  once the browser is reachable.
-- **Pool: `3f9f790`** replaces dead pooled browsers (`is_connected()` in
-  `get_crawler` and the janitor, background close). **`47ea8d7` / `6ccf610`**
-  add recycling by pages served (`crawler.pool.max_pages_before_recycle`), and
-  `15f4b29` defaults it to 200, which our `config.yml` would inherit. Both edit
-  the functions we rewrote. **Set `max_pages_before_recycle: 0` explicitly** until
-  upstream PR #2432 ships: upstream #2419 (maintainer-confirmed 2026-10-21) leaks
-  a context refcount on a cancelled crawl, after which a recycle waits forever
-  and every `/crawl` returns 504 until restart, and our wall-clock fence cancels
-  crawls. Recycling replaces contexts inside the same Chromium process, so it is
-  not known to bound the memory ratchet either (`FINDINGS.md` §Browser pool).
-- **Egress proxy: `890af3d`, `01e6e96`, `07873f1`** chain the egress proxy
-  through `HTTP(S)_PROXY` and route seeder fetches through it. That is 149
-  upstream lines against our 49; expect conflicts.
-- **Untrusted delay cap: `d6fdff5`** caps the untrusted
-  `delay_before_return_html` at 60 s. MAS sends 2 s. `raw://` load tests that
-  dial render time through that field are capped too. `retry_capture_wait_s` is
-  applied server-side and is unaffected.
-- **Channel: `a1bd6c8`** passes the `chromium` channel again and falls back to
-  the shell. This probably changes which binary our browser test suite runs,
-  and it is why the Windows-only workaround fix is not worth filing.
+**On `develop` after v0.9.5, for the next sync** (classified in
+`tmp/upgrade-v0.9.5-evidence/upstream-report-2-verify.md` §4, gitignored):
+- `3f9f790` replaces dead pooled browsers. It conflicts in `crawler_pool.py`,
+  and its janitor block auto-merges into *our* janitor while calling helpers
+  that exist only on upstream's side of the conflict; the janitor is a bare
+  `create_task` and would die silently. Design it against our pool (overflow
+  keys, `_close_detached`, `BUSY_SINCE`) or delete the block, never leave it
+  dangling.
+- `a1bd6c8` passes the `chromium` channel again, so our fixture suite will run
+  full Chromium and `pdf-inline` will go red for a true reason (production's
+  inline-PDF 500). Change that test to describe reality, don't skip it.
+- `a4c4b2d`, `b0ed23c` (`clone()` fields), `129a950` (setup fails loudly): clean.
+- Open upstream work that changes what we carry: PR #2428 (seed check off the
+  loop, sync-wrapped; a three-line conflict with ours), PR #2432 (the #2419
+  recycling deadlock; then reconsider `max_pages_before_recycle: 0`), #2416
+  (text after inline `<style>`/`<link>`/`<meta>`/`<noscript>`; then drop
+  `strip_noscript` and close #2114).
 
 **Probably takes upstream's fix for something we carry or work around:**
 - **PDF scraping:** `05de127` adds `pypdf`; `4ccd143` / `2341507` / `4138ada`
