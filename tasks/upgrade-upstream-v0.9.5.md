@@ -1,14 +1,10 @@
 # Merge upstream crawl4ai v0.9.2 → v0.9.5
 
-**Status:** merged on branch `upgrade-upstream-v0.9.5` (2026-11-03, merge commit `937e100`), all
-gates green, independent review done and acted on, **not deployed**. **2026-11-04: production moved
-to `crawl4ai-service-se` (Sweden Central); deploy and joint runs in progress, see [§10](#10-2026-11-04-the-deploy-sessions-record-in-progress).** Waiting on: Tero lifting the
-platform repo's quiet period, then
-`tmp/mas-repo-messages/55-to-mas-upstream-v0-9-5-merge-what-you-will-and-wont-see.md` (drafted,
-unsent) and MAS's answer on sweep timing. Deploy with `deploy-image.sh` at fleet zero, then merge
-the branch into `main`. The implementing session's record, including what this file got
-wrong, is [§8](#8-implementation-record-2026-11-03); [§9](#9-hand-over-deploy-then-the-first-joint-agent-runs-for-the-session-after-2026-11-03) is the hand-over to the next session. Framed 2026-11-03 by the coordinator
-session.
+**Status: DONE, 2026-11-04.** Merged 2026-11-03 (`937e100`); deployed 2026-11-04 as `0.9.5-merge`
+to `crawl4ai-service-se` (Sweden Central, where MAS had moved that morning), by digest, between two
+joint agent runs with MAS that found no regression. The branch is merged into `main`. This file stays
+in `tasks/` rather than `tasks/done/` because code comments cite it by path. §8 is the implementation
+record, §9 the hand-over, [§10](#10-2026-11-04-the-deploy-and-the-two-joint-runs) the deploy and the runs.
 **Size:** L. Mostly reconciliation and verification; the code you write is small.
 **Gate:** none to *start*. **Deploying has two gates:**
 - MAS must hear about the changes they can see (§5) before the deploy. Tero had asked for quiet in
@@ -751,31 +747,6 @@ resolutions**. Its findings, and what was done:
 
 ---
 
-## 10. 2026-11-04: the deploy session's record (in progress)
-
-**What changed under us before we started:** MAS moved every agent to Sweden Central at 06:01–06:18Z
-and cloned this service as **`crawl4ai-service-se`** in `aitosoft-aca-se` (same image by digest,
-token, scale rule, probes, env names). West Europe is idle and is to be deleted on or after
-2026-11-11. Found by `az` before sending `55-…`; then confirmed by MAS's `56-from-us-…` and
-`57-from-us-…`. Tooling, queries and docs are repointed (`cd9c4af`), and `deploy-image.sh` now
-deploys **by digest**. §9's "deploy to `crawl4ai-service`" and "rollback to tag" are superseded by
-AZURE_OPERATIONS §0 and §2.5.
-
-**The deploy is now three changes, not two:** region (a new egress address: `-se` lists 161, one
-replica used one), Chrome 151 → 156, the merge. Agreed with MAS (`58-to-mas-…`): **two runs**, each
-≈75 companies from their August captures, one company per host, 5 in flight, the same brain and
-client. Run (i) on today's image measures the region alone; we deploy into the gap after it; run
-(ii) measures Chrome + merge. Run (i) waits on Tero's go to MAS's session.
-
-**Gates, and one deliberate deviation:** offline 262/262 on `cd9c4af`; the fixture-origin suite is
-re-run locally before deploying. **Tier 1 runs against the deployed `-se` image before run (ii),
-not from this devcontainer:** its egress is Tero's home connection (PRIVATE.md), and the deployed
-image on Chrome 156 is the stronger instrument. A Tier 1 failure means rollback before run (ii). The
-post-deploy byte-compare (TESTING.md) is replaced by the suites inside the shipped image, which
-prove the same thing (the image runs the tested code) without a home-IP hit.
-
----
-
 ## 9. Hand-over: deploy, then the first joint agent runs (for the session after 2026-11-03)
 
 Written at the end of the implementing session for a peer with a clean context. Not a checklist;
@@ -834,3 +805,69 @@ gets the next ordered list. Already queued:
 - the PRs (`file-upstream-prs.md`);
 - the image-secrets decision (README item 1b, Tero's);
 - the parked browser-suite-in-CI idea.
+
+---
+
+## 10. 2026-11-04: the deploy and the two joint runs
+
+Written by the deploy session. §9's plan was right in outline and wrong in three places, all found
+before or during the deploy.
+
+**What §9 got wrong, and what settled each:**
+1. **The deploy target.** MAS had moved every agent to Sweden Central at 06:01–06:18Z and cloned us
+   as `crawl4ai-service-se`; §9 says `crawl4ai-service`. Found by `az containerapp list` before
+   sending `55-…` (a faithful clone: same digest, token, scale rule, probes, env names), then
+   confirmed by MAS (`56-from-us-…`, `57-from-us-…`). Tooling repointed in `cd9c4af`; deploys go by
+   digest now, because MAS pinned the app to one.
+2. **"Two changes in one deploy" was three.** The region change means a new egress address (the app
+   lists 161; one replica used one), and our blocks are IP-based. So the plan became two runs, one
+   change each (`58-to-mas-…`): (i) the region alone on the old image, then deploy, then (ii) the
+   merge and Chrome.
+3. **Chrome 156 was 157.** The rebuild picked up 157.0.8103.38. Our suite had never run on it, so
+   it ran inside the shipped image before run (ii) was released: 326 passed, 1 failed (`pdf-inline`,
+   known).
+
+**The runs** (75 companies each, 5 in flight, MAS's brain DeepSeek V4.1-Flash-1017 on Wafer, held
+identical; counts agreed request for request on both sides):
+
+| | (i) v0.9.2, Chrome 151, `-se` | (ii) v0.9.5, Chrome 157, `-se` |
+|---|---|---|
+| requests | 790: 736 × 200, 54 × 429 | 814: 761 × 200, 51 × 429, 2 × 500 |
+| lost work / newly empty (MAS, vs August) | 0 / 0 | 1 / 2, all the sites (below) |
+| our failures | 3 unreachable, 1 http_error | 1 unreachable, 1 http_error, 2 `render_error` |
+| blocks | 0 terminal; 2 CF challenges rescued | 0 terminal; 1 rescued |
+| 200 latency mean / p99 | 8.06 / 44.6 s | 7.42 / 18.0 s |
+| peak `anon` | 3.85 GB; one 55 s readiness outage | 2.8 GB |
+| ¢ per request / company | 0.049 / 0.52 | 0.050 / 0.55 |
+
+- **The 2 × 500 are a scale-in killing a replica mid-render** (AZURE_OPERATIONS §2.4), not the merge.
+- **The newly empty pages and the lost company are the sites:** one request each through the idle
+  West Europe app (old image) and `-se` (new) returned byte-identical pages. fortax.fi is now a
+  hosting company's parked-domain page; suujahammas.fi/ajanvaraus redirects to a booking app.
+  Recorded in TEST_SITES_REGISTRY.
+- **Latency and memory improved in (ii)**, but the cohorts differ: suggestive, not measured.
+
+**The gates, and two deviations.** Offline 262/262 and fixture origin 70/70 locally before the
+deploy; smoke and SSRF negatives green after. **Tier 1 ran against the deployed `-se` image, not
+from the devcontainer** (its egress is Tero's home connection): 3/4 by the script, 4/4 in
+substance, the miss being site drift (aspia.fi's expected contact is gone from the raw HTML; the
+expectation is updated). **The byte-compare was replaced** by the suite inside the shipped image.
+
+**What the runs taught, and where it now lives:**
+- cost per request is flat, so cost per company follows pages per company: AZURE_OPERATIONS §4.5;
+- the 429 split and the parallel-scrape cold start: §3.8;
+- scale-in kills in-flight renders: §2.4;
+- a replica stalled by memory without a kill: §6.4;
+- egress pool, two apps, the KQL-name trap: §0, §7;
+- requests orphaned during the revision switch: §2.4, TESTING §Quality gates;
+- #2416 is 0 of 630 real pages: FINDINGS §Parse collapse;
+- two method lessons (a positive result is about the patch first; diff the line, not the version):
+  FINDINGS §Method lessons.
+
+**What I am least sure of:**
+1. **That Playwright's `handle_sigterm` is what kills the browsers at scale-in.** Inferred from
+   supervisord having no `stopasgroup`; not reproduced.
+2. **That (ii)'s lower memory is Chrome 157's.** Different companies, different pages.
+3. **Two runs of 75 companies see only gross moves.** At August's block rate a run expects ~2;
+   both had 0 terminal. A fingerprint regression on Chrome 157 that costs a few percent would not
+   show at this size. The first full sweep is the real test; watch `origin_blocked` there.

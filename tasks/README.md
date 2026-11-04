@@ -7,44 +7,46 @@ works. Where a task file and this index disagree, the task file wins.
 
 ## State of the world
 
-- **Production moved to Sweden Central on 2026-11-04**, by MAS's cutover: the app MAS calls is
-  `crawl4ai-service-se` (environment `aitosoft-aca-se`, image pinned by digest). The West Europe
-  `crawl4ai-service` is idle and is to be deleted on or after 2026-11-11. **Every query and command
-  must name `-se`**: a wrong app name reads zero without an error (AZURE_OPERATIONS §0).
-- **Production is healthy and idle.** Its code last changed 2026-08-17. Check image, revision, trigger and
-  replica bounds with `az` (`AZURE_OPERATIONS.md` §0), never from a document. **`main` ==
-  production + docs + CI** as of 2026-11-03 (`f203391` added the test workflow; no code change).
-  Verify that rather than believe it. **The v0.9.5 merge is on branch `upgrade-upstream-v0.9.5`,
-  not on `main`**, until it deploys.
-- **No sweep is scheduled.** MAS's last sweep ended 2026-08-16. Since then, traffic has been small
-  test batches only (~1,540 requests in 2½ months). That makes now the window for changes that need a
-  quiet service.
+- **Production is v0.9.5 on `crawl4ai-service-se` (Sweden Central) since 2026-11-04 09:12:58Z**,
+  deployed by digest, Google Chrome 157. MAS moved every agent there that morning and cloned us; the
+  West Europe `crawl4ai-service` is idle on the old image and MAS deletes it on or after 2026-11-11.
+  **Every query and command must name `-se`**: a wrong app name reads zero without an error
+  (AZURE_OPERATIONS §0). Check image, revision and scale with `az`, never from a document.
+- **`main` == production + docs** since the branch was merged on 2026-11-04. Verify it.
+- **Two joint runs with MAS found no regression** (`upgrade-upstream-v0.9.5.md` §10): 1,604 requests,
+  counts agreed on both sides, the only lost company a parked domain.
+- **What's next is MAS's follow-up, `task-608`**: real never-scraped prospects with production
+  writes, in announced windows, one change per window. They lead it; we read our side of each
+  window (`tmp/research/readout.sh`) and count twice.
 - **What the last sweep says about priorities.** 186,178 requests over 175 h. Of MAS's 60,874
   capture attempts, 86.1 % were stored and **95 % of failures were the origin's**. Our share, in
-  captures lost:
-  - 500s: 156;
-  - 429s: 29;
-  - `render_defect`: 27;
-  - `unrenderable_content`: 4.
-
-  Size any new defect against those numbers before investigating it.
-- **Cost.** ~$0.605 per hour of sweep (2 replicas) and $0 when idle. **Invoice-verified** to within
-  1 % on 2026-08-15/16 (`AZURE_OPERATIONS.md` §4.4). USD, not EUR.
+  captures lost: 500s 156 (152 of the 163 URLs failed four times in a row, so deterministic, not
+  scale-in), 429s 29, `render_defect` 27, `unrenderable_content` 4. Size any new defect against
+  those numbers before investigating it.
+- **Cost.** ≈0.05 ¢ per request, flat from August through both joint runs; per company it follows
+  pages per company (6.4 in August, 10.5–10.9 on MAS's current brain → 0.33 → 0.52–0.55 ¢). $0 idle.
+  AZURE_OPERATIONS §4.5. USD.
 
 ## Open items
 
 | # | Task | Size | Why now |
 |---|---|---|---|
-| **1** | `upgrade-upstream-v0.9.5.md` | L | **Merged on branch `upgrade-upstream-v0.9.5`, all gates green, independent review done and acted on, not deployed** (2026-11-03). **2026-11-04: deploying to `crawl4ai-service-se` between two joint runs with MAS** (region first, then the merge). Merge the branch into `main` once its image is live. §10 is today's record. |
-| **1b** | The image carried `.env` (no task file; a decision) | XS | Found during #1: images up to `0.9.2-capacity-gate-2` contain `/tmp/project/.env`, `PRIVATE.md` and `tmp/`. `.dockerignore` is on the branch. Decide (Tero): rotate the token? delete or keep old tags, which are the rollback targets? Detail: `upgrade-upstream-v0.9.5.md` §8 item 5. |
-| **1c** | ~~Redis aborts on every `-se` container start~~ **Fixed by the merge; verified 2026-11-04** | — | `aitosoft-aca-se` has no IPv6 loopback. Production's v0.9.2 `supervisord.conf` bound `--bind 127.0.0.1 ::1` and Redis exited on all 3 `-se` starts before the deploy (West Europe, same image, started fine). Upstream `fadc53f` ("tolerate unavailable IPv6 loopback", in v0.9.5) made it `-::1`, and on revision `crawl4ai-service-se--0000001` Redis logs the `::1` warning and then `Ready to accept connections`. Nothing to do. **What was wrong in the first version of this row:** it said the merge wouldn't cure it, reasoning from the Redis version (the Dockerfile's 7.2.7 pin is ineffective: 8.10.x in both images) instead of diffing the bind line. `/crawl` never used Redis, so MAS saw nothing either way. |
-| **2** | The `render_mode` mislabel (no file; one word) | XS | We report a wrong value in a field MAS parses. Do it after #1 ships. |
-| **3** | `file-upstream-prs.md` | M | After #1 ships. File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
+| **1** | The `render_mode` mislabel (no file; one word) | XS | Unblocked by the deploy. We report a wrong value in a field MAS parses. Below. |
+| **2** | `file-upstream-prs.md` | M | Unblocked. File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
+| **3** | Scale-in kills in-flight renders (no task file yet) | S | Seen 2026-11-04: the browsers die at SIGTERM instead of finishing in the 30 s grace, so a scale-in mid-render is a `render_error` 500 (AZURE_OPERATIONS §2.4). Small: 2 of 814 in run (ii); 4 one-off-500 URLs of 163 in August; retries absorb it. Suspected cause Playwright's `handle_sigterm`, unverified. **First verify the mechanism locally** (SIGTERM the server during a stalled `raw://` render) before writing a fix; then the fix may be one launch flag. |
+| **4** | Parked-domain detection (an idea, either repo's) | XS–S | fortax.fi (run ii) is a hosting company's parked page (`/cgi-sys/defaultwebpage.cgi`, "verkkotunnus on varattu"), which MAS's agent called `blocked`. A signature check could make it a truthful class. Decide with MAS in `task-608`; size it on their data first. |
 
-**Owed to MAS, not a task file:** nothing. `54-…` and `55-…` were sent 2026-11-04 and answered
-(`57-from-us-…`). Still to send: the shipped image's Chrome version, and our counts for each run.
+**Decisions for Tero (no task files):**
+- **1b, the image carried `.env`.** Images up to `0.9.2-capacity-gate-2` contain `/tmp/project/.env`,
+  `PRIVATE.md` and `tmp/`; it is also the rollback target, and the West Europe app runs it. Rotate the
+  token? Delete old tags once West Europe is gone? Detail: `upgrade-upstream-v0.9.5.md` §8 item 5.
+- **The 630 raw pages from run (ii)** (`tmp/research/tailloss-data-2026-11-04/`, gitignored, 37 MB;
+  MAS holds a copy too). Keep as the offline corpus for the next upstream merge (630 real pages,
+  against the 5 hosts we have), or delete under the "temporarily" ruling? Both repos wait on it.
 
-### 2. The `render_mode` mislabel
+**Owed to MAS:** nothing. The learnings-index message (`82-to-mas-…`) points them at the docs.
+
+### 1. The `render_mode` mislabel
 
 In `api.handle_crawl_request`, the exception path's `failed_result(...)` call omits
 `render_mode`, which then defaults to `"full"` (`aitosoft_failure_class.failed_result`). The seed
@@ -96,30 +98,36 @@ all 61,937 of their rows).
   seen in production. The sweep's largest response was 32.6 MB against the 232 MB that lost a customer
   before the `desc` cap (`FINDINGS.md` §Output). Raise its priority if a real instance appears, or if
   OOMs become worth fixing by bounding allocations.
-- **Scale-trigger or `render_capacity` changes.** The fleet is at its floor, and loop gain is ~0.45 at
-  trigger 12 (`AZURE_OPERATIONS.md` §3.2). Only worth a run if MAS picks the slow-LLM shape (a) from
-  `52-to-mas-…`.
+- **Scale-trigger or `render_capacity` changes.** At August's ~19 requests/min the fleet sat at its
+  floor of 2; at the joint runs' ~32/min it ran at 3 and tracked the rate, with cost per request flat
+  (AZURE_OPERATIONS §4.5). So there is no over-provisioning to remove. Worth a run only if MAS's
+  `task-608` changes the request shape a lot (more in flight, more pages per company).
 - **Memory work.** Closed by two repos independently: `anon` moved +26 MB of 4,096 over 53 h.
   `tasks/done/post-sweep-closure-2026-08-17.md` has the seven closures from 2026-08-17. Read it
-  before re-deriving any of them.
+  before re-deriving any of them. **2026-11-04, joint run (i):** one
+  replica stalled 55 s out of rotation at `anon` 3.85 GB with six per-company browsers, no kill, no
+  lost work (AZURE_OPERATIONS §6.4). Reopen only if a stall costs work; the levers are fewer browser
+  identities or 8 GiB replicas.
 
 ## Open threads that need someone else's data
 
 - **53 captures came back with no `<body>` element**, on 28 hosts (`etlistat.fi` ×15). On 26 of the 28
   hosts our consent JS logged nothing, so it is not the cause. That is a real, unexplained mechanism,
   and it is 53 captures. Worth a task only if it grows, or if MAS can hand over the bytes.
-- **Text after an inline `<style>`, `<link>` or `<meta>` is dropped from our output today**
-  (upstream #2416, verified open 2026-11-03; a maintainer has a fix in progress). lxml keeps the
-  following text in the removed element's `.tail`, and the scraper's removal loop discards it. Our
-  `strip_noscript` protects only the `<noscript>` case. The size of the loss is unknown, but it is
-  cheap to measure on the stored corpus. **Take upstream's fix when it ships, and don't build ours.**
-  The upgrade task keeps `strip_noscript` for the same reason.
+- **Text after an inline `<style>`, `<link>` or `<meta>` is dropped (upstream #2416, open; a
+  maintainer plans one `drop_tree()` fix across ~11 sites).** Measured 2026-11-04 on 630 real WAA
+  raw pages: **0 change** (FINDINGS §Parse collapse; harness in `tmp/research/tailloss/`). Take
+  upstream's fix when it ships; don't build ours. Re-run the harness on the fix to confirm it.
+  We keep `strip_noscript` until then.
 - **PDF text extraction.** MAS holds April captures with extracted PDF text; today the class returns
   a 174-byte viewer shell. Who caused that is not established (`FINDINGS.md` §Downloads and PDFs).
   Upstream now ships `pypdf` and an opt-in PDF path, which arrive with the merge. Nobody needs it
   yet: MAS removes PDFs at dispatch.
 
 ## Reference, not a task
+
+`upgrade-upstream-v0.9.5.md` is done (2026-11-04) and stays in `tasks/` because code comments cite
+it by path; §10 has the deploy and the two joint runs.
 
 `waa-eval-2026-07-30-forensics.md` is the evidence base for the five root causes behind the
 2026-07-30 image. Code comments and older tasks cite it by path, so it stays in `tasks/`.

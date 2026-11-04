@@ -203,6 +203,18 @@ scales with concurrency. The knob exists (`az containerapp update
 revision transition, every deploy included, drain for three minutes per replica,
 to save ~6 requests in 36,783.
 
+**The browsers die at SIGTERM, not after the grace (seen 2026-11-04, joint run (ii)).** At 09:54:34
+the scaler went 3 → 2 ("All metrics below target") and terminated replica `ltjgf` with two renders
+in flight. Within ~0.3 s supervisord reaped ~30 Chrome processes "terminated by SIGTERM", gunicorn
+began its 30 s graceful shutdown with nothing left to finish, and both requests returned
+`render_error` 500 (`BrowserContext.new_page: Target page, context or browser has been closed`).
+`supervisord.conf` has no `stopasgroup`, so the likeliest sender is Playwright's own
+`handle_sigterm` (default on), which closes browsers when the Python process gets SIGTERM.
+**Unverified.** Size: 2 of 814 requests in that run, both retried by MAS; in August, 4 of the 163
+URLs that ever got a 500 got exactly one (a one-off a retry fixed), against 152 that failed four in a
+row (MAS's `49-data/http500-urls.csv`). So it is real, small, and not where our lost captures come
+from. `tasks/README.md` carries it as a follow-up.
+
 **A request that arrives during the switch, to an app at zero, can be orphaned (seen 2026-11-04).**
 The deploy of `0.9.5-merge` to `-se` updated the app at 09:12:14, but the platform kept 100 % of
 traffic on the old revision until 09:12:58 while the new one pulled and started. A `/health` sent
@@ -643,6 +655,12 @@ sweep, 2-minute bins:
 
 All of it landed at 1 replica; the second replica arrived and the 429s stopped.
 
+**2026-11-04, two joint runs at 5 companies in flight on `-se`:** 54 and 51 wire 429s in 790 and 814
+requests, split 32 + 22 and 46 + 5 between `render_slots` and `memory` (console tokens; the
+wire counts agree with MAS's to the request). The `render_slots` share is now the cold start:
+MAS's brain issues up to 6–7 `scrape_page` calls in one turn (2.3–2.4 per scraping turn), so 5
+companies put ≥7 requests on the first replica at once. Nothing ran out of retries in either run.
+
 **The ingress is round-robin, decided per request, with session affinity off**
 (`stickySessions: null`). Envoy picks the endpoint, then the connection pool, so a
 keep-alive client does not pin to a replica. A larger fleet dilutes bursts rather
@@ -831,6 +849,27 @@ requests per company.
 - **Between sweeps:** $0 for this service. The standing line is `aitosoft-edge`.
 - **The remaining levers are MAS's:** their `delay_before_return_html: 2.0` is
   ~37 % of our mean render time, and pages per company is the other half.
+- **2026-11-04, two joint runs on `-se` (75 companies each, 5 in flight): the cost per *request*
+  has not moved, so the cost per company follows pages per company.** Instruments: Azure Monitor
+  `Replicas` (1-min average, summed over the window plus the scale-in tail) × $0.3024, against
+  MAS's request counts.
+
+  | | requests / company | replica-min | ¢ / request | ¢ / company | fleet |
+  |---|---:|---:|---:|---:|---|
+  | August trigger-12 sweep | 6.4 | — | 0.052 | 0.33 | 2 at ~19 req/min |
+  | run (i), v0.9.2 | 10.53 | 77.5 | 0.049 | 0.52 | 3 at ~32 req/min |
+  | run (ii), v0.9.5 | 10.85 | 81.5 | 0.050 | 0.55 | 3 at ~32 req/min |
+
+  So the fleet tracks the request rate (render slots 58–64 % busy over each window, queue waits
+  included), and "the fleet is at its floor" above holds only at August's rate. Consequences:
+  - **a faster brain shortens a run without making our cost per company cheaper**: the same pages
+    and render-seconds arrive sooner, and the fleet scales up to meet them;
+  - **pages fetched per company is the lever on our side of the bill**: ≈0.05 ¢ of render each;
+  - **a short window carries fixed overhead**: a cold start (~1 min, with the `render_slots` 429
+    burst) and an idle tail of ~4–7 min at 2–3 replicas after the last request (about a fifth of a
+    25-minute window). For comparing configurations on short windows, price per request.
+  MAS's model cost in the same runs: 0.76–0.77 ¢ per company, so we are ≈40 % of the per-company
+  total. Readouts: `tmp/research/run-i-readout-2026-11-04.md` (gitignored), `tmp/mas-repo-messages/80-to-mas-…`.
 - **Cheaper architecture, priced and rejected:** ACA capped at 4 (~$29/day) matches
   6 PAYG D4as_v5 VMs (~$30/day) with no migration and keeps scale-to-zero, which
   matters because a sweep is ~17 % of the calendar. Azure Functions cannot run
@@ -1146,6 +1185,15 @@ outside the band"), and both were the same artefact. **Count refusals; never
 interpret them or size memory pressure from them.** (`max_browsers` is not the
 fix: refusals logged `resident=4/6`, under the cap, and the cap fired 0 times in
 186,178 requests.)
+
+**Six per-company browsers on 4 GiB can stall a replica without killing it (2026-11-04, joint run
+(i), `-se`).** Replica `2jqt7` reached `anon` 3,886 MB with the file cache squeezed to 68 MB, the
+pool's 10 s tick went silent for 67 s (08:53:57–08:55:04), and the readiness probe timed out for
+55 s (08:54:05–08:55:00), so ACA took it out of rotation. No restart, no OOM, no lost work. Run (ii)
+on v0.9.5 / Chrome 157 peaked at `anon` 2,824 MB (p50 ~2,200–2,400 per replica, against
+~2,600–3,000 in run (i)): suggestive of lower browser memory, but the cohorts differ, so not a
+measurement. Levers if it grows: fewer browser identities from MAS (64–70 launches for 75
+companies), or 4 vCPU / 8 GiB now that `aitosoft-aca-se` is a workload-profiles environment (§3.6).
 
 **Kills come with no warning in any sampled series.** At the labelled kill on
 2026-08-15 04:30, `anon` was 2,835–3,445 MB and the guard read 80.5–93.5 % in the

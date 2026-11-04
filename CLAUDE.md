@@ -235,7 +235,8 @@ entirely ours — verified against git. `AITOSOFT_CHANGES.md` is the history. Re
 from git rather than trusting either: `git diff --stat upstream/develop...HEAD -- crawl4ai deploy
 Dockerfile` (three dots — from the merge base).
 
-**Upstream sync:** last synced at v0.9.5 (merged 2026-11-03; merge-base `838869b`). `git fetch upstream &&
+**Upstream sync:** last synced at v0.9.5 (merged 2026-11-03, in production since 2026-11-04;
+merge-base `838869b`). `git fetch upstream &&
 git merge upstream/develop`. What `develop` brings next, and its one trap, is in `AITOSOFT_FILES.md`
 §5 "Last merge"; the method is `tasks/upgrade-upstream-v0.9.5.md` §4.
 

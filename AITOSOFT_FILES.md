@@ -643,7 +643,8 @@ Upstream will never touch these, so they cost nothing at merge time.
 
 ### Last merge, and what the next one inherits
 
-**v0.9.2 → v0.9.5 (`838869b`), 2026-11-03**, an ordinary merge (not the v0.9.2
+**v0.9.2 → v0.9.5 (`838869b`), merged 2026-11-03, deployed 2026-11-04** (`0.9.5-merge` on
+`crawl4ai-service-se`, by digest), an ordinary merge (not the v0.9.2
 `-s ours` technique): 187 commits, 7 conflicted files, 25 hunks. Every decision
 and the evidence behind it is in `tasks/upgrade-upstream-v0.9.5.md`; the
 behaviour-preserving choices are recorded per file in §1 above. The traps that

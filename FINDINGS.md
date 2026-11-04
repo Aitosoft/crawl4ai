@@ -347,6 +347,15 @@ Take upstream's fix when it ships; don't build our own.
 0 of 74 stored captures have text after a balanced `<noscript>` (`tasks/upgrade-upstream-v0.9.5.md`),
 so the population is small, but the loss is silent and it is contact data. None of the browser
 fixtures has this shape either; it needs a test.
+**Measured on real WAA pages, 2026-11-04: 0 of 630 change.** MAS stored raw HTML for joint run (ii)
+(631 pages, 75 companies; their `WAA_STORE_RAW_HTML`). Re-scraped offline through today's scraper and
+a tail-preserving one (`drop_tree()` at the 11 sites that don't already move `.tail` by hand):
+identical markdown on every page. Control 1: the offline path reproduces the markdown production
+returned on 584/630 exactly; the other 46 differ only in links resolved against `url` instead of
+`final_url`. Control 2: a synthetic page with an inline `<style>`, `<link>` and `<meta>` mid-paragraph
+loses phone, email and address on today's tree and keeps them on the patched one. So the rate is
+under ~0.5 % of pages (95 % bound): **wait for upstream's fix.** Harness, patch recipe and control:
+`tmp/research/tailloss/` (gitignored); the raw pages' retention is Tero's call.
 
 **An *unclosed* `<noscript>` still deletes the page, and the offline suite cannot see it.** libxml2
 auto-closes the element, so `test_noscript_body_collapse.py` reports the shape as fixed. Chromium
@@ -797,6 +806,19 @@ a control that shares the cause.
 table claim tree-against-tree, a script read `ScrapingResult.tables` and reported "0 of 74 captures
 have tables, 0 differ", which looked like confirmation. Tables live at `result.media.tables`; read
 there it is 13 of 74, and 0 differ. Both readings say "no change"; only one of them measured anything.
+
+**A positive result is a finding about the patch first, too.** The first #2416 comparison (2026-11-04)
+reported 22 of 74 pages changed and 4 phones lost. The patch had replaced every `remove()` with
+`drop_tree()`, including the two sites (empty-element removal; `<script>`) that already move `.tail`
+by hand, so it *duplicated* text ("YYli 100"), and the diff read the duplicate as recovered loss.
+Fixed, it is 0 of 74. Keep a synthetic positive control in any comparison like this, and read one
+changed page by eye before believing a count.
+
+**Diff the line, not the version.** On 2026-11-04 Redis aborted on every `-se` start (the
+environment has no IPv6 loopback). We first concluded the v0.9.5 merge wouldn't fix it, because both
+images ran Redis 8.10.x (the Dockerfile's 7.2.7 pin is ineffective). Upstream `fadc53f` had changed
+the bind from `::1` to `-::1`, optional, and Redis started on the first v0.9.5 replica. The
+version was the wrong variable; the config line was the right one.
 
 ---
 

@@ -5,8 +5,8 @@ What changed in this fork, when, why, and what it cost or proved. Newest first.
 - **What differs from upstream right now** is in `AITOSOFT_FILES.md`. That file
   is the per-file inventory; this one is history.
 - **What is deployed right now** is not tracked here. Query it with the `az`
-  commands at the top of `AZURE_OPERATIONS.md`, which also owns rollback (roll
-  back by tag; `0.9.2-egress-dns` is burned).
+  commands at the top of `AZURE_OPERATIONS.md`, which also owns rollback (by
+  digest since 2026-11-04; `0.9.2-egress-dns` is burned).
 - **Image tags in entries** record which build carried a change. They are
   history, not current config.
 - **Detail** lives in the `tasks/done/*.md` file each entry cites. An entry here
@@ -16,7 +16,40 @@ What changed in this fork, when, why, and what it cost or proved. Newest first.
 
 ---
 
-## 2026-11-03: upstream v0.9.5 merged, behaviour kept for MAS (branch `upgrade-upstream-v0.9.5`, not yet deployed)
+## 2026-11-04: v0.9.5 deployed to `crawl4ai-service-se`, between two joint agent runs (`0.9.5-merge`)
+
+**What changed:**
+- **Production moved before we deployed:** MAS moved every agent to Sweden Central that morning and
+  cloned this service as `crawl4ai-service-se` (environment `aitosoft-aca-se`, workload-profiles
+  type; a new FQDN; egress from a 161-address pool). Our scripts, queries and docs were repointed
+  (`cd9c4af`); the West Europe app is idle until MAS deletes it (on or after 2026-11-11).
+- **`0.9.5-merge` deployed by digest** (`sha256:c34667704c3d…84caa5`, revision
+  `crawl4ai-service-se--0000001`, live 09:12:58Z). `deploy-image.sh` now always updates by digest.
+- **The browser moved 151 → 157** (Google Chrome 157.0.8103.38; the candidate built a day earlier
+  had 156). Python packages as pinned.
+- **Redis starts on `-se` again**: upstream `fadc53f` (in the merge) made the `::1` bind optional;
+  on v0.9.2 it aborted on every `-se` start. `/crawl` never used it.
+
+**Evidence: two joint runs with MAS, one change each, 75 companies each, 5 in flight, the same
+brain and client** (`tmp/mas-repo-messages/72-from-us-…`, `78-from-us-…`, `80-to-mas-…`):
+- **Run (i), the region alone** (v0.9.2 on `-se`): 790 requests, 0 lost work, 0 newly empty.
+- **Run (ii), the merge and Chrome 157:** 814 requests, wire counts identical on both sides.
+  - Two pages newly empty against August and one company lost: all three were the sites
+    (an old-image vs new-image A/B gave byte-identical results; fortax.fi is now a parked domain).
+  - Two `render_error` 500s: an autoscaler scale-in killing a replica mid-render (AZURE_OPERATIONS
+    §2.4), not the merge.
+  - Latency p99 44.6 → 18.0 s and peak `anon` 3.9 → 2.8 GB: suggestive only (different cohorts).
+- **Gates:** offline 262/262, fixture origin 70/70, Tier 1 4/4 after a site-drift expectation
+  fix, smoke and SSRF negatives green; our suite inside the shipped image on Chrome 157: 326
+  passed, 1 failed (the known `pdf-inline`).
+- **Cost:** ≈0.05 ¢ per request in August and in both runs; per company 0.33 → 0.52–0.55 ¢
+  because MAS's new brain fetches 10.5–10.9 pages per company, not 6.4 (AZURE_OPERATIONS §4.5).
+- **#2416 on 630 real raw pages: 0 change** (FINDINGS §Parse collapse). Wait for upstream's fix.
+- Full record: `tasks/upgrade-upstream-v0.9.5.md` §10.
+
+---
+
+## 2026-11-03: upstream v0.9.5 merged, behaviour kept for MAS (deployed 2026-11-04, above)
 
 **What changed:**
 - **Upstream v0.9.2 → v0.9.5** (`838869b`, 187 commits, 7 conflicted files, 25 hunks), an ordinary
@@ -35,7 +68,7 @@ What changed in this fork, when, why, and what it cost or proved. Newest first.
   - nested-noscript `fit_html` keeps content;
   - `Connection: close` on plain-http origins;
   - `/health` reports 0.9.5.
-  - The heads-up is `tmp/mas-repo-messages/55-to-mas-…` (unsent).
+  - The heads-up is `tmp/mas-repo-messages/55-to-mas-…` (sent 2026-11-04).
 - **Build:**
   - `azure-deployment/pip-constraints.txt` (the 0.9.2-capacity-gate-2 image's freeze) via
     `PIP_CONSTRAINT`.
