@@ -55,10 +55,12 @@ trusting the table:
 pytest test-aitosoft/ --collect-only -q | grep '::' | cut -d: -f1 | sort | uniq -c
 ```
 
+Counts as of 2026-11-04; the command above regenerates them.
+
 | Suite | Tests | Pins | Re-run after touching |
 |---|--:|---|---|
-| `test_mas_contract.py` | 16 | MAS's audited request fields against the untrusted boundary plus our relaxations; multi-URL → 400; every 429 carries `capacity_gate` | `async_configs.py`, `aitosoft_trust.py`, any upstream sync |
-| `test_admission.py` | 13 | RenderGate capacity, bounded queue, 429 + `Retry-After` | admission / capacity |
+| `test_mas_contract.py` | 22 | MAS's audited request fields against the untrusted boundary plus our relaxations; multi-URL → 400; every 429 carries `capacity_gate` | `async_configs.py`, `aitosoft_trust.py`, any upstream sync |
+| `test_admission.py` | 14 | RenderGate capacity, bounded queue, 429 + `Retry-After` | admission / capacity |
 | `test_crawler_pool.py` | 27 | PERMANENT re-init, `max_browsers` evict-or-refuse (never wait), memory guard, the cgroup reading | `crawler_pool.py`, `deploy/docker/utils.py` memory functions |
 | `test_static_mode.py` | 10 | per-hop SSRF redirect validation, bounded fan-out, monitor outcome | `aitosoft_static_mode.py` |
 | `test_patchright_fallback.py` | 4 | in-flight counter, recycle race | `aitosoft_patchright_fallback.py` |
@@ -66,11 +68,11 @@ pytest test-aitosoft/ --collect-only -q | grep '::' | cut -d: -f1 | sort | uniq 
 | `test_antibot_challenge_detection.py` | 31 | challenge families served at HTTP 200; the Shopify `Access Denied` false positive | `antibot_detector.py` patterns |
 | `test_render_bounds.py` | 17 | `page.evaluate`, `page.content` and `total_timeout` are bounded; `total_timeout` sits inside `wall_clock_s` | capture path, adapters, timeouts |
 | `test_failure_classification.py` | 56 | the `failure_class` taxonomy and its wire status (table below) | `aitosoft_failure_class.py`, error-text matching |
-| `test_noscript_body_collapse.py` | 11 | a nested `<noscript>` no longer swallows the body | `strip_noscript()`, scraping strategy |
+| `test_noscript_body_collapse.py` | 12 | a nested `<noscript>` no longer swallows the body | `strip_noscript()`, scraping strategy |
 | `test_collapse_guard.py` | 34 | guard thresholds against real captures; recovery | `aitosoft_collapse_guard.py` |
-| `test_egress_dns_offload.py` | 14 | DNS off the event loop; NXDOMAIN → `origin_unreachable`; proxy connect timeout; `http://` connect failure closes | `egress_proxy.py`, `egress_broker.py`, the seed check in `api.py` |
+| `test_egress_dns_offload.py` | 18 | DNS off the event loop; NXDOMAIN → `origin_unreachable`; proxy connect timeout; `http://` connect failure closes | `egress_proxy.py`, `egress_broker.py`, the seed check in `api.py` |
 | `test_media_desc_cap.py` | 6 | image `desc` capped at 200 chars | `content_scraping_strategy.py` |
-| `test_fixture_origin.py` | 67 | browser-driven: time, navigation, challenge resolution, hydration, redirect chains, consent/overlay JS, downloads, the wall-clock fence | capture path, block detection, `failure_class`, consent/overlay snippets, the fence |
+| `test_fixture_origin.py` | 74 | browser-driven: time, navigation, challenge resolution, hydration, redirect chains, consent/overlay JS, downloads, the wall-clock fence, http-only and http-upgrade behaviour (two controls run only on real Chrome) | capture path, block detection, `failure_class`, consent/overlay snippets, the fence |
 
 **Tests that pin a defect on purpose.** Three tests in `test_fixture_origin.py`
 assert today's wrong behaviour so that the fix has a red test to turn green:

@@ -70,7 +70,7 @@ item 5). The 630 raw pages from run (ii) are kept as the offline corpus.
   measured frequency**, or when the next sync brings it in anyway.
 - **`residential-egress-retry-path.md`.** It aims at IP-based blocks, which dominate, and now at
   lever 12 too. But it needs an instrument neither repo has: a real browser from a residential IP.
-- **`guard-corpus-is-not-in-the-repo.md`.** XS. Three tests fail on a fresh clone because
+- **`guard-corpus-is-not-in-the-repo.md`.** XS. Four tests fail on a fresh clone because
   `test-aitosoft/artifacts/*` is gitignored. It fails loudly, in the safe direction. Commit 4–6 files
   to `artifacts/keep/`, or delete the task. Don't open its sizing table.
 - **`test_fingerprint.py` has been broken since v0.9.2** (it sends `js_code`, which gets a 400).
