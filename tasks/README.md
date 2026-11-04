@@ -1,13 +1,17 @@
 # Open tasks, in the order to do them
 
-**Updated 2026-11-03.** Each task file carries the concern, the evidence and the design space, and
+**Updated 2026-11-04.** Each task file carries the concern, the evidence and the design space, and
 deliberately no checklist. You're expected to challenge it and record what you found wrong in the
 file itself; that has happened on nine consecutive task files, and it is the quality gate that
 works. Where a task file and this index disagree, the task file wins.
 
 ## State of the world
 
-- **Production is healthy and idle.** It last changed 2026-08-17. Check image, revision, trigger and
+- **Production moved to Sweden Central on 2026-11-04**, by MAS's cutover: the app MAS calls is
+  `crawl4ai-service-se` (environment `aitosoft-aca-se`, image pinned by digest). The West Europe
+  `crawl4ai-service` is idle and is to be deleted on or after 2026-11-11. **Every query and command
+  must name `-se`**: a wrong app name reads zero without an error (AZURE_OPERATIONS §0).
+- **Production is healthy and idle.** Its code last changed 2026-08-17. Check image, revision, trigger and
   replica bounds with `az` (`AZURE_OPERATIONS.md` §0), never from a document. **`main` ==
   production + docs + CI** as of 2026-11-03 (`f203391` added the test workflow; no code change).
   Verify that rather than believe it. **The v0.9.5 merge is on branch `upgrade-upstream-v0.9.5`,
@@ -31,17 +35,14 @@ works. Where a task file and this index disagree, the task file wins.
 
 | # | Task | Size | Why now |
 |---|---|---|---|
-| **1** | `upgrade-upstream-v0.9.5.md` | L | **Merged on branch `upgrade-upstream-v0.9.5`, all gates green, independent review done and acted on, not deployed** (2026-11-03). Next: send MAS `54-…` and `55-…`, deploy in a gap they name, merge the branch into `main`, then the first joint agent runs. §8 is the record, §9 the hand-over. |
+| **1** | `upgrade-upstream-v0.9.5.md` | L | **Merged on branch `upgrade-upstream-v0.9.5`, all gates green, independent review done and acted on, not deployed** (2026-11-03). **2026-11-04: deploying to `crawl4ai-service-se` between two joint runs with MAS** (region first, then the merge). Merge the branch into `main` once its image is live. §10 is today's record. |
 | **1b** | The image carried `.env` (no task file; a decision) | XS | Found during #1: images up to `0.9.2-capacity-gate-2` contain `/tmp/project/.env`, `PRIVATE.md` and `tmp/`. `.dockerignore` is on the branch. Decide (Tero): rotate the token? delete or keep old tags, which are the rollback targets? Detail: `upgrade-upstream-v0.9.5.md` §8 item 5. |
+| **1c** | Redis aborts on every `-se` container start (no task file; one line) | XS | Found 2026-11-04. `aitosoft-aca-se` has no IPv6 loopback, and `redis-server --bind 127.0.0.1 -::1` (upstream's line in `supervisord.conf`) exits with `Could not create server TCP listening socket ::1:6379` on all 3 starts there, then supervisord marks it FATAL. West Europe, same image: `Ready to accept connections` on both starts in 30 days. **Harm to MAS: none found.** `/crawl` doesn't use Redis in v0.9.2 or v0.9.5; only the stats persistence worker (errors swallowed) and `/crawl/job`, `/llm` do. The merge doesn't cure it: the Dockerfile's Redis 7.2.7 pin is ineffective (`0.9.5-candidate` has 8.10.3, production 8.10.0). Fix: bind `127.0.0.1` only, in its own deploy after run (ii); verify with `Ready to accept connections` on `-se`. Upstream-worthy (both the bind and the pin). |
 | **2** | The `render_mode` mislabel (no file; one word) | XS | We report a wrong value in a field MAS parses. Do it after #1 ships. |
 | **3** | `file-upstream-prs.md` | M | After #1 ships. File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
 
-**Owed to MAS, not a task file:** two drafts, both **unsent**, because Tero asked for quiet in the
-platform repo on 2026-11-03 while they deploy. Send them, in order, when he lifts that:
-`tmp/mas-repo-messages/54-to-mas-live-config-unchanged-and-14-5-is-now-invoice-verified.md`, then
-`tmp/mas-repo-messages/55-to-mas-upstream-v0-9-5-merge-what-you-will-and-wont-see.md` (item 1's
-heads-up; fill in its Chrome version from the image that ships). The deploy waits for 55's answer
-on sweep timing.
+**Owed to MAS, not a task file:** nothing. `54-…` and `55-…` were sent 2026-11-04 and answered
+(`57-from-us-…`). Still to send: the shipped image's Chrome version, and our counts for each run.
 
 ### 2. The `render_mode` mislabel
 
@@ -136,10 +137,15 @@ integers.
   flight`), so a slow host is cheap only at ~15 in flight.
 - `53-to-mas-…` reconciles their ≈$85/day with our $14.5: those are the trigger-6 and trigger-12
   regimes.
-- `54-to-mas-…` is a **draft, unsent** (see above).
-- `55-to-mas-upstream-v0-9-5-merge-what-you-will-and-wont-see.md` is the v0.9.5 heads-up, a
-  **draft, unsent**. It asks three questions: sweep timing, whether anything hashes page text, and
-  whether they want TLS verification on.
+- `54-to-mas-…` and `55-to-mas-…` (the v0.9.5 heads-up, rewritten for the cutover) were sent
+  2026-11-04.
+- `56-from-us-…` (their 53): the move to Sweden Central, the digest pin, a 161-address egress pool.
+- `57-from-us-…` (their 56): the thread is now held by their **task-606 session** (Remote Control
+  bridge address in the file). Nothing calls West Europe. Yes to two runs. TLS stays off.
+  `scraped_pages.content_hash` hashes raw markdown, so the whitespace change rewrites ~half the pages
+  once and loses nothing.
+- `58-to-mas-…`: pointed; deploy by digest; one egress address per replica so far; run design
+  agreed. At ≈480 requests a run expects ~2 blocks, so 7 or more is a signal.
 
 **Corrections we sent in `50-…`, in case they come back on any of them:**
 - The first OOM was 2026-08-13, not 08-15, and it wasn't "two containers": ACA emits two rows per

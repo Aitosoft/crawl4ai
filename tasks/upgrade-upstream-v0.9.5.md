@@ -1,7 +1,8 @@
 # Merge upstream crawl4ai v0.9.2 → v0.9.5
 
 **Status:** merged on branch `upgrade-upstream-v0.9.5` (2026-11-03, merge commit `937e100`), all
-gates green, independent review done and acted on, **not deployed**. Waiting on: Tero lifting the
+gates green, independent review done and acted on, **not deployed**. **2026-11-04: production moved
+to `crawl4ai-service-se` (Sweden Central); deploy and joint runs in progress, see [§10](#10-2026-11-04-the-deploy-sessions-record-in-progress).** Waiting on: Tero lifting the
 platform repo's quiet period, then
 `tmp/mas-repo-messages/55-to-mas-upstream-v0-9-5-merge-what-you-will-and-wont-see.md` (drafted,
 unsent) and MAS's answer on sweep timing. Deploy with `deploy-image.sh` at fleet zero, then merge
@@ -747,6 +748,31 @@ resolutions**. Its findings, and what was done:
    toward 2.9 s; don't delete it.
 3. **The `.env` in old images.** Not a public leak (ACR has anonymous pull off), but every
    `aitosoftacr` puller has had the token, and those images remain the rollback targets.
+
+---
+
+## 10. 2026-11-04: the deploy session's record (in progress)
+
+**What changed under us before we started:** MAS moved every agent to Sweden Central at 06:01–06:18Z
+and cloned this service as **`crawl4ai-service-se`** in `aitosoft-aca-se` (same image by digest,
+token, scale rule, probes, env names). West Europe is idle and is to be deleted on or after
+2026-11-11. Found by `az` before sending `55-…`; then confirmed by MAS's `56-from-us-…` and
+`57-from-us-…`. Tooling, queries and docs are repointed (`cd9c4af`), and `deploy-image.sh` now
+deploys **by digest**. §9's "deploy to `crawl4ai-service`" and "rollback to tag" are superseded by
+AZURE_OPERATIONS §0 and §2.5.
+
+**The deploy is now three changes, not two:** region (a new egress address: `-se` lists 161, one
+replica used one), Chrome 151 → 156, the merge. Agreed with MAS (`58-to-mas-…`): **two runs**, each
+≈75 companies from their August captures, one company per host, 5 in flight, the same brain and
+client. Run (i) on today's image measures the region alone; we deploy into the gap after it; run
+(ii) measures Chrome + merge. Run (i) waits on Tero's go to MAS's session.
+
+**Gates, and one deliberate deviation:** offline 262/262 on `cd9c4af`; the fixture-origin suite is
+re-run locally before deploying. **Tier 1 runs against the deployed `-se` image before run (ii),
+not from this devcontainer:** its egress is Tero's home connection (PRIVATE.md), and the deployed
+image on Chrome 156 is the stronger instrument. A Tier 1 failure means rollback before run (ii). The
+post-deploy byte-compare (TESTING.md) is replaced by the suites inside the shipped image, which
+prove the same thing (the image runs the tested code) without a home-IP hit.
 
 ---
 
