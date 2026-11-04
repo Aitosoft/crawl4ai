@@ -20,7 +20,8 @@
 # The safe sequence (2026-11-04): BUILD_ONLY=1, run the test suite inside that digest (TESTING.md
 # "Inside a built image"), then DEPLOY_DIGEST=<it>. A plain run rebuilds, and every build installs
 # whatever Google Chrome is current, so the image you tested is not the one you would ship
-# (FINDINGS "Google Chrome is a second upstream"). Both modes run the same gates and drift checks.
+# (FINDINGS "Google Chrome is a second upstream"). DEPLOY_DIGEST runs the same gates and drift
+# checks as a plain run; BUILD_ONLY changes nothing live, so it skips them.
 #
 # Prereqs: az login (subscription "Aitosoft - Microsoft Partner Network NEW"),
 # run from repo root or pass nothing else — the build context is the repo root.
@@ -74,7 +75,7 @@ elif (( live_replicas > 0 )) && [[ -z "${BUILD_ONLY:-}" ]] && [[ "${DEPLOY_ALLOW
     echo "!! re-run with DEPLOY_ALLOW_LIVE=1. A fixed-fleet window keeps replicas up on purpose:" >&2
     echo "!! deploy in its release step instead (batch-scale.sh release, then deploy)." >&2
     exit 1
-elif (( live_replicas > DEPLOY_REPLICA_CEILING )); then
+elif (( live_replicas > DEPLOY_REPLICA_CEILING )) && [[ -z "${BUILD_ONLY:-}" ]]; then
     echo "!! REFUSING TO DEPLOY: $live_replicas replicas are live (> $DEPLOY_REPLICA_CEILING)." >&2
     echo "!! A new revision needs its own replicas while these drain, and the" >&2
     echo "!! environment quota is 100 cores at 2 vCPU each. Wait for the fleet to" >&2

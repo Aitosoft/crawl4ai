@@ -145,8 +145,8 @@ DEPLOY_DIGEST=sha256:<hex> ./azure-deployment/deploy-image.sh <tag>   # ship exa
 **Build, test inside the image, then deploy the tested digest.** A plain `deploy-image.sh <tag>`
 still works, but it rebuilds, and every build installs whatever Google Chrome is current. So the
 image you tested is not the image you'd ship (FINDINGS "Google Chrome is a second upstream"; Chrome
-151 → 157 arrived with the v0.9.5 deploy and refused http-only sites). Both modes run the same gates
-and drift checks.
+151 → 157 arrived with the v0.9.5 deploy and refused http-only sites). `DEPLOY_DIGEST` runs the
+same gates and drift checks as a plain run; `BUILD_ONLY` changes nothing live, so it skips them.
 
 **The live-fleet gate (2026-11-04):** from ≈2026-11-08 MAS's traffic is unannounced, so the script
 refuses while any replica is live. Wait for scale-to-zero. Or check that the last `RenderGate
@@ -251,12 +251,12 @@ was deactivated 16 s later. The request hung until the client gave up: `Containe
 shows it on the old revision, no replica, 218.1 s, `DC downstream_remote_disconnect` (query
 `ContainerAppHTTPLogs`, `ContainerAppName == 'crawl4ai-service-se'`, from 09:10Z). **`az
 containerapp revision list` already showed the new revision at 100 % at that moment**, so it is
-not the instrument for "has routing switched". Use the system log line `Setting traffic weight of
-'100%' for revision '<new>'` (`ContainerAppSystemLogs_CL`), or a request that lands on the new
-revision in `ContainerAppHTTPLogs`. **The log line is not always written:** for revisions
-`--0000006` and `--0000007` (2026-11-04 17:20 and 17:50) only the *old* revision's line appeared. With
-the old revision at zero replicas and the new ones running, a `/health` answering in under a
-second is the check that worked. This is one more reason a deploy waits for MAS to stop calling.
+not the instrument for "has routing switched". **The check that works:** the old revision has no
+replicas left (`az containerapp replica list`), and one `/health` answers in under a second; a
+request that lands on the new revision in `ContainerAppHTTPLogs` confirms it later. The system log
+line `Setting traffic weight of '100%' for revision '<new>'` (`ContainerAppSystemLogs_CL`) is
+corroboration only: it is **not always written** (for `--0000006` and `--0000007`, 2026-11-04 17:20
+and 17:50, only the *old* revision's line appeared). This is one more reason a deploy waits for MAS to stop calling.
 
 ### 2.5 Rollback
 
@@ -266,7 +266,8 @@ cost or replica count, the lever is the scale rule (§3.5), not the image.
 **The rollback target of the image that's live is the digest named in the previous
 `AITOSOFT_CHANGES.md` entry** (each deploy entry names its digest; this file names no images, §0's
 rule). Roll back through the script, so the gates run, with no build:
-`DEPLOY_DIGEST=sha256:<older> ./azure-deployment/deploy-image.sh <older-tag>`. The manual
+`DEPLOY_DIGEST=sha256:<older> ./azure-deployment/deploy-image.sh <older-tag>` (plus
+`DEPLOY_ALLOW_LIVE=1` if replicas are live and `last-admit.sh` shows nothing in flight). The manual
 equivalent below points the app at an older **tag** already in ACR: an image-only update, no
 build. The app runs `activeRevisionsMode: Single`, so old
 revisions are deactivated and garbage-collected; a revision name is not a
@@ -941,7 +942,7 @@ requests per company.
   **Corrected 2026-11-04 (afternoon).** The first readout of each run summed the metric before the
   fleet reached zero and reported 77.5 and 81.5 replica-minutes (0.049 / 0.050 ¢ per request, 0.52 /
   0.55 ¢ per company). Re-read once the fleet was at zero, the same recipe gives the table above.
-  The tail steps 3 → 2 → 1 → 0 over ~10–16 min after the last request (each step waits out the
+  The tail steps 3 → 2 → 1 → 0 over ~10–16 min after the last request at 3 replicas (§6.5 is the home: 6–16 min) (each step waits out the
   300 s scale-down window; the last replica waits out the 300 s cooldown), so **read replica-minutes
   only once `Replicas` is back at 0.** The August figure is day-scale and invoice-checked (§4.4), so
   it never had this problem.
@@ -954,7 +955,7 @@ requests per company.
     and render-seconds arrive sooner, and the fleet scales up to meet them;
   - **pages fetched per company is the lever on our side of the bill**: ≈0.055 ¢ of render each;
   - **a short window carries fixed overhead**: a cold start (3–4 min at one replica, with the
-    `render_slots` 429 burst) and an idle tail of ~10–16 min after the last request, 20–24 % of a
+    `render_slots` 429 burst) and an idle tail of 6–16 min after the last request (§6.5), 20–24 % of a
     25-minute window's replica-minutes. For comparing configurations on short windows, price per
     request, and report the window and its tail separately.
   MAS's model cost was 0.52–0.77 ¢ per company across these runs, and their all-in ~2.3–2.6 ¢ (web
