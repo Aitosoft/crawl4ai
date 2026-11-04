@@ -183,6 +183,10 @@ Sized from today's runs; argue with every one.
    the origin's broken HTTP/2, but our `_NET_ERR` table has no row for it, so it reads as "ours,
    retryable". Adding `ERR_HTTP2_` to the origin prefixes is one line, and it changes MAS's status
    (500 → 200).
+   **Acked by MAS 2026-11-04 (`131-…`):** all three (PDF shell, both-tiers-empty JS shell,
+   `ERR_HTTP2_`) → 200 with their own class, deployed announced. Neither recovers the company. For
+   luppoapartments.fi an HTTP/1.1 retry would: MAS's plain HTTP/2 GET returned 200, so its HTTP/2
+   breaks only under Chrome. Our call whether that's worth one.
 10. **A marked `http://` attempt when `https://` fails at connect.** 137 companies in MAS's archive
     failed https at the tunnel and stored nothing (`115-from-us-…`). MAS wants us to do it, marked.
     Task file: `https-connect-failure-http-retry.md`.
@@ -207,7 +211,7 @@ Sized from today's runs; argue with every one.
     127.0.0.1, so the seed SSRF check refuses it (w5, 2 × 400). The guard is right; the class isn't.
     It's the origin's broken DNS, and like `OriginUnresolvable` (`api.py`) it should come back as 200
     `origin_unreachable` on `/crawl`, keeping the opaque 400 on the other endpoints. That changes
-    MAS's status, so it needs their ack. Tiny.
+    MAS's status, so it needs their ack. Tiny. **Acked by MAS (`131-…`).**
 
 ## Instruments worth keeping
 

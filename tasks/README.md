@@ -13,6 +13,12 @@ works. Where a task file and this index disagree, the task file wins.
   (AITOSOFT_CHANGES, two entries). The idle West Europe copy goes when MAS deletes
   it (on or after 2026-11-11). Query the live state with `az` (AZURE_OPERATIONS §0).
 - **`main` == production + docs.** Verify it.
+- **From ≈2026-11-08, MAS's production traffic is unannounced** (`131-…`): campaign runs from their
+  edge at 1–5 in flight, at any hour. "Nothing calls `-se` outside windows" no longer holds.
+  - Before a deploy, check that the fleet is idle (`replica list`, and the last `RenderGate ADMIT`).
+  - A render stranded mid-switch is an error MAS sees (AZURE_OPERATIONS §2.4).
+  - Scale-in kills (lever 3) matter again outside fixed-fleet windows.
+  - Windows still come, from new levers, on the same protocol.
 - **Two joint runs with MAS found no regression** (`upgrade-upstream-v0.9.5.md` §10).
 - **The optimisation loop with MAS is running** (item 1): announced windows on real never-scraped
   prospects, one change each, both sides counting. **Five windows ran on 2026-11-04, then the series
