@@ -59,6 +59,7 @@ before the tail ended (AZURE_OPERATIONS §4.5).
 | 2026-11-04 | w3 | **ours: fleet fixed at min = max = 2** (lever 2, revised), 15:55:41–16:20:07Z, judged against w2 | 674 (8.99) | 7 + 1 / 0 | **0.052** | 0.47 + 0.55 | 4 (likely the 4 dead sites) | 70.0 replica-min (56.0 incl. ~3 min warm-up + 14.0 after, the release revision's own 2 idle replicas). **Held on every pre-registered line**: −26 % replica-min, −28 % per request vs w2; cold-start 429s gone; 200 p50/p90/p99 6.0/10.7/18.9 s, best of three; MAS window 24:26 (w2 31:21), 0 pages out of retries. vs w1 (2 replicas by luck) +14 % per request = the warm-up. MAS: `109-…`; ours: `110-…` |
 | 2026-11-04 | w4 | **MAS's**: 8 companies in flight on the standing fixed 2, 17:01:27–17:19:38Z | 722 (9.63) | 62 + 0 / 8 | **0.041** | 0.40 + 0.60 | 0 | 59.0 replica-min (42.0 + 17.0). Predictions (`112-…`) held: gate 429s 62, slot use 82 % (w3 55 %), 200 p50/p90/p99 9.7/15.5/35.4 s; MAS wall-clock per company +19 %, window 18:11. 0 out of retries. The 8 × 500 = luppoapartments.fi `ERR_HTTP2_PROTOCOL_ERROR` ×8 (lever 9). Two replicas are near their knee at 8. MAS: `121-…`; ours: `122-…` |
 | 2026-11-04 | (between) | **ours: `0.9.5-http-as-asked`** (HttpsUpgrades off), live 17:20:26Z in the same update as w4's release | | | | | | acked `115-…`. Tier 1 3/4: jpond.fi https timeout, no known path from the change. Watch `render_timeout` on https and `origin_http_error` 400 on http in w5 |
+| 2026-11-04 | w5 | none: **a repeat of w4** (8 in flight, fixed 2), 18:01:44–18:21:25Z | 764 (10.19) | 113 + 4 / 8 (+ 2 × 400) | 0.054 (≈0.044 normalised) | 0.55 measured, ≈0.44 with a normal lead + 0.53 | 0 by MAS's rule | 82.0 replica-min (66.0 + 16.0). 24 of them were a 12-min warm-up: our check waited for a routing log line Azure didn't write. **Identical windows differ ~±10 %** (MAS wall-clock +11 %, our ¢/company +10 %, 429s ×1.9). 500s = qaraton.com JS shell ×8; 400s = smcbrandstore.fi resolves to 127.0.0.1 (lever 13). 0 `render_timeout` on https. MAS: `129-…`; ours: `130-…`. **The series closed here** |
 
 ## Levers, roughly by expected value
 
@@ -118,10 +119,12 @@ Sized from today's runs; argue with every one.
      as a measurement-setup change.
    - **Procedure.** Each `minReplicas` change mints a revision (the April log: "the min-replicas
      update rolled `0000020`"), so `up` and `down` both carry §2.4's risks. MAS sends "ready" ~10 min
-     ahead and sends nothing until our "warm". Then `batch-scale.sh up N`, and wait for two things:
-     the system log's `Setting traffic weight of '100%'` for the new revision (`revision list` lies
-     about this, §2.4), and N × `Application startup complete` in the new revision's console log (a
-     Running replica on an uncached node may still be pulling, §6.5). Send "warm". At MAS's end
+     ahead and sends nothing until our "warm". Then `batch-scale.sh fix N`, and wait for N ×
+     `Application startup complete` in the new revision's console log (a Running replica on an
+     uncached node may still be pulling, §6.5). Then send one `/health`: under a second means
+     routing reaches the warm replicas. **Don't wait for the system log's traffic-weight line**: it
+     wasn't written for `--0000006`/`--0000007`, and waiting for it cost window 5 a 12-minute
+     warm-up (24 replica-min). Send "warm". At MAS's end
      message, check that the console log has no `RenderGate ADMIT` in the last 60 s (HTTP rows
      lag), then `batch-scale.sh down` (it verifies). Forgetting `down` costs N × $0.30/h.
    - **Pre-registered, against window 1:** `render_slots` 429s **≤ ~5** (per-request routing at 13 in
@@ -183,10 +186,28 @@ Sized from today's runs; argue with every one.
 10. **A marked `http://` attempt when `https://` fails at connect.** 137 companies in MAS's archive
     failed https at the tunnel and stored nothing (`115-from-us-…`). MAS wants us to do it, marked.
     Task file: `https-connect-failure-http-retry.md`.
-11. **The pinning proxy dials only the first DNS answer** (`egress_broker.resolve_and_pin`). One
-    stray A record (selosella.fi: `1.101.131.52` among four Fastly addresses) fails a live site
-    where a browser would try the next address. Upstream's code, so check upstream before patching.
-    Rare: 1 site in 225 companies.
+11. **The pinning proxy dials only the first DNS answer** (`egress_broker.resolve_and_pin`). A
+    stray A record (selosella.fi: `1.101.131.52` among four Fastly addresses) could fail a live site
+    where a browser would try the next address. **Downgraded 2026-11-04 evening:** www.selosella.fi
+    has no stray record and failed the same way, so lever 12 explains selosella. The mechanism is
+    still real; it's upstream's code, so check upstream before patching.
+12. **Some hosts drop our Sweden Central egress** (AZURE_OPERATIONS §7, measured that evening).
+    Proof by A/B: one static request to jekura.fi timed out through `-se` and returned 200 through
+    the West Europe app.
+    - Size: MAS counts 2.4 % of companies with a tunnel failure since the move against 1.4 % before
+      (n = 11). On a ≈9,500-company sweep, one point is ~100 companies lost for good.
+    - Options, cheapest first:
+      - (a) **A marked fallback through the West Europe app for 30 s connect timeouts.** Same shape
+        as lever 10; MAS prefers it (`126-…`), and it needs the West Europe app alive (held).
+      - (b) A static egress address for `-se` (NAT gateway).
+      - (c) Move the crawler back to West Europe.
+      - (d) Residential egress.
+    - A decision for Tero and us, not a window.
+13. **Loopback-resolving domains get `bad_request` 400.** smcbrandstore.fi (both names) resolves to
+    127.0.0.1, so the seed SSRF check refuses it (w5, 2 × 400). The guard is right; the class isn't.
+    It's the origin's broken DNS, and like `OriginUnresolvable` (`api.py`) it should come back as 200
+    `origin_unreachable` on `/crawl`, keeping the opaque 400 on the other endpoints. That changes
+    MAS's status, so it needs their ack. Tiny.
 
 ## Instruments worth keeping
 

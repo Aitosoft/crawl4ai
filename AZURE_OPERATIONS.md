@@ -230,7 +230,10 @@ shows it on the old revision, no replica, 218.1 s, `DC downstream_remote_disconn
 containerapp revision list` already showed the new revision at 100 % at that moment**, so it is
 not the instrument for "has routing switched". Use the system log line `Setting traffic weight of
 '100%' for revision '<new>'` (`ContainerAppSystemLogs_CL`), or a request that lands on the new
-revision in `ContainerAppHTTPLogs`. This is one more reason a deploy waits for MAS to stop calling.
+revision in `ContainerAppHTTPLogs`. **The log line is not always written:** for revisions
+`--0000006` and `--0000007` (2026-11-04 17:20 and 17:50) only the *old* revision's line appeared. With
+the old revision at zero replicas and the new ones running, a `/health` answering in under a
+second is the check that worked. This is one more reason a deploy waits for MAS to stop calling.
 
 ### 2.5 Rollback
 
@@ -1340,6 +1343,22 @@ and we inherit co-tenants' reputation. West Europe's app lists 1 `outboundIpAddr
 regions' addresses are in `PRIVATE.md`). Whether another replica, or the same one later, leaves from
 a different one is unmeasured. **The 2026-11-04 cutover changed our egress address, and blocks are
 IP-based**, so block rates from before and after the cutover are different instruments.
+
+**First measured case (2026-11-04 evening): some hosts silently drop `-se`'s egress and accept West
+Europe's.** In MAS's window 4, 10 URLs on 7 hosts failed `ERR_TUNNEL_CONNECTION_FAILED` after 30.3–30.9 s:
+two attempts at the egress proxy's 15 s connect timeout, with no SYN-ACK. They were spread over
+both replicas. Two of the hosts answer MAS in ~2 s.
+- A bare TCP connect from an `az acr run` task (ACR is in West Europe) reached jekura.fi,
+  terapiapalvelut.fi and www.selosella.fi in 30–40 ms.
+- One static-mode request to `https://jekura.fi/` through `-se` timed out after 15 s. The same
+  request through the West Europe app returned 200 with 3,417 characters.
+- **Tell the two kinds of tunnel failure apart by duration:**
+  - a refusal in ~1 s means port 443 is closed (an http-only site);
+  - a ~30 s timeout means the host is dead or drops our address.
+- MAS's archive: companies with any tunnel failure, 1.4 % on West Europe egress (since July)
+  against 2.4 % on Sweden Central (n = 11, a lead).
+- The West Europe app is held until this is sized (MAS's task-524). The fix options are in
+  `tasks/optimization-experiments.md` lever 12.
 
 When you do need a shell: `exec` needs a pty (wrap in `script -qec "…" /dev/null`),
 and the command travels in the websocket URL, so anything over ~300 characters

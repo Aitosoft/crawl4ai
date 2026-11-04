@@ -44,7 +44,12 @@ names and acks.
    `api.handle_crawl_request`, after `classify_result`, or a small `aitosoft_*` module it calls,
    like the patchright tier. Not in `crawl4ai/` (Principle 1), and not in the egress proxy. The
    proxy sees the CONNECT fail but has no say over the navigation.
-2. **Which errors.** Start narrow: `ERR_TUNNEL_CONNECTION_FAILED` and `ERR_CONNECTION_REFUSED`.
+2. **Which errors.** **Only fast refusals** (corrected 2026-11-04 evening, AZURE_OPERATIONS §7). A
+   tunnel failure in ~1 s is port 443 closed, the http-only case. A tunnel failure after ~30 s (two
+   × the proxy's 15 s connect timeout) is a host that is dead or drops our egress. There, http on
+   the same address would most likely cost another 30 s; lever 12 is the fix for those. So
+   condition on the error *and* its duration. Start narrow: `ERR_TUNNEL_CONNECTION_FAILED` and
+   `ERR_CONNECTION_REFUSED`.
    Measure before widening to `ERR_SSL_*` (enjo.fi's `ERR_SSL_UNRECOGNIZED_NAME_ALERT` in window 3 is
    the likeliest next member) or `ERR_CONNECTION_TIMED_OUT`, which is expensive to wait on twice.
    Never on DNS failures; the seed check returns those before render.

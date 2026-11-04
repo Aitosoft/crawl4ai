@@ -15,10 +15,15 @@ works. Where a task file and this index disagree, the task file wins.
 - **`main` == production + docs.** Verify it.
 - **Two joint runs with MAS found no regression** (`upgrade-upstream-v0.9.5.md` §10).
 - **The optimisation loop with MAS is running** (item 1): announced windows on real never-scraped
-  prospects, one change each, both sides counting. Three windows ran on 2026-11-04: a baseline,
-  MAS's model-host retry fix, and our fleet fixed at 2, which cut cost per request 28 % against
-  window 2 and removed the cold-start 429s. We proposed the fixed fleet as the standing setup.
-  The ledger is in the task file. Cost per request and per company: AZURE_OPERATIONS §4.5.
+  prospects, one change each, both sides counting. **Five windows ran on 2026-11-04, then the series
+  closed.**
+  - The fixed fleet (2 replicas) is the standing setup for MAS's windows. Our cost per company was
+    0.40–0.47 ¢ on it, against 0.43–0.64 ¢ when the scaler chose.
+  - Identical windows differ by ~±10 %.
+  - Two http fixes shipped.
+  - Open: the http retry, the Sweden Central egress drop, the deterministic-500 family and
+    loopback DNS (levers 9–13).
+  The ledger is in the task file. Cost: AZURE_OPERATIONS §4.5.
 - **What the last sweep says about priorities.** 186,178 requests over 175 h. Of MAS's 60,874
   capture attempts, 86.1 % were stored and **95 % of failures were the origin's**. Our share, in
   captures lost: 500s 156 (152 of the 163 URLs failed on every attempt, so deterministic), 429s 29,
@@ -66,6 +71,9 @@ all 61,937 of their rows).
   file and carries a silent trap: an auto-merged janitor block calls helpers that don't exist on our
   side, and the janitor dies without a log. See `upgrade-upstream-v0.9.5.md`. **Make it a task only
   with a measured frequency**, or when the next sync brings it in anyway.
+- **Some hosts drop our Sweden Central egress** (measured 2026-11-04 evening; `optimization-experiments.md`
+  lever 12). The West Europe app is held, not deleted on 11-11, until it's sized. The likely fix is a
+  marked fallback through it, which needs a decision from Tero and us.
 - **`residential-egress-retry-path.md`.** It aims at what actually dominates (blocks are IP-based,
   and Azure's shared SNAT inherits co-tenants' reputation). But it needs an instrument neither repo
   has: a real browser from a residential IP. The one independent 2026 benchmark puts Patchright at 25
@@ -121,5 +129,6 @@ The MAS thread is direct, session to session over Remote Control (CLAUDE.md §Cr
 are filed in gitignored `tmp/mas-repo-messages/`; cite filenames, never integers. On 2026-11-04 the
 thread was held by MAS's `task-606` session; their follow-up is `task-608`. A session's listed name
 changes with its title, so find it with `ListAgents`, or reply to the latest message's `from`.
-Nothing is owed to them; our proposal in `110-…` (fixed fleet as the standing setup, then 8 in
-flight on the same 2) awaits their answer. The thread is at `110-…` (2026-11-04).
+MAS's task-608 closed after window 5 with our open items in its follow-ups (`129-…`, `130-…`). New
+windows come from new levers on the same protocol (ready → fix → warm → end → release). MAS holds the
+West Europe app past 11-11 until lever 12 is sized (`126-…`). The thread is at `130-…` (2026-11-04).
