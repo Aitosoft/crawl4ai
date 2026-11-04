@@ -3,7 +3,11 @@
 **Status:** open, ongoing. Opened 2026-11-04 by the deploy session, for the session after it.
 **Size:** M per lever; the loop itself has no end.
 **Partner:** MAS's `task-608` (their side of the same loop). Their Claude session is reachable over Remote
-Control (CLAUDE.md §Cross-repo). The thread so far is `tmp/mas-repo-messages/54-…` to `83-…`; `83-…` offered MAS lever 2 for their next window.
+Control (CLAUDE.md §Cross-repo): on 2026-11-04 it was listed as "Task-608 prospect scraping
+optimization" and signed as `aitosoft-platform-a3` (the same bridge session that held task-606; find it
+with `ListAgents`, or reply to the latest message's `from`). The thread so far is `tmp/mas-repo-messages/54-…` to `90-…`. In `88-…` MAS set the
+order: **window 1 is a baseline on never-scraped prospects, window 2 is lever 2**; `89-…` agreed and
+corrected lever 2; `90-…` corrected our cost figures for runs (i)/(ii).
 **Gate:** none. Tero gave both repos a standing green light on 2026-11-04 to experiment toward
 affordable, robust scraping of prospect websites, on real never-scraped prospects with production writes.
 
@@ -27,7 +31,10 @@ are ours and MAS's to decide; tell Tero what was decided.
 - **Count the headline numbers on both sides.** Wire statuses agreed to the request in both runs so
   far. If they don't, that disagreement is the finding.
 - **Price per request, not per window.** A short window carries a cold start and an idle tail of
-  about a fifth of its replica-minutes (AZURE_OPERATIONS §4.5).
+  20–24 % of its replica-minutes (AZURE_OPERATIONS §4.5). **Read replica-minutes only once the
+  fleet is back at zero** (10–16 min after the last request), split by revision:
+  `azure-deployment/replica-minutes.sh <t0> <t1> <t2>` prints the window and its tail separately.
+  Both runs' first readouts were taken too early and under-read by ~11 %.
 - **Our own deploys go between windows** (AZURE_OPERATIONS §2.1, §2.4: a request sent mid-switch can
   hang on the old revision), announced, and then the next window measures them.
 - **Log Analytics keeps 30 days.** Copy each window's aggregates into the ledger the same day.
@@ -37,28 +44,63 @@ are ours and MAS's to decide; tell Tero what was decided.
 
 ## The ledger
 
-One row per window. Ours: ¢/request = replica-min / 60 × $0.3024 ÷ requests. MAS's columns come from
-their end message. Detail for the first two rows: `tasks/upgrade-upstream-v0.9.5.md` §10.
+One row per window. Ours: ¢/request = replica-min (window + tail, to zero) / 60 × $0.3024 ÷ requests.
+MAS's columns come from their end message. Detail for the first two rows: `tasks/upgrade-upstream-v0.9.5.md`
+§10. Rows (i) and (ii) were corrected on 2026-11-04 from 77.5 / 81.5 replica-minutes, which were read
+before the tail ended (AZURE_OPERATIONS §4.5).
 
 | date | window | the one change | requests (/company) | 429 gate + mem / 5xx | ¢ / request | ¢ / company (ours + model) | lost work (MAS) | notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-11-04 | (i) | region → Sweden Central (v0.9.2) | 790 (10.53) | 32 + 22 / 0 | 0.049 | 0.52 + 0.76 | 0 | one replica stalled 55 s at 3.85 GB `anon` |
-| 2026-11-04 | (ii) | v0.9.5 + Chrome 157 | 814 (10.85) | 46 + 5 / 2 | 0.050 | 0.55 + 0.77 | 1 (parked domain) | 500s = scale-in, not the merge |
+| 2026-11-04 | (i) | region → Sweden Central (v0.9.2) | 790 (10.53) | 32 + 22 / 0 | 0.056 | 0.58 + 0.76 | 0 | 87.0 replica-min (69.5 + 17.5 tail); one replica stalled 55 s at 3.85 GB `anon` |
+| 2026-11-04 | (ii) | v0.9.5 + Chrome 157 | 814 (10.85) | 46 + 5 / 2 | 0.055 | 0.60 + 0.77 | 1 (parked domain) | 89.5 (68.0 + 21.5); 500s = scale-in, not the merge |
+| 2026-11-04 | w1 | none: baseline on ~75 never-scraped prospects | | | | | | MAS's `88-…`; sets the numbers later windows are judged against |
+| | w2 | `minReplicas` pinned at w1's steady fleet (lever 2) | | | | | | fresh disjoint draw, same shape as w1 |
 
 ## Levers, roughly by expected value
 
 Sized from today's runs; argue with every one.
 
-1. **Pages per company: MAS's lever, the biggest on our bill.** ¢/request has been flat at ≈0.05 from
-   August through both runs, so our cost per company is pages × 0.05 ¢ (6.4 pages in August,
-   10.5–10.9 now). Their brain and prompt choices move it. Our part is to price each window per
+1. **Pages per company: MAS's lever, the biggest on our bill.** ¢/request has stayed near 0.05 from
+   August (0.052, day-scale) through both runs (0.055–0.056, window plus tail), so our cost per
+   company is pages × ≈0.055 ¢ (6.4 pages in August, 10.5–10.9 now). Their brain and prompt choices move it. Our part is to price each window per
    request so they can see it.
-2. **Cold-start 429 burst: pin one warm replica for an announced window** (`batch-scale.sh up 1` at
-   the start, `down` at the end). Nearly all of a window's `render_slots` 429s land in its first
-   minutes, on one replica receiving MAS's parallel scrape calls (AZURE_OPERATIONS §3.8). Retries
-   absorbed all of them, so the cost is wall-clock, not pages. At most ~$0.15 a window, mostly for a
-   replica the run would have started anyway. Expect `render_slots` 429s → ~0 and an earlier start.
-   Cheap and clean. Do it first.
+2. **Cold-start 429 burst: pin the fleet at the size the shape runs at, for one announced window**
+   (MAS's window 2, after their baseline). *Corrected 2026-11-04:* this used to say "pin one warm
+   replica, expect `render_slots` 429s → ~0", and one replica is exactly where the burst happens.
+   Per minute, `ContainerAppHTTPLogs` `/crawl` by `bin(StartTime, 1m)` with
+   `dcount(ReplicaName)` (requests / 429s / replicas): run (i) 08:32 24/14/1, 08:33 31/8/1, 08:34
+   31/7/2, 08:35 37/2/2, then 3 replicas at 0–5 a minute; run (ii) 09:30 23/13/1, 09:31 38/15/1,
+   09:32 34/14/1, 09:33 39/3/2, then 3 at 0–1. The brain's fan-out puts 12–13 in flight and a
+   replica holds 6 (2 rendering + 4 queued). So **N = the steady fleet of the previous window at
+   the same shape**: 3 in (i)/(ii); read window 1's (never-scraped prospects may differ).
+   - **What it buys, honestly: no captures.** 0 pages ran out of 429 retries in either run. It buys
+     a window without the cold start (the first requests' 50–60 s p50, 3–4 min at one replica, the
+     429 burst) and without the in-window scale-in kill (lever 3's 500s: the fleet can't drop below
+     the pin), at a price we will then know. If that price is flat, the pin can become the standing
+     setup for later windows, so their levers are measured on a warm fleet; it is also the
+     cold-start answer for any bigger sweep. The clean-context review said not to spend a window
+     on it. It rides on window 2's real prospects at no extra model cost, so we kept it, relabelled
+     as a measurement-setup change.
+   - **Procedure.** Each `minReplicas` change mints a revision (the April log: "the min-replicas
+     update rolled `0000020`"), so `up` and `down` both carry §2.4's risks. MAS sends "ready" ~10 min
+     ahead and sends nothing until our "warm". Then `batch-scale.sh up N`, and wait for two things:
+     the system log's `Setting traffic weight of '100%'` for the new revision (`revision list` lies
+     about this, §2.4), and N × `Application startup complete` in the new revision's console log (a
+     Running replica on an uncached node may still be pulling, §6.5). Send "warm". At MAS's end
+     message, check that the console log has no `RenderGate ADMIT` in the last 60 s (HTTP rows
+     lag), then `batch-scale.sh down` (it verifies). Forgetting `down` costs N × $0.30/h.
+   - **Pre-registered, against window 1:** `render_slots` 429s **≤ ~5** (per-request routing at 13 in
+     flight over 3 replicas: P(some replica gets a 7th) is 10–30 % at the peak, and the gate also
+     rejects after a 15 s queue wait); first-minute p50 at the normal 6–8 s; **0 scale-in 500s
+     inside the window**; memory-guard 429s not predicted (22 vs 5 between (i) and (ii), and run
+     (i)'s came from one replica at 3.85 GB). Cost: N × (lead + window) + whatever the `down`
+     revision costs (unmeasured; if it starts a replica for its 300 s cooldown, about +5). At N = 3,
+     a 4-min lead and a 26-min window that is ≈90–95 replica-min against (i)/(ii)'s 87–89.5, because
+     `down` replaces a 10–16 min tail. So **≈flat to +10 % per request.** Report window and tail
+     separately; the `down` revision's own replicas belong to the tail.
+   - **Alternatives considered.** MAS ramping its first minute (2 companies, then 5) removes the
+     same burst for free, but it is their change and prices nothing on our side. Doing nothing is
+     legitimate: retries absorb the burst.
 3. **Scale-in kills in-flight renders** (mechanism and size: AZURE_OPERATIONS §2.4; small, absorbed by
    retries). **First verify the mechanism locally**: SIGTERM the local server during a stalled
    `raw://` render; does Playwright's `handle_sigterm` close the browser? Only then write a fix, which
@@ -106,6 +148,22 @@ Sized from today's runs; argue with every one.
 - **Scale-trigger changes.** ¢/request was flat at 2 and at 3 replicas; there is no idle fleet to cut.
 - **A #2416 patch.** 0 of 630 real pages change (FINDINGS §Parse collapse).
 
+## What the 2026-11-04 afternoon session found wrong in this file
+
+Recorded so the next session can see what changed and argue with it.
+
+1. **Lever 2's "one warm replica" was the shape of the failure, not the fix** (corrected in place,
+   evidence there). Found from the per-minute ingress table, which nobody had cut by replica count.
+2. **The ledger's cost figures were under-read by ~11 %.** 77.5 and 81.5 replica-minutes were summed
+   while the fleet was still stepping down. The same recipe, re-run with the fleet at zero, gives
+   87.0 and 89.5. Two instruments agree on the recount: the unsplit recipe and the per-revision
+   split. Told MAS in `90-…`, because their ledger uses our per-company figure.
+3. **The `Replicas` metric averages overlapping revisions.** That didn't affect (i) or (ii), which
+   ran on one revision each. It would have under-read every pinned window, because `up` and `down`
+   each mint a revision. Recorded in AZURE_OPERATIONS §4.4. `replica-minutes.sh` splits by revision.
+4. **Not wrong, but missing:** that a `minReplicas` change is a revision change, with §2.4's two
+   risks (killed in-flight renders, the stranded request). Now part of lever 2's procedure.
+
 ## What I am least sure of
 
 1. **That ¢/request stays flat as the shape changes.** Three points (August, (i), (ii)), all at 5 in
@@ -114,3 +172,6 @@ Sized from today's runs; argue with every one.
    Repeating a window is cheap; do it before believing a small move.
 3. **That cohorts are comparable.** Each window is a different random draw of companies. The rates
    compare; the pages don't.
+4. **What `batch-scale.sh down` costs.** A new revision at `minReplicas: 0` may start a replica and
+   hold it for the 300 s cooldown, or start none. Nobody has measured it. It decides whether a
+   pinned window comes out flat or about +5 % per request.

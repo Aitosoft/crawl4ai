@@ -838,7 +838,7 @@ identical; counts agreed request for request on both sides):
 | blocks | 0 terminal; 2 CF challenges rescued | 0 terminal; 1 rescued |
 | 200 latency mean / p99 | 8.06 / 44.6 s | 7.42 / 18.0 s |
 | peak `anon` | 3.85 GB; one 55 s readiness outage | 2.8 GB |
-| ¢ per request / company | 0.049 / 0.52 | 0.050 / 0.55 |
+| ¢ per request / company | 0.056 / 0.58 (first read 0.049 / 0.52, before the tail ended; AZURE_OPERATIONS §4.5) | 0.055 / 0.60 (first read 0.050 / 0.55) |
 
 - **The 2 × 500 are a scale-in killing a replica mid-render** (AZURE_OPERATIONS §2.4), not the merge.
 - **The newly empty pages and the lost company are the sites:** one request each through the idle

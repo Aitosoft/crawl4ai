@@ -844,6 +844,13 @@ az monitor metrics list --resource "$APP_ID" --metric Replicas --interval PT1M -
   --query "sum(value[0].timeseries[0].data[?average!=null].average)" -o tsv    # ÷ 60 = replica-hours
 ```
 
+**Trap: across a revision change, the unsplit series averages the revisions instead of adding
+them.** At the 0.9.5 deploy on 2026-11-04, one replica ran on each of two revisions at 09:14, and
+the unsplit 1-min Average read 1.0. Split by revision, it read 1.0 + 1.0 (09:13: 0.75 unsplit
+against 1.0 + 0.5). The recipe above is right only for spans with one revision. Every deploy, and
+every `minReplicas` change, mints a revision. For those spans, split and sum the series:
+`--filter "revisionName eq '*'"`, then sum every `timeseries[*]`.
+
 **Cost per company ≈ $0.605/h × company wall-clock ÷ companies in flight.** For
 August: 97 s ÷ 5 in flight = 0.33¢, matching $0.51 per 1,000 requests × 6.4
 requests per company.
@@ -863,26 +870,37 @@ requests per company.
 - **The remaining levers are MAS's:** their `delay_before_return_html: 2.0` is
   ~37 % of our mean render time, and pages per company is the other half.
 - **2026-11-04, two joint runs on `-se` (75 companies each, 5 in flight): the cost per *request*
-  has not moved, so the cost per company follows pages per company.** Instruments: Azure Monitor
-  `Replicas` (1-min average, summed over the window plus the scale-in tail) × $0.3024, against
-  MAS's request counts.
+  has barely moved, so the cost per company follows pages per company.** Instruments: Azure Monitor
+  `Replicas` (1-min average, split by revision and summed over the window plus the whole tail, to
+  the minute the fleet reached zero) × $0.3024, against MAS's request counts. Script:
+  `azure-deployment/replica-minutes.sh <t0> <t1> <t2>`.
 
   | | requests / company | replica-min | ¢ / request | ¢ / company | fleet |
   |---|---:|---:|---:|---:|---|
   | August trigger-12 sweep | 6.4 | — | 0.052 | 0.33 | 2 at ~19 req/min |
-  | run (i), v0.9.2 | 10.53 | 77.5 | 0.049 | 0.52 | 3 at ~32 req/min |
-  | run (ii), v0.9.5 | 10.85 | 81.5 | 0.050 | 0.55 | 3 at ~32 req/min |
+  | run (i), v0.9.2 | 10.53 | 87.0 (69.5 + 17.5 tail) | 0.056 | 0.58 | 3 at ~32 req/min |
+  | run (ii), v0.9.5 | 10.85 | 89.5 (68.0 + 21.5 tail) | 0.055 | 0.60 | 3 at ~32 req/min |
+
+  **Corrected 2026-11-04 (afternoon).** The first readout of each run summed the metric before the
+  fleet reached zero and reported 77.5 and 81.5 replica-minutes (0.049 / 0.050 ¢ per request, 0.52 /
+  0.55 ¢ per company). Re-read once the fleet was at zero, the same recipe gives the table above.
+  The tail steps 3 → 2 → 1 → 0 over ~10–16 min after the last request (each step waits out the
+  300 s scale-down window; the last replica waits out the 300 s cooldown), so **read replica-minutes
+  only once `Replicas` is back at 0.** The August figure is day-scale and invoice-checked (§4.4), so
+  it never had this problem.
 
   So the fleet ran at 3 at ~32 requests/min where August held 2 at ~19 (two points, not a curve).
-  Render slots were 58–64 % busy over each window: the summed `RequestDuration` of the 200s (5,934 s
-  and 5,649 s, queue waits included) over replica-minutes × 60 × 2 slots. Consequences:
+  Render slots were ~70 % busy inside each window and 53–57 % counting the tail: the summed
+  `RequestDuration` of the 200s (5,934 s and 5,649 s, queue waits included) over replica-minutes ×
+  60 × 2 slots. Consequences:
   - **a faster brain shortens a run without making our cost per company cheaper**: the same pages
     and render-seconds arrive sooner, and the fleet scales up to meet them;
-  - **pages fetched per company is the lever on our side of the bill**: ≈0.05 ¢ of render each;
-  - **a short window carries fixed overhead**: a cold start (~1 min, with the `render_slots` 429
-    burst) and an idle tail of ~4–7 min at 2–3 replicas after the last request (about a fifth of a
-    25-minute window). For comparing configurations on short windows, price per request.
-  MAS's model cost in the same runs: 0.76–0.77 ¢ per company, so we are ≈40 % of the per-company
+  - **pages fetched per company is the lever on our side of the bill**: ≈0.055 ¢ of render each;
+  - **a short window carries fixed overhead**: a cold start (3–4 min at one replica, with the
+    `render_slots` 429 burst) and an idle tail of ~10–16 min after the last request, 20–24 % of a
+    25-minute window's replica-minutes. For comparing configurations on short windows, price per
+    request, and report the window and its tail separately.
+  MAS's model cost in the same runs: 0.76–0.77 ¢ per company, so we are ≈43 % of the per-company
   total. Readouts: `tmp/research/run-i-readout-2026-11-04.md` (gitignored), `tmp/mas-repo-messages/80-to-mas-…`.
 - **Cheaper architecture, priced and rejected:** ACA capped at 4 (~$29/day) matches
   6 PAYG D4as_v5 VMs (~$30/day) with no migration and keeps scale-to-zero, which

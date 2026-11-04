@@ -12,7 +12,9 @@
 # HTTP rows arrive several minutes after console rows: re-run the first two queries before
 # comparing totals with MAS. Replica-minutes for cost come from Azure Monitor, not from here:
 #   az monitor metrics list --resource "$(az containerapp show -n "$APP" -g aitosoft-prod --query id -o tsv)" \
-#     --metric Replicas --interval PT1M --aggregation Average --start-time <t0> --end-time <t1+15m>
+#     --metric Replicas --interval PT1M --aggregation Average --start-time <t0> --end-time <t1+15m> \
+#     --filter "revisionName eq '*'"     # then sum EVERY timeseries: unsplit, overlapping revisions
+#                                        # are averaged, not added (AZURE_OPERATIONS.md §4.4)
 set -uo pipefail
 T0="${1:?t0}"; T1="${2:?t1}"; APP="${3:-crawl4ai-service-se}"
 : "${LAW_ID:?set LAW_ID (PRIVATE.md)}"
