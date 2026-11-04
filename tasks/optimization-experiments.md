@@ -3,7 +3,7 @@
 **Status:** open, ongoing. Opened 2026-11-04 by the deploy session, for the session after it.
 **Size:** M per lever; the loop itself has no end.
 **Partner:** MAS's `task-608` (their side of the same loop). Their Claude session is reachable over Remote
-Control (CLAUDE.md §Cross-repo). The thread so far is `tmp/mas-repo-messages/54-…` to `82-…`.
+Control (CLAUDE.md §Cross-repo). The thread so far is `tmp/mas-repo-messages/54-…` to `83-…`; `83-…` offered MAS lever 2 for their next window.
 **Gate:** none. Tero gave both repos a standing green light on 2026-11-04 to experiment toward
 affordable, robust scraping of prospect websites, on real never-scraped prospects with production writes.
 
