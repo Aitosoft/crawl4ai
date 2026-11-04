@@ -3,8 +3,9 @@
 # $CRAWL4AI_API_URL with $CRAWL4AI_API_TOKEN (both from .env). No third party is contacted: raw://,
 # a made-up domain, and two addresses that must be refused.
 # Trap (AZURE_OPERATIONS.md §2.4): `revision list` can show the new revision at 100 % before routing
-# has switched; a request sent then can hang on the old revision. Wait for the system log's
-# "Setting traffic weight of '100%' for revision '<new>'" before running this.
+# has switched; a request sent then can hang on the old revision. Before running this, confirm the
+# switch the way §2.4 says: the old revision has no replicas left and a single `/health` answers in
+# under a second. The system log's "Setting traffic weight" line is not always written.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 set -a; . ./.env; set +a

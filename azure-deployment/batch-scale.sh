@@ -133,11 +133,24 @@ case "$action" in
     fix)
         n="${2:?usage: $0 fix N}"
         [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: N must be a positive integer." >&2; exit 1; }
+        # From ~2026-11-08 MAS's traffic is unannounced, and a revision change kills in-flight
+        # renders (AZURE_OPERATIONS.md §2.4). Fix the fleet only on an idle app, or after checking
+        # the last RenderGate ADMIT (azure-deployment/last-admit.sh, AZURE_OPERATIONS.md §2.1).
+        live="$(az containerapp replica list --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" \
+            --query 'length(@)' -o tsv 2>/dev/null || echo "")"
+        if [[ -n "$live" && "$live" != "0" && "${ALLOW_LIVE:-}" != "1" ]]; then
+            echo "REFUSING: $live replica(s) live, so MAS may be mid-crawl. Wait for scale-to-zero," >&2
+            echo "or run azure-deployment/last-admit.sh twice a minute apart; if the last ADMIT is" >&2
+            echo ">= 5 min old both times, re-run with ALLOW_LIVE=1." >&2
+            exit 1
+        fi
         echo "Fixing $APP_NAME at min = max = $n (mints a revision; nothing may be in flight)..."
         set_min_max "$n" "$n"
         echo "✅ Fixed at $n. Run 'batch-scale.sh release' after the window."
         ;;
     release)
+        # The fixed fleet is live by design here; MAS's end message plus a last RenderGate ADMIT
+        # older than a minute is the check (tasks/optimization-experiments.md, protocol step 5).
         max="$(repo_max)"
         [[ "$max" =~ ^[0-9]+$ ]] || { echo "ERROR: could not read ACA_MAX_REPLICAS from deploy-image.sh." >&2; exit 1; }
         echo "Releasing $APP_NAME to min=0, max=$max (deploy-image.sh's ACA_MAX_REPLICAS)..."

@@ -79,6 +79,7 @@ overrode Playwright's. Upgrade with fallback to http is what served these sites 
   cloned this service as `crawl4ai-service-se` (environment `aitosoft-aca-se`, workload-profiles
   type; a new FQDN; egress from a 161-address pool). Our scripts, queries and docs were repointed
   (`cd9c4af`); the West Europe app is idle until MAS deletes it (on or after 2026-11-11).
+  [Superseded that evening: kept as a second egress, AZURE_OPERATIONS §7.]
 - **`0.9.5-merge` deployed by digest** (`sha256:c34667704c3d…84caa5`, revision
   `crawl4ai-service-se--0000001`, live 09:12:58Z). `deploy-image.sh` now always updates by digest.
 - **The browser moved 151 → 157** (Google Chrome 157.0.8103.38; the candidate built a day earlier
@@ -89,7 +90,8 @@ overrode Playwright's. Upgrade with fallback to http is what served these sites 
 **Evidence:** two joint runs with MAS, one change each (the region, then the merge with Chrome 157),
 75 companies each, wire counts identical on both sides. No regression. Run (ii)'s one lost company
 and two newly empty pages were the sites (TEST_SITES_REGISTRY), and its two 500s were a scale-in
-(AZURE_OPERATIONS §2.4). Cost per request was flat: AZURE_OPERATIONS §4.5. #2416 changed 0 of 630
+(AZURE_OPERATIONS §2.4). Cost per request was flat: AZURE_OPERATIONS §4.5. [Superseded that evening:
+it follows the fleet size the autoscaler picks; `tasks/optimization-experiments.md`.] #2416 changed 0 of 630
 real pages: FINDINGS §Parse collapse. Gates, numbers and the record: `tasks/upgrade-upstream-v0.9.5.md` §10.
 
 ---

@@ -723,7 +723,9 @@ Also: `_read_memory_stat`, `get_memory_breakdown` and `get_container_memory_perc
 
 ## Testing fidelity
 
-**The browser suite has never run production's browser.** `browser_manager._build_browser_args`
+**On the devcontainer the browser suite doesn't run production's browser.** (It does inside a
+built image, on real Chrome: TESTING.md "Inside a built image", since 2026-11-03.)
+`browser_manager._build_browser_args`
 drops `channel` whenever `chrome_channel == "chromium"`. That is a Windows workaround applied on
 every platform, so Playwright launches `chromium_headless_shell`, which has no PDF viewer.
 `fixture_origin._resolve_channel()` falls back to `"chromium"` when there is no `google-chrome` on
@@ -733,7 +735,7 @@ rescue it, because it produces the same string that gets dropped. Production run
 `pdf-inline` passes for the wrong reason.
 `[revisit at next sync]`: upstream `a1bd6c8` (develop only) passes `channel="chromium"` again and
 falls back to the shell, so the suite's browser will change and `pdf-inline` will go red for the true
-reason. At v0.9.5 the suite still runs the headless shell (70/70 on 2026-11-03).
+reason. At v0.9.5 the local suite still runs the headless shell.
 
 **CI runs only the offline half of `test-aitosoft/`.** Until 2026-11-03 no workflow ran it at all.
 `aitosoft-tests.yml` now runs the pure-function suite on every push (Python 3.12, no browser, the four
@@ -838,7 +840,7 @@ that carried `[revisit after upstream merge]` now says what the merge did (`[mer
 | `a59f50e`/`61eb573` `_max_timeout_ms()` | `page_timeout` 90 s → 60 s | `CRAWL4AI_MAX_TIMEOUT_MS` via `setdefault` | `test_mas_contract.py` |
 | `b536bf5` (#2139) conditional consent wait | Capture 0.5 s earlier; paints in the gap come back blank | One line kept unconditional | `test_the_capture_point_includes_the_consent_wait` |
 | `890af3d` `_dial()` at 30 s | Dead host costs twice the render slot | Budget threaded through | `test_every_dial_path_honours_the_connect_budget` |
-| `15f4b29` recycle default 200 | Recycling on; #2419 deadlock | `max_pages_before_recycle: 0` | `config.yml` (no test) |
+| `15f4b29` recycle default 200 | Recycling on; #2419 deadlock | `max_pages_before_recycle: 0` | `test_browser_recycling_stays_off_by_default` (`test_mas_contract.py`) |
 | `6b5a0d4` path alone (#2416) | Text after a balanced `<noscript>` lost | `strip_noscript` kept | `test_text_after_a_balanced_noscript_survives` |
 
 **Changed, and MAS is told** (`tmp/mas-repo-messages/55-to-mas-…`): failed results carry keyed
@@ -847,7 +849,9 @@ nested-noscript content; `Connection: close` on plain-http origin requests; `/he
 
 **Still on `develop` after v0.9.5, for the next sync:** `3f9f790` (dead-browser replacement; the
 silent-janitor trap), `a1bd6c8` (chromium channel; `pdf-inline` goes red for a true reason),
-`a4c4b2d`/`b0ed23c` (`clone()` fields). Open upstream work that changes what we carry: PR #2428,
+`a4c4b2d`/`b0ed23c` (`clone()` fields), `a8062ab`/`b36eda2` (#2417, the content filter keeps inline
+text inside kept sentences; it touches `fit_markdown`, which MAS doesn't read, so low risk, but check
+with the `raw://` A/B). Open upstream work that changes what we carry: PR #2428,
 PR #2432, #2416.
 
 **Google Chrome is a second upstream, and every image build takes its current stable silently.**

@@ -26,7 +26,9 @@ at zero, running the older `0.9.2-capacity-gate-2`. **It's kept on purpose as a 
 (§7: some hosts drop Sweden Central's addresses and accept West Europe's). MAS holds its planned
 11-11 deletion until that is decided. Every command below takes the app
 and environment from these two variables, and the scripts in `azure-deployment/` default to the
-same app (override with `APP_NAME=`):
+same app. To target another, `deploy-image.sh`, `batch-scale.sh` and `last-admit.sh` read
+`APP_NAME=`; `window-watch.sh`, `window-readout.sh` and `replica-minutes.sh` take the app as their
+last positional argument; and `post-deploy-smoke.sh` reads `APP=`:
 
 ```bash
 APP=crawl4ai-service-se; ACA_ENV=aitosoft-aca-se      # West Europe legacy: crawl4ai-service / aitosoft-aca
@@ -156,8 +158,12 @@ vars — setting env vars during a deploy is how MAS's token gets broken** — a
 never touches replica limits, probes or scale rules. The script is commented at
 the level this section would otherwise duplicate; read it.
 
-Order inside the script: fleet-size gate (§2.3) → drift checks (§2.2) →
-`az acr build` → `az containerapp update --image`. Confirm rather than trust:
+Order inside the script: the live-fleet gate and the fleet-size gate (§2.3) → drift checks (§2.2;
+skipped under `BUILD_ONLY`) → `az acr build` (skipped under `DEPLOY_DIGEST`) → `az containerapp update
+--image …@sha256:…`. **Is anything in flight?** `azure-deployment/last-admit.sh` prints the live
+replica count and the age of the last `RenderGate ADMIT`. Console rows land minutes late (§5.3), so
+proceed only if the age is ≥ 5 min on two reads a minute apart. Confirm the order rather than trust
+it:
 
 ```bash
 grep -nE '^(DEPLOY_REPLICA_CEILING|ACA_SCALE_TRIGGER|ACA_MAX_REPLICAS)=|DRIFT CHECKS|az acr build|--image' azure-deployment/deploy-image.sh
@@ -173,8 +179,10 @@ or production and re-run. Trap: before 2026-08-14 they ran after the image swap,
 and older notes still say so; do not go looking for a half-deployed service.
 
 `minReplicas` is deliberately unchecked, because `batch-scale.sh up` legitimately
-pins it. **If you change a scale setting in Azure, change the constant in the same
-session**, or the next deploy fails — which is the check working.
+pins it. `maxReplicas` is checked, so **during a fixed-fleet window (`batch-scale.sh fix N`) the
+script stops with a drift error.** That's expected: release after MAS's end message, then deploy,
+and never reset max by hand mid-window. **If you change a scale setting in Azure for good, change
+the constant in the same session**, or the next deploy fails — which is the check working.
 
 ### 2.3 The fleet-size gate, and the quota behind it
 
@@ -255,8 +263,12 @@ second is the check that worked. This is one more reason a deploy waits for MAS 
 **Most incidents do not want an image rollback.** If the symptom is capacity,
 cost or replica count, the lever is the scale rule (§3.5), not the image.
 
-Roll back by pointing the app at an older **tag** that is already in ACR — an
-image-only update, no build. The app runs `activeRevisionsMode: Single`, so old
+**The rollback target of the image that's live is the digest named in the previous
+`AITOSOFT_CHANGES.md` entry** (each deploy entry names its digest; this file names no images, §0's
+rule). Roll back through the script, so the gates run, with no build:
+`DEPLOY_DIGEST=sha256:<older> ./azure-deployment/deploy-image.sh <older-tag>`. The manual
+equivalent below points the app at an older **tag** already in ACR: an image-only update, no
+build. The app runs `activeRevisionsMode: Single`, so old
 revisions are deactivated and garbage-collected; a revision name is not a
 rollback target, and a new revision is not necessarily a new image (a scale-rule
 change mints one too).
@@ -274,7 +286,7 @@ keeps it that way). So a tag push or retag changes nothing that runs, and the im
 `…@sha256:…`. To name it, map the digest back:
 `az acr manifest list-metadata -r aitosoftacr -n crawl4ai-service --query "[?digest=='<sha256:…>'].tags" -o tsv`.
 
-**Trap: never roll back with `deploy-image.sh <older-tag>`.** The script always
+**Trap: never roll back with a plain `deploy-image.sh <older-tag>`** (without `DEPLOY_DIGEST`). It
 runs `az acr build` on the current working tree before it deploys (§2.1's grep
 shows the order), so it would push today's code under the old tag —
 overwriting the good image, so the rollback target no longer exists — and then
@@ -300,12 +312,13 @@ What the tag list cannot tell you:
   faults at HTTP 200 + `success:false`; 5xx reserved for us). MAS's retry branch
   reads the wire status. Coordinate first.
 
-- **The v0.9.5 merge (`0.9.5-merge`, deployed 2026-11-04).** Its rollback target is
-  `0.9.2-capacity-gate-2` (digest `sha256:ea55e198…`, what `-se` ran before). That reverts the code to v0.9.2 and Chrome to 151, and
-  for MAS only the additive changes revert (keyed `links`/`media`, a little markdown whitespace;
+- **Rolling back past `0.9.5-merge` (2026-11-04)** reverts the code to v0.9.2 and Chrome to 151.
+  For MAS only the additive changes revert (keyed `links`/`media`, a little markdown whitespace;
   `tasks/upgrade-upstream-v0.9.5.md` §8). **`0.9.5-candidate` is neither a deploy artifact nor a
-  rollback target:** it is a test build from before the merge review's fixes. Deploy with
-  `deploy-image.sh`, which rebuilds.
+  rollback target:** it's a test build from before the merge review's fixes.
+- **Rolling back past `0.9.5-https-first` / `0.9.5-http-as-asked` (2026-11-04)** brings back
+  Chrome 157's refusal of http-only sites and the http → https-placeholder upgrade
+  (AITOSOFT_CHANGES).
 - **Every tag up to and including `0.9.2-capacity-gate-2` carries `/tmp/project/.env` (the API
   token), `PRIVATE.md` and `tmp/`**, because there was no `.dockerignore`. Decided 2026-11-04: no
   rotation (nothing reached the open internet) and the tags stay. Rolling back to one is safe.
@@ -316,8 +329,9 @@ What the tag list cannot tell you:
 
 ```bash
 az acr build --registry aitosoftacr --image crawl4ai-service:<tag> --file Dockerfile .
+D=$(az acr repository show --name aitosoftacr --image crawl4ai-service:<tag> --query digest -o tsv)
 az containerapp update -n "$APP" -g aitosoft-prod \
-  --image aitosoftacr.azurecr.io/crawl4ai-service:<tag>
+  --image aitosoftacr.azurecr.io/crawl4ai-service@$D     # by digest, never by tag (§2.5)
 curl -s -o /dev/null -w '%{http_code}\n' "$CRAWL4AI_API_URL/health"
 ```
 
@@ -550,8 +564,9 @@ az containerapp env list-usages -n "$ACA_ENV" -g aitosoft-prod -o table
 az containerapp list -g aitosoft-prod --query "[].{name:name, cpu:properties.template.containers[0].resources.cpu, min:properties.template.scale.minReplicas, max:properties.template.scale.maxReplicas}" -o table
 ```
 
-**Per-replica size: 2 vCPU / 4 GiB is this environment's maximum.** Tested
-2026-08-02; the error enumerates the allowed set:
+**Per-replica size: 2 vCPU / 4 GiB was the maximum of the West Europe, Consumption-only
+environment.** Tested there 2026-08-02; the error enumerates the allowed set. `-se`'s
+`aitosoft-aca-se` is a workload-profiles environment where 4 vCPU / 8 GiB is possible (below; untried):
 
 ```
 $ az containerapp update -n crawl4ai-service -g aitosoft-prod --cpu 2.0 --memory 8.0Gi
@@ -713,7 +728,7 @@ count, 2026-11-04, in `tasks/optimization-experiments.md`).
 ### 3.9 Measuring load
 
 **MAS's `--concurrency N` bounds companies in flight, not renders.** Each
-company's agent fetches up to 4 pages in parallel. MAS measured it 2026-08-06
+company's agent fetches several pages in parallel: up to 4 when MAS measured it on 2026-08-06, and up to 6–10 per turn (mean ~2.2) with the brain of 2026-11-04 (§3.8). The August measurement
 over 3,541 runs: 74 % of companies issued ≥ 2 simultaneous fetches, and at
 `--concurrency 2` the peak was 7 in flight — which our side saw as 6 admitted
 (`2/2 rendering, 4 queued`) + 1 rejected. So:
@@ -893,9 +908,11 @@ requests per company.
   ran at 3 (next bullets).
 - **Between sweeps:** $0 for this service. The standing line is MAS's edge app (`aitosoft-edge-se`,
   plus `aitosoft-edge` until West Europe is deleted).
-- **The remaining levers are MAS's:** their `delay_before_return_html: 2.0` is
-  ~37 % of our mean render time, and pages per company is the other half.
-- **2026-11-04, four windows on `-se` (75 companies each, 5 in flight): the cost per *request* follows
+- **Levers:** for MAS's windows our own lever is the fixed fleet (§3.5; window 3). The rest are
+  MAS's: pages per company and their `delay_before_return_html: 2.0` (~37 % of our mean render time)
+  act through their wall-clock per company (`tasks/optimization-experiments.md`, levers 1 and 4).
+- **2026-11-04, the joint runs and series 1 on `-se` (75 companies each; the ledger in
+  `tasks/optimization-experiments.md` is the home for per-window figures): the cost per *request* follows
   the fleet size the scaler happens to pick, and the cost per company follows that times pages per
   company.** Instruments: Azure Monitor
   `Replicas` (1-min average, split by revision and summed over the window plus the whole tail, to
@@ -940,8 +957,8 @@ requests per company.
     `render_slots` 429 burst) and an idle tail of ~10–16 min after the last request, 20–24 % of a
     25-minute window's replica-minutes. For comparing configurations on short windows, price per
     request, and report the window and its tail separately.
-  MAS's model cost in the same runs: 0.76–0.77 ¢ per company, so we are ≈43 % of the per-company
-  total. Readouts: `tmp/research/run-i-readout-2026-11-04.md` (gitignored), `tmp/mas-repo-messages/80-to-mas-…`.
+  MAS's model cost was 0.52–0.77 ¢ per company across these runs, and their all-in ~2.3–2.6 ¢ (web
+  search the largest line). So our render is roughly a fifth of a company's total cost. Readouts: `tmp/research/run-i-readout-2026-11-04.md` (gitignored), `tmp/mas-repo-messages/80-to-mas-…`.
 - **Cheaper architecture, priced and rejected:** ACA capped at 4 (~$29/day) matches
   6 PAYG D4as_v5 VMs (~$30/day) with no migration and keeps scale-to-zero, which
   matters because a sweep is ~17 % of the calendar. Azure Functions cannot run
@@ -1119,7 +1136,7 @@ packages these and more (failures by class and replica, memory, platform events)
 ### 5.5 The memory alert fires and pages nobody
 
 ```bash
-az monitor metrics alert show -n crawl4ai-memory-high -g aitosoft-prod \
+az monitor metrics alert show -n crawl4ai-se-memory-high -g aitosoft-prod \
   --query "{enabled:enabled, sev:severity, window:windowSize, freq:evaluationFrequency, crit:criteria}" -o json
 az monitor action-group show -n crawl4ai-oncall -g aitosoft-prod \
   --query "{email:emailReceivers, sms:smsReceivers, webhook:webhookReceivers, arm:armRoleReceivers, push:azureAppPushReceivers}" -o json
@@ -1311,8 +1328,10 @@ count from `replica list` or `SuccessfulRescale` is capacity ordered; for capaci
 available, take each replica's first `RenderGate ADMIT`.
 
 Scale-in in the same run: "All metrics below target" ~7 minutes after the last
-request, then 30 → 1 within a minute, then zero — so allow ~7–9 minutes after the
-last request for scale-to-zero.
+request, then 30 → 1 within a minute, then zero. **This is the home for scale-to-zero time:**
+measured 2026-11-04 on small fleets, 6–16 min after the last request (each step down waits out the
+300 s scale-down window, and the last replica the 300 s cooldown); a revision change from
+`batch-scale.sh release` or a deploy adds its own replicas for ~5 min (§4.5).
 
 **`ReplicaUnhealthy` is cold-start noise.** The sweep logged 3,030, dominated by
 `Readiness probe failed` / `Startup probe failed … connection refused` during
@@ -1332,7 +1351,7 @@ a live tail on an already-warm app.
 | Bound | Value | Owner |
 |---|---|---|
 | MAS client hard abort | 210 s | MAS |
-| Azure ingress timeout | 240 s | ACA platform, not configurable on this tier (§3.6) |
+| Azure ingress timeout | 240 s | ACA platform; not configurable on West Europe's Consumption-only tier. `-se`'s workload-profiles environment may allow it (§3.6; untried) |
 | Our wall-clock fence (starts after render admission) | 180 s | `config.yml limits.wall_clock_s` |
 | RenderGate queue wait | 15 s | `config.yml admission_max_wait_s` |
 | Grace on a revision change or scale-down | 30 s (unset ⇒ ACA default) | ACA, §2.4 |
@@ -1463,7 +1482,7 @@ script -qec "az containerapp exec -n $APP -g aitosoft-prod --command 'cat /etc/r
 | Doc | When |
 |---|---|
 | `azure-deployment/deploy-image.sh` | The deploy itself, heavily commented — the executable half of §2 |
-| `azure-deployment/batch-scale.sh` | The emergency valve, and the CLI no-op it works around |
+| `azure-deployment/batch-scale.sh` | The fixed fleet for MAS's windows (`fix`/`release`), the emergency floor (`up`/`down`), and the CLI no-op it works around |
 | `azure-deployment/setup-memory-alert.sh` | Recreates the alert and a receiver |
 | `OVERNIGHT_PLAYBOOK.md` | The tick loop when Tero says "monitor overnight" |
 | `tasks/done/autoscaler-ratchets-to-the-cap.md` | The scale-rule investigation and controlled runs (§3.2) |

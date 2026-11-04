@@ -312,5 +312,5 @@ out/
 # entrypoint.sh is a required deployment artifact (Dockerfile COPYs it)
 !deploy/docker/entrypoint.sh
 
-# Infrastructure identifiers kept out of the public repo (see CLAUDE.md § Private notes)
+# Infrastructure identifiers kept out of the public repo (see CLAUDE.md §Security)
 PRIVATE.md

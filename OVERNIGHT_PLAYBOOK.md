@@ -177,11 +177,12 @@ self-heal.
 - **Stuck-slot pattern** (repeated `STUCK-SLOT`, with fence 504s or queue pressure
   that does not clear) → **roll back the image**, image only (§2.5):
   ```bash
-  az containerapp update -n crawl4ai-service-se -g aitosoft-prod \
-    --image aitosoftacr.azurecr.io/crawl4ai-service:<rollback-tag>
+  # the rollback digest is the one named in the previous AITOSOFT_CHANGES entry
+  DEPLOY_DIGEST=sha256:<rollback-digest> DEPLOY_ALLOW_LIVE=1 \
+    ./azure-deployment/deploy-image.sh <rollback-tag>
   ```
-  **Never `deploy-image.sh <older-tag>`**: it rebuilds today's tree under that
-  tag, overwriting the good image, and ships it. Never set env vars — that is how
+  **Never a plain `deploy-image.sh <older-tag>`** (without `DEPLOY_DIGEST`): it rebuilds today's
+  tree under that tag, overwriting the good image, and ships it. Never set env vars — that is how
   MAS's token gets broken.
 - **Do not change the scale rule at night.** It mints a revision that kills every
   in-flight render, and the trigger has no tested value between 6 and 12 (§3.5).
@@ -198,8 +199,8 @@ When Tero confirms all rows are processed:
    counts, 429s by `capacity_gate`, restarts, failures by class, replica-hours from
    the `Replicas` metric (§4.4). Log Analytics keeps 30 days and the August sweep's
    logs are already gone (§5.1).
-3. If warm replicas were pinned (`batch-scale.sh up`), run
-   `./azure-deployment/batch-scale.sh down`. Normally nothing to unwind.
+3. If the fleet was pinned, undo it the matching way: after `batch-scale.sh up`, run `down`; after
+   `batch-scale.sh fix N`, run `release` (`down` would leave max at N). Normally nothing to unwind.
 4. Stop scheduling wakeups. If a straggler tick fires after the stop, acknowledge
    it and run nothing.
 

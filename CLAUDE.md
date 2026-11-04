@@ -187,7 +187,7 @@ blocked.
    weeks across two repos and cost 29 captures of 60,874. Buying headroom, deleting a feature,
    raising a limit and doing nothing are all legitimate answers. **Verify the cheap lever exists
    before arguing from it** — an "8 GiB at zero cost" note was cited for months and Azure rejects
-   it (2 vCPU / 4 GiB is this environment's maximum). Before an M-or-larger task, ask what would
+   it (2 vCPU / 4 GiB was the West Europe environment's maximum). Before an M-or-larger task, ask what would
    make the problem not exist.
 8. **Get a second opinion before committing to a plan and before calling it done.** A clean-context
    agent, five questions: What did we miss? Is there a simpler solution? Do we already have
@@ -198,7 +198,8 @@ blocked.
    fresh context, a second instrument, MAS's data, published work, upstream's tracker. **Count
    anything that matters twice, from two instruments; a disagreement is the finding.** Say which
    table and column produced a number and what would make it wrong. Be most suspicious when a
-   result confirms what you expected.
+   result confirms what you expected. A subagent sees the CLAUDE.md of when this session started,
+   not later edits: if you changed it, tell the agent to re-read it from disk.
 9. **Write instructions as you'd want them written to you.** The next session is a peer with the
    same tools and a cleaner context. Give principles, reasoning and evidence, not rigid rules — a
    rule without its reason can't be re-derived or safely broken and goes stale silently. Name what
@@ -241,7 +242,8 @@ Dockerfile` (three dots — from the merge base).
 
 **Upstream sync:** last synced at v0.9.5 (merged 2026-11-03; merge-base `838869b`). `git fetch upstream &&
 git merge upstream/develop`. What `develop` brings next, and its one trap, is in `AITOSOFT_FILES.md`
-§5 "Last merge"; the method is `tasks/upgrade-upstream-v0.9.5.md` §4.
+§5 "Last merge"; the method is `tasks/upgrade-upstream-v0.9.5.md` (§3 the decisions, §4 how to know
+it worked, §8 the record).
 
 ## Azure
 
@@ -268,6 +270,7 @@ Remote Control — `ListAgents` shows who is reachable, `SendMessage` sends, and
 incoming message's `from` attribute. Tero no longer carries them.
 File every message both ways in gitignored `tmp/mas-repo-messages/`, numbered and
 direction-labelled, and **cite filenames, never integers** — the two repos' numbering diverges.
+`NN-from-us-…` is a message *from MAS* (their "us", kept verbatim); `NN-to-mas-…` is ours.
 Tero can call a quiet period; then draft to a file and flag it as unsent in `tasks/README.md`.
 
 **Contract rule:** a change that alters what MAS receives waits for their ack; an additive one ships

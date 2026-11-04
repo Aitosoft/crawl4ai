@@ -4,10 +4,11 @@
 #
 # This is the ONLY supported deploy path for image updates. It never touches
 # env vars (so MAS's CRAWL4AI_API_TOKEN survives), replica limits, probes, or
-# scale rules — it swaps the image, then drift-checks the live `http-renders`
-# trigger and maxReplicas against the constants declared below. Those are NOT
-# tied to `render_capacity`; that coupling was a category error, retired
-# 2026-08-08.
+# scale rules. Order: the fleet gates, then drift checks of the live `http-renders`
+# trigger and maxReplicas against the constants declared below (skipped under
+# BUILD_ONLY, which changes nothing live), then the build (unless DEPLOY_DIGEST),
+# then the image swap by digest. The constants are NOT tied to `render_capacity`;
+# that coupling was a category error, retired 2026-08-08.
 #
 # Usage:
 #   ./azure-deployment/deploy-image.sh <tag>     # build, then deploy what was built
@@ -68,7 +69,8 @@ elif (( live_replicas > 0 )) && [[ -z "${BUILD_ONLY:-}" ]] && [[ "${DEPLOY_ALLOW
     # change kills in-flight renders and can strand a request mid-switch (AZURE_OPERATIONS §2.4),
     # so deploy only onto an idle fleet unless you have checked nothing is in flight.
     echo "!! REFUSING TO DEPLOY: $live_replicas replica(s) live; MAS may be mid-crawl." >&2
-    echo "!! Wait for scale-to-zero, or check the last 'RenderGate ADMIT' is minutes old and" >&2
+    echo "!! Wait for scale-to-zero, or run azure-deployment/last-admit.sh twice a minute apart;" >&2
+    echo "!! if the last RenderGate ADMIT is >= 5 min old both times, nothing is in flight, and" >&2
     echo "!! re-run with DEPLOY_ALLOW_LIVE=1. A fixed-fleet window keeps replicas up on purpose:" >&2
     echo "!! deploy in its release step instead (batch-scale.sh release, then deploy)." >&2
     exit 1
@@ -76,7 +78,7 @@ elif (( live_replicas > DEPLOY_REPLICA_CEILING )); then
     echo "!! REFUSING TO DEPLOY: $live_replicas replicas are live (> $DEPLOY_REPLICA_CEILING)." >&2
     echo "!! A new revision needs its own replicas while these drain, and the" >&2
     echo "!! environment quota is 100 cores at 2 vCPU each. Wait for the fleet to" >&2
-    echo "!! drain (scale-to-zero is ~9 min after the last request), then retry." >&2
+    echo "!! drain (scale-to-zero: 6–16 min after the last request, AZURE_OPERATIONS §6.5), then retry." >&2
     echo "!!   az containerapp replica list -n $APP_NAME -g $RESOURCE_GROUP --query 'length(@)'" >&2
     echo "!! Override with DEPLOY_ALLOW_BUSY=1 only if you have checked the quota:" >&2
     echo "!!   az containerapp env list-usages --ids <env-id> -o table" >&2
@@ -86,6 +88,9 @@ else
     echo "==> Fleet check OK: ${live_replicas} live replica(s)."
 fi
 
+if [[ -n "${BUILD_ONLY:-}" ]]; then
+    echo "==> BUILD_ONLY: skipping the drift checks (nothing live changes)."
+else
 # ---------------------------------------------------------------------------
 # DRIFT CHECKS RUN HERE, BEFORE THE BUILD -- moved 2026-08-14.
 #
@@ -147,7 +152,8 @@ echo "    OK: http-renders trigger=$rule_trigger (render_capacity is separate, a
 # maxReplicas is checked too, because it is the value that HAS silently drifted:
 # batch-scale.sh used to pass a hardcoded --max-replicas on every invocation.
 # minReplicas is deliberately NOT checked -- batch-scale.sh legitimately pins it
-# above 0 for an emergency window, and a deploy during that window must not fail.
+# above 0 for an emergency window. maxReplicas IS, so during a fixed-fleet window
+# (`batch-scale.sh fix N`, max = N) this check stops a deploy: release first.
 #
 # 2026-08-14: 45 -> 20. MAS lowered it on their side as tail protection; the
 # observed peak across the whole 18,374-company sweep was 19, so 20 does not
@@ -158,12 +164,16 @@ live_max=$(az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_G
     --query "properties.template.scale.maxReplicas" -o tsv)
 if [[ "$live_max" != "$ACA_MAX_REPLICAS" ]]; then
     echo "!! DRIFT: maxReplicas=$live_max but this repo expects $ACA_MAX_REPLICAS." >&2
+    echo "!! If a fixed-fleet window is running (batch-scale.sh fix $live_max), this is expected:" >&2
+    echo "!! wait for MAS's end message, run batch-scale.sh release, then deploy. Do NOT reset" >&2
+    echo "!! max by hand mid-window. Otherwise:" >&2
     echo "!! Environment quota is 100 consumption cores at 2 vCPU/replica (50 hard ceiling)," >&2
     echo "!! shared with MAS's edge app in the same environment. Reconcile before running traffic." >&2
     echo "!! NOTHING HAS BEEN BUILT OR DEPLOYED -- this check now runs first." >&2
     exit 1
 fi
 echo "    OK: maxReplicas=$live_max."
+fi
 
 if [[ -n "${DEPLOY_DIGEST:-}" ]]; then
     if [[ "$DEPLOY_DIGEST" != sha256:* ]]; then

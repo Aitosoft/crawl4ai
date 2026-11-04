@@ -3,9 +3,13 @@
 **Status:** open, not started. Opened 2026-11-04 by the optimisation-loop session.
 **Size:** S. Small changes in our failure taxonomy; the care is in the contract and in not widening
 any branch past its evidence.
-**Contract:** MAS acked all of it (`tmp/mas-repo-messages/131-from-us-…` §1). Ship in one deploy,
-announced, and name the classes in the announcement. It changes what MAS receives: a 500 becomes a
-200 with `success: false`, so their client stops retrying.
+**Contract:** MAS acked the change for all four shapes (`tmp/mas-repo-messages/131-from-us-…` §1):
+200 with its own class instead of a retried 500. They acked the classes, not names. So send the
+class names in a short message before the deploy, then ship in one deploy, announced. It changes
+what MAS receives: a 500 becomes a 200 with `success: false`, so their client stops retrying.
+**Upstream check (2026-11-04):** nothing merged or on `develop` covers these. Upstream's `2e30e54`
+(#2138) is about *PDFCrawlerStrategy* placeholders, not Chrome's viewer shell (AITOSOFT_FILES
+§"Upstream fixes near what we carry").
 
 ## Why
 
@@ -36,12 +40,15 @@ static-mode failures logging no `failure_class`, isn't worth building: static mo
   byte-identical across hosts, so a fixture can copy it (`fixture_origin`'s `/download/pdf-inline`
   is the route). `test_a_download_is_not_a_retryable_server_error[pdf-inline]` is red on real
   Chrome for exactly this, and green on the devcontainer only because its headless shell has no PDF
-  viewer (`fixture_origin.DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER`). The pass condition is green **in
-  the built image** (TESTING.md "Inside a built image").
+  viewer (`fixture_origin.DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER`). **That test has to change for
+  `pdf-inline`, not just go green:** it also asserts `"Download is starting" in error_message`,
+  which a *rendered* viewer shell never produces. On real Chrome the honest assertions are 200,
+  `unrenderable_content`, and the viewer-shell signal you key on. Then the pass condition is green
+  **in the built image** (TESTING.md "Inside a built image"), with the devcontainer still green.
 - **The both-tiers-empty shell.** The patchright tier already runs on these (`[patchright] … STILL
-  blocked`). If it also comes back with 0 visible characters, a retry from MAS repeats both. Decide
-  the class name with MAS before shipping (`render_defect` says "ours, permanent"; a new class may
-  be truer). Keep the single-tier case retryable: that's the `norex.com` lesson.
+  blocked`). If it also comes back with 0 visible characters, a retry from MAS repeats both. Pick
+  the class name and include it in the pre-deploy message (`render_defect` says "ours, permanent";
+  a new class may be truer). Keep the single-tier case retryable: that's the `norex.com` lesson.
 - **`ERR_HTTP2_`.** It's one prefix in `_NET_ORIGIN_UNREACHABLE_PREFIXES`. Check first that no
   `ERR_HTTP2_` code is ours: the egress proxy speaks HTTP/1.1 CONNECT, and h2 runs end-to-end inside
   the tunnel. Optional, separately: one HTTP/1.1 retry would recover the company

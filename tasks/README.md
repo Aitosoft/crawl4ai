@@ -8,22 +8,22 @@ gate that works. Where a task file and this index disagree, the task file wins.
 ## State of the world
 
 - **Production is `0.9.5-http-as-asked` on `crawl4ai-service-se` (Sweden Central)**, by digest,
-  Google Chrome 157. It's v0.9.5 plus two Chrome launch switches from 2026-11-04 (AITOSOFT_CHANGES,
-  the two top entries). Query the live state with `az` (AZURE_OPERATIONS §0). **`main` ==
+  Google Chrome 157. It's v0.9.5 plus one Chrome `--disable-features` switch carrying two features
+  (`HttpsUpgrades`, `HttpsFirstBalancedModeAutoEnable`), from 2026-11-04 (AITOSOFT_CHANGES, the two
+  top entries; it must stay the *last* such switch, FINDINGS). Query the live state with `az` (AZURE_OPERATIONS §0). **`main` ==
   production + docs.** Verify it.
 - **The West Europe app (`crawl4ai-service`) is kept**, idle at zero, as a second egress: some hosts
   drop our Sweden Central addresses and accept West Europe's (decision below). MAS holds its
   deletion, which was planned for 11-11.
 - **From ≈2026-11-08, MAS's production traffic arrives unannounced** (`131-from-us-…`): campaign runs
-  from their edge at 1–5 in flight, at any hour.
-  - `deploy-image.sh` refuses to deploy while replicas are live (override `DEPLOY_ALLOW_LIVE=1`
-    after checking the last `RenderGate ADMIT`).
-  - The safe sequence is `BUILD_ONLY=1`, test inside that digest, then `DEPLOY_DIGEST=`
-    (AZURE_OPERATIONS §2.1).
+  from their edge at 1–5 in flight, at any hour. Deploys and fleet changes now have live-traffic
+  gates. The procedure lives in AZURE_OPERATIONS §2.1. Scale-in kills in-flight renders again
+  outside windows (`optimization-experiments.md` lever 3).
 - **Optimisation series 1 with MAS closed on 2026-11-04** after five windows on real prospects
   (`optimization-experiments.md`, ledger and "What series 1 established").
   - A fleet fixed at 2 replicas is the standing setup for MAS's windows, and it makes our cost
-    predictable: 0.40–0.47 ¢ per company, against 0.43–0.64 ¢ when the scaler chose.
+    predictable: 0.40–0.47 ¢ per company (0.55 measured in window 5, with a warm-up we
+    lengthened by mistake), against 0.43–0.64 ¢ when the scaler chose.
   - Identical windows differ by ~±10 %.
   - The windows found two Chrome regressions no offline suite could see; both are fixed.
 - **What the August sweep says about priorities.** 186,178 requests over 175 h. Of MAS's 60,874
@@ -35,8 +35,8 @@ gate that works. Where a task file and this index disagree, the task file wins.
 
 | # | Task | Size | Why now |
 |---|---|---|---|
-| **1** | `deterministic-failures-are-terminal.md` | S | Acked by MAS (`131-…`). Four shapes that 500 four times on every attempt (inline-PDF shell, both-tiers-empty JS shell, `ERR_HTTP2_PROTOCOL_ERROR`, loopback DNS), plus the one-word `render_mode` mislabel. One announced deploy. |
-| **2** | `https-connect-failure-http-retry.md` | S–M | MAS asked for it: 137 archive companies failed https at the tunnel and stored nothing. A marked `http://` attempt, for fast refusals only. MAS acks the field name first. |
+| **1** | `deterministic-failures-are-terminal.md` | S | Acked by MAS (`131-…`). Three shapes that 500 on every attempt (inline-PDF shell, both-tiers-empty JS shell, `ERR_HTTP2_PROTOCOL_ERROR`), loopback DNS mislabelled 400 `bad_request`, and the one-word `render_mode` mislabel. One announced deploy. |
+| **2** | `https-connect-failure-http-retry.md` | S–M | MAS asked for it. Up to 137 archive companies failed https at the tunnel and stored nothing; not yet split into ~1 s refusals (this task) and ~30 s timeouts (lever 12). A marked `http://` attempt. MAS acks the field name first. |
 | **3** | `optimization-experiments.md` | M per lever, ongoing | The loop continues when either side has a lever (MAS's next is likely `task-609`). The protocol, the ledger and levers 1–13 live there. |
 | **4** | `file-upstream-prs.md` | M | File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
 
@@ -105,7 +105,9 @@ item 5). The 630 raw pages from run (ii) are kept as the offline corpus.
 ## Reference, not a task
 
 `upgrade-upstream-v0.9.5.md` (done) and `waa-eval-2026-07-30-forensics.md` stay in `tasks/` because
-code comments cite them by path. The second is the evidence base for the five root causes behind the
+code comments cite them by path. **Many other code comments cite `tasks/<name>.md` for files that
+have since moved:** look in `tasks/done/<name>*.md` (a few names were changed on the move; grep
+`tasks/done/` for the topic). The second is the evidence base for the five root causes behind the
 2026-07-30 image.
 
 ## Cross-repo state

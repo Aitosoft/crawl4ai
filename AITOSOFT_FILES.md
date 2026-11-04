@@ -590,7 +590,8 @@ Upstream will never touch these, so they cost nothing at merge time.
   - `batch-scale.sh` sets the fixed fleet for MAS's windows (`fix`/`release`) and the emergency
     floor (`up`/`down`).
   - `window-watch.sh`, `window-readout.sh` and `replica-minutes.sh` read a window's side of the
-    loop, Log Analytics and Azure Monitor only.
+    loop, Log Analytics and Azure Monitor only. `last-admit.sh` answers "is anything in flight?"
+    before a deploy or a fleet change.
   - `post-deploy-smoke.sh` runs the post-deploy checks. `setup-memory-alert.sh` sets up the
     memory alert.
   - `pip-constraints.txt` (2026-11-03) is the previous production image's `pip freeze`, applied by
@@ -691,16 +692,14 @@ pinned by a test:
   (text after inline `<style>`/`<link>`/`<meta>`/`<noscript>`; then drop
   `strip_noscript` and close #2114).
 
-**Probably takes upstream's fix for something we carry or work around:**
-- **PDF scraping:** `05de127` adds `pypdf`; `4ccd143` / `2341507` / `4138ada`
-  add PDF routing and SSRF; `2e30e54` / #2138 stop treating PDF placeholders as
-  blocks.
-- **Body visibility:** `0a78f07` / `027b6f0` / #2131 make the body-visibility
-  wait configurable.
-- **Config cloning:** `a4c4b2d` / `b0ed23c` preserve fields in
-  `CrawlerRunConfig.clone()` (`develop` only).
-- **`base_config`:** `974275d` / `81efcc3` apply `base_config` to
-  `crawler_configs`. This is not necessarily the `None`/`""` trap.
+**Upstream fixes near what we carry** (checked against HEAD 2026-11-04):
+- **Already merged with v0.9.5:** PDF scraping (`05de127` adds `pypdf`; `4ccd143` / `2341507` /
+  `4138ada` add PDF routing and SSRF), `2e30e54` / #2138 (stop treating *PDFCrawlerStrategy*
+  placeholders as blocks; it does **not** cover Chrome's inline-PDF viewer shell, which is
+  `tasks/deterministic-failures-are-terminal.md`), `0a78f07` / `027b6f0` / #2131 (body-visibility
+  wait configurable), `974275d` / `81efcc3` (`base_config` applied to `crawler_configs`; not
+  necessarily the `None`/`""` trap).
+- **On `develop` only:** `a4c4b2d` / `b0ed23c` preserve fields in `CrawlerRunConfig.clone()`.
 
 **Not merged upstream, still ours:** #2085 (upstream still hardcodes the GPU
 flags), #2112 (upstream still passes the first-hop `status_code`), #2113

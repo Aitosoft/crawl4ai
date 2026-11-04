@@ -554,8 +554,8 @@ def _collapse(m, query):
 #:
 #: **An inline `application/pdf` is the exception and this comment said otherwise
 #: for a week** — it holds only on the headless shell these tests actually run.
-#: See DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER below, and CLAUDE.md's row "The
-#: browser suite has never run production's browser".
+#: See DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER below, and FINDINGS.md §"Testing
+#: fidelity".
 DOWNLOAD_VCARD = (
     "BEGIN:VCARD\r\n"
     "VERSION:3.0\r\n"
@@ -653,8 +653,8 @@ DOWNLOAD_KINDS: Dict[str, Tuple[str, str, bool]] = {
 #: tier-3 structural inference then calls a block (`render_error`, 500). So on
 #: production's browser this set is really the other four. It is left whole
 #: because these tests run on the shell, where all five do refuse; **the fix is
-#: to run the arm production runs, not to edit the set.** See the CLAUDE.md row
-#: "The browser suite has never run production's browser".
+#: to run the arm production runs, not to edit the set.** See FINDINGS.md
+#: §"Testing fidelity" and tasks/deterministic-failures-are-terminal.md.
 DOWNLOAD_KINDS_THAT_REFUSE_TO_RENDER = frozenset(DOWNLOAD_KINDS)
 
 

@@ -387,7 +387,7 @@ python -m uvicorn aitosoft_entry:app --host 127.0.0.1 --port 11235
 `aitosoft_entry:app` is the production entry point (`supervisord.conf`), so it
 applies the config.yml defaults and the trust relaxations. `server:app` skips
 both. On this machine startup **fails** with `Chromium distribution 'chrome' is
-not found at /opt/google/chrome/chrome`, because `deploy/docker/config.yml:254-255`
+not found at /opt/google/chrome/chrome`, because `deploy/docker/config.yml` (its `chrome_channel` and `channel` keys)
 pins `chrome_channel: chrome` / `channel: chrome` and Chrome has no linux/arm64
 build. Comment those two lines out for the local run. **Never commit that edit**
 (it has been committed by accident before), so check
@@ -404,7 +404,7 @@ fails on a `jwt` import, a stale `jwt` 1.4.0 package is shadowing PyJWT: run
 **Neither the local server nor the browser suite runs production's browser.**
 `fixture_origin._resolve_channel()` falls back to `"chromium"` when no
 `google-chrome` is on PATH, which is always the case here. Then
-`crawl4ai/browser_manager.py:1127`, a Windows workaround applied on every
+`crawl4ai/browser_manager.py` (`_build_browser_args`, the `chrome_channel != "chromium"` check), a Windows workaround applied on every
 platform, drops `channel` whenever it equals `"chromium"`. Playwright therefore
 launches `chromium_headless_shell`, which has no PDF viewer.
 `CRAWL4AI_FIXTURE_CHANNEL=chromium` cannot help, because it is the same string
@@ -414,7 +414,7 @@ that gets dropped. The full Chromium build is installed
 inline-PDF divergence was measured on 2026-08-09. Known consequence: the five
 `/download/*` tests behave like production for four kinds, but `pdf-inline`
 passes for the wrong reason. Production's Chrome renders an inline PDF into a
-174-byte shell that tier-3 inference calls a block (`render_error`, 500).
+viewer shell (174 bytes on Chrome 151, 356 on 157) that tier-3 inference calls a block (`render_error`, 500).
 
 The two fixes, neither built:
 - make the workaround Windows-only (`sys.platform == "win32"`). Not worth filing
@@ -466,11 +466,12 @@ az acr run --registry aitosoftacr --timeout 2700 --cmd 'aitosoftacr.azurecr.io/c
 
 | Gate | When | Bar |
 |---|---|---|
-| Offline suites (`pytest test-aitosoft/`) | before every deploy; after every upstream sync | all pass (332 on 2026-11-03, after the v0.9.5 merge). On a fresh clone the four corpus tests fail (they skip under CI); see "Known limitations" |
-| Upstream security suite (`pytest deploy/docker/tests/test_security_*.py`) | after every upstream sync; after changing `deploy/docker/` | all pass, 1 xfail (316 + 1 on 2026-11-03) |
-| Tier 1 regression | before every deploy | 4/4 |
-| Post-deploy smoke | after every deploy (`azure-deployment/post-deploy-smoke.sh` runs this row and the next) | `/health` 200; unauthenticated `POST /crawl` → 401; check the new revision has 100 % of traffic **before** crawling (a mid-cutover smoke reported the old image on 2026-07-30, and on 2026-11-04 a `/health` sent while `revision list` already said 100 % was orphaned on the old revision for 218 s; trust the system log's `Setting traffic weight of '100%'` line, `AZURE_OPERATIONS.md` §2.4); one authenticated `raw://` crawl → 200, `failure_class: "none"`. A made-up domain → 200, `success: false`, `origin_unreachable`, `DNS: host does not resolve`; it exercises the egress path without contacting anyone, and is what caught the 2026-08-05 `NameError` |
+| Offline suites (`pytest test-aitosoft/`) | before every deploy; after every upstream sync | all pass (337 on 2026-11-04; `--collect-only -q` gives today's count). On a fresh clone the four corpus tests fail (they skip under CI); see "Known limitations". The two real-Chrome controls skip here |
+| **Suite inside the built image** ("Inside a built image" above) | before every deploy, **on the digest you will ship** (`BUILD_ONLY=1`, then `DEPLOY_DIGEST=`, AZURE_OPERATIONS §2.1) | all pass except `test_a_download_is_not_a_retryable_server_error[pdf-inline]` (until `tasks/deterministic-failures-are-terminal.md` ships). The only gate that runs production's Google Chrome. The http-only fixes of 2026-11-04 are pinned here and nowhere else |
+| Upstream security suite (`pytest deploy/docker/tests/test_security_*.py`) | after every upstream sync; after changing `deploy/docker/` | all pass, 1 xfail (343 + 1 on 2026-11-04; needs `pypdf`) |
+| Tier 1 regression | **after** the deploy, against production (no local Chrome can run it before) | 4/4. **On 3/4:** compare the failing page with its last capture in `test-aitosoft/artifacts/<previous label>/`. A navigation timeout with no response matches the Sweden Central egress drop (AZURE_OPERATIONS §7); a changed page is site drift. Either way, record it in AITOSOFT_CHANGES and watch the next window. **Roll back** only if the failure is in our class or code and you can't explain it. Budget: one Tier 1 run per deploy, and at most two per host per day (rule 1). 2026-11-04 ran three, one too many |
+| Post-deploy smoke | after every deploy (`azure-deployment/post-deploy-smoke.sh` runs this row and the next) | `/health` 200; unauthenticated `POST /crawl` → 401; check routing has switched to the new revision **before** crawling (a mid-cutover smoke reported the old image on 2026-07-30, and on 2026-11-04 a `/health` sent while `revision list` already said 100 % was orphaned on the old revision for 218 s). The check that works is in `AZURE_OPERATIONS.md` §2.4: the old revision has no replicas, and one `/health` answers in under a second. The system log's traffic-weight line is not always written; one authenticated `raw://` crawl → 200, `failure_class: "none"`. A made-up domain → 200, `success: false`, `origin_unreachable`, `DNS: host does not resolve`; it exercises the egress path without contacting anyone, and is what caught the 2026-08-05 `NameError` |
 | Post-deploy SSRF negatives | after every deploy | `169.254.169.254` and `127.0.0.1:8080` still → 400 `URL blocked (SSRF protection)`. Only a host with no address at all moved to `origin_unreachable`; this proves the security verdict did not move with it. The made-up-domain probe logs a `Traceback` (`Crawl error:`) for the caught `OriginUnresolvable`. That is expected: judge the wire status, not the stack |
 | Post-deploy byte-compare | after every deploy | one Tier 1 page's markdown (md5 or byte count) identical to a capture **you took pre-deploy**, from a local server running the same code. Pick a host the pre-deploy run hit only once, so this stays within rule 1's two hits. Never compare against a figure quoted in a doc: caverna.fi went from 1,210 to 532 chars of markdown between July and August. This shows the deployed image produces the same bytes on a real page, which a 200 does not |
-| Upstream merge | after every sync | the above, plus the before/after comparison, plus `git diff upstream/develop...HEAD --stat -- crawl4ai deploy Dockerfile` listing only files in `AITOSOFT_FILES.md` (26 files, +4,880/−193 on 2026-11-03). Use three dots, which diff from the merge base. Two dots (`upstream/develop HEAD`) also count every upstream change since our last sync as our divergence: 352 files on 2026-11-03, with upstream 233 commits ahead |
+| Upstream merge | after every sync | the above, plus the before/after comparison, plus `git diff upstream/develop...HEAD --stat -- crawl4ai deploy Dockerfile` listing only files in `AITOSOFT_FILES.md` (26 files on 2026-11-04). Use three dots, which diff from the merge base. Two dots (`upstream/develop HEAD`) also count every upstream change since our last sync as our divergence: 352 files on 2026-11-03, with upstream 233 commits ahead |
 | Stealth/browser changes | after changing stealth or browser flags | `test_fingerprint.py` against `stealth-v4/`, **currently broken** (see "Live CLI scripts") |
