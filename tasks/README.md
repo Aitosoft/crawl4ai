@@ -83,8 +83,10 @@ all 61,937 of their rows).
   seen in production. The sweep's largest response was 32.6 MB against the 232 MB that lost a customer
   before the `desc` cap (`FINDINGS.md` §Output). Raise its priority if a real instance appears, or if
   OOMs become worth fixing by bounding allocations.
-- **Scale-trigger or `render_capacity` changes.** There is no idle fleet to cut: cost per request was
-  flat at 2 and 3 replicas (AZURE_OPERATIONS §4.5).
+- **Scale-trigger or `render_capacity` changes.** The trigger is still not the lever (the scaler is
+  burst-driven, AZURE_OPERATIONS §3.2). But "no idle fleet to cut" was retired on 2026-11-04: at 5 in
+  flight the fleet lands on 2 or 3 by chance, and cost per request follows it. The lever being tested
+  is a fixed fleet (`optimization-experiments.md` lever 2, window 3).
 - **Memory work.** Closed by two repos independently: `anon` moved +26 MB of 4,096 over 53 h.
   `tasks/done/post-sweep-closure-2026-08-17.md` has the seven closures from 2026-08-17. Read it
   before re-deriving any of them. Reopen only if a memory stall costs work (AZURE_OPERATIONS §6.4).

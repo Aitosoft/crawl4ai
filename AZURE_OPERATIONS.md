@@ -869,8 +869,9 @@ requests per company.
   plus `aitosoft-edge` until West Europe is deleted).
 - **The remaining levers are MAS's:** their `delay_before_return_html: 2.0` is
   ~37 % of our mean render time, and pages per company is the other half.
-- **2026-11-04, two joint runs on `-se` (75 companies each, 5 in flight): the cost per *request*
-  has barely moved, so the cost per company follows pages per company.** Instruments: Azure Monitor
+- **2026-11-04, four windows on `-se` (75 companies each, 5 in flight): the cost per *request* follows
+  the fleet size the scaler happens to pick, and the cost per company follows that times pages per
+  company.** Instruments: Azure Monitor
   `Replicas` (1-min average, split by revision and summed over the window plus the whole tail, to
   the minute the fleet reached zero) × $0.3024, against MAS's request counts. Script:
   `azure-deployment/replica-minutes.sh <t0> <t1> <t2>`.
@@ -880,6 +881,14 @@ requests per company.
   | August trigger-12 sweep | 6.4 | — | 0.052 | 0.33 | 2 at ~19 req/min |
   | run (i), v0.9.2 | 10.53 | 87.0 (69.5 + 17.5 tail) | 0.056 | 0.58 | 3 at ~32 req/min |
   | run (ii), v0.9.5 | 10.85 | 89.5 (68.0 + 21.5 tail) | 0.055 | 0.60 | 3 at ~32 req/min |
+  | window 1, never-scraped | 9.32 | 64.0 (48.0 + 16.0) | 0.046 | 0.43 | **2** at ~28 req/min |
+  | window 2, never-scraped | 8.75 | 95.0 (77.5 + 17.5) | 0.073 | 0.64 | **3** from minute 13, at ~22 req/min |
+
+  **Windows 1 and 2 retire "cost per request is flat".** Nothing changed on our side between them,
+  and the fleet went to 3 at a *lower* request rate. Window 2 had ~14 % more render-seconds (p90
+  16.5 s vs 12.0), but 50 % more fleet for two-thirds of the window. The scaler is burst-driven
+  (§3.2), so at this shape 2 or 3 is close to chance (3 of 4 windows went to 3). Lever under test:
+  a fixed fleet, `batch-scale.sh fix 2` (`tasks/optimization-experiments.md` lever 2).
 
   **Corrected 2026-11-04 (afternoon).** The first readout of each run summed the metric before the
   fleet reached zero and reported 77.5 and 81.5 replica-minutes (0.049 / 0.050 ¢ per request, 0.52 /

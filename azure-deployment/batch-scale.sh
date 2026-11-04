@@ -13,6 +13,11 @@
 # Usage:
 #   ./batch-scale.sh up [N]  # Pin min=N warm replicas (default 1). Emergency only.
 #   ./batch-scale.sh down    # Set min=0 (scale-to-zero). ALWAYS call after.
+#   ./batch-scale.sh fix N   # min = max = N: a FIXED fleet for one announced window
+#                            # (tasks/optimization-experiments.md, lever 2). Mints a revision.
+#   ./batch-scale.sh release # Undo `fix`: min=0 and max back to deploy-image.sh's
+#                            # ACA_MAX_REPLICAS. ALWAYS call after `fix`; `down` would
+#                            # keep max at N.
 #   ./batch-scale.sh status  # Show current replica config.
 
 set -euo pipefail
@@ -85,6 +90,27 @@ set_min() {
     echo "Verified: minReplicas=${now}, maxReplicas=${max} (unchanged)."
 }
 
+# set_min_max <min> <max> — write both and prove both landed. Both values go into the PATCH
+# because --max-replicas is truthy whenever max >= 1 (see the CLI gate described above).
+set_min_max() {
+    local min="$1" max="$2" now
+    az containerapp update --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" \
+        --min-replicas "$min" --max-replicas "$max" --output none
+    now="$(az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" \
+        --query "join(' ', [to_string(properties.template.scale.minReplicas), to_string(properties.template.scale.maxReplicas)])" -o tsv)"
+    if [[ "$now" != "$min $max" ]]; then
+        echo "ERROR: min/max is '${now}', expected '${min} ${max}'. The update did NOT apply." >&2
+        exit 1
+    fi
+    echo "Verified: minReplicas=${min}, maxReplicas=${max}."
+}
+
+# The ceiling `release` restores: the one deploy-image.sh's drift check enforces, read from that
+# script so there is no second constant to drift (the defect this file's header documents).
+repo_max() {
+    grep -E '^ACA_MAX_REPLICAS=[0-9]+$' "$(dirname "${BASH_SOURCE[0]}")/deploy-image.sh" | cut -d= -f2
+}
+
 action="${1:-status}"
 
 case "$action" in
@@ -101,6 +127,20 @@ case "$action" in
         echo "✅ Done. Replicas will scale to zero when idle."
         echo "Resulting scale block:"; show_scale
         ;;
+    fix)
+        n="${2:?usage: $0 fix N}"
+        [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: N must be a positive integer." >&2; exit 1; }
+        echo "Fixing $APP_NAME at min = max = $n (mints a revision; nothing may be in flight)..."
+        set_min_max "$n" "$n"
+        echo "✅ Fixed at $n. Run 'batch-scale.sh release' after the window."
+        ;;
+    release)
+        max="$(repo_max)"
+        [[ "$max" =~ ^[0-9]+$ ]] || { echo "ERROR: could not read ACA_MAX_REPLICAS from deploy-image.sh." >&2; exit 1; }
+        echo "Releasing $APP_NAME to min=0, max=$max (deploy-image.sh's ACA_MAX_REPLICAS)..."
+        set_min_max 0 "$max"
+        echo "✅ Released. Scale-to-zero on idle."
+        ;;
     status)
         az containerapp show \
             --name "$APP_NAME" \
@@ -116,7 +156,7 @@ case "$action" in
             --output table
         ;;
     *)
-        echo "Usage: $0 {up [min]|down|status}" >&2
+        echo "Usage: $0 {up [min]|down|fix N|release|status}" >&2
         exit 1
         ;;
 esac

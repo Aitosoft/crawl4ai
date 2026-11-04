@@ -55,8 +55,8 @@ before the tail ended (AZURE_OPERATIONS §4.5).
 | 2026-11-04 | (ii) | v0.9.5 + Chrome 157 | 814 (10.85) | 46 + 5 / 2 | 0.055 | 0.60 + 0.77 | 1 (parked domain) | 89.5 (68.0 + 21.5); 500s = scale-in, not the merge |
 | 2026-11-04 | w1 | none: baseline on 75 never-scraped prospects, 13:09:35–13:35:28Z | 699 (9.32) | 42 + 11 / 20 | 0.046 | 0.43 + 0.53 (all-in 2.27, MAS) | 1 | 64.0 replica-min (48.0 + 16.0); fleet held at **2** (28 req/min); 31 of 42 gate 429s in the first 3 min at 1 replica. The 20 × 500 were 4 URLs × 4 attempts, all deterministic: http-only steel-air.fi (Chrome 157, fixed before w2), 3 inline PDFs, 1 JS shell. MAS: `93-…`, `97-…`; ours: `95-…` |
 | 2026-11-04 | (between) | **ours: `0.9.5-https-first`**, live 14:24:12Z | | | | | | not a window. Chrome 154+ refused http-only sites (AITOSOFT_CHANGES). MAS records it in w2's config beside their change |
-| | w2 | **MAS's**: retry a model-host 429 on the same host before the fallback | | | | | | MAS's `94-…`; our fleet unpinned, as in w1 |
-| | w3 | `minReplicas` pinned at **2** (lever 2), judged against w2 | | | | | | fresh disjoint draw, same shape |
+| 2026-11-04 | w2 | **MAS's**: retry a model-host 429 on the same host before the fallback; 14:46:58–15:18:19Z | 656 (8.75) | 29 + 13 / 4 | **0.073** | 0.64 + 0.52 | 1 | 95.0 replica-min (77.5 + 17.5). **Nothing changed on our side, and the fleet went to 3 at 22 req/min** (14:59), where w1 held 2 at 28: our cost per request is the scaler's choice of 2 or 3 (lever 2). Gate 429s by fleet size: 13 at 1 replica, 13 at 2, 3 at 3. 4 × 500 = page behaviour (navigation loops). MAS: `102-…`; ours: `103-…` |
+| | w3 | **ours: fleet fixed at min = max = 2** (lever 2, revised), judged against w2 | | | | | | agreed in MAS's `104-…`; their stop rule: any page out of 429 retries stops the window |
 
 ## Levers, roughly by expected value
 
@@ -66,7 +66,28 @@ Sized from today's runs; argue with every one.
    August (0.052, day-scale) through both runs (0.055–0.056, window plus tail), so our cost per
    company is pages × ≈0.055 ¢ (6.4 pages in August, 10.5–10.9 now). Their brain and prompt choices move it. Our part is to price each window per
    request so they can see it.
-2. **Cold-start 429 burst: pin the fleet at the size the shape runs at, for one announced window**
+2. **Fix the fleet at 2 (min = max = 2) for an announced window: cost per request, and the cold start.**
+   *Revised 2026-11-04 after w2, and agreed by MAS (`104-…`); the floor-only design below is kept
+   for its evidence.* At MAS's shape (5 in flight) the scaler lands a window on 2 or 3 replicas more
+   or less by chance: 3 in (i), (ii) and w2, 2 in w1. That decides our cost per request (0.046 ¢ in
+   w1 at 2 replicas, 0.073 ¢ in w2 at 3, where w2 had 14 % more render-seconds and 6 % fewer
+   requests). Render slots were 94 % busy in w1's window and 67 % in w2's (`RequestDuration` sums,
+   queue waits included, so both are upper bounds). A floor removes only the cold-start burst, which
+   varied 13–31 render-gate 429s between w1 and w2 with nothing changed, so a floor's effect sits
+   inside the noise. A fixed 2 also removes the chance third replica.
+   - **Pre-registered against w2:** replica-minutes ≈ 2 × (lead + window) ≈ 65–75 against 95
+     (**≈−25 % per request**); cold-start 429s gone; render-gate 429s *during* the window may rise
+     (w2 had 13 in 9 minutes at 2 replicas); MAS's wall-clock per company may rise; memory-guard
+     429s may rise (w1 at 2 replicas: 11). **Failure condition:** any page out of 429 retries, which
+     is MAS's stop rule.
+   - **Tooling:** `batch-scale.sh fix 2`, and afterwards `batch-scale.sh release`, which restores
+     max from `deploy-image.sh`'s `ACA_MAX_REPLICAS`. `down` would keep max at 2. Both mint a
+     revision and verify. While max isn't 20, `deploy-image.sh` refuses to deploy (its drift check),
+     which guards against a forgotten release.
+   - **If it holds,** the sweep lever is a fleet ceiling sized to companies in flight. That needs a
+     second point, e.g. 10 in flight at 4, before anyone believes a ratio.
+
+   *The floor-only design, as first corrected (superseded):*
    (MAS's window 2, after their baseline). *Corrected 2026-11-04:* this used to say "pin one warm
    replica, expect `render_slots` 429s → ~0", and one replica is exactly where the burst happens.
    Per minute, `ContainerAppHTTPLogs` `/crawl` by `bin(StartTime, 1m)` with
@@ -163,7 +184,10 @@ Sized from today's runs; argue with every one.
   the advantage (`tmp/research/upstream-and-web-scan-2026-11-04.md`).
 - **Trimming our markdown to save model cost.** Page content is about a quarter of a company's model
   cost on MAS's US host (`64-from-us-…`). It might matter for quality (lever 7), not money.
-- **Scale-trigger changes.** ¢/request was flat at 2 and at 3 replicas; there is no idle fleet to cut.
+- ~~**Scale-trigger changes.** ¢/request was flat at 2 and at 3 replicas; there is no idle fleet to cut.~~
+  **Retired by w2 (2026-11-04):** at 5 in flight the fleet lands on 2 or 3 by chance, and ¢/request
+  follows it (0.046 vs 0.073). The trigger is still not the lever, because the scaler is
+  burst-driven (AZURE_OPERATIONS §3.2); a fixed or capped fleet is (lever 2).
 - **A #2416 patch.** 0 of 630 real pages change (FINDINGS §Parse collapse).
 
 ## What the 2026-11-04 afternoon session found wrong in this file
@@ -184,8 +208,10 @@ Recorded so the next session can see what changed and argue with it.
 
 ## What I am least sure of
 
-1. **That ¢/request stays flat as the shape changes.** Three points (August, (i), (ii)), all at 5 in
-   flight. At 15 in flight, or with a warm replica pinned, it could move either way.
+1. **~~That ¢/request stays flat as the shape changes.~~ It doesn't, even at a fixed shape** (w1
+   0.046, w2 0.073). It follows the fleet size the scaler happens to pick. What I'm now least sure
+   of is whether a fixed 2 holds up when the cohort's pages are slow (w2's p90 was 16.5 s), or
+   whether the 429 back-off costs MAS more wall-clock than we save.
 2. **That the window-to-window noise is small enough** for levers 3–5 to show at ~800 requests.
    Repeating a window is cheap; do it before believing a small move.
 3. **That cohorts are comparable.** Each window is a different random draw of companies. The rates
