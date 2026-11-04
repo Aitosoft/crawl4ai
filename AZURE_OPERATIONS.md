@@ -883,12 +883,17 @@ requests per company.
   | run (ii), v0.9.5 | 10.85 | 89.5 (68.0 + 21.5 tail) | 0.055 | 0.60 | 3 at ~32 req/min |
   | window 1, never-scraped | 9.32 | 64.0 (48.0 + 16.0) | 0.046 | 0.43 | **2** at ~28 req/min |
   | window 2, never-scraped | 8.75 | 95.0 (77.5 + 17.5) | 0.073 | 0.64 | **3** from minute 13, at ~22 req/min |
+  | window 3, fleet **fixed at 2** | 8.99 | 70.0 (56.0 + 14.0) | 0.052 | 0.47 | 2 by `batch-scale.sh fix 2` |
 
   **Windows 1 and 2 retire "cost per request is flat".** Nothing changed on our side between them,
   and the fleet went to 3 at a *lower* request rate. Window 2 had ~14 % more render-seconds (p90
   16.5 s vs 12.0), but 50 % more fleet for two-thirds of the window. The scaler is burst-driven
-  (§3.2), so at this shape 2 or 3 is close to chance (3 of 4 windows went to 3). Lever under test:
-  a fixed fleet, `batch-scale.sh fix 2` (`tasks/optimization-experiments.md` lever 2).
+  (§3.2), so at this shape 2 or 3 is close to chance (3 of 4 windows went to 3). **Window 3 fixed the
+  fleet at 2** (`batch-scale.sh fix 2`): −28 % per request against window 2, with the cold-start
+  429s gone and the best latency of the three windows. Against window 1's lucky 2 it is +14 %, the
+  warm-up minutes. **A `minReplicas`/`maxReplicas` change mints a revision that starts as many
+  replicas as the old one had, even with nothing calling** (2 at 16:21:05 after the release, idle
+  ~5 min). So a release costs about one natural tail.
 
   **Corrected 2026-11-04 (afternoon).** The first readout of each run summed the metric before the
   fleet reached zero and reported 77.5 and 81.5 replica-minutes (0.049 / 0.050 ¢ per request, 0.52 /

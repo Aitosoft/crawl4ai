@@ -56,7 +56,7 @@ before the tail ended (AZURE_OPERATIONS §4.5).
 | 2026-11-04 | w1 | none: baseline on 75 never-scraped prospects, 13:09:35–13:35:28Z | 699 (9.32) | 42 + 11 / 20 | 0.046 | 0.43 + 0.53 (all-in 2.27, MAS) | 1 | 64.0 replica-min (48.0 + 16.0); fleet held at **2** (28 req/min); 31 of 42 gate 429s in the first 3 min at 1 replica. The 20 × 500 were 4 URLs × 4 attempts, all deterministic: http-only steel-air.fi (Chrome 157, fixed before w2), 3 inline PDFs, 1 JS shell. MAS: `93-…`, `97-…`; ours: `95-…` |
 | 2026-11-04 | (between) | **ours: `0.9.5-https-first`**, live 14:24:12Z | | | | | | not a window. Chrome 154+ refused http-only sites (AITOSOFT_CHANGES). MAS records it in w2's config beside their change |
 | 2026-11-04 | w2 | **MAS's**: retry a model-host 429 on the same host before the fallback; 14:46:58–15:18:19Z | 656 (8.75) | 29 + 13 / 4 | **0.073** | 0.64 + 0.52 | 1 | 95.0 replica-min (77.5 + 17.5). **Nothing changed on our side, and the fleet went to 3 at 22 req/min** (14:59), where w1 held 2 at 28: our cost per request is the scaler's choice of 2 or 3 (lever 2). Gate 429s by fleet size: 13 at 1 replica, 13 at 2, 3 at 3. 4 × 500 = page behaviour (navigation loops). MAS: `102-…`; ours: `103-…` |
-| | w3 | **ours: fleet fixed at min = max = 2** (lever 2, revised), judged against w2 | | | | | | agreed in MAS's `104-…`; their stop rule: any page out of 429 retries stops the window |
+| 2026-11-04 | w3 | **ours: fleet fixed at min = max = 2** (lever 2, revised), 15:55:41–16:20:07Z, judged against w2 | 674 (8.99) | 7 + 1 / 0 | **0.052** | 0.47 + 0.55 | 4 (likely the 4 dead sites) | 70.0 replica-min (56.0 incl. ~3 min warm-up + 14.0 after, the release revision's own 2 idle replicas). **Held on every pre-registered line**: −26 % replica-min, −28 % per request vs w2; cold-start 429s gone; 200 p50/p90/p99 6.0/10.7/18.9 s, best of three; MAS window 24:26 (w2 31:21), 0 pages out of retries. vs w1 (2 replicas by luck) +14 % per request = the warm-up. MAS: `109-…`; ours: `110-…` |
 
 ## Levers, roughly by expected value
 
@@ -86,6 +86,16 @@ Sized from today's runs; argue with every one.
      which guards against a forgotten release.
    - **If it holds,** the sweep lever is a fleet ceiling sized to companies in flight. That needs a
      second point, e.g. 10 in flight at 4, before anyone believes a ratio.
+   - **Result (w3, 2026-11-04): it held on every line** (ledger row). It buys *predictability*: our
+     cost per request stops depending on whether the scaler adds a third replica. Under a fixed fleet,
+     our cost per company = fleet × MAS's wall-clock per company ÷ companies in flight. So **more in
+     flight on the same fleet** and **a faster brain** both become levers on our bill. Proposed to
+     MAS as the standing setup for their windows (`110-…`). Next point: 8 in flight on the same 2, to
+     find where 429s start.
+   - **The release revision is not free.** `release` mints a revision that starts as many replicas as
+     the old one had (2 at 16:21:05, with nothing calling), and they idle ~5 min before scaling to
+     zero. So releasing right after the window replaces the natural tail (14.0 vs 16–17.5
+     replica-min) instead of removing it. Per window the protocol costs ≈ the warm-up minutes.
 
    *The floor-only design, as first corrected (superseded):*
    (MAS's window 2, after their baseline). *Corrected 2026-11-04:* this used to say "pin one warm
@@ -216,6 +226,6 @@ Recorded so the next session can see what changed and argue with it.
    Repeating a window is cheap; do it before believing a small move.
 3. **That cohorts are comparable.** Each window is a different random draw of companies. The rates
    compare; the pages don't.
-4. **What `batch-scale.sh down` costs.** A new revision at `minReplicas: 0` may start a replica and
-   hold it for the 300 s cooldown, or start none. Nobody has measured it. It decides whether a
-   pinned window comes out flat or about +5 % per request.
+4. ~~**What `batch-scale.sh down` costs.**~~ Measured at w3's release: the new revision started 2
+   replicas, matching the old one's count, and they idled ~5 min. So ~10 replica-min, about one
+   natural tail.

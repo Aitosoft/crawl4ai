@@ -14,9 +14,10 @@ works. Where a task file and this index disagree, the task file wins.
 - **`main` == production + docs.** Verify it.
 - **Two joint runs with MAS found no regression** (`upgrade-upstream-v0.9.5.md` §10).
 - **The optimisation loop with MAS is running** (item 1): announced windows on real never-scraped
-  prospects, one change each, both sides counting. Window 1 (baseline) ran 2026-11-04 13:09Z. Window 2
-  is MAS's model-host retry fix; window 3 is our warm-replica pin at 2. The ledger is in the task
-  file. Cost per request and per company: AZURE_OPERATIONS §4.5.
+  prospects, one change each, both sides counting. Three windows ran on 2026-11-04: a baseline,
+  MAS's model-host retry fix, and our fleet fixed at 2, which cut cost per request 28 % against
+  window 2 and removed the cold-start 429s. We proposed the fixed fleet as the standing setup.
+  The ledger is in the task file. Cost per request and per company: AZURE_OPERATIONS §4.5.
 - **What the last sweep says about priorities.** 186,178 requests over 175 h. Of MAS's 60,874
   capture attempts, 86.1 % were stored and **95 % of failures were the origin's**. Our share, in
   captures lost: 500s 156 (152 of the 163 URLs failed on every attempt, so deterministic), 429s 29,
@@ -118,5 +119,5 @@ The MAS thread is direct, session to session over Remote Control (CLAUDE.md §Cr
 are filed in gitignored `tmp/mas-repo-messages/`; cite filenames, never integers. On 2026-11-04 the
 thread was held by MAS's `task-606` session; their follow-up is `task-608`. A session's listed name
 changes with its title, so find it with `ListAgents`, or reply to the latest message's `from`.
-Nothing is owed to them beyond window 3's pin (2 replicas, after their window 2), which needs their
-"ready" first. The thread is at `99-…` (2026-11-04).
+Nothing is owed to them; our proposal in `110-…` (fixed fleet as the standing setup, then 8 in
+flight on the same 2) awaits their answer. The thread is at `110-…` (2026-11-04).
