@@ -20,7 +20,7 @@ checks only the expected names; it does not check phones or emails.
 | Site | Page | Expected name | What it exercises (from stored captures, 2026-08-17 unless dated) |
 |---|---|---|---|
 | **caverna.fi** | homepage | none | Since 2026-07 the homepage is a location picker with two addresses and no phone numbers: 1,001–1,239 markdown chars while it carried a news item, 539 since 2026-08-05. In April it was ~23,000 chars with phone numbers. It is the weakest gate member: it passed at 133 tokens against a 100-token bar |
-| **accountor.com/fi/finland** | `suuryritykselle` | Jani Järvensivu | A large real page (~8.8k tokens) with CMP scripts. It **redirects cross-domain to `www.aspia.fi/finland/suuryritykselle`**, as it has in every capture since 2026-04-11, so it also exercises final-hop handling |
+| **accountor.com/fi/finland** | `suuryritykselle` | Katja Vanhanen (Jani Järvensivu until 2026-08-17) | A large real page (~8.8k tokens) with CMP scripts. It **redirects cross-domain to `www.aspia.fi/finland/suuryritykselle`**, as it has in every capture since 2026-04-11, so it also exercises final-hop handling |
 | **solwers.com** | `sijoittajat/hallinnointi/#johtoryhma` | Johan Ehrnrooth | Names in ALL CAPS (`JOHAN EHRNROOTH, CEO`); the largest Tier 1 page (~13k tokens) |
 | **jpond.fi** | `yhteystiedot/` | Janne Lampi | Plain emails (21 `@jpond.fi` occurrences in the markdown, 19 `mailto:` links in the HTML). **It is no longer `(at)`-obfuscated:** the site's own HTML had 18 `(at)` in captures up to 2026-04-15 and 0 in every capture from 2026-07-17 on. Nothing in Tier 1 exercises `(at)` obfuscation any more |
 
@@ -36,7 +36,7 @@ that. Evidence: `FINDINGS.md` §Consent and overlay scripts, first entry.
 
 | Site / page | Person | Title | Phone | Email | Last verified |
 |---|---|---|---|---|---|
-| aspia.fi `/finland/suuryritykselle` | Jani Järvensivu | Myyntijohtaja | +358 40 713 3683 | jani.jarvensivu@aspia.fi | 2026-08-17 capture |
+| aspia.fi `/finland/suuryritykselle` | Katja Vanhanen | Growth Director | +358 40 688 7777 | katja.vanhanen@aspia.fi | 2026-11-04 capture (`0.9.5-merge-se`). Jani Järvensivu (Myyntijohtaja) was there until at least 2026-08-17 and is absent from the 2026-11-04 raw HTML: site drift, found when Tier 1 went 3/4 |
 | accountor.com `/fi/finland/pk-ja-kasvuyritykselle` | Kari Putkonen | Myyntijohtaja, pk-yritykset | +358447386009 | kari.putkonen@aspia.fi | 2026-01 (page not in Tier 1) |
 | solwers.com | Johan Ehrnrooth | CEO | | | 2026-08-17 capture |
 | jpond.fi `/yhteystiedot/` | Janne Lampi | | | janne.lampi@jpond.fi | 2026-08-17 capture |

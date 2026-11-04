@@ -203,6 +203,17 @@ scales with concurrency. The knob exists (`az containerapp update
 revision transition, every deploy included, drain for three minutes per replica,
 to save ~6 requests in 36,783.
 
+**A request that arrives during the switch, to an app at zero, can be orphaned (seen 2026-11-04).**
+The deploy of `0.9.5-merge` to `-se` updated the app at 09:12:14, but the platform kept 100 % of
+traffic on the old revision until 09:12:58 while the new one pulled and started. A `/health` sent
+at 09:12:42 was buffered by the activator for the *old* revision, which scaled a replica for it and
+was deactivated 16 s later. The request hung until the client gave up: `ContainerAppHTTPLogs`
+shows it on the old revision, no replica, 218.1 s, `DC downstream_remote_disconnect`. **`az
+containerapp revision list` already showed the new revision at 100 % at that moment**, so it is
+not the instrument for "has routing switched". Use the system log line `Setting traffic weight of
+'100%' for revision '<new>'` (`ContainerAppSystemLogs_CL`), or a request that lands on the new
+revision in `ContainerAppHTTPLogs`. This is one more reason a deploy waits for MAS to stop calling.
+
 ### 2.5 Rollback
 
 **Most incidents do not want an image rollback.** If the symptom is capacity,

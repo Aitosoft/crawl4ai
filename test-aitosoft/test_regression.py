@@ -32,7 +32,9 @@ TIER_1_SITES: List[Dict[str, Any]] = [
     {
         "domain": "accountor.com/fi/finland",
         "page": "suuryritykselle",
-        "expected_decision_makers": ["Jani Järvensivu"],
+        # Site drift 2026-11-04: Jani Järvensivu left the contact block
+        # (0 in the raw HTML; 2 in every capture to 2026-08-17).
+        "expected_decision_makers": ["Katja Vanhanen"],
         "expected_min_contacts": 1,
         # Cookie wall handled by remove_consent_popups (in optimal config)
     },
