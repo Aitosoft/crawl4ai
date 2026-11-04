@@ -850,6 +850,33 @@ silent-janitor trap), `a1bd6c8` (chromium channel; `pdf-inline` goes red for a t
 `a4c4b2d`/`b0ed23c` (`clone()` fields). Open upstream work that changes what we carry: PR #2428,
 PR #2432, #2416.
 
+**Google Chrome is a second upstream, and every image build takes its current stable silently.**
+The Dockerfile installs whatever Chrome is current on build day. The v0.9.5 deploy moved production
+from Chrome 151 to 157 (2026-11-04 09:12Z), and Chrome 154+ turns on HTTPS-First balanced mode by
+default. For a public site whose HTTPS fails, headless Chrome then refuses the http load with
+**`net::ERR_BLOCKED_BY_CLIENT`** (0.2–0.6 s, no request leaves the browser). `classify_error_text`
+logs that as "unclassified net error, treated as ours" and returns `render_error` → 500, so MAS
+retries it three more times. http://steel-air.fi failed 4/4 in MAS's first window after the
+deploy. MAS's archive puts it at 35 of 28,636 companies http-only and 150 with at least one http
+page. Fixed by a last `--disable-features=…,HttpsFirstBalancedModeAutoEnable` in `config.yml`,
+live from 2026-11-04 14:24Z (`0.9.5-https-first`, AITOSOFT_CHANGES).
+
+Three traps from this:
+- **Chrome honours only the last `--disable-features` switch.** Measured: with the fix first and
+  another switch after it, the page is still blocked. Playwright's own list (which disables
+  `HttpsUpgrades`, and since microsoft/playwright#43871 also this feature) is overridden by
+  crawl4ai's `MediaRouter,DialMediaRouteProvider` switch, so upgrading Playwright would not have
+  fixed it.
+- **Chromium's adoption guide spells the feature `…AutoEnabled`; the working name is
+  `HttpsFirstBalancedModeAutoEnable`.**
+- **Our browser suite can't see it on loopback**, because Chrome exempts localhost and private
+  addresses. `test_an_http_only_public_site_renders` maps a public-looking name onto the fixture
+  with `--host-resolver-rules`. That flag is one `enforce_egress` strips, so the test relaxes the
+  list for its own block only. Its control is red without the switch, on real Chrome only.
+
+**If a rebuild changes Chrome's major version, treat it as an upstream merge.** Run the browser
+suite inside the built image, and watch `render_error` with `ERR_` codes in the first window.
+
 **Not a regression if `origin_unreachable` moves after the deploy:** TLS tolerance is kept, so it
 should not. If it jumps anyway, check that `aitosoft_trust` still sets `ALLOW_INSECURE_TLS` before
 anything else; the fixture tests pin it, but they run on headless Chromium, not production's Chrome.

@@ -8,12 +8,15 @@ works. Where a task file and this index disagree, the task file wins.
 ## State of the world
 
 - **Production is v0.9.5 on `crawl4ai-service-se` (Sweden Central) since 2026-11-04**, by digest,
-  Google Chrome 157; MAS moved there that morning. The idle West Europe copy goes when MAS deletes
+  Google Chrome 157; MAS moved there that morning. Since 14:24Z the image is `0.9.5-https-first`:
+  Chrome 154+ refused http-only sites until one launch switch turned that off (AITOSOFT_CHANGES). The idle West Europe copy goes when MAS deletes
   it (on or after 2026-11-11). Query the live state with `az` (AZURE_OPERATIONS §0).
 - **`main` == production + docs.** Verify it.
 - **Two joint runs with MAS found no regression** (`upgrade-upstream-v0.9.5.md` §10).
-- **Next is the optimisation loop with MAS** (item 1): announced windows on real prospects, one
-  change each, both sides counting. Cost per request and per company: AZURE_OPERATIONS §4.5.
+- **The optimisation loop with MAS is running** (item 1): announced windows on real never-scraped
+  prospects, one change each, both sides counting. Window 1 (baseline) ran 2026-11-04 13:09Z. Window 2
+  is MAS's model-host retry fix; window 3 is our warm-replica pin at 2. The ledger is in the task
+  file. Cost per request and per company: AZURE_OPERATIONS §4.5.
 - **What the last sweep says about priorities.** 186,178 requests over 175 h. Of MAS's 60,874
   capture attempts, 86.1 % were stored and **95 % of failures were the origin's**. Our share, in
   captures lost: 500s 156 (152 of the 163 URLs failed on every attempt, so deterministic), 429s 29,
@@ -113,4 +116,5 @@ The MAS thread is direct, session to session over Remote Control (CLAUDE.md §Cr
 are filed in gitignored `tmp/mas-repo-messages/`; cite filenames, never integers. On 2026-11-04 the
 thread was held by MAS's `task-606` session; their follow-up is `task-608`. A session's listed name
 changes with its title, so find it with `ListAgents`, or reply to the latest message's `from`.
-Nothing is owed to them.
+Nothing is owed to them beyond window 3's pin (2 replicas, after their window 2), which needs their
+"ready" first. The thread is at `99-…` (2026-11-04).

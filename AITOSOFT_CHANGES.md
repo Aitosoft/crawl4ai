@@ -16,6 +16,36 @@ What changed in this fork, when, why, and what it cost or proved. Newest first.
 
 ---
 
+## 2026-11-04: Chrome 157 refused http-only sites; one launch switch restores them (`0.9.5-https-first`)
+
+**What changed:** `config.yml` gains a final
+`--disable-features=MediaRouter,DialMediaRouteProvider,HttpsFirstBalancedModeAutoEnable`. Deployed
+by digest `sha256:da6c4460…9af35`, revision `crawl4ai-service-se--0000002`, with traffic on it
+from 14:24:12Z. It is the same Chrome 157.0.8103.38 and the same Python packages as `0.9.5-merge`.
+
+**Why:** the v0.9.5 deploy that morning also moved Chrome from 151 to 157. Chrome 154+ enables
+HTTPS-First balanced mode by default, which refuses an http-only public site in headless mode with
+`net::ERR_BLOCKED_BY_CLIENT`. We class that `render_error` → 500, so MAS retried each URL three more
+times and lost the page. Found in the first window of the optimisation loop (http://steel-air.fi,
+4/4). MAS's archive: 35 of 28,636 companies are http-only and 150 have at least one http page.
+A company drawn into a window is never drawn again, so the fix went in before MAS's window 2, at
+their request.
+
+**Evidence:**
+- Probes on the shipped image against http://neverssl.com. Blocked with Playwright's defaults and
+  with ours. Loads with the switch. Does not load with the `…AutoEnabled` spelling. Still blocked
+  when the switch is not the last `--disable-features`, because Chrome honours only the last one.
+- Our suite inside the new image on real Chrome: 329 passed, 1 failed (the known `pdf-inline`). Both
+  new http-only tests pass, including the control.
+- Smoke green, Tier 1 4/4, and one production canary to neverssl.com → 200 with 1,300 characters.
+- A clean-context review: ship.
+- Detail and traps: FINDINGS §Upstream merge watchlist ("Google Chrome is a second upstream").
+
+**Not changed:** `HttpsUpgrades` stays on as it was under Chrome 151, since crawl4ai's switch already
+overrode Playwright's. Upgrade with fallback to http is what served these sites before.
+
+---
+
 ## 2026-11-04: v0.9.5 deployed to `crawl4ai-service-se`, between two joint agent runs (`0.9.5-merge`)
 
 **What changed:**

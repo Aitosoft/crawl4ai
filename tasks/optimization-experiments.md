@@ -53,8 +53,10 @@ before the tail ended (AZURE_OPERATIONS §4.5).
 |---|---|---|---|---|---|---|---|---|
 | 2026-11-04 | (i) | region → Sweden Central (v0.9.2) | 790 (10.53) | 32 + 22 / 0 | 0.056 | 0.58 + 0.76 | 0 | 87.0 replica-min (69.5 + 17.5 tail); one replica stalled 55 s at 3.85 GB `anon` |
 | 2026-11-04 | (ii) | v0.9.5 + Chrome 157 | 814 (10.85) | 46 + 5 / 2 | 0.055 | 0.60 + 0.77 | 1 (parked domain) | 89.5 (68.0 + 21.5); 500s = scale-in, not the merge |
-| 2026-11-04 | w1 | none: baseline on ~75 never-scraped prospects | | | | | | MAS's `88-…`; sets the numbers later windows are judged against |
-| | w2 | `minReplicas` pinned at w1's steady fleet (lever 2) | | | | | | fresh disjoint draw, same shape as w1 |
+| 2026-11-04 | w1 | none: baseline on 75 never-scraped prospects, 13:09:35–13:35:28Z | 699 (9.32) | 42 + 11 / 20 | 0.046 | 0.43 + 0.53 (all-in 2.27, MAS) | 1 | 64.0 replica-min (48.0 + 16.0); fleet held at **2** (28 req/min); 31 of 42 gate 429s in the first 3 min at 1 replica. The 20 × 500 were 4 URLs × 4 attempts, all deterministic: http-only steel-air.fi (Chrome 157, fixed before w2), 3 inline PDFs, 1 JS shell. MAS: `93-…`, `97-…`; ours: `95-…` |
+| 2026-11-04 | (between) | **ours: `0.9.5-https-first`**, live 14:24:12Z | | | | | | not a window. Chrome 154+ refused http-only sites (AITOSOFT_CHANGES). MAS records it in w2's config beside their change |
+| | w2 | **MAS's**: retry a model-host 429 on the same host before the fallback | | | | | | MAS's `94-…`; our fleet unpinned, as in w1 |
+| | w3 | `minReplicas` pinned at **2** (lever 2), judged against w2 | | | | | | fresh disjoint draw, same shape |
 
 ## Levers, roughly by expected value
 
@@ -105,7 +107,12 @@ Sized from today's runs; argue with every one.
    retries). **First verify the mechanism locally**: SIGTERM the local server during a stalled
    `raw://` render; does Playwright's `handle_sigterm` close the browser? Only then write a fix, which
    may be a launch flag in an upstream-owned file (check upstream first, Principle 1). Expected
-   effect: scale-in 500s → 0.
+   effect: scale-in 500s → 0. **Worth less than when it was written:** a pinned window (lever 2)
+   can't scale in below the pin, so inside windows it would already be 0. It matters only for
+   unpinned runs that scale above the pin. Note for whoever verifies it: production's SIGTERM path
+   is supervisord → gunicorn master → uvicorn worker, with no `stopasgroup`. A bare local uvicorn is
+   not that path, so reproduce it under supervisord (Principle: patch the layer below the one you
+   test).
 4. **`delay_before_return_html: 2.0` is MAS's config and ~37 % of our mean render time**
    (AZURE_OPERATIONS §4.5). Lowering it cuts render-seconds per page, so ¢/request, if the fleet
    follows render demand. Risk: pages that paint late come back thin. The capture-point canary is
@@ -125,6 +132,17 @@ Sized from today's runs; argue with every one.
    want it from us; it's additive for us.
 8. **4 vCPU / 8 GiB replicas** (possible since the v2 environment, AZURE_OPERATIONS §3.6, untried). Only
    if memory starts costing work; it doubles the price per replica.
+9. **Deterministic 500s: stop paying four attempts for a page that can't render** (found in w1). All
+   16 non-http 500s in w1 were URLs that failed identically on every attempt: three inline PDFs
+   (Chrome's 356-byte viewer shell; our detector calls it blocked, and with no 403/503 that is
+   `render_error`), and one JS shell with 0 visible characters in Chrome *and* Patchright. Each attempt
+   costs two renders (Chrome + Patchright with a 10 s capture wait), so ~8 renders per URL, ~12 of
+   699 requests. In August, 152 of 163 URLs that ever got a 500 got four in a row. The levers: classify
+   the PDF viewer shell as `unrenderable_content` (200, terminal; `test_a_download_is_not_a_retryable_server_error[pdf-inline]`
+   is already red for exactly this), and maybe make a both-tiers-empty JS shell terminal. Both change
+   what MAS receives (500 → 200), so they need their ack. MAS's side: their extension filter doesn't
+   stop the agent fetching a `.pdf` it read in page text (`96-…`). **Small:** ~2 % of requests and
+   maybe 3 % of render-seconds a window. Worth it mostly because it also makes the outcome true.
 
 ## Instruments worth keeping
 

@@ -78,7 +78,7 @@ Line counts are `git diff --numstat 838869b 3b6b2a1`.
 | `deploy/docker/api.py` | +455/−22 | ours (deployment) |
 | `deploy/docker/server.py` | +113/−4 | ours (deployment) |
 | `deploy/docker/crawler_pool.py` | +650/−55 | ours (deployment) |
-| `deploy/docker/config.yml` | +212/−19 | ours (deployment config) |
+| `deploy/docker/config.yml` | +228/−19 | ours (deployment config) |
 | `deploy/docker/utils.py` | +74/−1 | ours (memory instrument) |
 | `deploy/docker/egress_proxy.py` | +56/−8 | not worth filing; carry until upstream PR #2428 lands |
 | `deploy/docker/egress_broker.py` | +7/−0 | docstring only |
@@ -429,6 +429,12 @@ reasoning. What differs from upstream:
 - `extra_args`: `--disable-gpu` and `--disable-software-rasterizer` are removed.
   The TLS comment there records why certificate errors are tolerated without a
   launch flag since upstream `f0ada4c`.
+- `extra_args` ends with `--disable-features=MediaRouter,DialMediaRouteProvider,HttpsFirstBalancedModeAutoEnable`
+  (2026-11-04). Chrome 154+ otherwise refuses http-only sites. Chrome honours only
+  the last `--disable-features`, so this switch must stay last and must repeat
+  crawl4ai's own (`browser_manager.py`). `test_mas_contract.py` pins both.
+  **At the next sync**, if upstream changes its `--disable-features` list, this
+  line has to follow.
 
 ### `deploy/docker/utils.py`
 
