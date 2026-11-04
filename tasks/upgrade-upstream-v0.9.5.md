@@ -859,7 +859,7 @@ tags stay (§8 item 5); the 630 raw pages are kept as the offline corpus
 (`tasks/optimization-experiments.md` §Instruments).
 
 **What the runs taught, and where it now lives:**
-- cost per request is flat, so cost per company follows pages per company: AZURE_OPERATIONS §4.5;
+- cost per request is flat, so cost per company follows pages per company: AZURE_OPERATIONS §4.5 (**retired the same evening**: the fleet size the autoscaler picks sets cost per request; `optimization-experiments.md`);
 - the 429 split and the parallel-scrape cold start: §3.8;
 - scale-in kills in-flight renders: §2.4;
 - a replica stalled by memory without a kill: §6.4;

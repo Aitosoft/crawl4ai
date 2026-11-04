@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Aitosoft: toggle crawl4ai-service min-replicas. EMERGENCY VALVE ONLY.
+# Aitosoft: set crawl4ai-service's replica floor and ceiling.
 #
-# RETIRED as a routine pre-batch step (2026-07-17). Capacity is now managed
-# by the render-admission gate (aitosoft_admission.py, 429 + Retry-After) and
-# the `http-renders` ACA scale rule (a trigger, NOT render capacity) — replicas
-# scale with load automatically. See AZURE_OPERATIONS.md "Scaling".
+# Two uses (AZURE_OPERATIONS.md §3.5):
+#  - `fix N` / `release`: the fixed fleet for MAS's announced windows (since 2026-11-04). At their
+#    shape the autoscaler lands on 2 or 3 replicas by chance, so a fixed 2 makes our cost
+#    predictable and removes the cold-start 429 burst (tasks/optimization-experiments.md, lever 2).
+#  - `up N` / `down`: an emergency floor, e.g. if KEDA misbehaves mid-batch (the 2026-04-14
+#    outage, where replica xs697 was SIGTERM'd during an active run).
+# Outside those, the app autoscales from zero: the render-admission gate (429 + Retry-After) and the
+# `http-renders` scale rule (a trigger, not render capacity) track the traffic.
 #
-# Keep for emergencies: if KEDA misbehaves mid-batch (e.g. the 2026-04-14
-# outage where replica xs697 was SIGTERM'd during an active run), pinning
-# min-replicas > 0 holds warm capacity until the batch completes.
+# Every change mints a revision, which kills in-flight renders (AZURE_OPERATIONS.md §2.4), so make
+# it with nothing in flight.
 #
 # Usage:
 #   ./batch-scale.sh up [N]  # Pin min=N warm replicas (default 1). Emergency only.

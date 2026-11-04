@@ -10,7 +10,16 @@
 # 2026-08-08.
 #
 # Usage:
-#   ./azure-deployment/deploy-image.sh <tag>     # e.g. 0.9.3-fix-foo
+#   ./azure-deployment/deploy-image.sh <tag>     # build, then deploy what was built
+#   BUILD_ONLY=1 ./azure-deployment/deploy-image.sh <tag>
+#                                               # build and print the digest; deploy nothing
+#   DEPLOY_DIGEST=sha256:<hex> ./azure-deployment/deploy-image.sh <tag>
+#                                               # deploy an already-built digest; no build
+#
+# The safe sequence (2026-11-04): BUILD_ONLY=1, run the test suite inside that digest (TESTING.md
+# "Inside a built image"), then DEPLOY_DIGEST=<it>. A plain run rebuilds, and every build installs
+# whatever Google Chrome is current, so the image you tested is not the one you would ship
+# (FINDINGS "Google Chrome is a second upstream"). Both modes run the same gates and drift checks.
 #
 # Prereqs: az login (subscription "Aitosoft - Microsoft Partner Network NEW"),
 # run from repo root or pass nothing else — the build context is the repo root.
@@ -53,6 +62,16 @@ live_replicas=$(az containerapp replica list --name "$APP_NAME" \
     --resource-group "$RESOURCE_GROUP" --query 'length(@)' -o tsv 2>/dev/null || echo "")
 if [[ -z "$live_replicas" ]]; then
     echo "    WARNING: could not read the live replica count; continuing." >&2
+elif (( live_replicas > 0 )) && [[ -z "${BUILD_ONLY:-}" ]] && [[ "${DEPLOY_ALLOW_LIVE:-}" != "1" ]] \
+        && (( live_replicas <= DEPLOY_REPLICA_CEILING )); then
+    # Since ~2026-11-08 MAS's production traffic arrives unannounced (thread 131). A revision
+    # change kills in-flight renders and can strand a request mid-switch (AZURE_OPERATIONS §2.4),
+    # so deploy only onto an idle fleet unless you have checked nothing is in flight.
+    echo "!! REFUSING TO DEPLOY: $live_replicas replica(s) live; MAS may be mid-crawl." >&2
+    echo "!! Wait for scale-to-zero, or check the last 'RenderGate ADMIT' is minutes old and" >&2
+    echo "!! re-run with DEPLOY_ALLOW_LIVE=1. A fixed-fleet window keeps replicas up on purpose:" >&2
+    echo "!! deploy in its release step instead (batch-scale.sh release, then deploy)." >&2
+    exit 1
 elif (( live_replicas > DEPLOY_REPLICA_CEILING )); then
     echo "!! REFUSING TO DEPLOY: $live_replicas replicas are live (> $DEPLOY_REPLICA_CEILING)." >&2
     echo "!! A new revision needs its own replicas while these drain, and the" >&2
@@ -146,15 +165,29 @@ if [[ "$live_max" != "$ACA_MAX_REPLICAS" ]]; then
 fi
 echo "    OK: maxReplicas=$live_max."
 
-echo "==> Building ${IMAGE} in ACR (context: ${REPO_ROOT})..."
-az acr build --registry "$REGISTRY" --image "$IMAGE" \
-    --file "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
+if [[ -n "${DEPLOY_DIGEST:-}" ]]; then
+    if [[ "$DEPLOY_DIGEST" != sha256:* ]]; then
+        echo "!! DEPLOY_DIGEST must look like sha256:<hex> (got '${DEPLOY_DIGEST}')." >&2
+        exit 1
+    fi
+    # The digest must exist in this repository, or the update would point the app at nothing.
+    if ! az acr repository show --name "$REGISTRY" --image "${IMAGE%%:*}@${DEPLOY_DIGEST}" \
+            --query digest -o tsv >/dev/null 2>&1; then
+        echo "!! ${IMAGE%%:*}@${DEPLOY_DIGEST} is not in ${REGISTRY}. Nothing deployed." >&2
+        exit 1
+    fi
+    echo "==> DEPLOY_DIGEST set: skipping the build, deploying ${DEPLOY_DIGEST} (tag ${TAG})."
+else
+    echo "==> Building ${IMAGE} in ACR (context: ${REPO_ROOT})..."
+    az acr build --registry "$REGISTRY" --image "$IMAGE" \
+        --file "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
+fi
 
 # Deploy BY DIGEST, not by tag (2026-11-04). MAS's cutover pinned the live app
 # to a digest, and that is the better invariant: a tag is mutable (the
 # rollback trap in AZURE_OPERATIONS.md §2.5 is a tag overwritten by a rebuild),
 # a digest is not. The tag stays as the human-readable name in ACR.
-DIGEST=$(az acr repository show --name "$REGISTRY" --image "$IMAGE" --query digest -o tsv)
+DIGEST="${DEPLOY_DIGEST:-$(az acr repository show --name "$REGISTRY" --image "$IMAGE" --query digest -o tsv)}"
 if [[ "$DIGEST" != sha256:* ]]; then
     echo "!! Could not resolve ${IMAGE} to a digest (got '${DIGEST}'). The image is built" >&2
     echo "!! but NOT deployed. Resolve it by hand and update by digest:" >&2
@@ -162,6 +195,12 @@ if [[ "$DIGEST" != sha256:* ]]; then
     exit 1
 fi
 PINNED="${REGISTRY}.azurecr.io/${IMAGE%%:*}@${DIGEST}"
+if [[ -n "${BUILD_ONLY:-}" ]]; then
+    echo "==> BUILD_ONLY: built ${IMAGE} = ${DIGEST}. Nothing deployed."
+    echo "    Test it inside the image (TESTING.md), then:"
+    echo "    DEPLOY_DIGEST=${DIGEST} $0 ${TAG}"
+    exit 0
+fi
 echo "==> Updating ${APP_NAME} to ${PINNED} (tag ${TAG})..."
 az containerapp update \
     --name "$APP_NAME" \

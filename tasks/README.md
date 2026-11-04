@@ -1,89 +1,75 @@
 # Open tasks, in the order to do them
 
-**Updated 2026-11-04.** Each task file carries the concern, the evidence and the design space, and
-deliberately no checklist. You're expected to challenge it and record what you found wrong in the
-file itself; that has happened on nine consecutive task files, and it is the quality gate that
-works. Where a task file and this index disagree, the task file wins.
+**Updated 2026-11-04 (evening).** Each task file carries the concern, the evidence and the design
+space, and deliberately no checklist. You're expected to challenge it and record what you found
+wrong in the file itself; that has happened on nine consecutive task files, and it is the quality
+gate that works. Where a task file and this index disagree, the task file wins.
 
 ## State of the world
 
-- **Production is v0.9.5 on `crawl4ai-service-se` (Sweden Central) since 2026-11-04**, by digest,
-  Google Chrome 157; MAS moved there that morning. Since 17:20Z the image is `0.9.5-http-as-asked`:
-  two launch switches make Chrome fetch an `http://` URL over http, and stop refusing http-only sites
-  (AITOSOFT_CHANGES, two entries). The idle West Europe copy goes when MAS deletes
-  it (on or after 2026-11-11). Query the live state with `az` (AZURE_OPERATIONS §0).
-- **`main` == production + docs.** Verify it.
-- **From ≈2026-11-08, MAS's production traffic is unannounced** (`131-…`): campaign runs from their
-  edge at 1–5 in flight, at any hour. "Nothing calls `-se` outside windows" no longer holds.
-  - Before a deploy, check that the fleet is idle (`replica list`, and the last `RenderGate ADMIT`).
-  - A render stranded mid-switch is an error MAS sees (AZURE_OPERATIONS §2.4).
-  - Scale-in kills (lever 3) matter again outside fixed-fleet windows.
-  - Windows still come, from new levers, on the same protocol.
-- **Two joint runs with MAS found no regression** (`upgrade-upstream-v0.9.5.md` §10).
-- **The optimisation loop with MAS is running** (item 1): announced windows on real never-scraped
-  prospects, one change each, both sides counting. **Five windows ran on 2026-11-04, then the series
-  closed.**
-  - The fixed fleet (2 replicas) is the standing setup for MAS's windows. Our cost per company was
-    0.40–0.47 ¢ on it, against 0.43–0.64 ¢ when the scaler chose.
+- **Production is `0.9.5-http-as-asked` on `crawl4ai-service-se` (Sweden Central)**, by digest,
+  Google Chrome 157. It's v0.9.5 plus two Chrome launch switches from 2026-11-04 (AITOSOFT_CHANGES,
+  the two top entries). Query the live state with `az` (AZURE_OPERATIONS §0). **`main` ==
+  production + docs.** Verify it.
+- **The West Europe app (`crawl4ai-service`) is kept**, idle at zero, as a second egress: some hosts
+  drop our Sweden Central addresses and accept West Europe's (decision below). MAS holds its
+  deletion, which was planned for 11-11.
+- **From ≈2026-11-08, MAS's production traffic arrives unannounced** (`131-from-us-…`): campaign runs
+  from their edge at 1–5 in flight, at any hour.
+  - `deploy-image.sh` refuses to deploy while replicas are live (override `DEPLOY_ALLOW_LIVE=1`
+    after checking the last `RenderGate ADMIT`).
+  - The safe sequence is `BUILD_ONLY=1`, test inside that digest, then `DEPLOY_DIGEST=`
+    (AZURE_OPERATIONS §2.1).
+- **Optimisation series 1 with MAS closed on 2026-11-04** after five windows on real prospects
+  (`optimization-experiments.md`, ledger and "What series 1 established").
+  - A fleet fixed at 2 replicas is the standing setup for MAS's windows, and it makes our cost
+    predictable: 0.40–0.47 ¢ per company, against 0.43–0.64 ¢ when the scaler chose.
   - Identical windows differ by ~±10 %.
-  - Two http fixes shipped.
-  - Open: the http retry, the Sweden Central egress drop, the deterministic-500 family and
-    loopback DNS (levers 9–13).
-  The ledger is in the task file. Cost: AZURE_OPERATIONS §4.5.
-- **What the last sweep says about priorities.** 186,178 requests over 175 h. Of MAS's 60,874
+  - The windows found two Chrome regressions no offline suite could see; both are fixed.
+- **What the August sweep says about priorities.** 186,178 requests over 175 h. Of MAS's 60,874
   capture attempts, 86.1 % were stored and **95 % of failures were the origin's**. Our share, in
-  captures lost: 500s 156 (152 of the 163 URLs failed on every attempt, so deterministic), 429s 29,
-  `render_defect` 27, `unrenderable_content` 4. Size any new defect against those numbers before
-  investigating it.
+  captures lost: 500s 156 (152 of the 163 URLs failed on every attempt, so deterministic: item 1),
+  429s 29, `render_defect` 27, `unrenderable_content` 4. Size any new defect against those numbers.
 
 ## Open items
 
 | # | Task | Size | Why now |
 |---|---|---|---|
-| **1** | `optimization-experiments.md` | M per lever, ongoing | Tero's standing green light (2026-11-04). The loop, the ledger of levers and effects, and the levers sized. Windows 1–3 ran 2026-11-04; the fixed fleet is now the standing setup. Window 4 ran MAS's 8 in flight on our fixed 2 (0.40 ¢ per company, our cheapest), and `0.9.5-http-as-asked` went live after it. MAS's side is their `task-608`. |
-| **2** | The `render_mode` mislabel (no file; one word) | XS | We report a wrong value in a field MAS parses. Below. Deploy it between windows, announced. |
-| **3** | `https-connect-failure-http-retry.md` | S–M | MAS asked for it (`115-from-us-…`): 137 companies failed https at the tunnel and stored nothing. A marked `http://` attempt. Ships in its own window after MAS acks the field name. |
+| **1** | `deterministic-failures-are-terminal.md` | S | Acked by MAS (`131-…`). Four shapes that 500 four times on every attempt (inline-PDF shell, both-tiers-empty JS shell, `ERR_HTTP2_PROTOCOL_ERROR`, loopback DNS), plus the one-word `render_mode` mislabel. One announced deploy. |
+| **2** | `https-connect-failure-http-retry.md` | S–M | MAS asked for it: 137 archive companies failed https at the tunnel and stored nothing. A marked `http://` attempt, for fast refusals only. MAS acks the field name first. |
+| **3** | `optimization-experiments.md` | M per lever, ongoing | The loop continues when either side has a lever (MAS's next is likely `task-609`). The protocol, the ledger and levers 1–13 live there. |
 | **4** | `file-upstream-prs.md` | M | File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
+
+## Waiting on a decision (Tero and MAS's owner)
+
+- **Some hosts drop our Sweden Central egress** (`optimization-experiments.md` lever 12;
+  AZURE_OPERATIONS §7). The A/B was one static request to jekura.fi: it timed out through `-se` and
+  returned 200 through the West Europe app. MAS's archive: companies with a tunnel failure, 2.4 %
+  since the move (n = 11) against 1.4 % before, a lead. Options:
+  - (a) a marked fallback through the West Europe app for ~30 s connect timeouts (both sessions'
+    preference);
+  - (b) a static egress address for `-se`;
+  - (c) move the crawler back to West Europe;
+  - (d) residential egress.
 
 **Decided 2026-11-04 (Tero deferred both to us):** the API token in old images is not rotated and the
 old tags stay as rollback targets (nothing reached the open internet; `upgrade-upstream-v0.9.5.md` §8
-item 5); the 630 raw pages from run (ii) are kept as the offline corpus (`optimization-experiments.md`
-§Instruments).
-
-### 2. The `render_mode` mislabel
-
-In `api.handle_crawl_request`, the exception path's `failed_result(...)` call omits
-`render_mode`, which then defaults to `"full"` (`aitosoft_failure_class.failed_result`). The seed
-check runs before the static short-circuit, so **a static-mode request to a dead domain is reported
-to MAS as `"full"`.** One word, in a field they parse. Find it by name, not by line number: line
-numbers in `api.py` drift with every change, and the merge will move them again.
-
-Its sibling is not worth building: static-mode failed fetches log no `failure_class`. That is real in
-code, but static mode was used **0 times in 186,178 requests** (MAS confirms: `renderMode: "full"` on
-all 61,937 of their rows).
+item 5). The 630 raw pages from run (ii) are kept as the offline corpus.
 
 ---
 
 ## Parked on purpose: don't pick these up unasked
 
 - **CI could run the browser suite on real Chrome.** GitHub's `ubuntu-latest` has Google Chrome
-  preinstalled, and `fixture_origin._resolve_channel()` picks it automatically, so a second CI job
-  would be the first run of our browser suite on production's browser. Day one it turns
-  `pdf-inline` red for the true reason (production's inline-PDF 500), so that test has to change to
-  describe reality first. Not done in #1 to keep the merge readable.
+  preinstalled, and `fixture_origin._resolve_channel()` picks it automatically. Day one,
+  `pdf-inline` goes red for the true reason, until item 1 fixes it. Item 1 makes this cheaper.
 - **Dead-browser replacement (upstream `3f9f790`, on develop after v0.9.5).** It replaces pooled
-  browsers whose Chromium process died. We lack it, and how often a browser dies in production is
-  unmeasured (the 74 restarts in the last sweep were whole-container). It lands in our most-modified
-  file and carries a silent trap: an auto-merged janitor block calls helpers that don't exist on our
-  side, and the janitor dies without a log. See `upgrade-upstream-v0.9.5.md`. **Make it a task only
-  with a measured frequency**, or when the next sync brings it in anyway.
-- **Some hosts drop our Sweden Central egress** (measured 2026-11-04 evening; `optimization-experiments.md`
-  lever 12). The West Europe app is held, not deleted on 11-11, until it's sized. The likely fix is a
-  marked fallback through it, which needs a decision from Tero and us.
-- **`residential-egress-retry-path.md`.** It aims at what actually dominates (blocks are IP-based,
-  and Azure's shared SNAT inherits co-tenants' reputation). But it needs an instrument neither repo
-  has: a real browser from a residential IP. The one independent 2026 benchmark puts Patchright at 25
-  of 31 Cloudflare targets against vanilla Playwright's 24.
+  browsers whose Chromium process died. How often that happens in production is unmeasured. It
+  lands in our most-modified file and carries a silent trap (an auto-merged janitor block calls
+  helpers that don't exist on our side; `upgrade-upstream-v0.9.5.md`). **Make it a task only with a
+  measured frequency**, or when the next sync brings it in anyway.
+- **`residential-egress-retry-path.md`.** It aims at IP-based blocks, which dominate, and now at
+  lever 12 too. But it needs an instrument neither repo has: a real browser from a residential IP.
 - **`guard-corpus-is-not-in-the-repo.md`.** XS. Three tests fail on a fresh clone because
   `test-aitosoft/artifacts/*` is gitignored. It fails loudly, in the safe direction. Commit 4–6 files
   to `artifacts/keep/`, or delete the task. Don't open its sizing table.
@@ -91,37 +77,30 @@ all 61,937 of their rows).
   `test_soak.py` breaks the live-site rules (327 live requests in its stored run). Fix or delete each
   one when someone next needs it; until then, don't run them.
 - **The egress proxy may answer with its own 400 on an idle socket.** `_handle` writes `_BAD` when
-  an idle client socket times out after 30 s (`egress_proxy.py`). On full Chromium, a stalled
-  plain-http navigation once got that 400 and ended as `origin_http_error` after 162.9 s (seen once
-  in the upgrade's trial merge, not reproduced; `tmp/upgrade-v0.9.5-evidence/upstream-report-3-trial-merge.md`
-  §6.2). Production runs full Chrome. Size it before building anything, e.g. from MAS's data:
-  `origin_http_error` with status 400 on plain-http URLs.
+  an idle client socket times out after 30 s (`egress_proxy.py`). A stalled plain-http navigation
+  once got that 400 (the upgrade's trial merge, not reproduced). Plain-http traffic grew on
+  2026-11-04 when `HttpsUpgrades` went off. So count `origin_http_error` with status 400 on
+  `http://` URLs in any readout; none seen in window 5 (its two 400s were loopback DNS, not this).
 - **The response-size backstop and the `colspan` amplifier.** Pathological markup only, and never
-  seen in production. The sweep's largest response was 32.6 MB against the 232 MB that lost a customer
-  before the `desc` cap (`FINDINGS.md` §Output). Raise its priority if a real instance appears, or if
-  OOMs become worth fixing by bounding allocations.
-- **Scale-trigger or `render_capacity` changes.** The trigger is still not the lever (the scaler is
-  burst-driven, AZURE_OPERATIONS §3.2). But "no idle fleet to cut" was retired on 2026-11-04: at 5 in
-  flight the fleet lands on 2 or 3 by chance, and cost per request follows it. The lever being tested
-  is a fixed fleet (`optimization-experiments.md` lever 2, window 3).
-- **Memory work.** Closed by two repos independently: `anon` moved +26 MB of 4,096 over 53 h.
-  `tasks/done/post-sweep-closure-2026-08-17.md` has the seven closures from 2026-08-17. Read it
-  before re-deriving any of them. Reopen only if a memory stall costs work (AZURE_OPERATIONS §6.4).
+  seen in production (FINDINGS §Output). Raise its priority if a real instance appears.
+- **Scale-trigger or `render_capacity` changes.** The scaler is burst-driven (AZURE_OPERATIONS
+  §3.2); a fixed fleet does what a trigger can't (`optimization-experiments.md` lever 2).
+- **Memory work.** Closed by two repos independently (`tasks/done/post-sweep-closure-2026-08-17.md`).
+  Reopen only if a memory stall costs work (AZURE_OPERATIONS §6.4). Peak `anon` in the 2026-11-04
+  windows was 2.7–3.5 GB of 4 GiB, with no kill.
 
 ## Open threads that need someone else's data
 
 - **53 captures came back with no `<body>` element**, on 28 hosts (`etlistat.fi` ×15). On 26 of the 28
-  hosts our consent JS logged nothing, so it is not the cause. That is a real, unexplained mechanism,
-  and it is 53 captures. Worth a task only if it grows, or if MAS can hand over the bytes.
-- **Text after an inline `<style>`, `<link>` or `<meta>` is dropped (upstream #2416, open; a
-  maintainer plans one `drop_tree()` fix across ~11 sites).** Measured 2026-11-04 on 630 real WAA
-  raw pages: **0 change** (FINDINGS §Parse collapse; harness in `tmp/research/tailloss/`). Take
-  upstream's fix when it ships; don't build ours. Re-run the harness on the fix to confirm it.
-  We keep `strip_noscript` until then.
-- **PDF text extraction.** MAS holds April captures with extracted PDF text; today the class returns
-  a 174-byte viewer shell. Who caused that is not established (`FINDINGS.md` §Downloads and PDFs).
-  Upstream now ships `pypdf` and an opt-in PDF path, which arrive with the merge. Nobody needs it
-  yet: MAS removes PDFs at dispatch.
+  hosts our consent JS logged nothing, so it is not the cause. Worth a task only if it grows, or if
+  MAS can hand over the bytes.
+- **Text after an inline `<style>`, `<link>` or `<meta>` is dropped (upstream #2416, open).**
+  Measured 2026-11-04 on 630 real WAA raw pages: **0 change** (FINDINGS §Parse collapse). Take
+  upstream's fix when it ships; don't build ours. We keep `strip_noscript` until then.
+- **PDF text extraction.** MAS holds April captures with extracted PDF text; today an inline PDF
+  returns Chrome's viewer shell (item 1 makes that terminal, not readable). Upstream ships `pypdf`
+  and an opt-in PDF path. MAS's extension filter keeps PDF links out of the agent's menu, but not
+  out of URLs it reads in page text (`96-from-us-…`).
 
 ## Reference, not a task
 
@@ -132,9 +111,8 @@ code comments cite them by path. The second is the evidence base for the five ro
 ## Cross-repo state
 
 The MAS thread is direct, session to session over Remote Control (CLAUDE.md §Cross-repo). Messages
-are filed in gitignored `tmp/mas-repo-messages/`; cite filenames, never integers. On 2026-11-04 the
-thread was held by MAS's `task-606` session; their follow-up is `task-608`. A session's listed name
-changes with its title, so find it with `ListAgents`, or reply to the latest message's `from`.
-MAS's task-608 closed after window 5 with our open items in its follow-ups (`129-…`, `130-…`). New
-windows come from new levers on the same protocol (ready → fix → warm → end → release). MAS holds the
-West Europe app past 11-11 until lever 12 is sized (`126-…`). The thread is at `130-…` (2026-11-04).
+are filed in gitignored `tmp/mas-repo-messages/`; cite filenames, never integers. A session's listed
+name changes with its title, so find it with `ListAgents`, or reply to the latest message's `from`.
+MAS's `task-608` closed after window 5 (`129-…` to `132-…`), with our open items in its follow-ups.
+Owed to MAS: items 1 and 2 deployed, announced; the http retry's field name proposed before it's
+built. The thread is at `132-…` (2026-11-04).

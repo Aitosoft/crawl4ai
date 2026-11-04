@@ -30,9 +30,9 @@ pip install -e .                    # editable install
 crawl4ai-setup && crawl4ai-doctor   # browsers + install check
 pre-commit run --all-files          # black/ruff/mypy, scoped to our files only
 
-# Tests — run from repo root; TESTING.md has the full picture (counts as of 2026-11-03)
-pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py   # 262 pure-function, ~30 s
-pytest test-aitosoft/test_fixture_origin.py                           # 70 browser vs local origin, ~4 min
+# Tests — run from repo root; TESTING.md has the full picture (counts as of 2026-11-04)
+pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py   # 263 pure-function, ~30 s
+pytest test-aitosoft/test_fixture_origin.py                           # 74 browser vs local origin, ~4 min
 pytest deploy/docker/tests/test_security_*.py                         # upstream's, what CI runs
 python test-aitosoft/test_regression.py --tier 1 --version <label>    # Tier 1, live sites — sparingly
 ```
@@ -132,6 +132,10 @@ Each line points at the entry that explains it. `FINDINGS.md` holds the code-lev
   turned TLS verification on, capped `page_timeout` at 60 s, moved capture 0.5 s earlier and switched
   on browser recycling, all silently and with green suites. Each is now pinned by a test; the next
   sync's real gate is the old-vs-new server A/B, not the suites. → FINDINGS §Upstream merge watchlist
+- **So does a rebuild: every image build installs whatever Google Chrome is current.** Chrome 151 →
+  157 arrived with the v0.9.5 deploy and refused http-only sites. Our loopback suites can't see that
+  family. Deploy the digest you tested (`BUILD_ONLY=1`, test in the image, then `DEPLOY_DIGEST=`).
+  → FINDINGS "Google Chrome is a second upstream"
 
 ## Testing
 
@@ -243,14 +247,17 @@ git merge upstream/develop`. What `develop` brings next, and its one trap, is in
 
 - **Endpoint:** `https://crawl4ai-service-se.blackpond-4f5c37ea.swedencentral.azurecontainerapps.io`
   — app `crawl4ai-service-se`, Sweden Central, since MAS moved there on 2026-11-04. The West Europe
-  `crawl4ai-service` still exists, idle. **KQL filters on the app name and a wrong one returns zero
-  rows silently**; history before 2026-11-04 is under the old name. `AZURE_OPERATIONS.md` §0.
+  `crawl4ai-service` is kept, idle, as a second egress (some hosts drop Sweden Central's addresses;
+  AZURE_OPERATIONS §7). **KQL filters on the app name and a wrong one returns zero rows silently**;
+  history before 2026-11-04 is under the old name. `AZURE_OPERATIONS.md` §0.
 - **Configuration is queried, never transcribed.** Image, revision, replica bounds, scale trigger,
   CPU and memory: `AZURE_OPERATIONS.md` opens with the `az` commands. Every transcribed copy of
   those values has drifted at least once.
-- **Deploy:** `./azure-deployment/deploy-image.sh <tag>` (ACR build + image-only update + drift
-  checks, which run before the build). **Never set env vars during a deploy** — that is how MAS's
-  token gets broken.
+- **Deploy:** `./azure-deployment/deploy-image.sh <tag>`, image-only, with drift checks before the
+  build. Build with `BUILD_ONLY=1`, test inside the image, then ship that digest with
+  `DEPLOY_DIGEST=` (AZURE_OPERATIONS §2.1). From ≈2026-11-08 MAS's traffic is unannounced, and the
+  script refuses while replicas are live. **Never set env vars during a deploy** — that is how
+  MAS's token gets broken.
 - **Cost:** ~$0.30 per replica-hour, $0 when idle (`minReplicas: 0`), USD. Per request and per
   company, and the measurement traps: `AZURE_OPERATIONS.md` §4.
 

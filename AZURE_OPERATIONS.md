@@ -22,7 +22,9 @@ to know better than anyone.
 moved every agent to Sweden Central that morning and cloned us there as `crawl4ai-service-se` in
 environment `aitosoft-aca-se` (same image by digest, token, scale rule, probes and env var names;
 checked with `az` 2026-11-04). The West Europe `crawl4ai-service` in `aitosoft-aca` still exists, idle
-at zero; it served no requests in the 3 days before the cutover. Every command below takes the app
+at zero, running the older `0.9.2-capacity-gate-2`. **It's kept on purpose as a second egress**
+(§7: some hosts drop Sweden Central's addresses and accept West Europe's). MAS holds its planned
+11-11 deletion until that is decided. Every command below takes the app
 and environment from these two variables, and the scripts in `azure-deployment/` default to the
 same app (override with `APP_NAME=`):
 
@@ -133,8 +135,21 @@ export SUB=$(az account show --query id -o tsv)
 ### 2.1 The only supported path
 
 ```bash
-./azure-deployment/deploy-image.sh <tag>
+BUILD_ONLY=1 ./azure-deployment/deploy-image.sh <tag>            # build; prints the digest
+# run the suite inside that digest: TESTING.md "Inside a built image"
+DEPLOY_DIGEST=sha256:<hex> ./azure-deployment/deploy-image.sh <tag>   # ship exactly that
 ```
+
+**Build, test inside the image, then deploy the tested digest.** A plain `deploy-image.sh <tag>`
+still works, but it rebuilds, and every build installs whatever Google Chrome is current. So the
+image you tested is not the image you'd ship (FINDINGS "Google Chrome is a second upstream"; Chrome
+151 → 157 arrived with the v0.9.5 deploy and refused http-only sites). Both modes run the same gates
+and drift checks.
+
+**The live-fleet gate (2026-11-04):** from ≈2026-11-08 MAS's traffic is unannounced, so the script
+refuses while any replica is live. Wait for scale-to-zero. Or check that the last `RenderGate
+ADMIT` is minutes old and set `DEPLOY_ALLOW_LIVE=1`. After a fixed-fleet window: `batch-scale.sh
+release` first, then deploy with `DEPLOY_ALLOW_LIVE=1`.
 
 It builds in ACR (no local Docker) and swaps the image only. It **never sets env
 vars — setting env vars during a deploy is how MAS's token gets broken** — and
@@ -509,12 +524,18 @@ so 0 never enters the PATCH body; source lines in the script's header):
 
 ```bash
 ./azure-deployment/batch-scale.sh status    # read
-./azure-deployment/batch-scale.sh up 1      # emergency only: pin warm capacity
-./azure-deployment/batch-scale.sh down      # back to scale-to-zero (verifies)
+./azure-deployment/batch-scale.sh fix 2     # min = max = 2: the fixed fleet for an announced window
+./azure-deployment/batch-scale.sh release   # min 0, max back to deploy-image.sh's ACA_MAX_REPLICAS
+./azure-deployment/batch-scale.sh up 1      # emergency only: a floor, max untouched
+./azure-deployment/batch-scale.sh down      # undo `up` (keeps max as it is, so never after `fix`)
 ```
 
-Pre-batch warm-replica pinning was retired 2026-07-17; RenderGate plus the
-explicit scale rule track real traffic.
+**For MAS's announced windows, the fleet is fixed, not autoscaled** (since 2026-11-04;
+`tasks/optimization-experiments.md`, protocol and lever 2). At their shape the scaler lands on 2 or 3
+replicas by chance (§4.5), so a fixed 2 makes the cost predictable, and the warm fleet removes the
+cold-start 429 burst. Every `fix`/`release`/`up`/`down` mints a revision (§2.4), so do them with
+nothing in flight. Outside windows the app autoscales from zero as before. A floor around the clock
+is still declined (§3.8).
 
 ### 3.6 Ceilings — what can and cannot be bought
 
@@ -680,12 +701,14 @@ than absorbing them, and dilution needs the replicas to exist already. MAS's
 control: three crossings of 5 concurrent in minute one produced their single 429;
 seven crossings after KEDA had scaled produced none.
 
-**So the lever for cold-start 429s is `minReplicas`, not `maxReplicas` or the
-trigger** — priced and declined. One pinned replica costs up to ~$7.3/day at the
-active rate (about half the trigger-12 sweep bill), less if it qualifies for the
-idle rate between sweeps (unmeasured, §4.3), to remove an ~11.5 s cold start that
-occurs only at gaps between batches. Revisit if cold-start 429s start costing
-captures.
+**So the lever for cold-start 429s is the replica floor, not `maxReplicas` or the
+trigger.** A floor around the clock was priced and declined: one pinned replica costs up to ~$7.3/day
+at the active rate, less if it qualifies for the idle rate (unmeasured, §4.3). **For an announced
+window it's used** (2026-11-04): the fleet is fixed at 2 for the window's duration (§3.5). In window
+3 that removed the cold-start burst (render-gate 429s 29 → 7) and gave the day's best latency. **A
+single warm replica would not have done it.** The burst lands *at* one replica after it's up,
+because MAS's brain fans out to 12–13 in flight against a replica's 6 (per-minute table by replica
+count, 2026-11-04, in `tasks/optimization-experiments.md`).
 
 ### 3.9 Measuring load
 

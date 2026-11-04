@@ -580,16 +580,23 @@ Upstream will never touch these, so they cost nothing at merge time.
 - **Gitignored:** `artifacts/` holds the guard's evidence corpus
   (`tasks/guard-corpus-is-not-in-the-repo.md`).
 - `TESTING.md` owns test counts and procedure. To verify the count:
-  `pytest --collect-only -q test-aitosoft/` (332 on 2026-11-03 after the v0.9.5
-  merge: 262 offline + 70 fixture-origin).
+  `pytest --collect-only -q test-aitosoft/` (337 on 2026-11-04: 263 offline + 74
+  fixture-origin).
 
 **Other**
-- `azure-deployment/`: `deploy-image.sh` is the only deploy path.
-  `batch-scale.sh` is an emergency valve. `setup-memory-alert.sh` sets up the
-  memory alert. `pip-constraints.txt` (2026-11-03) is the previous production
-  image's `pip freeze`, applied by the Dockerfile's `PIP_CONSTRAINT`, so a build
-  does not move the browser stack by accident; its header says how to
-  regenerate it.
+- `azure-deployment/`:
+  - `deploy-image.sh` is the only deploy path. Since 2026-11-04 it has `BUILD_ONLY=1`,
+    `DEPLOY_DIGEST=` and a live-fleet gate.
+  - `batch-scale.sh` sets the fixed fleet for MAS's windows (`fix`/`release`) and the emergency
+    floor (`up`/`down`).
+  - `window-watch.sh`, `window-readout.sh` and `replica-minutes.sh` read a window's side of the
+    loop, Log Analytics and Azure Monitor only.
+  - `post-deploy-smoke.sh` runs the post-deploy checks. `setup-memory-alert.sh` sets up the
+    memory alert.
+  - `pip-constraints.txt` (2026-11-03) is the previous production image's `pip freeze`, applied by
+    the Dockerfile's `PIP_CONSTRAINT`, so a build doesn't move the Python browser stack by
+    accident. Google Chrome itself is not pinned; every build installs current stable. Its header
+    says how to regenerate it.
 - `.dockerignore` (2026-11-03): keeps `.env*`, `PRIVATE.md`, `tmp/`,
   `test-aitosoft/artifacts/` and local tool state out of the build context.
   Before it, `0.9.2-capacity-gate-2` and earlier images carried all of them under

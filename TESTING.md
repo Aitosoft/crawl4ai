@@ -37,9 +37,9 @@ what we did".
 ## Offline suites: what proves what
 
 ```bash
-pytest test-aitosoft/                                                # 332 tests, ~270 s
-pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # 262 tests, ~30 s (pure-function)
-pytest test-aitosoft/test_fixture_origin.py                          # 70 tests, ~245 s (browser, loopback)
+pytest test-aitosoft/                                                # 337 tests, ~275 s
+pytest test-aitosoft/ --ignore=test-aitosoft/test_fixture_origin.py  # 263 tests, ~30 s (pure-function)
+pytest test-aitosoft/test_fixture_origin.py                          # 74 tests, ~245 s (browser, loopback)
 pytest deploy/docker/tests/test_security_*.py -q                     # upstream's: 343 passed + 1 xfailed, ~8 s (needs pypdf)
 ```
 
@@ -443,8 +443,22 @@ az acr run --registry aitosoftacr --timeout 2700 --cmd 'aitosoftacr.azurecr.io/c
   python-dotenv raise in every test. Copy the tree without it first:
   `mkdir /tmp/p2 && cd /tmp/project && tar --exclude=./.env --exclude=./.env.txt -cf - . | (cd /tmp/p2 && tar xf -)`, then run from `/tmp/p2`.
 - **Expected on real Chrome: `test_a_download_is_not_a_retryable_server_error[pdf-inline]` fails**,
-  the production inline-PDF 500 described under "arm64 devcontainer". Everything else passes:
-  69/70 on `0.9.5-candidate` (Chrome 156), 66/67 on `0.9.2-capacity-gate-2` (Chrome 151).
+  the production inline-PDF 500 described under "arm64 devcontainer"
+  (`tasks/deterministic-failures-are-terminal.md` fixes it). Everything else passes: 331 passed, 1
+  failed, 5 skipped on `0.9.5-http-as-asked` (Chrome 157, 2026-11-04).
+- **Two controls run only here.** `test_the_http_only_route_is_blocked_without_the_switch` and
+  `test_the_https_answer_wins_without_the_upgrade_switch` skip on the devcontainer's Chromium, which
+  neither refuses http-only sites nor upgrades http. They're the evidence that their positive twins
+  aren't vacuous (FINDINGS "Google Chrome is a second upstream").
+- **Testing a file the image doesn't contain**, or a config variant: `--cmd` with `/dev/null` as
+  context can't carry a large file. Use a small context directory with an `acb.yaml`
+  (`version: v1.1.0`, one `steps: - cmd: <image> bash run.sh`) and run
+  `az acr run --registry aitosoftacr -f acb.yaml .` from inside it. The directory is the working
+  directory of the step. Done 2026-11-04 to show a new test red on the old `config.yml` and green on
+  the new one, in the live image.
+- **A bare TCP probe from Azure** runs the same way (ACR is in West Europe, so it leaves from a West
+  Europe address). That's one SYN per host and no HTTP: the cheapest "does this host drop us?"
+  check (AZURE_OPERATIONS §7).
 
 ---
 
