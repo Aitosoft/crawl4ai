@@ -306,6 +306,22 @@ crawler:
       # flips again, they go red. Turning verification ON is a contract change
       # for MAS and needs a count of broken-cert targets first
       # (tasks/upgrade-upstream-v0.9.5.md §3.1).
+      # Aitosoft 2026-11-04: http-only sites. Chrome 154+ turns on "Always Use
+      # Secure Connections" (HTTPS-First balanced mode) by default: before loading
+      # a public site whose HTTPS fails, it asks the user, and headless Chrome
+      # surfaces the ask as net::ERR_BLOCKED_BY_CLIENT, which we class
+      # render_error -> 500 on every attempt. Production went Chrome 151 -> 157 at
+      # 2026-11-04 09:12Z and http://steel-air.fi failed 4/4 in MAS's next window.
+      # Disabling HttpsFirstBalancedModeAutoEnable restores Chrome 151's behaviour
+      # (verified in the shipped image against http://neverssl.com; the spelling
+      # "...AutoEnabled" in Chromium's adoption guide does NOT work). Playwright
+      # made the same fix upstream (microsoft/playwright#43871, PR #43877), which
+      # would not reach us anyway: Chrome takes ONE --disable-features value, and
+      # crawl4ai's own switch (browser_manager.py, MediaRouter,DialMediaRouteProvider)
+      # comes after Playwright's. So this switch must be the LAST one and must
+      # repeat crawl4ai's features. test_mas_contract.py pins both; the fixture
+      # origin's http-only route pins the behaviour on real Chrome.
+      - "--disable-features=MediaRouter,DialMediaRouteProvider,HttpsFirstBalancedModeAutoEnable"
 
 # Logging Configuration
 logging:

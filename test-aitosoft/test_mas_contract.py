@@ -471,6 +471,35 @@ def test_tls_tolerance_survives_enforce_egress():
     assert kwargs.get("ignore_https_errors") is True
 
 
+def test_https_first_is_off_in_the_launch_args_chrome_actually_reads():
+    """Chrome 154+ blocks http-only public sites with net::ERR_BLOCKED_BY_CLIENT
+    unless HttpsFirstBalancedModeAutoEnable is disabled (config.yml extra_args,
+    2026-11-04). Chrome reads one --disable-features value, so the switch must be
+    the LAST one, and it must repeat every feature crawl4ai's own switch
+    disables, or we silently re-enable those. Behavioural pin, on real Chrome
+    only: test_an_http_only_public_site_renders (test_fixture_origin.py)."""
+    from utils import load_config
+
+    from crawl4ai.browser_manager import BrowserManager
+
+    browser = load_config()["crawler"]["browser"]
+    cfg = BrowserConfig(**browser["kwargs"], extra_args=list(browser["extra_args"]))
+    args = BrowserManager(browser_config=cfg)._build_browser_args()["args"]
+
+    def features(switch: str) -> set:
+        return set(switch.split("=", 1)[1].split(","))
+
+    switches = [a for a in args if a.startswith("--disable-features=")]
+    assert switches, "no --disable-features switch at all"
+    last = features(switches[-1])
+    assert "HttpsFirstBalancedModeAutoEnable" in last
+    for earlier in switches[:-1]:
+        assert features(earlier) <= last, (
+            f"crawl4ai's {earlier} is not repeated in the last switch, "
+            "so Chrome would re-enable those features"
+        )
+
+
 def test_falsy_global_forbidden_fields_are_dropped_not_rejected():
     """v0.9.5 added UNTRUSTED_GLOBAL_FORBIDDEN_FIELDS; until our tolerant filter
     learned about it, these 400'd where v0.9.2 dropped them."""

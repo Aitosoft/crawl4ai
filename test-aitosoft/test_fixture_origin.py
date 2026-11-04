@@ -21,6 +21,7 @@ Three things this suite is for:
     pytest test-aitosoft/test_fixture_origin.py -q     # ~50 s, launches Chromium
 """
 
+import contextlib
 import os
 
 import pytest
@@ -538,6 +539,83 @@ def test_the_capture_point_includes_the_consent_wait(fixture_origin, production_
     assert (
         fixture_origin.hits_for("/hydrate-after") == 1
     ), "captured blank and rescued by a retry: the capture point moved earlier"
+
+
+# ── http-only sites under Chrome's HTTPS-First default (2026-11-04) ──────
+# Chrome exempts localhost and private addresses from HTTPS-First, so a loopback
+# URL can never show this. Map a public-looking name onto the fixture instead
+# (Playwright's own repro, microsoft/playwright#43871): :80 is the fixture, :443
+# is a closed port, so the site is http-only exactly like http://steel-air.fi.
+# The seed check is skipped inside loopback_allowed(), so the name needs no DNS.
+# enforce_egress strips --host-resolver-rules from every launch (an egress
+# bypass); this block alone lets that one flag through, and restores the list.
+
+_HTTP_ONLY_HOST = "http-only.example.org"
+
+
+@contextlib.contextmanager
+def _http_only_host_mapped(fixture_origin, drop_https_first_switch=False):
+    import egress_broker
+
+    from crawl4ai import BrowserConfig
+
+    saved = BrowserConfig.get_defaults()
+    saved_dangerous = egress_broker._DANGEROUS_BROWSER_ARGS
+    egress_broker._DANGEROUS_BROWSER_ARGS = tuple(
+        a for a in saved_dangerous if a != "--host-resolver-rules"
+    )
+    args = [
+        a
+        for a in (saved.get("extra_args") or [])
+        if not (drop_https_first_switch and "HttpsFirstBalancedModeAutoEnable" in a)
+    ]
+    port = fixture_origin.port
+    args.append(
+        f"--host-resolver-rules=MAP {_HTTP_ONLY_HOST}:80 127.0.0.1:{port},"
+        f"MAP {_HTTP_ONLY_HOST}:443 127.0.0.1:9"
+    )
+    BrowserConfig.set_defaults(extra_args=args)
+    try:
+        yield f"http://{_HTTP_ONLY_HOST}/ok"
+    finally:
+        egress_broker._DANGEROUS_BROWSER_ARGS = saved_dangerous
+        BrowserConfig.reset_defaults()
+        BrowserConfig.set_defaults(**saved)
+
+
+def test_an_http_only_public_site_renders(fixture_origin, production_path):
+    """Chrome 154+ asks before loading a public site whose HTTPS fails, and
+    headless Chrome turns the ask into net::ERR_BLOCKED_BY_CLIENT: render_error,
+    500, on every attempt. Production went Chrome 151 -> 157 at 2026-11-04 09:12Z
+    and http://steel-air.fi failed 4/4 in MAS's next window. config.yml's last
+    --disable-features switch turns the default off. Red only on Chrome >= 154
+    without that switch; on the devcontainer's older bundled Chromium it passes
+    either way (the control below is skipped there)."""
+    fixture_origin.reset_hits()
+    with _http_only_host_mapped(fixture_origin) as url:
+        outcome = production_path.crawl(url, delay_before_return_html=SHORT_WAIT)
+
+    assert outcome.success, outcome.error_message
+    assert outcome.failure_class == "none"
+    assert CONTENT_MARKER in outcome.markdown
+    assert fixture_origin.hits_for("/ok") >= 1
+
+
+def test_the_http_only_route_is_blocked_without_the_switch(
+    fixture_origin, production_path
+):
+    """The control: without the switch, real Chrome refuses the same URL, so the
+    test above cannot pass vacuously. Needs Chrome >= 154 (the deployed image);
+    skipped on bundled Chromium, which predates the default."""
+    if production_path.channel != "chrome":
+        pytest.skip("needs real Google Chrome >= 154 (the built image)")
+    fixture_origin.reset_hits()
+    with _http_only_host_mapped(fixture_origin, drop_https_first_switch=True) as url:
+        outcome = production_path.crawl(url, delay_before_return_html=SHORT_WAIT)
+
+    assert not outcome.success
+    assert "ERR_BLOCKED_BY_CLIENT" in (outcome.error_message or "")
+    assert fixture_origin.hits_for("/ok") == 0
 
 
 # ── TLS: broken certificates (v0.9.5 merge, task §3.1) ───────────────────
