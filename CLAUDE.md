@@ -106,7 +106,7 @@ Each line points at the entry that explains it. `FINDINGS.md` holds the code-lev
 - **The server accepts `magic` and `simulate_user`; don't send them** — the boundary won't stop
   you, and they damage pages. Don't recommend
   `remove_overlay_elements` either. Injected page JS must never remove `<html>`/`<body>`/`<head>`.
-  → §Untrusted boundary, §Consent and overlay scripts
+  → §Untrusted-config boundary, §Consent and overlay scripts
 - **`base_config` fills only `None`/`""` values**, so it can't set `max_retries` or any boolean;
   `CrawlerRunConfig.set_defaults()` can. → §Request contract
 - **`page.content()` and `page.evaluate()` have no timeout**; wrap every new call. → §Render timing
@@ -235,8 +235,7 @@ entirely ours — verified against git. `AITOSOFT_CHANGES.md` is the history. Re
 from git rather than trusting either: `git diff --stat upstream/develop...HEAD -- crawl4ai deploy
 Dockerfile` (three dots — from the merge base).
 
-**Upstream sync:** last synced at v0.9.5 (merged 2026-11-03, in production since 2026-11-04;
-merge-base `838869b`). `git fetch upstream &&
+**Upstream sync:** last synced at v0.9.5 (merged 2026-11-03; merge-base `838869b`). `git fetch upstream &&
 git merge upstream/develop`. What `develop` brings next, and its one trap, is in `AITOSOFT_FILES.md`
 §5 "Last merge"; the method is `tasks/upgrade-upstream-v0.9.5.md` §4.
 
@@ -252,8 +251,8 @@ git merge upstream/develop`. What `develop` brings next, and its one trap, is in
 - **Deploy:** `./azure-deployment/deploy-image.sh <tag>` (ACR build + image-only update + drift
   checks, which run before the build). **Never set env vars during a deploy** — that is how MAS's
   token gets broken.
-- **Cost:** ~$0.30 per replica-hour, ≈0.05 ¢ per request; the fleet ran at 2 replicas at August's
-  request rate and 3 at the 2026-11-04 joint runs' ~32/min; $0 when idle (`minReplicas: 0`). Costs are USD. Detail and the measurement traps: `AZURE_OPERATIONS.md`.
+- **Cost:** ~$0.30 per replica-hour, $0 when idle (`minReplicas: 0`), USD. Per request and per
+  company, and the measurement traps: `AZURE_OPERATIONS.md` §4.
 
 ## Cross-repo communication
 

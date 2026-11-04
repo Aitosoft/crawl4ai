@@ -30,22 +30,11 @@ What changed in this fork, when, why, and what it cost or proved. Newest first.
 - **Redis starts on `-se` again**: upstream `fadc53f` (in the merge) made the `::1` bind optional;
   on v0.9.2 it aborted on every `-se` start. `/crawl` never used it.
 
-**Evidence: two joint runs with MAS, one change each, 75 companies each, 5 in flight, the same
-brain and client** (`tmp/mas-repo-messages/72-from-us-…`, `78-from-us-…`, `80-to-mas-…`):
-- **Run (i), the region alone** (v0.9.2 on `-se`): 790 requests, 0 lost work, 0 newly empty.
-- **Run (ii), the merge and Chrome 157:** 814 requests, wire counts identical on both sides.
-  - Two pages newly empty against August and one company lost: all three were the sites
-    (an old-image vs new-image A/B gave identical sizes and text; fortax.fi is now a parked domain).
-  - Two `render_error` 500s: an autoscaler scale-in killing a replica mid-render (AZURE_OPERATIONS
-    §2.4), not the merge.
-  - Latency p99 44.6 → 18.0 s and peak `anon` 3.9 → 2.8 GB: suggestive only (different cohorts).
-- **Gates:** offline 262/262, fixture origin 70/70, Tier 1 4/4 after a site-drift expectation
-  fix, smoke and SSRF negatives green; our suite inside the shipped image on Chrome 157: 326
-  passed, 5 skipped, 1 failed (the known `pdf-inline`).
-- **Cost:** ≈0.05 ¢ per request in August and in both runs; per company 0.33 → 0.52–0.55 ¢
-  because MAS's new brain fetches 10.5–10.9 pages per company, not 6.4 (AZURE_OPERATIONS §4.5).
-- **#2416 on 630 real raw pages: 0 change** (FINDINGS §Parse collapse). Wait for upstream's fix.
-- Full record: `tasks/upgrade-upstream-v0.9.5.md` §10.
+**Evidence:** two joint runs with MAS, one change each (the region, then the merge with Chrome 157),
+75 companies each, wire counts identical on both sides. No regression. Run (ii)'s one lost company
+and two newly empty pages were the sites (TEST_SITES_REGISTRY), and its two 500s were a scale-in
+(AZURE_OPERATIONS §2.4). Cost per request was flat: AZURE_OPERATIONS §4.5. #2416 changed 0 of 630
+real pages: FINDINGS §Parse collapse. Gates, numbers and the record: `tasks/upgrade-upstream-v0.9.5.md` §10.
 
 ---
 

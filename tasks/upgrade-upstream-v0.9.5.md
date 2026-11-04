@@ -854,6 +854,10 @@ from the devcontainer** (its egress is Tero's home connection): 3/4 by the scrip
 substance, the miss being site drift (aspia.fi's expected contact is gone from the raw HTML; the
 expectation is updated). **The byte-compare was replaced** by the suite inside the shipped image.
 
+**Decided the same day (Tero deferred both):** the token in old images is not rotated and the old
+tags stay (§8 item 5); the 630 raw pages are kept as the offline corpus
+(`tasks/optimization-experiments.md` §Instruments).
+
 **What the runs taught, and where it now lives:**
 - cost per request is flat, so cost per company follows pages per company: AZURE_OPERATIONS §4.5;
 - the 429 split and the parallel-scrape cold start: §3.8;
@@ -866,8 +870,7 @@ expectation is updated). **The byte-compare was replaced** by the suite inside t
   FINDINGS §Method lessons.
 
 **What I am least sure of:**
-1. **That Playwright's `handle_sigterm` is what kills the browsers at scale-in.** Inferred from
-   supervisord having no `stopasgroup`; not reproduced.
+1. **The scale-in mechanism** (AZURE_OPERATIONS §2.4): inferred, not reproduced.
 2. **That (ii)'s lower memory is Chrome 157's.** Different companies, different pages.
 3. **Two runs of 75 companies see only gross moves.** At August's block rate a run expects ~2;
    both had 0 terminal. A fingerprint regression on Chrome 157 that costs a few percent would not

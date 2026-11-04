@@ -355,7 +355,8 @@ returned on 584/630 exactly; the other 46 differ only in links resolved against 
 `final_url`. Control 2: a synthetic page with an inline `<style>`, `<link>` and `<meta>` mid-paragraph
 loses phone, email and address on today's tree and keeps them on the patched one. So the rate is
 under ~0.5 % of pages (95 % bound): **wait for upstream's fix.** Harness, patch recipe and control:
-`tmp/research/tailloss/` (gitignored); the raw pages' retention is Tero's call.
+`tmp/research/tailloss/` (gitignored); the raw pages are kept as the offline corpus
+(`tasks/optimization-experiments.md` §Instruments).
 
 **An *unclosed* `<noscript>` still deletes the page, and the offline suite cannot see it.** libxml2
 auto-closes the element, so `test_noscript_body_collapse.py` reports the shape as fixed. Chromium

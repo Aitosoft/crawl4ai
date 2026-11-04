@@ -31,8 +31,9 @@ Trigger 12 ran for the last 54 h of the final sweep (from 2026-08-14). Figures
 that do not depend on the trigger are whole-sweep (2026-08-09 → 08-16, 186,178
 requests). §5.6 has the table, §3.8 the per-regime 429 split.
 
-- **Fleet: 2 replicas** (occasionally 1 or 3) under full sweep load. That is where
-  the scaler settles, not a configured floor (`minReplicas` is 0). The fleet will
+- **Fleet: 2 replicas** (occasionally 1 or 3) under August's sweep load (~19 requests/min); 3 at
+  the ~32/min of the 2026-11-04 joint runs (AZURE_OPERATIONS §4.5). That is where the scaler
+  settles, not a configured floor (`minReplicas` is 0). The fleet will
   not surge for you; do not wait for replicas to appear as proof a burst was
   handled (§3.7).
 - **429s: ~6 % of requests** (6.5 % in a matched 32-minute window right after the
@@ -160,11 +161,10 @@ self-heal.
 
 - **The one exception, where you act before pages are lost: `origin_blocked`
   climbing segment over segment** (query 3; hour over hour if the sweep has no
-  segments). That is IP-reputation decay on our shared egress (§7: since 2026-11-04 a pool on `-se`, one address
-per replica as far as measured)
+  segments). That is IP-reputation decay on our shared egress (AZURE_OPERATIONS §7)
   — blocks are IP-based, not fingerprint-based — and every further request deepens
-  it. **Stop the sweep**: tell Tero, who relays to MAS. Nothing on our side repairs
-  an address's reputation. A rise confined to one host is that host, so read query
+  it. **Stop the sweep**: tell MAS's session directly (CLAUDE.md §Cross-repo), and
+  Tero. Nothing on our side repairs an address's reputation. A rise confined to one host is that host, so read query
   3's `hosts` before calling it reputation. Baselines: 0 in segment 1 (August
   2026); 2 in a 632-request trigger-12 window (2026-08-14).
 - **Replica non-Running for > 10 min → restart the revision.** "All replicas

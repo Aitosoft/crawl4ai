@@ -1,4 +1,4 @@
-# Azure Operations — `crawl4ai-service`
+# Azure Operations — `crawl4ai-service-se` (production since 2026-11-04)
 
 The single Azure reference for this repo: deploying, scaling, cost, logs, alerts,
 and the failure modes that only show up in Azure. Written by Claude for Claude.
@@ -188,7 +188,8 @@ az containerapp env list-usages -n "$ACA_ENV" -g aitosoft-prod -o table
 ### 2.4 A revision change kills in-flight renders
 
 `terminationGracePeriodSeconds` is unset, so ACA applies its 30 s default against
-our 180 s wall-clock fence. A draining replica loses up to 150 s of render work.
+our 180 s wall-clock fence. **In practice a draining replica loses its in-flight renders at once**,
+because the browsers die at SIGTERM (below), so a longer grace would not save them until that is fixed.
 
 ```bash
 az containerapp show -n "$APP" -g aitosoft-prod \
@@ -217,7 +218,7 @@ copy is `tmp/research/readout-run-ii-raw.txt`).
 URLs that ever got a 500 got exactly one, against 152 that got four (MAS's
 `49-data/http500-urls.csv`; their ladder makes four attempts, so four means every attempt failed and
 one means a retry fixed it). So it is real, small, and not where our lost captures come
-from. `tasks/README.md` carries it as a follow-up.
+from. Next step: `tasks/optimization-experiments.md`, lever 3.
 
 **A request that arrives during the switch, to an app at zero, can be orphaned (seen 2026-11-04).**
 The deploy of `0.9.5-merge` to `-se` updated the app at 09:12:14, but the platform kept 100 % of
@@ -281,15 +282,15 @@ What the tag list cannot tell you:
   faults at HTTP 200 + `success:false`; 5xx reserved for us). MAS's retry branch
   reads the wire status. Coordinate first.
 
-- **The v0.9.5 merge (branch `upgrade-upstream-v0.9.5`, first deployed after 2026-11-03).** Its
-  rollback target is `0.9.2-capacity-gate-2`. That reverts the code to v0.9.2 and Chrome to 151, and
+- **The v0.9.5 merge (`0.9.5-merge`, deployed 2026-11-04).** Its rollback target is
+  `0.9.2-capacity-gate-2` (digest `sha256:ea55e198…`, what `-se` ran before). That reverts the code to v0.9.2 and Chrome to 151, and
   for MAS only the additive changes revert (keyed `links`/`media`, a little markdown whitespace;
   `tasks/upgrade-upstream-v0.9.5.md` §8). **`0.9.5-candidate` is neither a deploy artifact nor a
   rollback target:** it is a test build from before the merge review's fixes. Deploy with
   `deploy-image.sh`, which rebuilds.
 - **Every tag up to and including `0.9.2-capacity-gate-2` carries `/tmp/project/.env` (the API
-  token), `PRIVATE.md` and `tmp/`**, because there was no `.dockerignore` (`tasks/README.md` item
-  1b). Rolling back to one is still safe; deleting them removes rollback targets.
+  token), `PRIVATE.md` and `tmp/`**, because there was no `.dockerignore`. Decided 2026-11-04: no
+  rotation (nothing reached the open internet) and the tags stay. Rolling back to one is safe.
 
 **Image only. Never set env vars during a rollback.**
 
@@ -1053,7 +1054,9 @@ ContainerAppConsoleLogs_CL
     by bin(TimeGenerated, 5m)
 ```
 
-All three verified to run 2026-11-03.
+All three verified to run 2026-11-03. For a whole run window, `azure-deployment/window-readout.sh`
+packages these and more (failures by class and replica, memory, platform events);
+`azure-deployment/window-watch.sh` is the during-the-run version.
 
 ### 5.5 The memory alert fires and pages nobody
 
