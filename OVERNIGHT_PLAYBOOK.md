@@ -20,7 +20,7 @@ any query of your own.
    set -a; source .env; set +a      # CRAWL4AI_API_URL, CRAWL4AI_API_TOKEN
    export LAW_ID=$(az monitor log-analytics workspace list \
      --query "[?name=='workspace-aitosoftprodnCsc'].customerId | [0]" -o tsv)
-   export APP_ID=$(az containerapp show -n crawl4ai-service -g aitosoft-prod --query id -o tsv)
+   export APP_ID=$(az containerapp show -n crawl4ai-service-se -g aitosoft-prod --query id -o tsv)
    ```
 3. **Know what a healthy sweep looks like** (below, and §5.6), so you do not
    report normal behaviour as an anomaly.
@@ -66,7 +66,7 @@ curl -s -o /dev/null -w "%{http_code}\n" "$CRAWL4AI_API_URL/health"
 # Restarts: sum the series, never sample one bin (§5.3)
 az monitor metrics list --resource "$APP_ID" --metric RestartCount --interval PT1M --aggregation Total -o json
 # Per-replica view; -o table hides restartCount
-az containerapp replica list -n crawl4ai-service -g aitosoft-prod -o json \
+az containerapp replica list -n crawl4ai-service-se -g aitosoft-prod -o json \
   --query "[].{name:name, created:properties.createdTime, restarts:properties.containers[].restartCount}"
 az monitor log-analytics query -w "$LAW_ID" --analytics-query '<kusto>' -o json   # always -o json
 ```
@@ -81,7 +81,7 @@ match the cadence.
 // 1. Wire: what MAS received (§5.4 explains via_activator and ResponseFlags)
 ContainerAppHTTPLogs
 | where TimeGenerated > ago(20m)
-| where ContainerAppName == "crawl4ai-service"
+| where ContainerAppName == "crawl4ai-service-se"
 | summarize n=count(), p95_s=round(percentile(toreal(RequestDuration),95)/1000.0,2),
             max_s=round(max(toreal(RequestDuration))/1000.0,2)
     by StatusCode, ResponseFlags, ResponseCodeDetails, via_activator=isempty(ReplicaName)
@@ -91,7 +91,7 @@ ContainerAppHTTPLogs
 // 2. Console signals — indexof, never contains (contains is term-based, §5.3)
 ContainerAppConsoleLogs_CL
 | where TimeGenerated > ago(20m)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | extend sig = case(
     indexof(Log_s, "RenderGate REJECT") >= 0,            "GATE-429",
     indexof(Log_s, "Memory pressure:") >= 0,             "MEM-REFUSE",
@@ -114,7 +114,7 @@ ContainerAppConsoleLogs_CL
 // 3. Failures by class — count failure_class=, never the token (§5.3)
 ContainerAppConsoleLogs_CL
 | where TimeGenerated > ago(20m)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where indexof(Log_s, "RESULT FAILURE") >= 0 or indexof(Log_s, "ORIGIN FAILURE") >= 0
      or indexof(Log_s, "TERMINAL FAILURE") >= 0
 | extend failure_class = extract(@"failure_class=(\w+)", 1, Log_s),
@@ -169,14 +169,14 @@ self-heal.
 - **Replica non-Running for > 10 min → restart the revision.** "All replicas
   Running" is not evidence nothing crashed (§6.3).
   ```bash
-  az containerapp revision restart -n crawl4ai-service -g aitosoft-prod \
-    --revision "$(az containerapp show -n crawl4ai-service -g aitosoft-prod --query properties.latestRevisionName -o tsv)"
+  az containerapp revision restart -n crawl4ai-service-se -g aitosoft-prod \
+    --revision "$(az containerapp show -n crawl4ai-service-se -g aitosoft-prod --query properties.latestRevisionName -o tsv)"
   ```
 - **Sustained 504s on healthy hosts → restart.**
 - **Stuck-slot pattern** (repeated `STUCK-SLOT`, with fence 504s or queue pressure
   that does not clear) → **roll back the image**, image only (§2.5):
   ```bash
-  az containerapp update -n crawl4ai-service -g aitosoft-prod \
+  az containerapp update -n crawl4ai-service-se -g aitosoft-prod \
     --image aitosoftacr.azurecr.io/crawl4ai-service:<rollback-tag>
   ```
   **Never `deploy-image.sh <older-tag>`**: it rebuilds today's tree under that

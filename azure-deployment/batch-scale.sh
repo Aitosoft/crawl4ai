@@ -17,7 +17,8 @@
 
 set -euo pipefail
 
-APP_NAME="crawl4ai-service"
+# 2026-11-04: MAS calls crawl4ai-service-se (Sweden Central); see deploy-image.sh.
+APP_NAME="${APP_NAME:-crawl4ai-service-se}"
 RESOURCE_GROUP="aitosoft-prod"
 
 # NOTE (2026-08-08): this script used to carry `MAX_REPLICAS=30` and pass

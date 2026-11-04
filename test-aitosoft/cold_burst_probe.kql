@@ -47,7 +47,7 @@
 // direction for "did we have enough capacity". Cross-check §2.
 ContainerAppConsoleLogs_CL
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | summarize replicas = dcount(ContainerGroupName_s) by bin(TimeGenerated, 1m)
 | order by TimeGenerated asc
 
@@ -62,7 +62,7 @@ ContainerAppConsoleLogs_CL
 //       this was 05:10:41 for a run that ended at 05:05, i.e. the ratchet).
 ContainerAppSystemLogs_CL
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where Reason_s in ("SuccessfulRescale", "TriggeredScaleUp", "KEDAScalerFailed")
 | project TimeGenerated, Reason_s, Log_s
 | order by TimeGenerated asc
@@ -70,7 +70,7 @@ ContainerAppSystemLogs_CL
 // Same thing, counted — for a one-line before/after diff.
 ContainerAppSystemLogs_CL
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | summarize events = count(), first = min(TimeGenerated), last = max(TimeGenerated)
     by Reason_s
 | order by events desc
@@ -89,7 +89,7 @@ ContainerAppSystemLogs_CL
 // logged it, and you need to know that before quoting either number.
 ContainerAppHTTPLogs
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName == "crawl4ai-service"
+| where ContainerAppName == "crawl4ai-service-se"
 | summarize requests = count() by Path, StatusCode
 | order by requests desc
 
@@ -99,7 +99,7 @@ ContainerAppHTTPLogs
 // differently.
 ContainerAppHTTPLogs
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+| where ContainerAppName == "crawl4ai-service-se" and Path == "/crawl"
 | summarize total = count(),
             n429 = countif(StatusCode == 429),
             n5xx = countif(StatusCode >= 500),
@@ -123,7 +123,7 @@ ContainerAppHTTPLogs
 // anything. Check this BEFORE reading the replica curve.
 ContainerAppHTTPLogs
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+| where ContainerAppName == "crawl4ai-service-se" and Path == "/crawl"
 | extend d = toreal(RequestDuration) / 1000.0
 | summarize reqs = count(), busy_seconds = round(sum(d), 1),
             concurrency = round(sum(d) / 60.0, 2),
@@ -134,7 +134,7 @@ ContainerAppHTTPLogs
 // Whole-window rollup.
 ContainerAppHTTPLogs
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+| where ContainerAppName == "crawl4ai-service-se" and Path == "/crawl"
 | extend d = toreal(RequestDuration) / 1000.0
 | summarize n = count(), mean = round(avg(d), 2),
             p50 = round(percentile(d, 50), 2), p90 = round(percentile(d, 90), 2),
@@ -152,7 +152,7 @@ ContainerAppHTTPLogs
 // Both REJECT variants become a 429 + Retry-After: 5 at the wire.
 ContainerAppConsoleLogs_CL
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where Log_s contains "RenderGate"
 | extend kind = case(Log_s contains "ADMIT", "ADMIT",
                      Log_s contains "REJECT (queue full)", "REJECT-queue-full",
@@ -168,7 +168,7 @@ ContainerAppConsoleLogs_CL
 // THIS is the early-warning signal the decision table's AMBER row keys on.
 ContainerAppConsoleLogs_CL
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where Log_s contains "RenderGate ADMIT"
 | extend waited = toreal(extract(@"waited=([0-9.]+)s", 1, Log_s))
 | extend in_use = toint(extract(@"in_use=(\d+)/", 1, Log_s))
@@ -183,7 +183,7 @@ ContainerAppConsoleLogs_CL
 // nowhere to put them and is why a 429 appeared.
 ContainerAppConsoleLogs_CL
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where Log_s contains "RenderGate ADMIT"
 | summarize admits = count() by ContainerGroupName_s
 | summarize replicas_that_rendered = count(), total_admits = sum(admits),
@@ -195,7 +195,7 @@ ContainerAppConsoleLogs_CL
 // Worth a glance whenever a 429 count surprises you.
 ContainerAppConsoleLogs_CL
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where Log_s contains "RenderGate initialized"
 | summarize boots = count(), sample = any(Log_s) by RevisionName_s
 
@@ -212,18 +212,18 @@ ContainerAppConsoleLogs_CL
 let ingress = toscalar(
     ContainerAppHTTPLogs
     | where TimeGenerated between (T0 .. T1)
-    | where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+    | where ContainerAppName == "crawl4ai-service-se" and Path == "/crawl"
     | count);
 let admits = toscalar(
     ContainerAppConsoleLogs_CL
     | where TimeGenerated between (T0 .. T1)
-    | where ContainerAppName_s == "crawl4ai-service"
+    | where ContainerAppName_s == "crawl4ai-service-se"
     | where Log_s contains "RenderGate ADMIT"
     | count);
 let n429 = toscalar(
     ContainerAppHTTPLogs
     | where TimeGenerated between (T0 .. T1)
-    | where ContainerAppName == "crawl4ai-service" and Path == "/crawl"
+    | where ContainerAppName == "crawl4ai-service-se" and Path == "/crawl"
         and StatusCode == 429
     | count);
 print ingress_crawl = ingress, rendergate_admits = admits,
@@ -242,7 +242,7 @@ print ingress_crawl = ingress, rendergate_admits = admits,
 // and ORIGIN/TERMINAL FAILURE are disjoint paths and no request emits both.
 ContainerAppConsoleLogs_CL
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where Log_s contains "failure_class="
 | extend fc = extract(@"failure_class=([a-z_]+)", 1, Log_s)
 | summarize n = count() by fc
@@ -259,7 +259,7 @@ ContainerAppConsoleLogs_CL
 // a change that buys nothing.
 ContainerAppConsoleLogs_CL
 | where TimeGenerated between (T0 .. T1)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | summarize replicas = dcount(ContainerGroupName_s) by bin(TimeGenerated, 1m)
 | summarize replica_minutes = sum(replicas), peak = max(replicas),
             minutes_observed = count(), mean_replicas = round(avg(replicas), 2)

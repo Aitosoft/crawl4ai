@@ -18,10 +18,28 @@ to know better than anyone.
 
 ## 0. Live state — query it
 
+**Since 2026-11-04 there are two copies of this service, and MAS calls the Sweden Central one.** MAS
+moved every agent to Sweden Central that morning and cloned us there as `crawl4ai-service-se` in
+environment `aitosoft-aca-se` (same image by digest, token, scale rule, probes and env var names;
+checked with `az` 2026-11-04). The West Europe `crawl4ai-service` in `aitosoft-aca` still exists, idle
+at zero; it served no requests in the 3 days before the cutover. Every command below takes the app
+and environment from these two variables, and the scripts in `azure-deployment/` default to the
+same app (override with `APP_NAME=`):
+
 ```bash
-az containerapp show -n crawl4ai-service -g aitosoft-prod --query "{image:properties.template.containers[0].image, rev:properties.latestRevisionName, min:properties.template.scale.minReplicas, max:properties.template.scale.maxReplicas, trigger:properties.template.scale.rules[0].http.metadata.concurrentRequests, cpu:properties.template.containers[0].resources.cpu, mem:properties.template.containers[0].resources.memory}" -o json
-az containerapp env list-usages -n aitosoft-aca -g aitosoft-prod -o table
-az containerapp revision list -n crawl4ai-service -g aitosoft-prod -o table
+APP=crawl4ai-service-se; ACA_ENV=aitosoft-aca-se      # West Europe legacy: crawl4ai-service / aitosoft-aca
+```
+
+**KQL filters on the app name, and a wrong name returns zero rows without an error.** Both apps log
+to the same workspace; the queries in §5 name `crawl4ai-service-se`. Anything you count from before
+2026-11-04 is under `crawl4ai-service`. Spanning the cutover means `startswith "crawl4ai-service"`.
+
+The ACR **repository** is still `crawl4ai-service` for both apps; only the app name changed.
+
+```bash
+az containerapp show -n "$APP" -g aitosoft-prod --query "{image:properties.template.containers[0].image, rev:properties.latestRevisionName, min:properties.template.scale.minReplicas, max:properties.template.scale.maxReplicas, trigger:properties.template.scale.rules[0].http.metadata.concurrentRequests, cpu:properties.template.containers[0].resources.cpu, mem:properties.template.containers[0].resources.memory}" -o json
+az containerapp env list-usages -n "$ACA_ENV" -g aitosoft-prod -o table
+az containerapp revision list -n "$APP" -g aitosoft-prod -o table
 az acr repository show-tags --name aitosoftacr --repository crawl4ai-service --orderby time_desc -o tsv
 ```
 
@@ -34,40 +52,45 @@ included. Two more:
 az containerapp list -g aitosoft-prod --query "[].{name:name, cpu:properties.template.containers[0].resources.cpu, mem:properties.template.containers[0].resources.memory, min:properties.template.scale.minReplicas, max:properties.template.scale.maxReplicas}" -o table
 
 # Probes, env var NAMES (never values), grace period, revision mode, session affinity
-az containerapp show -n crawl4ai-service -g aitosoft-prod --query "{probes:properties.template.containers[0].probes, envNames:properties.template.containers[0].env[].name, grace:properties.template.terminationGracePeriodSeconds, mode:properties.configuration.activeRevisionsMode, sticky:properties.configuration.ingress.stickySessions}" -o json
+az containerapp show -n "$APP" -g aitosoft-prod --query "{probes:properties.template.containers[0].probes, envNames:properties.template.containers[0].env[].name, grace:properties.template.terminationGracePeriodSeconds, mode:properties.configuration.activeRevisionsMode, sticky:properties.configuration.ingress.stickySessions}" -o json
 ```
 
 ---
 
 ## 1. Resources and identifiers
 
-All in resource group `aitosoft-prod`, West Europe (co-located with MAS).
+All in resource group `aitosoft-prod`. The resource group, the registry and the Log Analytics
+workspace are in West Europe; since 2026-11-04 the apps MAS calls are in Sweden Central (§0).
 
 | Resource | Type | Purpose |
 |---|---|---|
 | `aitosoftacr` | Container Registry | Image tags — the rollback surface (§2.5) |
-| `aitosoft-aca` | Container Apps environment | Shared with the platform repo's app; legacy Consumption-only (§3.6) |
-| `crawl4ai-service` | Container App | This service |
-| `aitosoft-edge` | Container App | The platform repo's (MAS). Same environment, same core quota, same cost lines (§4.3) |
+| `aitosoft-aca-se` | Container Apps environment, Sweden Central | Since 2026-11-04. **Workload-profiles (v2)**, Consumption profile, its own 100-core quota (§3.6) |
+| `crawl4ai-service-se` | Container App | **This service, as MAS calls it since 2026-11-04** |
+| `aitosoft-edge-se` | Container App | The platform repo's (MAS), in `aitosoft-aca-se`: same core quota and cost lines as us there |
+| `aitosoft-aca` | Container Apps environment, West Europe | Legacy Consumption-only (§3.6). Holds the pre-cutover apps |
+| `crawl4ai-service` | Container App | This service before 2026-11-04; idle at zero |
+| `aitosoft-edge` | Container App | MAS's, pre-cutover. min = max = 1, so it bills idle while it exists (§4.3) |
 | `workspace-aitosoftprodnCsc` | Log Analytics | Console, system and HTTP logs (§5) |
-| `crawl4ai-memory-high` | Metric alert | Fires routinely and pages nobody (§5.5) |
+| `crawl4ai-se-memory-high` | Metric alert | Created by MAS's cutover for `-se`, same rule as the old one; fires routinely and pages nobody (§5.5). `crawl4ai-memory-high` scopes the West Europe app |
 | `crawl4ai-oncall` | Action group | Zero receivers |
 
-**Trap: the environment is `aitosoft-aca`; `wonderfulsea-6a581e75` is its DNS
-label.** The label appears in the endpoint because an app FQDN is
+**Trap: the environments are `aitosoft-aca-se` and `aitosoft-aca`; `blackpond-4f5c37ea` and
+`wonderfulsea-6a581e75` are their DNS labels.** The label appears in the endpoint because an app FQDN is
 `<app>.<environment defaultDomain>`; `az containerapp env …` commands written
 against the label fail confusingly. The same fact is why an environment
 migration changes the endpoint (§3.6).
 
 ```bash
-az containerapp env show -n aitosoft-aca -g aitosoft-prod \
+az containerapp env show -n "$ACA_ENV" -g aitosoft-prod \
   --query "{defaultDomain:properties.defaultDomain, workloadProfiles:properties.workloadProfiles}" -o json
 ```
 
 **Endpoint** (tracked on purpose: fail-closed behind the token, and live tooling
-config):
+config). Since 2026-11-04 MAS calls the first; the second is the idle West Europe copy:
 
 ```
+https://crawl4ai-service-se.blackpond-4f5c37ea.swedencentral.azurecontainerapps.io
 https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io
 ```
 
@@ -84,7 +107,7 @@ or secret reference** (checked 2026-11-03: the app's only secret is the ACR
 registry credential). Check without printing values:
 
 ```bash
-az containerapp show -n crawl4ai-service -g aitosoft-prod \
+az containerapp show -n "$APP" -g aitosoft-prod \
   --query "properties.template.containers[0].env[].{name:name, secretRef:secretRef}" -o table
 ```
 
@@ -99,7 +122,7 @@ command in this file derives what it needs instead:
 ```bash
 export LAW_ID=$(az monitor log-analytics workspace list \
   --query "[?name=='workspace-aitosoftprodnCsc'].customerId | [0]" -o tsv)
-export APP_ID=$(az containerapp show -n crawl4ai-service -g aitosoft-prod --query id -o tsv)
+export APP_ID=$(az containerapp show -n "$APP" -g aitosoft-prod --query id -o tsv)
 export SUB=$(az account show --query id -o tsv)
 ```
 
@@ -158,8 +181,8 @@ old revision's survivors. The risk is highest mid-sweep — exactly when someone
 wants to ship a fix.
 
 ```bash
-az containerapp replica list -n crawl4ai-service -g aitosoft-prod --query 'length(@)'
-az containerapp env list-usages -n aitosoft-aca -g aitosoft-prod -o table
+az containerapp replica list -n "$APP" -g aitosoft-prod --query 'length(@)'
+az containerapp env list-usages -n "$ACA_ENV" -g aitosoft-prod -o table
 ```
 
 ### 2.4 A revision change kills in-flight renders
@@ -168,7 +191,7 @@ az containerapp env list-usages -n aitosoft-aca -g aitosoft-prod -o table
 our 180 s wall-clock fence. A draining replica loses up to 150 s of render work.
 
 ```bash
-az containerapp show -n crawl4ai-service -g aitosoft-prod \
+az containerapp show -n "$APP" -g aitosoft-prod \
   --query properties.template.terminationGracePeriodSeconds -o tsv    # empty == 30 s default
 ```
 
@@ -193,10 +216,16 @@ change mints one too).
 
 ```bash
 az acr repository show-tags --name aitosoftacr --repository crawl4ai-service --orderby time_desc -o tsv
-az containerapp update -n crawl4ai-service -g aitosoft-prod \
-  --image aitosoftacr.azurecr.io/crawl4ai-service:<older-tag>
-az containerapp show -n crawl4ai-service -g aitosoft-prod --query 'properties.template.containers[0].image' -o tsv
+D=$(az acr repository show --name aitosoftacr --image crawl4ai-service:<older-tag> --query digest -o tsv)
+az containerapp update -n "$APP" -g aitosoft-prod \
+  --image aitosoftacr.azurecr.io/crawl4ai-service@$D
+az containerapp show -n "$APP" -g aitosoft-prod --query 'properties.template.containers[0].image' -o tsv
 ```
+
+**The live app names a digest, not a tag** (since MAS's cutover, 2026-11-04; `deploy-image.sh`
+keeps it that way). So a tag push or retag changes nothing that runs, and the image field reads
+`…@sha256:…`. To name it, map the digest back:
+`az acr manifest list-metadata -r aitosoftacr -n crawl4ai-service --query "[?digest=='<sha256:…>'].tags" -o tsv`.
 
 **Trap: never roll back with `deploy-image.sh <older-tag>`.** The script always
 runs `az acr build` on the current working tree before it deploys (§2.1's grep
@@ -240,7 +269,7 @@ What the tag list cannot tell you:
 
 ```bash
 az acr build --registry aitosoftacr --image crawl4ai-service:<tag> --file Dockerfile .
-az containerapp update -n crawl4ai-service -g aitosoft-prod \
+az containerapp update -n "$APP" -g aitosoft-prod \
   --image aitosoftacr.azurecr.io/crawl4ai-service:<tag>
 curl -s -o /dev/null -w '%{http_code}\n' "$CRAWL4AI_API_URL/health"
 ```
@@ -260,7 +289,7 @@ an image (real Chrome, amd64) is in `TESTING.md` §"Inside a built image".
 
 ```bash
 NEW_TOKEN="crawl4ai-$(openssl rand -hex 24)"
-az containerapp update -n crawl4ai-service -g aitosoft-prod \
+az containerapp update -n "$APP" -g aitosoft-prod \
   --set-env-vars CRAWL4AI_API_TOKEN="$NEW_TOKEN"
 # then update this repo's .env AND tell MAS, in that order
 ```
@@ -413,12 +442,12 @@ Verified 2026-08-08 against the ARM spec and Microsoft's docs:
 
 ```bash
 # The trigger — the cost lever. Mints a revision.
-az containerapp update -n crawl4ai-service -g aitosoft-prod \
+az containerapp update -n "$APP" -g aitosoft-prod \
   --scale-rule-name http-renders --scale-rule-type http \
   --scale-rule-http-concurrency <N>
 
 # Verify against the app, never against the update's response
-az containerapp show -n crawl4ai-service -g aitosoft-prod \
+az containerapp show -n "$APP" -g aitosoft-prod \
   --query "properties.template.scale.rules[?name=='http-renders'].http.metadata.concurrentRequests | [0]" -o tsv
 ```
 
@@ -463,7 +492,7 @@ than trusting a figure (every document said `aitosoft-edge` held 0.25 cores for
 weeks after it went to 1.0 — §4.3).
 
 ```bash
-az containerapp env list-usages -n aitosoft-aca -g aitosoft-prod -o table
+az containerapp env list-usages -n "$ACA_ENV" -g aitosoft-prod -o table
 az containerapp list -g aitosoft-prod --query "[].{name:name, cpu:properties.template.containers[0].resources.cpu, min:properties.template.scale.minReplicas, max:properties.template.scale.maxReplicas}" -o table
 ```
 
@@ -509,6 +538,13 @@ resources double. The real price:
 - **Try the cheap lever first:** Microsoft's FAQ says memory-limit overrides are
   "evaluated on a per-case basis". One support ticket might remove the need, and
   nobody has filed one.
+
+**2026-11-04: MAS's cutover made this migration for its own reasons.** `aitosoft-aca-se` has
+`workloadProfiles: [Consumption]` where `aitosoft-aca` has `null`, and it has its own 100-core
+quota (`list-usages`: 1 used, MAS's edge app). So the 4 vCPU / 8 GiB size, a configurable ingress
+timeout and the quota headroom should now be available to `crawl4ai-service-se`. **Read from the
+environment's type and Microsoft's docs, not from an attempt;** nobody has tried a resize there, and
+the `GLOBAL_SEM` caveat above still applies if `render_capacity` moves with it.
 
 Not needed today. **Right-sizing down is refuted:** the busiest replica exceeds
 3.0 GiB in 99 % of minutes, so 1.5 vCPU / 3 GiB does not fit.
@@ -805,8 +841,8 @@ double-ingest and double-bill. Every suffix trap below follows from this.
 
 ```bash
 az monitor diagnostic-settings list --resource \
-  "$(az containerapp env show -n aitosoft-aca -g aitosoft-prod --query id -o tsv)" -o json
-az containerapp env show -n aitosoft-aca -g aitosoft-prod --query properties.appLogsConfiguration -o json
+  "$(az containerapp env show -n "$ACA_ENV" -g aitosoft-prod --query id -o tsv)" -o json
+az containerapp env show -n "$ACA_ENV" -g aitosoft-prod --query properties.appLogsConfiguration -o json
 ```
 
 **Log Analytics retention is 30 days** (`PerGB2018`, no daily cap):
@@ -856,7 +892,7 @@ first.
 | `-o tsv` on `az monitor log-analytics query` | Columns come back alphabetical, not in `project` order; positional reads silently transpose numbers | `-o json`, key by name |
 | Metrics API window > ~30 days | Silently truncated to the last ~30 days (§5.1) | ≤ 30-day windows |
 | Console logs are workspace-wide | `aitosoft-edge` logs into the same table at ~280× our volume when we are idle (1.37 M vs 4.9 k lines, 30 days to 2026-11-03) | `where ContainerAppName_s == "crawl4ai-service"`. The replica column is `ContainerGroupName_s`; there is no `ReplicaName_s` |
-| `ContainerAppHTTPLogs` is environment-wide | Same problem | `where ContainerAppName == "crawl4ai-service"` |
+| `ContainerAppHTTPLogs` is environment-wide | Same problem | `where ContainerAppName == "crawl4ai-service-se"` |
 | `ContainerAppHTTPLogs` column guesses | `StatusCode_d`, `ReplicaName_s`, `DurationMs_d`, `ContainerAppName_s` do not exist | Unsuffixed: `StatusCode`, `ReplicaName`, `RequestDuration` (ms), `ContainerAppName`. Wrap arithmetic in `toreal()`; columns arrive as strings in some paths |
 | `ConnectionId` alone | Unique only per Envoy pod (there are 2); keying on it merged connections and inflated lifetime 3× | Key on `(EnvoyPodName, ConnectionId)` |
 | `ContainerAppSystemLogs_CL.Count_d` | A cumulative per-pod tally (the Kubernetes event `count`), so `count()` under-counts and `sum(Count_d)` over-counts. One replica's `OOMKilled` rows read 1,2 → 3,4 → … → 9,10: `count()` 10, `sum` 55, truth 5 | Count distinct `(ReplicaName_s, TimeGenerated)` |
@@ -916,7 +952,7 @@ az monitor log-analytics query -w "$LAW_ID" --analytics-query '<kusto>' -o json
 // Wire truth: what MAS received
 ContainerAppHTTPLogs
 | where TimeGenerated > ago(20m)
-| where ContainerAppName == "crawl4ai-service"
+| where ContainerAppName == "crawl4ai-service-se"
 | summarize n=count(), p95_s=round(percentile(toreal(RequestDuration),95)/1000.0,2),
             max_s=round(max(toreal(RequestDuration))/1000.0,2)
     by StatusCode, ResponseFlags, ResponseCodeDetails, via_activator=isempty(ReplicaName)
@@ -937,7 +973,7 @@ close shows as `503`/`UC`, never as a 502.
 // Platform events — replica history stated, not inferred
 ContainerAppSystemLogs_CL
 | where TimeGenerated > ago(1h)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where Reason_s in ("SuccessfulRescale","AssigningReplica","ContainerStarted","OOMKilled")
 | project TimeGenerated, Reason_s, ReplicaName_s, Log_s | order by TimeGenerated asc
 ```
@@ -946,7 +982,7 @@ ContainerAppSystemLogs_CL
 // Pool memory — read anon, not the percentage (§6.4)
 ContainerAppConsoleLogs_CL
 | where TimeGenerated > ago(20m)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where indexof(Log_s, "Pool:") >= 0 and indexof(Log_s, "mem=") >= 0
 | extend mem_pct = toreal(extract(@"mem=([\d.]+)%", 1, Log_s)),
          anon_mb = toreal(extract(@"anon=([\d.]+)MB", 1, Log_s))
@@ -1072,7 +1108,7 @@ healthy replicas and concludes nothing happened — this happened here twice. Th
 ```kusto
 ContainerAppSystemLogs_CL
 | where TimeGenerated > ago(24h)
-| where ContainerAppName_s == "crawl4ai-service"
+| where ContainerAppName_s == "crawl4ai-service-se"
 | where Reason_s == "ContainerStarted"
 | project TimeGenerated, ReplicaName_s, Log_s | order by TimeGenerated asc
 ```
@@ -1189,10 +1225,14 @@ curl -s -X POST "$CRAWL4AI_API_URL/crawl" -H "Authorization: Bearer $CRAWL4AI_AP
   | jq -r '.results[0].markdown.raw_markdown'
 ```
 
-Swap the URL to ask "can the crawler reach this, and what does it get?". Egress is
-a single Azure West Europe address (in `PRIVATE.md`) from Azure's shared SNAT pool —
-the environment has no VNet integration — so it is not contractually stable, and
-we inherit co-tenants' reputation.
+Swap the URL to ask "can the crawler reach this, and what does it get?". Egress comes from
+Azure's shared SNAT pool; neither environment has VNet integration, so no address is contractual
+and we inherit co-tenants' reputation. West Europe's app lists 1 `outboundIpAddresses` entry;
+`crawl4ai-service-se` lists **161** (2026-11-04). In use, 7 of 7 probes from one warm `-se` replica
+(2026-11-04 07:52–07:56 UTC) left from the same single address, which is in that list (both
+regions' addresses are in `PRIVATE.md`). Whether another replica, or the same one later, leaves from
+a different one is unmeasured. **The 2026-11-04 cutover changed our egress address, and blocks are
+IP-based**, so block rates from before and after the cutover are different instruments.
 
 When you do need a shell: `exec` needs a pty (wrap in `script -qec "…" /dev/null`),
 and the command travels in the websocket URL, so anything over ~300 characters
@@ -1201,9 +1241,9 @@ It is the only instrument for two things:
 
 ```bash
 # Whether the cgroup has swap — an open prerequisite of the memory work, never run.
-script -qec "az containerapp exec -n crawl4ai-service -g aitosoft-prod --command 'cat /sys/fs/cgroup/memory.swap.max'" /dev/null
+script -qec "az containerapp exec -n $APP -g aitosoft-prod --command 'cat /sys/fs/cgroup/memory.swap.max'" /dev/null
 # The resolver ACA injects — what it costs and how we bound it: FINDINGS.md §"Egress, DNS and dead hosts"
-script -qec "az containerapp exec -n crawl4ai-service -g aitosoft-prod --command 'cat /etc/resolv.conf'" /dev/null
+script -qec "az containerapp exec -n $APP -g aitosoft-prod --command 'cat /etc/resolv.conf'" /dev/null
 ```
 
 ---

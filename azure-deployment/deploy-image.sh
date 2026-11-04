@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Aitosoft: build and deploy a new crawl4ai-service image.
+# Aitosoft: build and deploy a new crawl4ai-service image (to the app MAS calls;
+# since 2026-11-04 that is crawl4ai-service-se, see APP_NAME below).
 #
 # This is the ONLY supported deploy path for image updates. It never touches
 # env vars (so MAS's CRAWL4AI_API_TOKEN survives), replica limits, probes, or
@@ -20,7 +21,11 @@
 set -euo pipefail
 
 TAG="${1:?usage: deploy-image.sh <image-tag>}"
-APP_NAME="crawl4ai-service"
+# 2026-11-04: MAS moved every agent to Sweden Central, and the app they call is
+# `crawl4ai-service-se` (environment `aitosoft-aca-se`), a clone of the West
+# Europe `crawl4ai-service`. The West Europe app still exists, idle at zero;
+# target it explicitly with APP_NAME=crawl4ai-service if you ever need to.
+APP_NAME="${APP_NAME:-crawl4ai-service-se}"
 RESOURCE_GROUP="aitosoft-prod"
 REGISTRY="aitosoftacr"
 IMAGE="crawl4ai-service:${TAG}"
@@ -135,7 +140,7 @@ live_max=$(az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_G
 if [[ "$live_max" != "$ACA_MAX_REPLICAS" ]]; then
     echo "!! DRIFT: maxReplicas=$live_max but this repo expects $ACA_MAX_REPLICAS." >&2
     echo "!! Environment quota is 100 consumption cores at 2 vCPU/replica (50 hard ceiling)," >&2
-    echo "!! shared with MAS's aitosoft-edge. Reconcile before running traffic." >&2
+    echo "!! shared with MAS's edge app in the same environment. Reconcile before running traffic." >&2
     echo "!! NOTHING HAS BEEN BUILT OR DEPLOYED -- this check now runs first." >&2
     exit 1
 fi
@@ -145,11 +150,23 @@ echo "==> Building ${IMAGE} in ACR (context: ${REPO_ROOT})..."
 az acr build --registry "$REGISTRY" --image "$IMAGE" \
     --file "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
 
-echo "==> Updating ${APP_NAME} to ${REGISTRY}.azurecr.io/${IMAGE}..."
+# Deploy BY DIGEST, not by tag (2026-11-04). MAS's cutover pinned the live app
+# to a digest, and that is the better invariant: a tag is mutable (the
+# rollback trap in AZURE_OPERATIONS.md §2.5 is a tag overwritten by a rebuild),
+# a digest is not. The tag stays as the human-readable name in ACR.
+DIGEST=$(az acr repository show --name "$REGISTRY" --image "$IMAGE" --query digest -o tsv)
+if [[ "$DIGEST" != sha256:* ]]; then
+    echo "!! Could not resolve ${IMAGE} to a digest (got '${DIGEST}'). The image is built" >&2
+    echo "!! but NOT deployed. Resolve it by hand and update by digest:" >&2
+    echo "!!   az acr repository show --name $REGISTRY --image $IMAGE --query digest -o tsv" >&2
+    exit 1
+fi
+PINNED="${REGISTRY}.azurecr.io/${IMAGE%%:*}@${DIGEST}"
+echo "==> Updating ${APP_NAME} to ${PINNED} (tag ${TAG})..."
 az containerapp update \
     --name "$APP_NAME" \
     --resource-group "$RESOURCE_GROUP" \
-    --image "${REGISTRY}.azurecr.io/${IMAGE}" \
+    --image "$PINNED" \
     --output none
 
 # The drift checks used to live HERE, after the image update. They now run
@@ -161,5 +178,7 @@ az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" \
     --query "{image: properties.template.containers[0].image, revision: properties.latestRevisionName, fqdn: properties.configuration.ingress.fqdn}" \
     --output table
 
-echo "==> Done. Smoke-test with:"
-echo '    curl -s https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io/health'
+fqdn=$(az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" \
+    --query "properties.configuration.ingress.fqdn" -o tsv)
+echo "==> Done. Smoke-test with (TESTING.md §Quality gates has the full post-deploy smoke):"
+echo "    curl -s https://${fqdn}/health"

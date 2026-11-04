@@ -241,7 +241,10 @@ git merge upstream/develop`. What `develop` brings next, and its one trap, is in
 
 ## Azure
 
-- **Endpoint:** `https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io`
+- **Endpoint:** `https://crawl4ai-service-se.blackpond-4f5c37ea.swedencentral.azurecontainerapps.io`
+  — app `crawl4ai-service-se`, Sweden Central, since MAS moved there on 2026-11-04. The West Europe
+  `crawl4ai-service` still exists, idle. **KQL filters on the app name and a wrong one returns zero
+  rows silently**; history before 2026-11-04 is under the old name. `AZURE_OPERATIONS.md` §0.
 - **Configuration is queried, never transcribed.** Image, revision, replica bounds, scale trigger,
   CPU and memory: `AZURE_OPERATIONS.md` opens with the `az` commands. Every transcribed copy of
   those values has drifted at least once.

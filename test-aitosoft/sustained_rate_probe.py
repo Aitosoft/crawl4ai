@@ -88,7 +88,7 @@ from cold_burst_probe import (  # noqa: E402
 )
 
 DEFAULT_ENDPOINT = (
-    "https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io"
+    "https://crawl4ai-service-se.blackpond-4f5c37ea.swedencentral.azurecontainerapps.io"
 )
 
 # Segment 3's measured arrival rate, the run that produced the 30-replica ratchet.

@@ -21,9 +21,9 @@ if [ -z "$EMAIL_LIST" ]; then
 fi
 
 RESOURCE_GROUP="aitosoft-prod"
-APP_NAME="crawl4ai-service"
+APP_NAME="${APP_NAME:-crawl4ai-service-se}"   # 2026-11-04: MAS calls the Sweden Central app
 ACTION_GROUP="crawl4ai-oncall"
-ALERT_NAME="crawl4ai-memory-high"
+ALERT_NAME="${ALERT_NAME:-crawl4ai-se-memory-high}"   # MAS created this one for -se on 2026-11-04; the old one scopes West Europe
 SUBSCRIPTION=$(az account show --query id -o tsv)
 APP_RESOURCE_ID="/subscriptions/$SUBSCRIPTION/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.App/containerApps/$APP_NAME"
 

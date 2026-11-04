@@ -86,9 +86,9 @@ except ImportError:  # pragma: no cover
     sys.exit("httpx is required: pip install httpx")
 
 DEFAULT_ENDPOINT = (
-    "https://crawl4ai-service.wonderfulsea-6a581e75.westeurope.azurecontainerapps.io"
+    "https://crawl4ai-service-se.blackpond-4f5c37ea.swedencentral.azurecontainerapps.io"
 )
-APP_NAME = "crawl4ai-service"
+APP_NAME = "crawl4ai-service-se"  # Sweden Central since 2026-11-04
 RESOURCE_GROUP = "aitosoft-prod"
 
 # Measured locally through the real pipeline, 2026-08-08: a raw:// render costs
@@ -663,7 +663,7 @@ def main() -> int:
                     "  To drain: stop sending traffic and wait. Scale-down from a "
                     "burst took over\n"
                     "  twenty minutes in segment 3, so budget for it. Re-check with:\n"
-                    "      az containerapp revision list -n crawl4ai-service "
+                    "      az containerapp revision list -n crawl4ai-service-se "
                     "-g aitosoft-prod \\\n"
                     "        --query "
                     '"[?properties.active].properties.replicas" -o tsv\n\n'
