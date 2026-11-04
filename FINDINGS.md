@@ -874,6 +874,14 @@ Three traps from this:
   with `--host-resolver-rules`. That flag is one `enforce_egress` strips, so the test relaxes the
   list for its own block only. Its control is red without the switch, on real Chrome only.
 
+**`HttpsUpgrades` is the same family and older than Chrome 157:** an `http://` URL is upgraded,
+and Chrome falls back only if https *fails*. A hosting company's https placeholder ("HTTPS Not
+Available", 200) doesn't fail, so an http-only site came back as the placeholder
+(jr-sahkopalvelu.fi, MAS's window 3). It has been disabled in the same switch since
+`0.9.5-http-as-asked`. `test_an_http_url_is_fetched_over_http_even_when_https_answers` pins it,
+with a control. On the devcontainer's Chromium the upgrade never happens, so the control runs only
+on real Chrome.
+
 **If a rebuild changes Chrome's major version, treat it as an upstream merge.** Run the browser
 suite inside the built image, and watch `render_error` with `ERR_` codes in the first window.
 

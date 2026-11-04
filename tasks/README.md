@@ -8,8 +8,9 @@ works. Where a task file and this index disagree, the task file wins.
 ## State of the world
 
 - **Production is v0.9.5 on `crawl4ai-service-se` (Sweden Central) since 2026-11-04**, by digest,
-  Google Chrome 157; MAS moved there that morning. Since 14:24Z the image is `0.9.5-https-first`:
-  Chrome 154+ refused http-only sites until one launch switch turned that off (AITOSOFT_CHANGES). The idle West Europe copy goes when MAS deletes
+  Google Chrome 157; MAS moved there that morning. Since 17:20Z the image is `0.9.5-http-as-asked`:
+  two launch switches make Chrome fetch an `http://` URL over http, and stop refusing http-only sites
+  (AITOSOFT_CHANGES, two entries). The idle West Europe copy goes when MAS deletes
   it (on or after 2026-11-11). Query the live state with `az` (AZURE_OPERATIONS §0).
 - **`main` == production + docs.** Verify it.
 - **Two joint runs with MAS found no regression** (`upgrade-upstream-v0.9.5.md` §10).
@@ -28,7 +29,7 @@ works. Where a task file and this index disagree, the task file wins.
 
 | # | Task | Size | Why now |
 |---|---|---|---|
-| **1** | `optimization-experiments.md` | M per lever, ongoing | Tero's standing green light (2026-11-04). The loop, the ledger of levers and effects, and the levers sized. Windows 1–3 ran 2026-11-04; the fixed fleet is now the standing setup. Window 4 is MAS's 8 in flight on our fixed 2, and `0.9.5-http-as-asked` (HttpsUpgrades off) deploys after it, acked in `115-…`. MAS's side is their `task-608`. |
+| **1** | `optimization-experiments.md` | M per lever, ongoing | Tero's standing green light (2026-11-04). The loop, the ledger of levers and effects, and the levers sized. Windows 1–3 ran 2026-11-04; the fixed fleet is now the standing setup. Window 4 ran MAS's 8 in flight on our fixed 2 (0.40 ¢ per company, our cheapest), and `0.9.5-http-as-asked` went live after it. MAS's side is their `task-608`. |
 | **2** | The `render_mode` mislabel (no file; one word) | XS | We report a wrong value in a field MAS parses. Below. Deploy it between windows, announced. |
 | **3** | `https-connect-failure-http-retry.md` | S–M | MAS asked for it (`115-from-us-…`): 137 companies failed https at the tunnel and stored nothing. A marked `http://` attempt. Ships in its own window after MAS acks the field name. |
 | **4** | `file-upstream-prs.md` | M | File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |

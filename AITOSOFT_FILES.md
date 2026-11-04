@@ -429,8 +429,10 @@ reasoning. What differs from upstream:
 - `extra_args`: `--disable-gpu` and `--disable-software-rasterizer` are removed.
   The TLS comment there records why certificate errors are tolerated without a
   launch flag since upstream `f0ada4c`.
-- `extra_args` ends with `--disable-features=MediaRouter,DialMediaRouteProvider,HttpsFirstBalancedModeAutoEnable`
-  (2026-11-04). Chrome 154+ otherwise refuses http-only sites. Chrome honours only
+- `extra_args` ends with `--disable-features=MediaRouter,DialMediaRouteProvider,HttpsUpgrades,HttpsFirstBalancedModeAutoEnable`
+  (2026-11-04). Without `HttpsFirstBalancedModeAutoEnable`, Chrome 154+ refuses http-only sites.
+  Without `HttpsUpgrades`, an `http://` URL is upgraded to whatever the https side answers, e.g. a
+  hosting placeholder. Chrome honours only
   the last `--disable-features`, so this switch must stay last and must repeat
   crawl4ai's own (`browser_manager.py`). `test_mas_contract.py` pins both.
   **At the next sync**, if upstream changes its `--disable-features` list, this

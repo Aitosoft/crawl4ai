@@ -493,6 +493,7 @@ def test_https_first_is_off_in_the_launch_args_chrome_actually_reads():
     assert switches, "no --disable-features switch at all"
     last = features(switches[-1])
     assert "HttpsFirstBalancedModeAutoEnable" in last
+    assert "HttpsUpgrades" in last  # the URL asked for is the URL fetched
     for earlier in switches[:-1]:
         assert features(earlier) <= last, (
             f"crawl4ai's {earlier} is not repeated in the last switch, "

@@ -16,6 +16,32 @@ What changed in this fork, when, why, and what it cost or proved. Newest first.
 
 ---
 
+## 2026-11-04: the URL MAS asks for is the URL we fetch: `HttpsUpgrades` off (`0.9.5-http-as-asked`)
+
+**What changed:** `HttpsUpgrades` joins the last `--disable-features` switch in `config.yml`.
+Deployed by digest `sha256:1c256048…5822e`, revision `crawl4ai-service-se--0000006`, at 17:20:26Z.
+The same update released window 4's fixed fleet (min 0 / max 20). Same Chrome 157.0.8103.38.
+
+**Why:** in MAS's window 3, jr-sahkopalvelu.fi (an http-only WordPress site) came back as Hetzner's
+"HTTPS Not Available" placeholder. Chrome's HTTPS-Upgrades turned `http://` into `https://`, and
+the placeholder answers 200, so Chrome never fell back. This predates Chrome 157: crawl4ai's own
+switch has long overridden Playwright's, which disables HttpsUpgrades. MAS acked (`115-…`).
+
+**Evidence:**
+- In the live image, a new fixture pair maps :80 to the http fixture and :443 to the TLS fixture.
+  With the old config the request landed on https ("upgraded to https"); with the new config it
+  stays on http. The control shows the upgrade without the switch.
+- Suite in the new image: 331 passed, 1 failed (`pdf-inline`, known).
+- Clean-context review: ship. Its one watch item is the plain-http egress-proxy path, so count
+  `origin_http_error` 400s on `http://` URLs.
+- Smoke green. Canary: `http://example.com/` came back as `http://example.com/`.
+- **Tier 1 3/4.** `https://jpond.fi/yhteystiedot/` timed out at navigation (60 s), where it had
+  passed at 14:30Z. Its chain is https → https (first-hop `Location` from the 14:30Z capture), so no
+  path from this change to it is known. Not re-tested: that would have been a third hit that day.
+  Rollback target: `…da6c4460…` (`0.9.5-https-first`).
+
+---
+
 ## 2026-11-04: Chrome 157 refused http-only sites; one launch switch restores them (`0.9.5-https-first`)
 
 **What changed:** `config.yml` gains a final

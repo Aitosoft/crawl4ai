@@ -554,7 +554,11 @@ _HTTP_ONLY_HOST = "http-only.example.org"
 
 
 @contextlib.contextmanager
-def _http_only_host_mapped(fixture_origin, drop_https_first_switch=False):
+def _http_only_host_mapped(fixture_origin, https_port=9, without=()):
+    """`https_port`: what the name's :443 reaches. 9 is closed (an https that
+    fails); a TLS fixture's port is an https that answers, like a hosting
+    company's "HTTPS Not Available" placeholder. `without`: features to take out
+    of config.yml's last --disable-features switch, for the controls."""
     import egress_broker
 
     from crawl4ai import BrowserConfig
@@ -564,15 +568,16 @@ def _http_only_host_mapped(fixture_origin, drop_https_first_switch=False):
     egress_broker._DANGEROUS_BROWSER_ARGS = tuple(
         a for a in saved_dangerous if a != "--host-resolver-rules"
     )
-    args = [
-        a
-        for a in (saved.get("extra_args") or [])
-        if not (drop_https_first_switch and "HttpsFirstBalancedModeAutoEnable" in a)
-    ]
+    args = []
+    for a in saved.get("extra_args") or []:
+        if without and a.startswith("--disable-features="):
+            kept = [f for f in a.split("=", 1)[1].split(",") if f not in without]
+            a = "--disable-features=" + ",".join(kept)
+        args.append(a)
     port = fixture_origin.port
     args.append(
         f"--host-resolver-rules=MAP {_HTTP_ONLY_HOST}:80 127.0.0.1:{port},"
-        f"MAP {_HTTP_ONLY_HOST}:443 127.0.0.1:9"
+        f"MAP {_HTTP_ONLY_HOST}:443 127.0.0.1:{https_port}"
     )
     BrowserConfig.set_defaults(extra_args=args)
     try:
@@ -610,12 +615,55 @@ def test_the_http_only_route_is_blocked_without_the_switch(
     if production_path.channel != "chrome":
         pytest.skip("needs real Google Chrome >= 154 (the built image)")
     fixture_origin.reset_hits()
-    with _http_only_host_mapped(fixture_origin, drop_https_first_switch=True) as url:
+    with _http_only_host_mapped(
+        fixture_origin, without=("HttpsFirstBalancedModeAutoEnable",)
+    ) as url:
         outcome = production_path.crawl(url, delay_before_return_html=SHORT_WAIT)
 
     assert not outcome.success
     assert "ERR_BLOCKED_BY_CLIENT" in (outcome.error_message or "")
     assert fixture_origin.hits_for("/ok") == 0
+
+
+def test_an_http_url_is_fetched_over_http_even_when_https_answers(
+    fixture_origin, broken_tls_origin, production_path
+):
+    """The URL MAS asks for is the URL we fetch. Chrome's HTTPS-Upgrades turns
+    http:// into https:// and falls back only if https FAILS; a hosting
+    company's https placeholder ("HTTPS Not Available", 200) doesn't fail, so
+    jr-sahkopalvelu.fi (http-only WordPress) came back as the placeholder in
+    MAS's window 3, 2026-11-04. config.yml's switch disables HttpsUpgrades too,
+    as Playwright's own defaults do. Here :443 is the broken-TLS fixture, which
+    answers (certificate errors are ignored), so an upgrade would land there."""
+    fixture_origin.reset_hits()
+    broken_tls_origin.reset_hits()
+    with _http_only_host_mapped(
+        fixture_origin, https_port=broken_tls_origin.port
+    ) as url:
+        outcome = production_path.crawl(url, delay_before_return_html=SHORT_WAIT)
+
+    assert outcome.success, outcome.error_message
+    assert broken_tls_origin.hits_for("/ok") == 0, "upgraded to https"
+    assert fixture_origin.hits_for("/ok") >= 1
+
+
+def test_the_https_answer_wins_without_the_upgrade_switch(
+    fixture_origin, broken_tls_origin, production_path
+):
+    """The control: with HttpsUpgrades left on, the same request lands on the
+    https side, so the test above can't pass vacuously. Real Chrome only: the
+    devcontainer's bundled Chromium never upgraded (measured 2026-11-04), while
+    Chrome 157 in the image did."""
+    if production_path.channel != "chrome":
+        pytest.skip("needs real Google Chrome (the built image)")
+    fixture_origin.reset_hits()
+    broken_tls_origin.reset_hits()
+    with _http_only_host_mapped(
+        fixture_origin, https_port=broken_tls_origin.port, without=("HttpsUpgrades",)
+    ) as url:
+        production_path.crawl(url, delay_before_return_html=SHORT_WAIT)
+
+    assert broken_tls_origin.hits_for("/ok") >= 1, "no upgrade happened"
 
 
 # ── TLS: broken certificates (v0.9.5 merge, task §3.1) ───────────────────

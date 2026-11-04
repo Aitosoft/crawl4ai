@@ -321,7 +321,13 @@ crawler:
       # comes after Playwright's. So this switch must be the LAST one and must
       # repeat crawl4ai's features. test_mas_contract.py pins both; the fixture
       # origin's http-only route pins the behaviour on real Chrome.
-      - "--disable-features=MediaRouter,DialMediaRouteProvider,HttpsFirstBalancedModeAutoEnable"
+      # HttpsUpgrades too (2026-11-04, MAS's window 3): Chrome upgrades http:// to
+      # https:// and falls back only if https FAILS. A hosting company's https
+      # placeholder ("HTTPS Not Available", HTTP 200) doesn't fail, so the
+      # http-only jr-sahkopalvelu.fi came back as the placeholder. Disabled, the
+      # URL MAS asks for is the URL we fetch; a site that wants https redirects
+      # there itself. Playwright's own defaults disable both features.
+      - "--disable-features=MediaRouter,DialMediaRouteProvider,HttpsUpgrades,HttpsFirstBalancedModeAutoEnable"
 
 # Logging Configuration
 logging:
