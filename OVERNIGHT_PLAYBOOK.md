@@ -160,7 +160,8 @@ self-heal.
 
 - **The one exception, where you act before pages are lost: `origin_blocked`
   climbing segment over segment** (query 3; hour over hour if the sweep has no
-  segments). That is IP-reputation decay on our single shared egress address (§7)
+  segments). That is IP-reputation decay on our shared egress (§7: since 2026-11-04 a pool on `-se`, one address
+per replica as far as measured)
   — blocks are IP-based, not fingerprint-based — and every further request deepens
   it. **Stop the sweep**: tell Tero, who relays to MAS. Nothing on our side repairs
   an address's reputation. A rise confined to one host is that host, so read query

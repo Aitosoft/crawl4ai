@@ -252,8 +252,8 @@ git merge upstream/develop`. What `develop` brings next, and its one trap, is in
 - **Deploy:** `./azure-deployment/deploy-image.sh <tag>` (ACR build + image-only update + drift
   checks, which run before the build). **Never set env vars during a deploy** — that is how MAS's
   token gets broken.
-- **Cost:** ~$0.30 per replica-hour; a sweep runs at 2 replicas, $0 when idle (`minReplicas: 0`).
-  Costs are USD. Detail and the measurement traps: `AZURE_OPERATIONS.md`.
+- **Cost:** ~$0.30 per replica-hour, ≈0.05 ¢ per request; the fleet ran at 2 replicas at August's
+  request rate and 3 at the 2026-11-04 joint runs' ~32/min; $0 when idle (`minReplicas: 0`). Costs are USD. Detail and the measurement traps: `AZURE_OPERATIONS.md`.
 
 ## Cross-repo communication
 

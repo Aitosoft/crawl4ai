@@ -205,14 +205,18 @@ to save ~6 requests in 36,783.
 
 **The browsers die at SIGTERM, not after the grace (seen 2026-11-04, joint run (ii)).** At 09:54:34
 the scaler went 3 → 2 ("All metrics below target") and terminated replica `ltjgf` with two renders
-in flight. Within ~0.3 s supervisord reaped ~30 Chrome processes "terminated by SIGTERM", gunicorn
-began its 30 s graceful shutdown with nothing left to finish, and both requests returned
+in flight. Within ~0.3 s supervisord logged dozens of `reaped unknown pid … (terminated by SIGTERM)` lines
+(the browser processes), gunicorn began its 30 s graceful shutdown with nothing left to finish, and both requests returned
 `render_error` 500 (`BrowserContext.new_page: Target page, context or browser has been closed`).
+Evidence: `ContainerAppConsoleLogs_CL`, `ContainerGroupName_s endswith 'ltjgf'`, 09:54:28–09:55:30Z,
+and `ContainerAppSystemLogs_CL` `SuccessfulRescale` at 09:54:34 (30-day retention; the readout's
+copy is `tmp/research/readout-run-ii-raw.txt`).
 `supervisord.conf` has no `stopasgroup`, so the likeliest sender is Playwright's own
 `handle_sigterm` (default on), which closes browsers when the Python process gets SIGTERM.
 **Unverified.** Size: 2 of 814 requests in that run, both retried by MAS; in August, 4 of the 163
-URLs that ever got a 500 got exactly one (a one-off a retry fixed), against 152 that failed four in a
-row (MAS's `49-data/http500-urls.csv`). So it is real, small, and not where our lost captures come
+URLs that ever got a 500 got exactly one, against 152 that got four (MAS's
+`49-data/http500-urls.csv`; their ladder makes four attempts, so four means every attempt failed and
+one means a retry fixed it). So it is real, small, and not where our lost captures come
 from. `tasks/README.md` carries it as a follow-up.
 
 **A request that arrives during the switch, to an app at zero, can be orphaned (seen 2026-11-04).**
@@ -220,7 +224,8 @@ The deploy of `0.9.5-merge` to `-se` updated the app at 09:12:14, but the platfo
 traffic on the old revision until 09:12:58 while the new one pulled and started. A `/health` sent
 at 09:12:42 was buffered by the activator for the *old* revision, which scaled a replica for it and
 was deactivated 16 s later. The request hung until the client gave up: `ContainerAppHTTPLogs`
-shows it on the old revision, no replica, 218.1 s, `DC downstream_remote_disconnect`. **`az
+shows it on the old revision, no replica, 218.1 s, `DC downstream_remote_disconnect` (query
+`ContainerAppHTTPLogs`, `ContainerAppName == 'crawl4ai-service-se'`, from 09:10Z). **`az
 containerapp revision list` already showed the new revision at 100 % at that moment**, so it is
 not the instrument for "has routing switched". Use the system log line `Setting traffic weight of
 '100%' for revision '<new>'` (`ContainerAppSystemLogs_CL`), or a request that lands on the new
@@ -509,7 +514,8 @@ explicit scale rule track real traffic.
 
 ### 3.6 Ceilings — what can and cannot be bought
 
-**Environment core quota: 100**, shared with `aitosoft-edge`. The replica ceiling
+**Environment core quota: 100**, shared with MAS's edge app (`aitosoft-edge-se` in `aitosoft-aca-se`
+since 2026-11-04; `aitosoft-edge` in the West Europe environment before). The replica ceiling
 is `(100 − other apps' cores) / 2`; compute it from the two commands below rather
 than trusting a figure (every document said `aitosoft-edge` held 0.25 cores for
 weeks after it went to 1.0 — §4.3).
@@ -657,9 +663,11 @@ All of it landed at 1 replica; the second replica arrived and the 429s stopped.
 
 **2026-11-04, two joint runs at 5 companies in flight on `-se`:** 54 and 51 wire 429s in 790 and 814
 requests, split 32 + 22 and 46 + 5 between `render_slots` and `memory` (console tokens; the
-wire counts agree with MAS's to the request). The `render_slots` share is now the cold start:
-MAS's brain issues up to 6–7 `scrape_page` calls in one turn (2.3–2.4 per scraping turn), so 5
-companies put ≥7 requests on the first replica at once. Nothing ran out of retries in either run.
+wire counts agree with MAS's to the request). The `render_slots` share is the cold start:
+run (i)'s 32 landed 08:32–08:34 on one replica, run (ii)'s 45 of 46 in its first six minutes. MAS's
+brain issues up to 6–7 `scrape_page` calls in one turn (2.3–2.4 per scraping turn, MAS's count), and
+the gate's own lines show it: `REJECT (queue full): in_use=2/2 queued=4`, i.e. a seventh concurrent
+request on one replica. Nothing ran out of retries in either run.
 
 **The ingress is round-robin, decided per request, with session affinity off**
 (`stickySessions: null`). Envoy picks the endpoint, then the connection pool, so a
@@ -763,8 +771,10 @@ costs no third party anything.
   and no resource column (`ResourceGuid` is a meter ID). Its fields:
   `SubscriptionName, SubscriptionGuid, Date, ResourceGuid, ServiceName,
   ServiceType, ServiceRegion, ServiceResource, Quantity, Cost`. **Its Container
-  Apps lines cover the whole `aitosoft-aca` environment** — `crawl4ai-service`
-  *and* `aitosoft-edge` — so attribution needs subtraction (§4.3).
+  Apps lines cover the whole environment** — ours *and* MAS's edge app — so attribution needs
+  subtraction (§4.3). Since 2026-11-04 there are two environments (`aitosoft-aca-se`, and the idle
+  West Europe `aitosoft-aca` until MAS deletes it); the export's `ServiceRegion` should separate
+  them (unverified: no export has been read since the move).
 - **Our own replica-hours predict the invoice** (§4.4), which makes the Azure
   Monitor `Replicas` metric the usable instrument — within its 30-day query window
   and 93-day retention (§5.1).
@@ -792,7 +802,7 @@ export. Azure's EUR list is 0.8775 × USD.
 ACA's idle rate discounts **vCPU only** — memory bills the same — so an idle
 replica is ~3.5× cheaper, not the ~8.5× a naive read of the price page suggests.
 Idle requires `minReplicas > 0` and the revision sitting at its minimum; above the
-minimum every replica bills active. **At `minReplicas: 0`, `crawl4ai-service` never
+minimum every replica bills active. **At `minReplicas: 0`, our app (`-se` or West Europe) never
 bills idle**, and scale-to-zero means it bills nothing between sweeps.
 
 So the export's idle lines are other apps — in practice `aitosoft-edge`, pinned at
@@ -844,9 +854,11 @@ requests per company.
 - **Trigger 12:** 6.4× cheaper per request. The fleet held at 2 across a 1.6× swing
   in load, so the bill is `2 × $0.3024 × wall-clock`. The remaining idle capacity
   is queueing headroom, not over-provisioning — 29 % of admits already wait, and a
-  one-replica probe rejected 10.6 %. **The fleet is at its floor; do not re-run the
-  over-provisioning argument against it.**
-- **Between sweeps:** $0 for this service. The standing line is `aitosoft-edge`.
+  one-replica probe rejected 10.6 %. **At August's request rate the fleet was at its floor; do not
+  re-run the over-provisioning argument against it.** At the 2026-11-04 joint runs' higher rate it
+  ran at 3 (next bullets).
+- **Between sweeps:** $0 for this service. The standing line is MAS's edge app (`aitosoft-edge-se`,
+  plus `aitosoft-edge` until West Europe is deleted).
 - **The remaining levers are MAS's:** their `delay_before_return_html: 2.0` is
   ~37 % of our mean render time, and pages per company is the other half.
 - **2026-11-04, two joint runs on `-se` (75 companies each, 5 in flight): the cost per *request*
@@ -860,8 +872,9 @@ requests per company.
   | run (i), v0.9.2 | 10.53 | 77.5 | 0.049 | 0.52 | 3 at ~32 req/min |
   | run (ii), v0.9.5 | 10.85 | 81.5 | 0.050 | 0.55 | 3 at ~32 req/min |
 
-  So the fleet tracks the request rate (render slots 58–64 % busy over each window, queue waits
-  included), and "the fleet is at its floor" above holds only at August's rate. Consequences:
+  So the fleet ran at 3 at ~32 requests/min where August held 2 at ~19 (two points, not a curve).
+  Render slots were 58–64 % busy over each window: the summed `RequestDuration` of the 200s (5,934 s
+  and 5,649 s, queue waits included) over replica-minutes × 60 × 2 slots. Consequences:
   - **a faster brain shortens a run without making our cost per company cheaper**: the same pages
     and render-seconds arrive sooner, and the fleet scales up to meet them;
   - **pages fetched per company is the lever on our side of the bill**: ≈0.05 ¢ of render each;
@@ -941,7 +954,7 @@ first.
 | `first`, `last`, `kind` as column names | `BadArgumentError` — reserved words (verified 2026-11-03 with `summarize kind=count()`) | `t0`, `t1`, `n_kind` |
 | `-o tsv` on `az monitor log-analytics query` | Columns come back alphabetical, not in `project` order; positional reads silently transpose numbers | `-o json`, key by name |
 | Metrics API window > ~30 days | Silently truncated to the last ~30 days (§5.1) | ≤ 30-day windows |
-| Console logs are workspace-wide | `aitosoft-edge` logs into the same table at ~280× our volume when we are idle (1.37 M vs 4.9 k lines, 30 days to 2026-11-03) | `where ContainerAppName_s == "crawl4ai-service"`. The replica column is `ContainerGroupName_s`; there is no `ReplicaName_s` |
+| Console logs are workspace-wide | `aitosoft-edge` logs into the same table at ~280× our volume when we are idle (1.37 M vs 4.9 k lines, 30 days to 2026-11-03) | `where ContainerAppName_s == "crawl4ai-service-se"`. The replica column is `ContainerGroupName_s`; there is no `ReplicaName_s` |
 | `ContainerAppHTTPLogs` is environment-wide | Same problem | `where ContainerAppName == "crawl4ai-service-se"` |
 | `ContainerAppHTTPLogs` column guesses | `StatusCode_d`, `ReplicaName_s`, `DurationMs_d`, `ContainerAppName_s` do not exist | Unsuffixed: `StatusCode`, `ReplicaName`, `RequestDuration` (ms), `ContainerAppName`. Wrap arithmetic in `toreal()`; columns arrive as strings in some paths |
 | `ConnectionId` alone | Unique only per Envoy pod (there are 2); keying on it merged connections and inflated lifetime 3× | Key on `(EnvoyPodName, ConnectionId)` |
@@ -1288,7 +1301,7 @@ Swap the URL to ask "can the crawler reach this, and what does it get?". Egress 
 Azure's shared SNAT pool; neither environment has VNet integration, so no address is contractual
 and we inherit co-tenants' reputation. West Europe's app lists 1 `outboundIpAddresses` entry;
 `crawl4ai-service-se` lists **161** (2026-11-04). In use, 7 of 7 probes from one warm `-se` replica
-(2026-11-04 07:52–07:56 UTC) left from the same single address, which is in that list (both
+(2026-11-04 07:51–07:56 UTC) left from the same single address, which is in that list (both
 regions' addresses are in `PRIVATE.md`). Whether another replica, or the same one later, leaves from
 a different one is unmeasured. **The 2026-11-04 cutover changed our egress address, and blocks are
 IP-based**, so block rates from before and after the cutover are different instruments.

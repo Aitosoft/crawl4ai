@@ -20,8 +20,8 @@ works. Where a task file and this index disagree, the task file wins.
   window (`tmp/research/readout.sh`) and count twice.
 - **What the last sweep says about priorities.** 186,178 requests over 175 h. Of MAS's 60,874
   capture attempts, 86.1 % were stored and **95 % of failures were the origin's**. Our share, in
-  captures lost: 500s 156 (152 of the 163 URLs failed four times in a row, so deterministic, not
-  scale-in), 429s 29, `render_defect` 27, `unrenderable_content` 4. Size any new defect against
+  captures lost: 500s 156 (152 of the 163 URLs got four 500s, i.e. every attempt of MAS's ladder, so
+  deterministic, not scale-in), 429s 29, `render_defect` 27, `unrenderable_content` 4. Size any new defect against
   those numbers before investigating it.
 - **Cost.** ≈0.05 ¢ per request, flat from August through both joint runs; per company it follows
   pages per company (6.4 in August, 10.5–10.9 on MAS's current brain → 0.33 → 0.52–0.55 ¢). $0 idle.
@@ -44,7 +44,8 @@ works. Where a task file and this index disagree, the task file wins.
   MAS holds a copy too). Keep as the offline corpus for the next upstream merge (630 real pages,
   against the 5 hosts we have), or delete under the "temporarily" ruling? Both repos wait on it.
 
-**Owed to MAS:** nothing. The learnings-index message (`82-to-mas-…`) points them at the docs.
+**Owed to MAS:** nothing. `82-to-mas-where-each-learning-lives.md` (sent 2026-11-04) points them at
+the docs.
 
 ### 1. The `render_mode` mislabel
 

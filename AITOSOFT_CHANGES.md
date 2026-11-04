@@ -35,13 +35,13 @@ brain and client** (`tmp/mas-repo-messages/72-from-us-…`, `78-from-us-…`, `8
 - **Run (i), the region alone** (v0.9.2 on `-se`): 790 requests, 0 lost work, 0 newly empty.
 - **Run (ii), the merge and Chrome 157:** 814 requests, wire counts identical on both sides.
   - Two pages newly empty against August and one company lost: all three were the sites
-    (an old-image vs new-image A/B gave byte-identical results; fortax.fi is now a parked domain).
+    (an old-image vs new-image A/B gave identical sizes and text; fortax.fi is now a parked domain).
   - Two `render_error` 500s: an autoscaler scale-in killing a replica mid-render (AZURE_OPERATIONS
     §2.4), not the merge.
   - Latency p99 44.6 → 18.0 s and peak `anon` 3.9 → 2.8 GB: suggestive only (different cohorts).
 - **Gates:** offline 262/262, fixture origin 70/70, Tier 1 4/4 after a site-drift expectation
   fix, smoke and SSRF negatives green; our suite inside the shipped image on Chrome 157: 326
-  passed, 1 failed (the known `pdf-inline`).
+  passed, 5 skipped, 1 failed (the known `pdf-inline`).
 - **Cost:** ≈0.05 ¢ per request in August and in both runs; per company 0.33 → 0.52–0.55 ¢
   because MAS's new brain fetches 10.5–10.9 pages per company, not 6.4 (AZURE_OPERATIONS §4.5).
 - **#2416 on 630 real raw pages: 0 change** (FINDINGS §Parse collapse). Wait for upstream's fix.

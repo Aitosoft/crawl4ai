@@ -824,8 +824,8 @@ before or during the deploy.
    change each (`58-to-mas-…`): (i) the region alone on the old image, then deploy, then (ii) the
    merge and Chrome.
 3. **Chrome 156 was 157.** The rebuild picked up 157.0.8103.38. Our suite had never run on it, so
-   it ran inside the shipped image before run (ii) was released: 326 passed, 1 failed (`pdf-inline`,
-   known).
+   it ran inside the shipped image before run (ii) was released: 326 passed, 5 skipped (the corpus
+   tests, under `CI`), 1 failed (`pdf-inline`, known); log `tmp/research/image-suite-0.9.5-merge-chrome157.log`.
 
 **The runs** (75 companies each, 5 in flight, MAS's brain DeepSeek V4.1-Flash-1017 on Wafer, held
 identical; counts agreed request for request on both sides):
@@ -842,7 +842,8 @@ identical; counts agreed request for request on both sides):
 
 - **The 2 × 500 are a scale-in killing a replica mid-render** (AZURE_OPERATIONS §2.4), not the merge.
 - **The newly empty pages and the lost company are the sites:** one request each through the idle
-  West Europe app (old image) and `-se` (new) returned byte-identical pages. fortax.fi is now a
+  West Europe app (old image) and `-se` (new) returned identical HTML length, markdown length,
+  visible words and opening text (`tmp/research/ab-fortax-suujahammas-2026-11-04.json`; no full hash). fortax.fi is now a
   hosting company's parked-domain page; suujahammas.fi/ajanvaraus redirects to a booking app.
   Recorded in TEST_SITES_REGISTRY.
 - **Latency and memory improved in (ii)**, but the cohorts differ: suggestive, not measured.
