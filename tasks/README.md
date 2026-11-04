@@ -28,9 +28,10 @@ works. Where a task file and this index disagree, the task file wins.
 
 | # | Task | Size | Why now |
 |---|---|---|---|
-| **1** | `optimization-experiments.md` | M per lever, ongoing | Tero's standing green light (2026-11-04). The loop, the ledger of levers and effects, and the levers sized: a warm replica for the cold-start 429s first, then the scale-in kill, and MAS's own levers. MAS's side is their `task-608`. |
+| **1** | `optimization-experiments.md` | M per lever, ongoing | Tero's standing green light (2026-11-04). The loop, the ledger of levers and effects, and the levers sized. Windows 1–3 ran 2026-11-04; the fixed fleet is now the standing setup. Window 4 is MAS's 8 in flight on our fixed 2, and `0.9.5-http-as-asked` (HttpsUpgrades off) deploys after it, acked in `115-…`. MAS's side is their `task-608`. |
 | **2** | The `render_mode` mislabel (no file; one word) | XS | We report a wrong value in a field MAS parses. Below. Deploy it between windows, announced. |
-| **3** | `file-upstream-prs.md` | M | File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
+| **3** | `https-connect-failure-http-retry.md` | S–M | MAS asked for it (`115-from-us-…`): 137 companies failed https at the tunnel and stored nothing. A marked `http://` attempt. Ships in its own window after MAS acks the field name. |
+| **4** | `file-upstream-prs.md` | M | File the two PRs a maintainer can verify alone. Close #2114 only once upstream fixes #2416. |
 
 **Decided 2026-11-04 (Tero deferred both to us):** the API token in old images is not rotated and the
 old tags stay as rollback targets (nothing reached the open internet; `upgrade-upstream-v0.9.5.md` §8

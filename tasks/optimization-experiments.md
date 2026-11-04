@@ -57,6 +57,7 @@ before the tail ended (AZURE_OPERATIONS §4.5).
 | 2026-11-04 | (between) | **ours: `0.9.5-https-first`**, live 14:24:12Z | | | | | | not a window. Chrome 154+ refused http-only sites (AITOSOFT_CHANGES). MAS records it in w2's config beside their change |
 | 2026-11-04 | w2 | **MAS's**: retry a model-host 429 on the same host before the fallback; 14:46:58–15:18:19Z | 656 (8.75) | 29 + 13 / 4 | **0.073** | 0.64 + 0.52 | 1 | 95.0 replica-min (77.5 + 17.5). **Nothing changed on our side, and the fleet went to 3 at 22 req/min** (14:59), where w1 held 2 at 28: our cost per request is the scaler's choice of 2 or 3 (lever 2). Gate 429s by fleet size: 13 at 1 replica, 13 at 2, 3 at 3. 4 × 500 = page behaviour (navigation loops). MAS: `102-…`; ours: `103-…` |
 | 2026-11-04 | w3 | **ours: fleet fixed at min = max = 2** (lever 2, revised), 15:55:41–16:20:07Z, judged against w2 | 674 (8.99) | 7 + 1 / 0 | **0.052** | 0.47 + 0.55 | 4 (likely the 4 dead sites) | 70.0 replica-min (56.0 incl. ~3 min warm-up + 14.0 after, the release revision's own 2 idle replicas). **Held on every pre-registered line**: −26 % replica-min, −28 % per request vs w2; cold-start 429s gone; 200 p50/p90/p99 6.0/10.7/18.9 s, best of three; MAS window 24:26 (w2 31:21), 0 pages out of retries. vs w1 (2 replicas by luck) +14 % per request = the warm-up. MAS: `109-…`; ours: `110-…` |
+| | w4 | **MAS's**: 8 companies in flight on the standing fixed 2 | | | | | | agreed `111-…`; pre-registered in `112-…`: gate 429s tens to 100+, slot use ~85–90 % (w3 55 %), our ¢/company ≈ 0.30 × (MAS wall-clock per company ratio); stop = any page out of retries |
 
 ## Levers, roughly by expected value
 
@@ -174,6 +175,13 @@ Sized from today's runs; argue with every one.
    what MAS receives (500 → 200), so they need their ack. MAS's side: their extension filter doesn't
    stop the agent fetching a `.pdf` it read in page text (`96-…`). **Small:** ~2 % of requests and
    maybe 3 % of render-seconds a window. Worth it mostly because it also makes the outcome true.
+10. **A marked `http://` attempt when `https://` fails at connect.** 137 companies in MAS's archive
+    failed https at the tunnel and stored nothing (`115-from-us-…`). MAS wants us to do it, marked.
+    Task file: `https-connect-failure-http-retry.md`.
+11. **The pinning proxy dials only the first DNS answer** (`egress_broker.resolve_and_pin`). One
+    stray A record (selosella.fi: `1.101.131.52` among four Fastly addresses) fails a live site
+    where a browser would try the next address. Upstream's code, so check upstream before patching.
+    Rare: 1 site in 225 companies.
 
 ## Instruments worth keeping
 
